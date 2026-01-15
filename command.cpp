@@ -1261,6 +1261,157 @@ int command__disco(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int command__roster(const void *pointer, void *data,
+                   struct t_gui_buffer *buffer, int argc,
+                   char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer,
+                       _("%s%s: you are not connected to server"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    // /roster - display roster
+    if (argc == 1)
+    {
+        if (ptr_account->roster.empty())
+        {
+            weechat_printf(buffer, "%sRoster is empty", weechat_prefix("network"));
+            return WEECHAT_RC_OK;
+        }
+
+        weechat_printf(buffer, "");
+        weechat_printf(buffer, "%sRoster (%zu contacts):", 
+                      weechat_prefix("network"), 
+                      ptr_account->roster.size());
+        
+        for (const auto& [jid, item] : ptr_account->roster)
+        {
+            std::string display = jid;
+            if (!item.name.empty())
+                display = item.name + " <" + jid + ">";
+            
+            std::string groups_str = "";
+            if (!item.groups.empty())
+            {
+                groups_str = " [";
+                for (size_t i = 0; i < item.groups.size(); i++)
+                {
+                    if (i > 0) groups_str += ", ";
+                    groups_str += item.groups[i];
+                }
+                groups_str += "]";
+            }
+            
+            weechat_printf(buffer, "  %s%s%s - %s%s",
+                          weechat_color("chat_nick"),
+                          display.c_str(),
+                          weechat_color("reset"),
+                          item.subscription.c_str(),
+                          groups_str.c_str());
+        }
+        
+        return WEECHAT_RC_OK;
+    }
+
+    // /roster add <jid> [name]
+    if (argc >= 3 && weechat_strcasecmp(argv[1], "add") == 0)
+    {
+        const char *jid = argv[2];
+        const char *name = (argc >= 4) ? argv_eol[3] : NULL;
+
+        char *id = xmpp_uuid_gen(ptr_account->context);
+        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", id);
+        xmpp_free(ptr_account->context, id);
+        
+        xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(query, "query");
+        xmpp_stanza_set_ns(query, "jabber:iq:roster");
+        
+        xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(item, "item");
+        xmpp_stanza_set_attribute(item, "jid", jid);
+        if (name)
+            xmpp_stanza_set_attribute(item, "name", name);
+        
+        xmpp_stanza_add_child(query, item);
+        xmpp_stanza_add_child(iq, query);
+        
+        xmpp_send(ptr_account->connection, iq);
+        
+        xmpp_stanza_release(item);
+        xmpp_stanza_release(query);
+        xmpp_stanza_release(iq);
+
+        weechat_printf(buffer, "%sAdding %s to roster...", 
+                      weechat_prefix("network"), jid);
+
+        // Also send presence subscription request
+        xmpp_stanza_t *presence = xmpp_presence_new(ptr_account->context);
+        xmpp_stanza_set_type(presence, "subscribe");
+        xmpp_stanza_set_to(presence, jid);
+        xmpp_send(ptr_account->connection, presence);
+        xmpp_stanza_release(presence);
+
+        return WEECHAT_RC_OK;
+    }
+
+    // /roster del <jid>
+    if (argc >= 3 && (weechat_strcasecmp(argv[1], "del") == 0 || 
+                       weechat_strcasecmp(argv[1], "delete") == 0 ||
+                       weechat_strcasecmp(argv[1], "remove") == 0))
+    {
+        const char *jid = argv[2];
+
+        char *id = xmpp_uuid_gen(ptr_account->context);
+        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", id);
+        xmpp_free(ptr_account->context, id);
+        
+        xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(query, "query");
+        xmpp_stanza_set_ns(query, "jabber:iq:roster");
+        
+        xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(item, "item");
+        xmpp_stanza_set_attribute(item, "jid", jid);
+        xmpp_stanza_set_attribute(item, "subscription", "remove");
+        
+        xmpp_stanza_add_child(query, item);
+        xmpp_stanza_add_child(iq, query);
+        
+        xmpp_send(ptr_account->connection, iq);
+        
+        xmpp_stanza_release(item);
+        xmpp_stanza_release(query);
+        xmpp_stanza_release(iq);
+
+        weechat_printf(buffer, "%sRemoving %s from roster...", 
+                      weechat_prefix("network"), jid);
+
+        return WEECHAT_RC_OK;
+    }
+
+    weechat_printf(buffer,
+                   _("%s%s: unknown roster command (try /help roster)"),
+                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+
+    return WEECHAT_RC_OK;
+}
+
 void command__init()
 {
     struct t_hook *hook;
@@ -1415,4 +1566,17 @@ void command__init()
         NULL, &command__disco, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /disco");
+
+    hook = weechat_hook_command(
+        "roster",
+        N_("manage XMPP roster (contact list)"),
+        N_("|| add <jid> [name] || del <jid>"),
+        N_("      : display roster\n"
+           "  add : add contact to roster\n"
+           "  del : remove contact from roster (also: delete, remove)\n"
+           "  jid : Jabber ID of the contact\n"
+           " name : optional display name for the contact"),
+        "add|del|delete|remove", &command__roster, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /roster");
 }

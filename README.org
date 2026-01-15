@@ -53,6 +53,7 @@
     - Complete chat state notifications - active, composing, paused, inactive, gone
     - PGP key persistence - keys set with /pgp now persist across restarts per JID/MUC
     - Encryption status bar item (xmpp_encryption) - shows current buffer's encryption mode
+    - Roster management - /roster command to display, add, and remove contacts
 
   *Known limitation*: Plugin reload while weechat is running is not supported due to 
   fundamental race conditions with timer hooks. Always restart weechat instead of 
@@ -89,6 +90,15 @@
    #+end_src
 
    Or simply add =xmpp_encryption= to your existing status bar items configuration.
+
+** Roster Management
+
+   The plugin supports XMPP roster (contact list) management:
+   - =/roster= - Display your contact list with names, subscriptions, and groups
+   - =/roster add <jid> [name]= - Add a contact to your roster and send subscription request
+   - =/roster del <jid>= - Remove a contact from your roster
+
+   The roster is automatically fetched when you connect to the server.
 
 * Installing
 
@@ -240,7 +250,10 @@
        * [ ] [#A] Except biboumi rooms
      * [ ] [#B] Add bookmarks
      * [ ] [#B] Delete bookmarks
-     * [ ] [#B] Roster
+     * [X] [#B] Roster
+       * [X] Display contacts with /roster
+       * [X] Add contacts with /roster add
+       * [X] Remove contacts with /roster del
    * [ ] [#D] OTR (libotr)
    * [ ] [#C] Room Explorer (https://search.jabber.network/docs/api)
    * [ ] [#C] DOAP

@@ -50,11 +50,20 @@ namespace weechat
             std::optional<time_t> end;
         };
 
+        struct roster_item
+        {
+            std::string jid;
+            std::string name;
+            std::string subscription;
+            std::vector<std::string> groups;
+        };
+
     public:
         bool disconnected = false;
 
         std::unordered_map<std::uint32_t, device> devices;
         std::unordered_map<std::string, mam_query> mam_queries;
+        std::unordered_map<std::string, roster_item> roster;
 
     private:
         bool is_connected = false;
