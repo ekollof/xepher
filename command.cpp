@@ -1203,58 +1203,6 @@ int command__ping(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
-int command__disco(const void *pointer, void *data,
-                   struct t_gui_buffer *buffer, int argc,
-                   char **argv, char **argv_eol)
-{
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
-
-    (void) pointer;
-    (void) data;
-    (void) argv_eol;
-
-    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
-
-    if (!ptr_account)
-        return WEECHAT_RC_ERROR;
-
-    if (!ptr_account->connected())
-    {
-        weechat_printf(buffer,
-                       _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-        return WEECHAT_RC_OK;
-    }
-
-    const char *target = NULL;
-    if (argc > 1)
-        target = argv[1];
-    else
-        target = xmpp_jid_domain(ptr_account->context, ptr_account->jid().data());
-
-    char *id = xmpp_uuid_gen(ptr_account->context);
-    ptr_account->user_disco_queries.insert(id);
-    
-    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", id);
-    xmpp_stanza_set_to(iq, target);
-    
-    xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(query, "query");
-    xmpp_stanza_set_ns(query, "http://jabber.org/protocol/disco#info");
-    
-    xmpp_stanza_add_child(iq, query);
-    xmpp_stanza_release(query);
-    
-    xmpp_send(ptr_account->connection, iq);
-    xmpp_stanza_release(iq);
-    xmpp_free(ptr_account->context, id);
-
-    weechat_printf(buffer, "Querying service discovery for %s...", target);
-
-    return WEECHAT_RC_OK;
-}
-
 void command__init()
 {
     struct t_hook *hook;
@@ -1400,13 +1348,4 @@ void command__init()
         NULL, &command__edit, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /edit");
-
-    hook = weechat_hook_command(
-        "disco",
-        N_("discover services and features (XEP-0030)"),
-        N_("[jid]"),
-        N_("jid: optional target jid (defaults to server domain)"),
-        NULL, &command__disco, NULL, NULL);
-    if (!hook)
-        weechat_printf(NULL, "Failed to setup command /disco");
 }

@@ -82,8 +82,6 @@ namespace weechat
         std::unordered_map<std::string, weechat::user> users;
 
         std::unordered_map<std::string, struct t_config_option *> options;
-        
-        std::unordered_set<std::string> user_disco_queries;
 
         int reloading_from_config = 0;
 

@@ -188,8 +188,8 @@
        * [X] Diff highlighting
        * [X] Making (/edit)
      * [X] Leave on /close
-   * [-] Service Disco
-     * [X] [#B] /disco [domain]
+   * [ ] Service Disco
+     * [ ] [#B] /disco [domain]
    * [ ] /whois [user|muc]
      * [ ] [#B] User Avatars
      * [ ] [#B] MUC Icons
