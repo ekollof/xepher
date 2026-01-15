@@ -96,7 +96,7 @@ namespace weechat
             struct t_hashtable *bundle_requests;
         } omemo;
         struct {
-            int enabled = 1;
+            int enabled = 0;
             std::unordered_set<std::string> ids;
         } pgp;
         struct {
