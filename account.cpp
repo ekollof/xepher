@@ -523,8 +523,8 @@ void weechat::account::mam_cache_cleanup()
     try {
         if (mam_db_env)
         {
-            mam_dbi.messages.close(mam_db_env);
-            mam_dbi.timestamps.close(mam_db_env);
+            mdb_dbi_close(mam_db_env.handle(), mam_dbi.messages.handle());
+            mdb_dbi_close(mam_db_env.handle(), mam_dbi.timestamps.handle());
             mam_db_env.close();
             mam_db_env = nullptr;
         }
@@ -552,9 +552,10 @@ void weechat::account::mam_cache_message(const std::string& channel_jid,
         // Value: from|timestamp|body
         std::string value = fmt::format("{}|{}|{}", from, timestamp, body);
         
-        lmdb::dbi_put(txn, mam_dbi.messages, 
-                     lmdb::val(key.data(), key.size()),
-                     lmdb::val(value.data(), value.size()));
+        MDB_val k = {key.size(), (void*)key.data()};
+        MDB_val v = {value.size(), (void*)value.data()};
+        
+        mdb_put(txn.handle(), mam_dbi.messages.handle(), &k, &v, 0);
         
         txn.commit();
     } catch (const lmdb::error& ex) {
@@ -570,26 +571,27 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
         lmdb::txn parentTransaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
         
-        auto cursor = lmdb::cursor::open(txn, mam_dbi.messages);
+        MDB_cursor *cursor;
+        mdb_cursor_open(txn.handle(), mam_dbi.messages.handle(), &cursor);
         
         // Start with channel prefix
         std::string prefix = channel_jid + ":";
-        lmdb::val key(prefix.data(), prefix.size());
-        lmdb::val value;
+        MDB_val key = {prefix.size(), (void*)prefix.data()};
+        MDB_val value;
         
         int count = 0;
-        bool found = cursor.get(key, value, MDB_SET_RANGE);
+        int rc = mdb_cursor_get(cursor, &key, &value, MDB_SET_RANGE);
         
-        while (found && count < 100)  // Limit to last 100 cached messages
+        while (rc == 0 && count < 100)  // Limit to last 100 cached messages
         {
-            std::string key_str(key.data(), key.size());
+            std::string key_str((char*)key.mv_data, key.mv_size);
             
             // Check if key still belongs to our channel
             if (key_str.substr(0, prefix.size()) != prefix)
                 break;
             
             // Parse value: from|timestamp|body
-            std::string value_str(value.data(), value.size());
+            std::string value_str((char*)value.mv_data, value.mv_size);
             size_t pos1 = value_str.find('|');
             size_t pos2 = value_str.find('|', pos1 + 1);
             
@@ -610,10 +612,10 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
                 count++;
             }
             
-            found = cursor.get(key, value, MDB_NEXT);
+            rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT);
         }
         
-        cursor.close();
+        mdb_cursor_close(cursor);
         txn.abort();
         
         if (count > 0)
@@ -636,15 +638,15 @@ time_t weechat::account::mam_cache_get_last_timestamp(const std::string& channel
         lmdb::txn parentTransaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
         
-        lmdb::val value;
-        if (lmdb::dbi_get(txn, mam_dbi.timestamps,
-                         lmdb::val(channel_jid.data(), channel_jid.size()),
-                         value))
+        MDB_val key = {channel_jid.size(), (void*)channel_jid.data()};
+        MDB_val value;
+        
+        if (mdb_get(txn.handle(), mam_dbi.timestamps.handle(), &key, &value) == 0)
         {
             time_t ts = 0;
-            if (value.size() == sizeof(time_t))
+            if (value.mv_size == sizeof(time_t))
             {
-                memcpy(&ts, value.data(), sizeof(time_t));
+                memcpy(&ts, value.mv_data, sizeof(time_t));
             }
             txn.abort();
             return ts;
@@ -666,9 +668,10 @@ void weechat::account::mam_cache_set_last_timestamp(const std::string& channel_j
         lmdb::txn parentTransaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
         
-        lmdb::dbi_put(txn, mam_dbi.timestamps,
-                     lmdb::val(channel_jid.data(), channel_jid.size()),
-                     lmdb::val(&timestamp, sizeof(timestamp)));
+        MDB_val key = {channel_jid.size(), (void*)channel_jid.data()};
+        MDB_val value = {sizeof(timestamp), &timestamp};
+        
+        mdb_put(txn.handle(), mam_dbi.timestamps.handle(), &key, &value, 0);
         
         txn.commit();
     } catch (const lmdb::error& ex) {
