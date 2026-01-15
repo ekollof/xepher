@@ -24,6 +24,30 @@
  | Version:    | 0.2.1                                       |
  | Disclaimer: | I'm lazy and unashamedly clinically insane  |
 
+* This Fork
+
+  This is a fork with critical bug fixes applied:
+
+  - *Memory corruption fixes*: Fixed malloc corruption from xmlDocDumpFormatMemory 
+    misuse and unaligned allocations that caused crashes
+  - *Segfault prevention*: Added comprehensive destructor safety checks to prevent 
+    crashes on weechat exit
+  - *MAM (Message Archive Management) fixes*:
+    - Fixed incorrect JID handling in MAM queries
+    - Fixed pagination to properly retrieve all archived messages
+    - Fixed time range calculation
+    - Enabled automatic MAM retrieval on connect (7 days history for PM channels)
+  - *Display improvements*:
+    - Messages now show sender's JID instead of client resource ID (e.g., "user@domain.org" 
+      instead of "Conversations.xxxx")
+    - Typing indicators show JID instead of resource ID
+  - *Reduced logging noise*: Disabled debug-level logging for cleaner output
+  - *Channel type detection*: Fixed PM vs MUC detection for proper message handling
+
+  *Known limitation*: Plugin reload while weechat is running is not supported due to 
+  fundamental race conditions with timer hooks. Always restart weechat instead of 
+  reloading the plugin.
+
 * Description
 
   A weechat plugin in C/++ to extend the chat client to
