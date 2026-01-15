@@ -32,7 +32,7 @@ namespace weechat {
 
             lmdb::env db_env = nullptr;
             struct dbi {
-                lmdb::dbi omemo;
+                lmdb::dbi omemo = 0;
             } dbi;
             std::string db_path;
 

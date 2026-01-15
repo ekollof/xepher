@@ -107,7 +107,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza)
         const char* jid = binding.from->bare.data();
         channel = &account.channels.emplace(
             std::make_pair(jid, weechat::channel {
-                    account, weechat::channel::chat_type::MUC, jid, jid
+                    account, weechat::channel::chat_type::PM, jid, jid
                 })).first->second;
     }
 
@@ -327,9 +327,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza)
                                                                     ? nick : from)).first->second;
             }
             channel->add_typing(user);
+            const char *display_name = channel->type == weechat::channel::chat_type::MUC 
+                ? nick 
+                : (user->profile.display_name ? user->profile.display_name : from_bare);
             weechat_printf(channel->buffer, "...\t%s%s typing",
                            weechat_color("gray"),
-                           channel->type == weechat::channel::chat_type::MUC ? nick : from);
+                           display_name);
         }
 
         sent = xmpp_stanza_get_child_by_name_and_ns(
@@ -686,17 +689,20 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza)
     }
 
     nick = from;
+    const char *display_from = from_bare;
     if (weechat_strcasecmp(type, "groupchat") == 0)
     {
         nick = channel->name == xmpp_jid_bare(account.context, from)
             ? xmpp_jid_resource(account.context, from)
             : from;
+        display_from = from;
     }
     else if (parent_channel && parent_channel->type == weechat::channel::chat_type::MUC)
     {
         nick = channel->name == from
             ? xmpp_jid_resource(account.context, from)
             : from;
+        display_from = from;
     }
     delay = xmpp_stanza_get_child_by_name_and_ns(stanza, "delay", "urn:xmpp:delay");
     timestamp = delay ? xmpp_stanza_get_attribute(delay, "stamp") : NULL;
@@ -756,17 +762,21 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza)
                                  weechat_prefix("network"), weechat_color("gray"),
                                  channel::transport_name(channel->transport));
     }
+    auto display_prefix = user::as_prefix_raw(&account, display_from);
+    if (display_prefix.empty())
+        display_prefix = user::as_prefix_raw(from_bare);
+    
     if (channel_id == from_bare && to == channel->id)
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t[to %s]: %s",
-                                 edit, user::as_prefix_raw(&account, from).data(),
+                                 edit, display_prefix.data(),
                                  to, difftext ? difftext : text ? text : "");
     else if (weechat_string_match(text, "/me *", 0))
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s %s",
-                                 edit, weechat_prefix("action"), user::as_prefix_raw(&account, from).data(),
+                                 edit, weechat_prefix("action"), display_prefix.data(),
                                  difftext ? difftext+4 : text ? text+4 : "");
     else
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s",
-                                 edit, user::as_prefix_raw(&account, from).data(),
+                                 edit, display_prefix.data(),
                                  difftext ? difftext : text ? text : "");
 
     weechat_string_dyn_free(dyn_tags, 1);
@@ -1202,6 +1212,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
         xmpp_stanza_t *set, *set__last;
         char *set__last__text;
         weechat::account::mam_query mam_query;
+        
+        const char *complete = xmpp_stanza_get_attribute(fin, "complete");
 
         set = xmpp_stanza_get_child_by_name_and_ns(
             fin, "set", "http://jabber.org/protocol/rsm");
@@ -1213,15 +1225,28 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
             set__last__text = set__last
                 ? xmpp_stanza_get_text(set__last) : NULL;
 
-            if (channel != account.channels.end() && set__last__text)
+            if (channel != account.channels.end())
             {
-                channel->second.fetch_mam(id,
-                                   mam_query.start.transform([](time_t& t) { return &t; }).value_or(nullptr),
-                                   mam_query.end.transform([](time_t& t) { return &t; }).value_or(nullptr),
-                                   set__last__text);
+                if (set__last__text)
+                {
+                    channel->second.fetch_mam(id,
+                                       mam_query.start.transform([](time_t& t) { return &t; }).value_or(nullptr),
+                                       mam_query.end.transform([](time_t& t) { return &t; }).value_or(nullptr),
+                                       set__last__text);
+                }
+                else
+                    account.mam_query_remove(mam_query.id);
             }
-            else if (!set__last)
-                account.mam_query_remove(mam_query.id);
+            else
+            {
+                if (!set__last)
+                    account.mam_query_remove(mam_query.id);
+            }
+        }
+        else
+        {
+            weechat_printf(account.buffer, "MAM query not found or no set: id=%s, set=%s", 
+                id ? id : "null", set ? "yes" : "no");
         }
     }
 

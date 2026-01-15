@@ -754,28 +754,29 @@ int command__mam(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    time_t start = time(NULL);
-    struct tm *ago = gmtime(&start);
+    time_t start, end;
     if (argc > 1)
     {
         errno = 0;
         days = strtol(argv[1], NULL, 10);
 
-        if (errno == 0)
-            ago->tm_mday -= days;
-        else
+        if (errno != 0)
         {
             weechat_printf(
                 ptr_channel->buffer,
                 _("%s%s: \"%s\" is not a valid number of %s for %s"),
-                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "days", "mam");
-            ago->tm_mday -= MAM_DEFAULT_DAYS;
+                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[1], "days", "mam");
+            days = MAM_DEFAULT_DAYS;
         }
     }
     else
-        ago->tm_mday -= MAM_DEFAULT_DAYS;
-    start = mktime(ago);
-    ptr_channel->fetch_mam(xmpp_uuid_gen(ptr_account->context), &start, NULL, NULL);
+        days = MAM_DEFAULT_DAYS;
+    
+    // Calculate time range: (now - days) to now
+    end = time(NULL);
+    start = end - (days * 24 * 60 * 60);
+    
+    ptr_channel->fetch_mam(xmpp_uuid_gen(ptr_account->context), &start, &end, NULL);
 
     return WEECHAT_RC_OK;
 }

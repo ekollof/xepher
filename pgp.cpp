@@ -101,6 +101,10 @@ weechat::xmpp::pgp::pgp()
 
 weechat::xmpp::pgp::~pgp()
 {
+    // Safety check: if plugin is destroyed, skip cleanup
+    if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
+        return;
+        
     gpgme_release(this->gpgme);
 }
 

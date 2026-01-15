@@ -26,6 +26,9 @@ namespace weechat
     class channel;
     class user;
 
+    // Global flag to signal plugin is unloading (prevents crashes in timer callbacks)
+    extern bool g_plugin_unloading;
+
     void log_emit(void *const userdata, const xmpp_log_level_t level,
                   const char *const area, const char *const msg);
 
@@ -146,5 +149,5 @@ namespace weechat
         void pgp_keyid(std::string pgp_keyid) { this->option_pgp_keyid = pgp_keyid; }
     };
 
-    extern std::unordered_map<std::string, account> accounts;
+    extern std::unordered_map<std::string, account>& accounts;
 }

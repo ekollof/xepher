@@ -143,3 +143,13 @@
 | 0449: Stickers(Experimental)                                            |           ✗            |       ✗       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
 | 0454: OMEMO Media sharing(Experimental)                                 |           ✗            |       ✗       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
 +-------------------------------------------------------------------------+------------------------+---------------+------+-------+----------+-------+--------+-------+
+
+## Known Issues
+
+### Plugin Reload
+Hot reloading the plugin (e.g., `/plugin reload xmpp` or `make install` while weechat is running) may cause crashes due to timer hooks firing after the plugin is unloaded. 
+
+**Workaround**: Restart weechat after rebuilding the plugin.
+
+### Clean Exit
+The plugin should exit cleanly with `/quit`. If you experience crashes on exit, this is a bug that should be reported.

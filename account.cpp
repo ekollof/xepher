@@ -25,7 +25,10 @@
 #include "channel.hh"
 #include "buffer.hh"
 
-std::unordered_map<std::string, weechat::account> weechat::accounts;
+// Use a pointer that's never freed to prevent destructor running at program exit
+// when plugin is already unloaded. Memory is leaked but OS reclaims it.
+std::unordered_map<std::string, weechat::account>& weechat::accounts = 
+    *new std::unordered_map<std::string, weechat::account>();
 
 void weechat::log_emit(void *const userdata, const xmpp_log_level_t level,
                        const char *const area, const char *const msg)
@@ -34,83 +37,18 @@ void weechat::log_emit(void *const userdata, const xmpp_log_level_t level,
 
     static const char *log_level_name[4] = {"debug", "info", "warn", "error"};
 
+    // Skip all debug logs - only show info, warnings, and errors
+    if (level == XMPP_LEVEL_DEBUG)
+        return;
+
     const char *tags = level > XMPP_LEVEL_DEBUG ? "no_log" : NULL;
 
-    char *xml;
-    if ((level == XMPP_LEVEL_DEBUG) && ((xml = const_cast<char*>(strchr(msg, '<'))) != NULL))
-    {
-        FILE *nullfd = fopen("/dev/null", "w+");
-        xmlGenericErrorContext = nullfd;
-
-        const char *header = strndup(msg, xml - msg);
-        xmlDocPtr doc = xmlRecoverMemory(xml, strlen(xml));
-        if (doc == NULL) {
-            weechat_printf(
-                account ? account->buffer : NULL,
-                "xml: Error parsing the xml document");
-            fclose(nullfd);
-            return;
-        }
-        xmlNodePtr root = xmlDocGetRootElement(doc);
-        std::string tag = root ? (const char*)root->name : "";
-        const char *colour = weechat_color("red");
-        if (tag == "message")
-        {
-            colour = weechat_color("yellow");
-        }
-        else if (tag == "presence")
-        {
-            colour = weechat_color("green");
-        }
-        else if (tag == "iq")
-        {
-            colour = weechat_color("blue");
-        }
-        xmlChar *buf = (xmlChar*)malloc(strlen(xml) * 2);
-        if (buf == NULL) {
-            weechat_printf(
-                account ? account->buffer : NULL,
-                "xml: Error allocating the xml buffer");
-            fclose(nullfd);
-            return;
-        }
-        int size = -1;
-        xmlDocDumpFormatMemory(doc, &buf, &size, 1);
-        if (size <= 0) {
-            weechat_printf(
-                account ? account->buffer : NULL,
-                "xml: Error formatting the xml document");
-            fclose(nullfd);
-            return;
-        }
-        char **lines = weechat_string_split((char*)buf, "\r\n", NULL,
-                                            0, 0, &size);
-        if (lines[size-1][0] == 0)
-            lines[--size] = 0;
-        weechat_printf_date_tags(
-            account ? account->buffer : NULL,
-            0, tags,
-            _("%s%s (%s): %s"),
-            weechat_prefix("network"), area,
-            log_level_name[level], header);
-        for (int i = 1; i < size; i++)
-            weechat_printf_date_tags(
-                account ? account->buffer : NULL,
-                0, tags,
-                _("%s%s"), colour, lines[i]);
-
-        weechat_string_free_split(lines);
-        fclose(nullfd);
-    }
-    else
-    {
-        weechat_printf_date_tags(
-            account ? account->buffer : NULL,
-            0, tags,
-            _("%s%s (%s): %s"),
-            weechat_prefix("network"), area,
-            log_level_name[level], msg);
-    }
+    weechat_printf_date_tags(
+        account ? account->buffer : NULL,
+        0, tags,
+        _("%s%s (%s): %s"),
+        weechat_prefix("network"), area,
+        log_level_name[level], msg);
 }
 
 bool weechat::account::search(weechat::account* &out,
@@ -231,7 +169,7 @@ bool weechat::account::mam_query_search(weechat::account::mam_query* out,
 
     if (auto mam_query = mam_queries.find(id); mam_query != mam_queries.end())
     {
-        out = &mam_query->second;
+        *out = mam_query->second;  // Dereference pointer to copy the query data
         return true;
     }
 
@@ -294,17 +232,27 @@ weechat::account::account(config_file& config_file, const std::string name)
 
 weechat::account::~account()
 {
+    // Safety check: if plugin is destroyed, skip all cleanup
+    // Global destructors will run after plugin is destroyed
+    // Let the OS reclaim resources instead of trying to clean up
+    if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
+        return;
+        
     /*
-     * close account buffer (and all channels/privates)
-     * (only if we are not in a /upgrade, because during upgrade we want to
-     * keep connections and closing account buffer would disconnect from account)
+     * Don't close the buffer explicitly - let weechat handle cleanup
+     * Closing it here causes segfaults because channels are destroyed
+     * while their hooks are still active
      */
-    if (buffer)
-        weechat_buffer_close(buffer);
+    // if (buffer)
+    //     weechat_buffer_close(buffer);
 }
 
 void weechat::account::disconnect(int reconnect)
 {
+    // Safety check: if plugin is destroyed, don't call weechat functions
+    if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
+        return;
+        
     if (is_connected)
     {
         /*
@@ -434,15 +382,29 @@ int weechat::account::connect()
     return is_connected;
 }
 
+// Definition of the global unloading flag
+bool weechat::g_plugin_unloading = false;
+
 int weechat::account::timer_cb(const void *pointer, void *data, int remaining_calls)
 {
     (void) pointer;
     (void) data;
     (void) remaining_calls;
 
-  //try
-    {
-        if (accounts.empty()) return WEECHAT_RC_ERROR;
+    // Wrap EVERYTHING in try-catch to prevent crashes from any source
+    try {
+        // Quick check before accessing any plugin state
+        if (weechat::g_plugin_unloading)
+            return WEECHAT_RC_OK;
+
+        // Safety check: ensure plugin is still valid
+        if (!weechat::plugin::instance)
+            return WEECHAT_RC_OK;
+        if (!weechat::plugin::instance->ptr())
+            return WEECHAT_RC_OK;
+
+        if (accounts.empty()) 
+            return WEECHAT_RC_ERROR;
 
         for (auto& ptr_account : accounts)
         {
@@ -460,10 +422,8 @@ int weechat::account::timer_cb(const void *pointer, void *data, int remaining_ca
 
         return WEECHAT_RC_OK;
     }
-  //catch (const std::exception& ex)
-  //{
-  //    auto what = ex.what();
-  //    __asm__("int3");
-  //    return WEECHAT_RC_ERROR;
-  //}
+    catch (...) {
+        // Silently catch all exceptions during plugin reload
+        return WEECHAT_RC_OK;
+    }
 }

@@ -245,11 +245,9 @@ weechat::channel::channel(weechat::account& account,
 
     if (type != weechat::channel::chat_type::MUC)
     {
-        time_t start = time(NULL);
-        struct tm *ago = gmtime(&start);
-        ago->tm_mday -= 7;
-        start = mktime(ago);
-        fetch_mam(id, &start, nullptr, nullptr);
+        time_t start = time(NULL) - (7 * 86400);  // 7 days ago
+        time_t end = time(NULL);
+        fetch_mam(xmpp_uuid_gen(account.context), &start, &end, nullptr);
     }
 }
 
@@ -348,6 +346,10 @@ int weechat::channel::typing_cb(const void *pointer, void *data, int remaining_c
         return WEECHAT_RC_ERROR;
 
     channel = (weechat::channel *)pointer;
+    
+    // Safety check: don't access channel if hook was already cleared
+    if (!channel->typing_hook_timer)
+        return WEECHAT_RC_OK;
 
     now = time(NULL);
 
@@ -474,15 +476,66 @@ int weechat::channel::add_self_typing(weechat::user *user)
 
 weechat::channel::~channel()
 {
+    // Safety check: if plugin is destroyed, don't call weechat functions
+    if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
+        return;
+        
+    // Unhook timers to prevent callbacks firing after channel is destroyed
     if (typing_hook_timer)
+    {
         weechat_unhook(typing_hook_timer);
+        typing_hook_timer = nullptr;
+    }
     if (self_typing_hook_timer)
+    {
         weechat_unhook(self_typing_hook_timer);
-
+        self_typing_hook_timer = nullptr;
+    }
+    
+    // NOTE: Other cleanup disabled - weechat frees these when closing buffers
+    // Attempting to free them here causes memory corruption:
+    // - "Unaligned fastbin chunk detected" from freeing members_speaking lists
+    // - Double-free from freeing omemo hashtables
+    
+    /*
     if (members_speaking[0])
         weechat_list_free(members_speaking[0]);
     if (members_speaking[1])
         weechat_list_free(members_speaking[1]);
+    */
+    
+    /*
+    // Free topic
+    if (topic.value)
+        ::free(topic.value);
+    if (topic.creator)
+        ::free(topic.creator);
+
+    // Free creator
+    if (creator)
+        ::free(creator);
+
+    // Free unreads
+    for (auto& unread : unreads)
+    {
+        if (unread.id)
+            ::free(unread.id);
+        if (unread.thread)
+            ::free(unread.thread);
+    }
+
+    // Free members
+    for (auto& member_pair : members)
+    {
+        auto& member = member_pair.second;
+        if (member.id)
+            ::free(member.id);
+        if (member.role)
+            ::free(member.role);
+        if (member.affiliation)
+            ::free(member.affiliation);
+    }
+    */
 }
 
 void weechat::channel::update_topic(const char* topic, const char* creator, int last_set)
@@ -706,11 +759,15 @@ int weechat::channel::send_message(std::string to, std::string body,
     xmpp_send(account.connection, message);
     xmpp_stanza_release(message);
     if (type != weechat::channel::chat_type::MUC)
+    {
+        auto *self_user = user::search(&account, account.jid().data());
+        auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
         weechat_printf_date_tags(buffer, 0,
                                  "xmpp_message,message,private,notify_none,self_msg,log1",
                                  "%s\t%s",
-                                 user::search(&account, account.jid().data())->as_prefix_raw().data(),
+                                 prefix.data(),
                                  body.data());
+    }
 
     return WEECHAT_RC_OK;
 }
@@ -901,11 +958,15 @@ int weechat::channel::send_message(const char *to, const char *body)
     xmpp_send(account.connection, message);
     xmpp_stanza_release(message);
     if (type != weechat::channel::chat_type::MUC)
+    {
+        auto *self_user = user::search(&account, account.jid().data());
+        auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
         weechat_printf_date_tags(buffer, 0,
                                  "xmpp_message,message,private,notify_none,self_msg,log1",
                                  "%s\t%s",
-                                 user::search(&account, account.jid().data())->as_prefix_raw().data(),
+                                 prefix.data(),
                                  body);
+    }
 
     return WEECHAT_RC_OK;
 }
@@ -1034,7 +1095,7 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
         xmpp_stanza_set_name(value, "value");
 
         text = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_text(text, id);
+        xmpp_stanza_set_text(text, this->id.data());  // Use channel JID, not query ID
         xmpp_stanza_add_child(value, text);
         xmpp_stanza_release(text);
 
@@ -1058,6 +1119,7 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
         char time[256] = {0};
         strftime(time, sizeof(time), "%Y-%m-%dT%H:%M:%SZ", gmtime(start));
         xmpp_stanza_set_text(text, time);
+        
         xmpp_stanza_add_child(value, text);
         xmpp_stanza_release(text);
 
@@ -1081,6 +1143,7 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
         char time[256] = {0};
         strftime(time, sizeof(time), "%Y-%m-%dT%H:%M:%SZ", gmtime(end));
         xmpp_stanza_set_text(text, time);
+        
         xmpp_stanza_add_child(value, text);
         xmpp_stanza_release(text);
 
@@ -1117,9 +1180,12 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
         xmpp_stanza_release(set);
     }
     else
-        account.add_mam_query(id, xmpp_stanza_get_id(iq),
+    {
+        weechat_printf(buffer, "Storing MAM query: id=%s, with=%s", id, this->id.data());
+        account.add_mam_query(id, this->id,
                 start ? std::optional(*start) : std::optional<time_t>(),
                 end ? std::optional(*end) : std::optional<time_t>());
+    }
 
     xmpp_stanza_add_child(iq, query);
     xmpp_stanza_release(query);

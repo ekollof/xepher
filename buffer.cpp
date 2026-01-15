@@ -69,7 +69,7 @@ char *buffer__typing_bar_cb(const void *pointer, void *data,
     buffer__get_account_and_channel(buffer, &account, &channel);
 
     if (!channel)
-        return strndup("", 0);
+        return strdup("");
 
     typecount = 0;
 
@@ -100,7 +100,7 @@ char *buffer__typing_bar_cb(const void *pointer, void *data,
     }
     else
     {
-        return strndup("", 0);
+        return strdup("");
     }
 }
 
@@ -137,6 +137,10 @@ int buffer__close_cb(const void *pointer, void *data,
 
     (void) pointer;
     (void) data;
+
+    // Safety check: if plugin instance is gone, we're shutting down
+    if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
+        return WEECHAT_RC_OK;
 
     buffer_plugin = (struct t_weechat_plugin*)weechat_buffer_get_pointer(buffer, "plugin");
     if (buffer_plugin != weechat_plugin)

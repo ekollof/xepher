@@ -140,7 +140,11 @@ weechat::config::config()
 {
 }
 
-weechat::config::~config() {}
+weechat::config::~config() {
+    // Safety check: if plugin is destroyed, skip cleanup
+    if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
+        return;
+}
 
 std::optional<weechat::config> weechat::config::instance;
 

@@ -81,10 +81,14 @@ weechat::plugin::plugin(struct t_weechat_plugin *plugin)
 
 void weechat::plugin::init(int argc, char *argv[])
 {
+    // Reset unloading flag
+    weechat::g_plugin_unloading = false;
+    
     m_args = std::vector<std::string_view>(argv, argv+argc);
 
-    if (std::find(m_args.begin(), m_args.end(), "debug") != m_args.end())
-        weechat_signal_handler = std::signal(SIGSEGV, wrapped_signal_handler);
+    // Signal handler wrapping disabled - causes crashes when not under debugger
+    // if (std::find(m_args.begin(), m_args.end(), "debug") != m_args.end())
+    //     weechat_signal_handler = std::signal(SIGSEGV, wrapped_signal_handler);
 
     if (!weechat::config::init()) // TODO: bool -> exceptions
         throw std::runtime_error("Config init failed");
@@ -119,23 +123,34 @@ void weechat::plugin::init(int argc, char *argv[])
 }
 
 void weechat::plugin::end() {
+    // Unhook timer FIRST to stop any callbacks
+    if (m_process_timer) {
+        weechat_unhook(m_process_timer);
+        m_process_timer = nullptr;
+    }
+    
+    // Set flag to prevent any in-flight callbacks from proceeding
+    weechat::g_plugin_unloading = true;
+    
     if (m_typing_bar_item) // raii?
         weechat_bar_item_remove(m_typing_bar_item);
 
-    if (m_process_timer) // raii?
-        weechat_unhook(m_process_timer);
-
-    weechat::config::write();
-
-    weechat::config::instance.reset();
-
     weechat::account::disconnect_all();
 
+    // Write config before clearing accounts
+    weechat::config::write();
+    
+    // Clear accounts while plugin is still valid
+    // The global is a never-freed pointer so it won't be destroyed at program exit
     weechat::accounts.clear();
+
+    weechat::config::instance.reset();
 
     libstrophe::shutdown();
 }
 
 weechat::plugin::~plugin()
 {
+    // Note: instance is being destroyed here, so we can't check it
+    // This destructor should be empty anyway
 }
