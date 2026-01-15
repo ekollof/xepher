@@ -76,6 +76,11 @@ std::unique_ptr<weechat::plugin> weechat::plugin::instance;
 
 weechat::plugin::plugin(struct t_weechat_plugin *plugin)
     : m_plugin_ptr(plugin)
+    , m_process_timer(nullptr)
+    , m_typing_bar_item(nullptr)
+    , m_encryption_bar_item(nullptr)
+    , m_buffer_switch_hook(nullptr)
+    , m_input_text_changed_hook(nullptr)
 {
 }
 
@@ -121,13 +126,13 @@ void weechat::plugin::init(int argc, char *argv[])
                                                   &buffer__encryption_bar_cb,
                                                   nullptr, nullptr);
 
-    weechat_hook_signal("buffer_switch",
-                        &buffer__switch_cb,
-                        nullptr, nullptr);
+    m_buffer_switch_hook = weechat_hook_signal("buffer_switch",
+                                                &buffer__switch_cb,
+                                                nullptr, nullptr);
 
-    weechat_hook_signal("input_text_changed",
-                        &input__text_changed_cb, // TODO: port
-                        nullptr, nullptr);
+    m_input_text_changed_hook = weechat_hook_signal("input_text_changed",
+                                                      &input__text_changed_cb, // TODO: port
+                                                      nullptr, nullptr);
 }
 
 void weechat::plugin::end() {
@@ -135,6 +140,17 @@ void weechat::plugin::end() {
     if (m_process_timer) {
         weechat_unhook(m_process_timer);
         m_process_timer = nullptr;
+    }
+    
+    // Unhook signals to prevent callbacks during shutdown
+    if (m_buffer_switch_hook) {
+        weechat_unhook(m_buffer_switch_hook);
+        m_buffer_switch_hook = nullptr;
+    }
+    
+    if (m_input_text_changed_hook) {
+        weechat_unhook(m_input_text_changed_hook);
+        m_input_text_changed_hook = nullptr;
     }
     
     // Set flag to prevent any in-flight callbacks from proceeding
