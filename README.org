@@ -164,7 +164,7 @@
      * [ ] [#C] Event-driven MUC entrance
    * [-] XMPP Ping (xep-199)
      * [X] Respond to s2c and m2c
-     * [ ] [#B] /ping for c2s and c2c
+     * [X] /ping for c2s and c2c
    * [-] MUCs
      * [X] Presence/nicklist
        * [X] Enters

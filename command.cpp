@@ -1001,6 +1001,142 @@ int command__trap(const void *pointer, void *data,
 }
 
 
+
+int command__edit(const void *pointer, void *data,
+                  struct t_gui_buffer *buffer, int argc,
+                  char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+    const char *text;
+
+    (void) pointer;
+    (void) data;
+    (void) argv;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel)
+    {
+        weechat_printf(buffer, "%sxmpp: you must be in a channel to edit messages",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2)
+    {
+        weechat_printf(buffer, "%sxmpp: missing message text",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    text = argv_eol[1];
+
+    // Find the last message sent by us
+    struct t_hdata *hdata_line = weechat_hdata_get("line");
+    struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+    struct t_gui_lines *own_lines = (struct t_gui_lines*)weechat_hdata_pointer(
+        weechat_hdata_get("buffer"), buffer, "own_lines");
+    
+    if (!own_lines)
+    {
+        weechat_printf(buffer, "%sxmpp: cannot access buffer lines",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    struct t_gui_line *line = (struct t_gui_line*)weechat_hdata_pointer(
+        hdata_line, own_lines, "last_line");
+    
+    char *last_msg_id = NULL;
+    
+    // Search backwards for our last sent message
+    while (line && !last_msg_id)
+    {
+        struct t_gui_line_data *line_data = (struct t_gui_line_data*)weechat_hdata_pointer(
+            hdata_line, line, "data");
+        
+        if (line_data)
+        {
+            const char *tags = (const char*)weechat_hdata_string(hdata_line_data, line_data, "tags");
+            
+            // Check if this is our message (has self_msg tag and id_ tag)
+            if (tags && strstr(tags, "self_msg") && strstr(tags, "id_"))
+            {
+                // Extract the message ID from tags
+                char **tag_array = weechat_string_split(tags, ",", NULL, 0, 0, NULL);
+                if (tag_array)
+                {
+                    for (int i = 0; tag_array[i]; i++)
+                    {
+                        if (strncmp(tag_array[i], "id_", 3) == 0)
+                        {
+                            last_msg_id = strdup(tag_array[i] + 3);
+                            break;
+                        }
+                    }
+                    weechat_string_free_split(tag_array);
+                }
+                break;
+            }
+        }
+        
+        line = (struct t_gui_line*)weechat_hdata_move(hdata_line, line, -1);
+    }
+    
+    if (!last_msg_id)
+    {
+        weechat_printf(buffer, "%sxmpp: no message found to edit",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // Send message correction
+    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
+                    ptr_channel->type == weechat::channel::chat_type::MUC
+                    ? "groupchat" : "chat",
+                    ptr_channel->id.data(), NULL);
+
+    char *id = xmpp_uuid_gen(ptr_account->context);
+    xmpp_stanza_set_id(message, id);
+    xmpp_free(ptr_account->context, id);
+    xmpp_message_set_body(message, text);
+
+    // Add replace element with original message ID
+    xmpp_stanza_t *replace = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(replace, "replace");
+    xmpp_stanza_set_ns(replace, "urn:xmpp:message-correct:0");
+    xmpp_stanza_set_id(replace, last_msg_id);
+    xmpp_stanza_add_child(message, replace);
+    xmpp_stanza_release(replace);
+
+    xmpp_stanza_t *message__store = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(message__store, "store");
+    xmpp_stanza_set_ns(message__store, "urn:xmpp:hints");
+    xmpp_stanza_add_child(message, message__store);
+    xmpp_stanza_release(message__store);
+
+    xmpp_send(ptr_account->connection, message);
+    xmpp_stanza_release(message);
+    
+    free(last_msg_id);
+
+    weechat_printf(buffer, "%sxmpp: message edit sent",
+                  weechat_prefix("network"));
+
+    return WEECHAT_RC_OK;
+}
+
 int command__ping(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
@@ -1198,4 +1334,13 @@ void command__init()
         NULL, &command__ping, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /ping");
+
+    hook = weechat_hook_command(
+        "edit",
+        N_("edit the last message sent"),
+        N_("<message>"),
+        N_("message: new message text to replace the last one"),
+        NULL, &command__edit, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /edit");
 }
