@@ -89,6 +89,12 @@ namespace weechat
                                [&](config_option&, const char *) { return true; },
                                [&](config_option&) {},
                                [&](config_option&) {})
+            , option_pgp_keys(config_file, section_account,
+                              fmt::format("{0}.{1} << xmpp.account_default.{1}", name, "pgp_keys"),
+                              "string", "Per-JID PGP Keys (jid:keyid,...)", nullptr, 0, 0, "", "", false,
+                              [&](config_option&, const char *) { return true; },
+                              [&](config_option&) {},
+                              [&](config_option&) {})
         {
         }
 
@@ -141,6 +147,11 @@ namespace weechat
                                [&](config_option&, const char *) { return true; },
                                [&](config_option&) {},
                                [&](config_option&) {})
+            , option_pgp_keys(config_file, section_account_default,
+                              "pgp_keys", "string", "Per-JID PGP Keys (jid:keyid,...)", nullptr, 0, 0, "", "", false,
+                              [&](config_option&, const char *) { return true; },
+                              [&](config_option&) {},
+                              [&](config_option&) {})
         {
         }
 
@@ -155,6 +166,7 @@ namespace weechat
         config_option option_status;
         config_option option_pgp_path;
         config_option option_pgp_keyid;
+        config_option option_pgp_keys;
 
         bool read(const char *, const char *);
         bool write();

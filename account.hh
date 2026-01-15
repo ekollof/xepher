@@ -82,6 +82,8 @@ namespace weechat
         std::unordered_map<std::string, weechat::user> users;
 
         std::unordered_map<std::string, struct t_config_option *> options;
+        
+        std::unordered_set<std::string> user_disco_queries;
 
         int reloading_from_config = 0;
 
@@ -147,6 +149,9 @@ namespace weechat
         void pgp_path(std::string pgp_path) { this->option_pgp_path = pgp_path; }
         std::string_view pgp_keyid() { return this->option_pgp_keyid.string(); }
         void pgp_keyid(std::string pgp_keyid) { this->option_pgp_keyid = pgp_keyid; }
+        
+        void save_pgp_keys();
+        void load_pgp_keys();
     };
 
     extern std::unordered_map<std::string, account>& accounts;

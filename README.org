@@ -43,6 +43,12 @@
     - Typing indicators show JID instead of resource ID
   - *Reduced logging noise*: Disabled debug-level logging for cleaner output
   - *Channel type detection*: Fixed PM vs MUC detection for proper message handling
+  - *New features implemented*:
+    - MUC leave on /close - properly sends unavailable presence when closing MUC buffer
+    - XMPP Ping (XEP-0199) - responds to ping requests and /ping command to send pings
+    - Message correction (XEP-0308) - /edit command to correct last sent message
+    - Complete chat state notifications - active, composing, paused, inactive, gone
+    - PGP key persistence - keys set with /pgp now persist across restarts per JID/MUC
 
   *Known limitation*: Plugin reload while weechat is running is not supported due to 
   fundamental race conditions with timer hooks. Always restart weechat instead of 
@@ -127,14 +133,14 @@
    * [X] Recv typing notifications
    * [X] Message Carbons
    * [X] MAM Fetching
-   * [/] Read receipts
+   * [X] Read receipts
      * [X] Message Delivery (XEP-0184)
      * [X] Chat Markers (XEP-0333)
        * [X] Composing
        * [X] Paused
-       * [?] Active
-       * [#] Inactive
-       * [#] Gone
+       * [X] Active
+       * [X] Inactive
+       * [X] Gone
    * [X] OMEMO (libomemo-c)
      * [X] Presence
        * [X] Disco
@@ -152,7 +158,7 @@
      * [X] Decryption
      * [X] Encryption
      * [X] Custom set/clear key (/pgp)
-     * [ ] [#B] Save pgp key set per jid/muc
+     * [X] [#B] Save pgp key set per jid/muc
    * [ ] [#A] Account renaming
    * [-] OOB messages
      * [X] Single media on a line
@@ -182,8 +188,8 @@
        * [X] Diff highlighting
        * [X] Making (/edit)
      * [X] Leave on /close
-   * [ ] Service Disco
-     * [ ] [#B] /disco [domain]
+   * [-] Service Disco
+     * [X] [#B] /disco [domain]
    * [ ] /whois [user|muc]
      * [ ] [#B] User Avatars
      * [ ] [#B] MUC Icons

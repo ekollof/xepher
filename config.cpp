@@ -47,6 +47,7 @@ bool account_read_cb(weechat::config_section& section,
             std::ref(account->option_status),
             std::ref(account->option_pgp_path),
             std::ref(account->option_pgp_keyid),
+            std::ref(account->option_pgp_keys),
         };
 
         if (!account->reloading_from_config++)
@@ -71,9 +72,11 @@ bool account_read_cb(weechat::config_section& section,
         if (option_id == "status") rc &= rc_ok(account->option_status = value);
         if (option_id == "pgp_path") rc &= rc_ok(account->option_pgp_path = value);
         if (option_id == "pgp_keyid") rc &= rc_ok(account->option_pgp_keyid = value);
+        if (option_id == "pgp_keys") rc &= rc_ok(account->option_pgp_keys = value);
 
         if (!account->reloading_from_config)
         {
+            account->load_pgp_keys();  // Safe to call - only loads for existing channels
             bool ac_global = std::stoul(std::unique_ptr<char, decltype(free)*>(
                                             weechat_info_get("auto_connect", NULL), &free).get());
             bool ac_local = account->autoconnect();
@@ -107,6 +110,7 @@ bool account_write_cb(weechat::config_section& section, const char *section_name
 
     for (auto& account : weechat::accounts)
     {
+        account.second.save_pgp_keys();
         if (!account.second.write())
             return WEECHAT_CONFIG_WRITE_ERROR;
     }

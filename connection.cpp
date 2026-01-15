@@ -109,6 +109,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza)
             std::make_pair(jid, weechat::channel {
                     account, weechat::channel::chat_type::PM, jid, jid
                 })).first->second;
+        account.load_pgp_keys();
     }
 
     if (binding.type && *binding.type == "error" && channel)
@@ -998,9 +999,25 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
 
         if (weechat_strcasecmp(type, "result") == 0)
         {
+            const char *stanza_id = xmpp_stanza_get_id(stanza);
+            bool user_initiated = stanza_id && account.user_disco_queries.count(stanza_id);
+            
+            if (user_initiated)
+            {
+                account.user_disco_queries.erase(stanza_id);
+                
+                const char *from_jid = xmpp_stanza_get_from(stanza);
+                struct t_gui_buffer *output_buffer = account.buffer;
+                
+                weechat_printf(output_buffer, "");
+                weechat_printf(output_buffer, "%sService Discovery for %s%s:", 
+                              weechat_color("chat_prefix_network"),
+                              weechat_color("chat_server"), 
+                              from_jid ? from_jid : "server");
+            }
+            
             xmpp_stanza_t *identity = xmpp_stanza_get_child_by_name(query, "identity");
-
-            if (identity)
+            while (identity)
             {
                 std::string category;
                 std::string name;
@@ -1012,6 +1029,17 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
                     name = unescape(attr);
                 if (const char *attr = xmpp_stanza_get_attribute(identity, "type"))
                     type = attr;
+
+                if (user_initiated)
+                {
+                    weechat_printf(account.buffer, "  %sIdentity:%s %s/%s %s%s%s",
+                                  weechat_color("chat_prefix_network"),
+                                  weechat_color("reset"),
+                                  category.c_str(), type.c_str(),
+                                  weechat_color("chat_delimiters"),
+                                  name.empty() ? "" : name.c_str(),
+                                  weechat_color("reset"));
+                }
 
                 if (category == "conference")
                 {
@@ -1031,6 +1059,25 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
                             binding.from ? strdup(binding.from->bare.data()) : NULL, strdup("get"));
                     account.connection.send(children[0]);
                     xmpp_stanza_release(children[0]);
+                }
+                
+                identity = xmpp_stanza_get_next(identity);
+            }
+            
+            if (user_initiated)
+            {
+                xmpp_stanza_t *feature = xmpp_stanza_get_child_by_name(query, "feature");
+                if (feature)
+                {
+                    weechat_printf(account.buffer, "  %sFeatures:",
+                                  weechat_color("chat_prefix_network"));
+                    while (feature)
+                    {
+                        const char *var = xmpp_stanza_get_attribute(feature, "var");
+                        if (var)
+                            weechat_printf(account.buffer, "    %s", var);
+                        feature = xmpp_stanza_get_next(feature);
+                    }
                 }
             }
         }
