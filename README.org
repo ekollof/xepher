@@ -194,7 +194,7 @@
            * [X] Device ID
            * [X] Bundles
      * [X] Messages
-   * [-] PGP (gpgme)
+      * [X] PGP (gpgme)
      * [X] Use keyrings (from gnupg)
      * [X] Presence
      * [X] Decryption
@@ -210,10 +210,10 @@
    * [ ] Cache caps
    * [ ] Handle wide errors gracefully
      * [ ] [#C] Event-driven MUC entrance
-   * [-] XMPP Ping (xep-199)
+      * [X] XMPP Ping (xep-199)
      * [X] Respond to s2c and m2c
      * [X] /ping for c2s and c2c
-   * [-] MUCs
+      * [X] MUCs
      * [X] Presence/nicklist
        * [X] Enters
        * [X] Leaves
@@ -224,13 +224,13 @@
      * [X] Sending
        * [X] With /msg
      * [X] Handle errors gracefully
-     * [-] Edits
+     *       * [X] Edits
        * [X] Displaying
        * [X] Tagging
        * [X] Diff highlighting
        * [X] Making (/edit)
      * [X] Leave on /close
-   * [-] Service Disco
+      * [X] Service Disco
      * [X] [#B] /disco [domain]
    * [ ] /whois [user|muc]
      * [ ] [#B] User Avatars
