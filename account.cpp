@@ -13,6 +13,8 @@
 #include <libxml/xmlerror.h>
 #include <libxml/parser.h>
 #include <weechat/weechat-plugin.h>
+#include <filesystem>
+#include <lmdb++.h>
 
 #include "plugin.hh"
 #include "xmpp/stanza.hh"
@@ -228,6 +230,8 @@ weechat::account::account(config_file& config_file, const std::string name)
     this->status(config_file.configuration.account_default.option_status.string().data());
     this->pgp_path(config_file.configuration.account_default.option_pgp_path.string().data());
     this->pgp_keyid(config_file.configuration.account_default.option_pgp_keyid.string().data());
+    
+    mam_cache_init();
 }
 
 weechat::account::~account()
@@ -237,6 +241,8 @@ weechat::account::~account()
     // Let the OS reclaim resources instead of trying to clean up
     if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
         return;
+    
+    mam_cache_cleanup();
         
     /*
      * Don't close the buffer explicitly - let weechat handle cleanup
@@ -480,4 +486,126 @@ void weechat::account::load_pgp_keys()
     }
     
     weechat_string_free_split(pairs);
+}
+
+void weechat::account::mam_cache_init()
+{
+    try {
+        mam_db_path = std::shared_ptr<char>(
+            weechat_string_eval_expression(
+                fmt::format("${{weechat_data_dir}}/xmpp/mam_{}.db", name.data()).data(),
+                NULL, NULL, NULL),
+            &free).get();
+        
+        std::filesystem::create_directories(
+            std::filesystem::path(mam_db_path.data()).parent_path());
+
+        mam_db_env = lmdb::env::create();
+        mam_db_env.set_max_dbs(10);
+        mam_db_env.set_mapsize((size_t)1048576 * 1000); // 1000MB
+        mam_db_env.open(mam_db_path.data(), MDB_NOSUBDIR, 0664);
+
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn transaction = lmdb::txn::begin(mam_db_env, parentTransaction);
+
+        mam_dbi.messages = lmdb::dbi::open(transaction, "messages", MDB_CREATE);
+        mam_dbi.timestamps = lmdb::dbi::open(transaction, "timestamps", MDB_CREATE);
+
+        transaction.commit();
+    } catch (const lmdb::error& ex) {
+        weechat_printf(NULL, "%sxmpp: MAM cache init failed - %s",
+                      weechat_prefix("error"), ex.what());
+    }
+}
+
+void weechat::account::mam_cache_cleanup()
+{
+    try {
+        if (mam_db_env)
+        {
+            mam_dbi.messages.close(mam_db_env);
+            mam_dbi.timestamps.close(mam_db_env);
+            mam_db_env.close();
+            mam_db_env = nullptr;
+        }
+    } catch (const lmdb::error& ex) {
+        weechat_printf(NULL, "%sxmpp: MAM cache cleanup failed - %s",
+                      weechat_prefix("error"), ex.what());
+    }
+}
+
+void weechat::account::mam_cache_message(const std::string& channel_jid,
+                                         const std::string& message_id,
+                                         const std::string& from,
+                                         time_t timestamp,
+                                         const std::string& body)
+{
+    if (!mam_db_env) return;
+    
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+        
+        // Key: channel_jid:timestamp:message_id
+        std::string key = fmt::format("{}:{:020d}:{}", channel_jid, timestamp, message_id);
+        
+        // Value: from|timestamp|body
+        std::string value = fmt::format("{}|{}|{}", from, timestamp, body);
+        
+        lmdb::dbi_put(txn, mam_dbi.messages, 
+                     lmdb::val(key.data(), key.size()),
+                     lmdb::val(value.data(), value.size()));
+        
+        txn.commit();
+    } catch (const lmdb::error& ex) {
+        // Silently ignore cache write errors
+    }
+}
+
+time_t weechat::account::mam_cache_get_last_timestamp(const std::string& channel_jid)
+{
+    if (!mam_db_env) return 0;
+    
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
+        
+        lmdb::val value;
+        if (lmdb::dbi_get(txn, mam_dbi.timestamps,
+                         lmdb::val(channel_jid.data(), channel_jid.size()),
+                         value))
+        {
+            time_t ts = 0;
+            if (value.size() == sizeof(time_t))
+            {
+                memcpy(&ts, value.data(), sizeof(time_t));
+            }
+            txn.abort();
+            return ts;
+        }
+        
+        txn.abort();
+    } catch (const lmdb::error& ex) {
+        // Silently ignore read errors
+    }
+    
+    return 0;
+}
+
+void weechat::account::mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp)
+{
+    if (!mam_db_env) return;
+    
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+        
+        lmdb::dbi_put(txn, mam_dbi.timestamps,
+                     lmdb::val(channel_jid.data(), channel_jid.size()),
+                     lmdb::val(&timestamp, sizeof(timestamp)));
+        
+        txn.commit();
+    } catch (const lmdb::error& ex) {
+        // Silently ignore write errors
+    }
 }

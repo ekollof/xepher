@@ -248,6 +248,12 @@ weechat::channel::channel(weechat::account& account,
         time_t now = time(NULL);
         time_t start;
         
+        // Load last fetch timestamp from cache
+        if (last_mam_fetch == 0)
+        {
+            last_mam_fetch = account.mam_cache_get_last_timestamp(id);
+        }
+        
         // If we've fetched recently, only get new messages since last fetch
         if (last_mam_fetch > 0 && (now - last_mam_fetch) < 300)  // Less than 5 minutes
         {

@@ -11,6 +11,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <optional>
+#include <lmdb++.h>
 
 #include "fmt/core.h"
 #include "strophe.h"
@@ -93,6 +94,14 @@ namespace weechat
         std::unordered_map<std::string, struct t_config_option *> options;
         
         std::unordered_set<std::string> user_disco_queries;
+        
+        // MAM cache database
+        lmdb::env mam_db_env = nullptr;
+        struct mam_dbi {
+            lmdb::dbi messages = 0;
+            lmdb::dbi timestamps = 0;
+        } mam_dbi;
+        std::string mam_db_path;
 
         int reloading_from_config = 0;
 
@@ -117,6 +126,13 @@ namespace weechat
         bool mam_query_search(mam_query* out, const std::string id);
         void mam_query_remove(const std::string id);
         void mam_query_free_all();
+        
+        void mam_cache_init();
+        void mam_cache_cleanup();
+        void mam_cache_message(const std::string& channel_jid, const std::string& message_id,
+                              const std::string& from, time_t timestamp, const std::string& body);
+        time_t mam_cache_get_last_timestamp(const std::string& channel_jid);
+        void mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp);
 
         struct t_gui_buffer* create_buffer();
 

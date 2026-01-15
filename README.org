@@ -39,7 +39,7 @@
     - Fixed pagination to properly retrieve all archived messages
     - Fixed time range calculation
     - Enabled automatic MAM retrieval on connect (7 days history for PM channels)
-    - Smart timestamp tracking - avoids refetching messages when reopening buffers
+    - Smart timestamp tracking with LMDB persistence - timestamps persist across restarts
   - *Display improvements*:
     - Messages now show sender's JID instead of client resource ID (e.g., "user@domain.org" 
       instead of "Conversations.xxxx")

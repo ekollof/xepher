@@ -1351,6 +1351,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
                 {
                     // MAM fetch complete, update last fetch timestamp
                     channel->second.last_mam_fetch = time(NULL);
+                    account.mam_cache_set_last_timestamp(channel->second.id, channel->second.last_mam_fetch);
                     weechat_printf(channel->second.buffer, 
                                   "%sMAM history loaded",
                                   weechat_prefix("network"));
