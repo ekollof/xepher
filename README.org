@@ -127,14 +127,14 @@
    * [X] Recv typing notifications
    * [X] Message Carbons
    * [X] MAM Fetching
-   * [/] Read receipts
+   * [X] Read receipts
      * [X] Message Delivery (XEP-0184)
      * [X] Chat Markers (XEP-0333)
        * [X] Composing
        * [X] Paused
-       * [?] Active
-       * [#] Inactive
-       * [#] Gone
+       * [X] Active
+       * [X] Inactive
+       * [X] Gone
    * [X] OMEMO (libomemo-c)
      * [X] Presence
        * [X] Disco

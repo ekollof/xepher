@@ -473,10 +473,13 @@ int command__enter(const void *pointer, void *data,
                                     ptr_account->jid().data()));
 
             if (!ptr_account->channels.contains(jid))
+            {
                 ptr_channel = &ptr_account->channels.emplace(
                     std::make_pair(jid, weechat::channel {
                             *ptr_account, weechat::channel::chat_type::MUC, jid, jid
                         })).first->second;
+                ptr_account->load_pgp_keys();
+            }
 	    if (!ptr_channel) {
 		weechat_string_free_split(jids); // raii unique_ptr?
 		return WEECHAT_RC_ERROR;
@@ -847,6 +850,8 @@ int command__pgp(const void *pointer, void *data,
         keyid = argv_eol[1];
 
         ptr_channel->pgp.ids.emplace(keyid);
+        ptr_account->save_pgp_keys();
+        weechat::config::write();
     }
     ptr_channel->omemo.enabled = 0;
     ptr_channel->pgp.enabled = 1;

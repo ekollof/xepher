@@ -109,6 +109,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza)
             std::make_pair(jid, weechat::channel {
                     account, weechat::channel::chat_type::PM, jid, jid
                 })).first->second;
+        account.load_pgp_keys();
     }
 
     if (binding.type && *binding.type == "error" && channel)
