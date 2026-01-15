@@ -966,9 +966,26 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
     const char *id = xmpp_stanza_get_id(stanza);
     const char *from = xmpp_stanza_get_from(stanza);
     const char *to = xmpp_stanza_get_to(stanza);
+    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    
+    // Handle XMPP Ping (XEP-0199)
+    xmpp_stanza_t *ping = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "ping", "urn:xmpp:ping");
+    if (ping && type && weechat_strcasecmp(type, "get") == 0)
+    {
+        // Respond with iq result
+        reply = xmpp_iq_new(account.context, "result", id);
+        xmpp_stanza_set_to(reply, from);
+        if (to)
+            xmpp_stanza_set_from(reply, to);
+        
+        account.connection.send(reply);
+        xmpp_stanza_release(reply);
+        return true;
+    }
+    
     query = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "query", "http://jabber.org/protocol/disco#info");
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
     if (query && type)
     {
         if (weechat_strcasecmp(type, "get") == 0)

@@ -181,7 +181,7 @@
        * [X] Tagging
        * [X] Diff highlighting
        * [ ] [#B] Making (/edit)
-     * [ ] [#A] Leave on /close
+     * [X] Leave on /close
    * [ ] Service Disco
      * [ ] [#B] /disco [domain]
    * [ ] /whois [user|muc]
