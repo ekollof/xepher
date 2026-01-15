@@ -562,6 +562,72 @@ void weechat::account::mam_cache_message(const std::string& channel_jid,
     }
 }
 
+void weechat::account::mam_cache_load_messages(const std::string& channel_jid, struct t_gui_buffer *buffer)
+{
+    if (!mam_db_env || !buffer) return;
+    
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
+        
+        auto cursor = lmdb::cursor::open(txn, mam_dbi.messages);
+        
+        // Start with channel prefix
+        std::string prefix = channel_jid + ":";
+        lmdb::val key(prefix.data(), prefix.size());
+        lmdb::val value;
+        
+        int count = 0;
+        bool found = cursor.get(key, value, MDB_SET_RANGE);
+        
+        while (found && count < 100)  // Limit to last 100 cached messages
+        {
+            std::string key_str(key.data(), key.size());
+            
+            // Check if key still belongs to our channel
+            if (key_str.substr(0, prefix.size()) != prefix)
+                break;
+            
+            // Parse value: from|timestamp|body
+            std::string value_str(value.data(), value.size());
+            size_t pos1 = value_str.find('|');
+            size_t pos2 = value_str.find('|', pos1 + 1);
+            
+            if (pos1 != std::string::npos && pos2 != std::string::npos)
+            {
+                std::string from = value_str.substr(0, pos1);
+                std::string timestamp_str = value_str.substr(pos1 + 1, pos2 - pos1 - 1);
+                std::string body = value_str.substr(pos2 + 1);
+                
+                time_t timestamp = std::stoll(timestamp_str);
+                
+                // Display cached message with gray prefix
+                weechat_printf_date_tags(buffer, timestamp, "xmpp_cached,no_highlight",
+                                        "%s%s\t%s",
+                                        weechat_color("darkgray"),
+                                        from.c_str(),
+                                        body.c_str());
+                count++;
+            }
+            
+            found = cursor.get(key, value, MDB_NEXT);
+        }
+        
+        cursor.close();
+        txn.abort();
+        
+        if (count > 0)
+        {
+            weechat_printf(buffer, "%s--- %d cached messages loaded ---",
+                          weechat_prefix("network"), count);
+        }
+    } catch (const lmdb::error& ex) {
+        // Silently ignore read errors
+    } catch (const std::exception& ex) {
+        // Silently ignore parsing errors
+    }
+}
+
 time_t weechat::account::mam_cache_get_last_timestamp(const std::string& channel_jid)
 {
     if (!mam_db_env) return 0;

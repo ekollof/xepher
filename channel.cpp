@@ -254,12 +254,18 @@ weechat::channel::channel(weechat::account& account,
             last_mam_fetch = account.mam_cache_get_last_timestamp(id);
         }
         
+        // Load and display cached messages
+        if (last_mam_fetch > 0)
+        {
+            account.mam_cache_load_messages(id, buffer);
+        }
+        
         // If we've fetched recently, only get new messages since last fetch
         if (last_mam_fetch > 0 && (now - last_mam_fetch) < 300)  // Less than 5 minutes
         {
             // Fetch only messages since last fetch
             start = last_mam_fetch;
-            weechat_printf(buffer, "%sFetching MAM messages since last check (%ld seconds ago)...",
+            weechat_printf(buffer, "%sFetching new MAM messages since last check (%ld seconds ago)...",
                           weechat_prefix("network"),
                           now - last_mam_fetch);
         }

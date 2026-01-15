@@ -364,9 +364,49 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza)
                 xmpp_stanza_t *message = xmpp_stanza_get_child_by_name(forwarded, "message");
                 if (message)
                 {
-                    message = xmpp_stanza_copy(message);
+                    // Extract message details for caching
+                    const char *msg_id = xmpp_stanza_get_id(message);
+                    const char *msg_from = xmpp_stanza_get_from(message);
+                    const char *msg_to = xmpp_stanza_get_to(message);
+                    xmpp_stanza_t *msg_body = xmpp_stanza_get_child_by_name(message, "body");
+                    char *msg_text = msg_body ? xmpp_stanza_get_text(msg_body) : NULL;
+                    
                     delay = xmpp_stanza_get_child_by_name_and_ns(
                         forwarded, "delay", "urn:xmpp:delay");
+                    const char *timestamp_str = delay ? xmpp_stanza_get_attribute(delay, "stamp") : NULL;
+                    
+                    // Parse timestamp
+                    time_t msg_timestamp = 0;
+                    if (timestamp_str)
+                    {
+                        struct tm time = {0};
+                        strptime(timestamp_str, "%FT%T", &time);
+                        msg_timestamp = mktime(&time);
+                    }
+                    
+                    // Cache the message if we have all required fields
+                    if (msg_id && msg_from && msg_text && msg_timestamp > 0)
+                    {
+                        const char *from_bare = xmpp_jid_bare(account.context, msg_from);
+                        const char *to_bare = msg_to ? xmpp_jid_bare(account.context, msg_to) : NULL;
+                        
+                        // Determine channel JID (from_bare for received, to_bare for sent)
+                        const char *channel_jid = from_bare;
+                        if (to_bare && weechat_strcasecmp(to_bare, account.jid().data()) != 0)
+                            channel_jid = to_bare;
+                        
+                        account.mam_cache_message(channel_jid, msg_id, from_bare, 
+                                                  msg_timestamp, msg_text);
+                        
+                        xmpp_free(account.context, (void*)from_bare);
+                        if (to_bare)
+                            xmpp_free(account.context, (void*)to_bare);
+                    }
+                    
+                    if (msg_text)
+                        xmpp_free(account.context, msg_text);
+                    
+                    message = xmpp_stanza_copy(message);
                     if (delay != NULL)
                         xmpp_stanza_add_child_ex(message, xmpp_stanza_copy(delay), 0);
                     int ret = message_handler(message);
