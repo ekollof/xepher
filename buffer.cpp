@@ -205,6 +205,13 @@ int buffer__close_cb(const void *pointer, void *data,
         {
             if (ptr_account->connected())
             {
+                // Send "gone" chat state when closing PM
+                if (ptr_channel->type == weechat::channel::chat_type::PM)
+                {
+                    auto *user = weechat::user::search(ptr_account, ptr_account->jid_device().data());
+                    ptr_channel->send_gone(user);
+                }
+                
                 ptr_account->channels.erase(ptr_channel->name);
             }
         }

@@ -158,6 +158,8 @@ namespace weechat
         void send_reads();
         void send_typing(weechat::user *user);
         void send_paused(weechat::user *user);
+        void send_inactive(weechat::user *user);
+        void send_gone(weechat::user *user);
 
         void fetch_mam(const char *id, time_t *start, time_t *end, const char *after);
 

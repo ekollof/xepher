@@ -1049,6 +1049,42 @@ void weechat::channel::send_paused(weechat::user *user)
     xmpp_stanza_release(message);
 }
 
+void weechat::channel::send_inactive(weechat::user *user)
+{
+    xmpp_stanza_t *message = xmpp_message_new(account.context,
+                                              type == weechat::channel::chat_type::MUC
+                                              ? "groupchat" : "chat",
+                                              (user ? user->id : id).data(), NULL);
+
+    xmpp_stanza_t *message__inactive = xmpp_stanza_new(account.context);
+    xmpp_stanza_set_name(message__inactive, "inactive");
+    xmpp_stanza_set_ns(message__inactive, "http://jabber.org/protocol/chatstates");
+
+    xmpp_stanza_add_child(message, message__inactive);
+    xmpp_stanza_release(message__inactive);
+
+    xmpp_send(account.connection, message);
+    xmpp_stanza_release(message);
+}
+
+void weechat::channel::send_gone(weechat::user *user)
+{
+    xmpp_stanza_t *message = xmpp_message_new(account.context,
+                                              type == weechat::channel::chat_type::MUC
+                                              ? "groupchat" : "chat",
+                                              (user ? user->id : id).data(), NULL);
+
+    xmpp_stanza_t *message__gone = xmpp_stanza_new(account.context);
+    xmpp_stanza_set_name(message__gone, "gone");
+    xmpp_stanza_set_ns(message__gone, "http://jabber.org/protocol/chatstates");
+
+    xmpp_stanza_add_child(message, message__gone);
+    xmpp_stanza_release(message__gone);
+
+    xmpp_send(account.connection, message);
+    xmpp_stanza_release(message);
+}
+
 void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, const char* after)
 {
     xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", "juliet1");

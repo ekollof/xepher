@@ -180,7 +180,7 @@
        * [X] Displaying
        * [X] Tagging
        * [X] Diff highlighting
-       * [ ] [#B] Making (/edit)
+       * [X] Making (/edit)
      * [X] Leave on /close
    * [ ] Service Disco
      * [ ] [#B] /disco [domain]
