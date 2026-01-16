@@ -1570,6 +1570,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
 
 bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
 {
+    // CRITICAL: Verify this is actually an SM stanza by checking xmlns
+    const char *xmlns = xmpp_stanza_get_ns(stanza);
+    if (!xmlns || strcmp(xmlns, "urn:xmpp:sm:3") != 0)
+    {
+        // Not an SM stanza, ignore
+        return true;
+    }
+
     const char *name = xmpp_stanza_get_name(stanza);
     if (!name)
         return true;
@@ -1858,9 +1866,9 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                    .get());
         
         // Hook user activity signals to detect when user becomes active
-        weechat_hook_signal("input_text_changed", &account::activity_cb, &account, nullptr);
-        weechat_hook_signal("buffer_switch", &account::activity_cb, &account, nullptr);
-        weechat_hook_signal("key_pressed", &account::activity_cb, &account, nullptr);
+        account.csi_activity_hooks[0] = weechat_hook_signal("input_text_changed", &account::activity_cb, &account, nullptr);
+        account.csi_activity_hooks[1] = weechat_hook_signal("buffer_switch", &account::activity_cb, &account, nullptr);
+        account.csi_activity_hooks[2] = weechat_hook_signal("key_pressed", &account::activity_cb, &account, nullptr);
         
         // Set up idle timer (check every 60 seconds)
         account.idle_timer_hook = weechat_hook_timer(60 * 1000, 0, 0,

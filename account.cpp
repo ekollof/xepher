@@ -267,6 +267,15 @@ void weechat::account::disconnect(int reconnect)
         idle_timer_hook = nullptr;
     }
     
+    for (int i = 0; i < 3; i++)
+    {
+        if (csi_activity_hooks[i])
+        {
+            weechat_unhook(csi_activity_hooks[i]);
+            csi_activity_hooks[i] = nullptr;
+        }
+    }
+    
     // Clean up Stream Management hooks
     if (sm_ack_timer_hook)
     {

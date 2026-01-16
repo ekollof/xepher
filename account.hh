@@ -96,6 +96,7 @@ namespace weechat
         bool csi_active = true;
         time_t last_activity = 0;
         struct t_hook *idle_timer_hook = nullptr;
+        struct t_hook *csi_activity_hooks[3] = {nullptr, nullptr, nullptr};  // Store activity signal hooks
 
         // Stream Management (XEP-0198)
         bool sm_enabled = false;
