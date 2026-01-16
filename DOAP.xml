@@ -184,6 +184,15 @@
       </xmpp:SupportedXep>
     </implements>
 
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0245.html'/>
+        <xmpp:status>complete</xmpp:status>
+        <xmpp:version>1.0.0</xmpp:version>
+        <xmpp:note xml:lang='en'>The /me Command for IRC-style action messages</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
     <release>
       <Version>
         <revision>0.3.0-fork</revision>

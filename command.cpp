@@ -717,12 +717,12 @@ int command__me(const void *pointer, void *data,
 
     if (argc > 1)
     {
-        text = argv_eol[0];
+        std::string me_text = std::string("/me ") + argv_eol[1];
 
         message = xmpp_message_new(ptr_account->context,
                                    ptr_channel->type == weechat::channel::chat_type::MUC ? "groupchat" : "chat",
                                    ptr_channel->name.data(), NULL);
-        xmpp_message_set_body(message, text);
+        xmpp_message_set_body(message, me_text.data());
         ptr_account->connection.send( message);
         xmpp_stanza_release(message);
         if (ptr_channel->type != weechat::channel::chat_type::MUC)
@@ -731,7 +731,7 @@ int command__me(const void *pointer, void *data,
                                      "%s%s %s",
                                      weechat_prefix("action"),
                                      weechat::user::search(ptr_account, ptr_account->jid().data())->as_prefix_raw().data(),
-                                     strlen(text) > strlen("/me ") ? text+4 : "");
+                                     argv_eol[1]);
     }
 
     return WEECHAT_RC_OK;

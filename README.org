@@ -176,6 +176,8 @@
 *** /me
     Send an XMPP action to the current buffer (third-person narrative)
 
+    Implements XEP-0245: The /me Command
+
     *Usage:*
     #+begin_src
     /me <message>
@@ -184,6 +186,7 @@
     *Example:*
     #+begin_src
     /me is away from keyboard
+    /me jumps for joy
     #+end_src
 
 *** /edit
