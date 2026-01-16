@@ -147,9 +147,28 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
     {
         if (auto error = binding.error())
         {
-            weechat_printf(channel->buffer, "[!]\t%s%sError: %s",
-                           weechat_color("gray"),
-                           binding.muc() ? "MUC " : "", error->reason());
+            const char *error_reason = error->reason();
+            const char *from_str = binding.from ? binding.from->full.data() : "unknown";
+            
+            // Only log if the error has meaningful information
+            // Skip generic "Unspecified" errors that don't have useful context
+            if (strcmp(error_reason, "Unspecified") != 0 || error->description)
+            {
+                weechat_printf(channel->buffer, "[!]\t%s%sError: %s%s%s",
+                               weechat_color("gray"),
+                               binding.muc() ? "MUC " : "",
+                               error_reason,
+                               error->description ? " (" : "",
+                               error->description ? error->description->data() : "");
+                if (error->description)
+                    weechat_printf(channel->buffer, "%s)", "");
+            }
+            else
+            {
+                // Debug: log unspecified errors with JID
+                weechat_printf(account.buffer, "%s[DEBUG] Received unspecified error from %s (presence)",
+                              weechat_prefix("network"), from_str);
+            }
         }
         return 1;
     }
