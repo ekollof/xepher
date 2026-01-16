@@ -124,6 +124,7 @@
     - ✅ XEP-0334: Message Processing Hints (bandwidth optimization)
     - ✅ XEP-0352: Client State Indication
     - ✅ XEP-0359: Unique and Stable Stanza IDs (message deduplication)
+    - ✅ XEP-0380: Explicit Message Encryption (encryption method tagging)
     - ✅ XEP-0384: OMEMO Encryption (complete implementation)
     - ✅ XEP-0402: PEP Native Bookmarks (modern PEP-based bookmark storage)
 

@@ -878,6 +878,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     encrypted = xmpp_stanza_get_child_by_name_and_ns(stanza, "encrypted",
                                                      "eu.siacs.conversations.axolotl");
     x = xmpp_stanza_get_child_by_name_and_ns(stanza, "x", "jabber:x:encrypted");
+    
+    // XEP-0380: Explicit Message Encryption
+    xmpp_stanza_t *eme = xmpp_stanza_get_child_by_name_and_ns(stanza, "encryption",
+                                                                "urn:xmpp:eme:0");
+    const char *eme_namespace = eme ? xmpp_stanza_get_attribute(eme, "namespace") : NULL;
+    const char *eme_name = eme ? xmpp_stanza_get_attribute(eme, "name") : NULL;
+    
     intext = xmpp_stanza_get_text(body);
     
     // Auto-enable OMEMO for PM channels when receiving encrypted messages
@@ -1418,6 +1425,21 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         weechat_string_dyn_concat(dyn_tags, ",stanza_id_by_", -1);
         weechat_string_dyn_concat(dyn_tags, stanza_id_by, -1);
     }
+    // XEP-0380: Store encryption method if advertised
+    if (eme_namespace)
+    {
+        weechat_string_dyn_concat(dyn_tags, ",eme_", -1);
+        if (eme_name)
+            weechat_string_dyn_concat(dyn_tags, eme_name, -1);
+        else if (strstr(eme_namespace, "axolotl"))
+            weechat_string_dyn_concat(dyn_tags, "OMEMO", -1);
+        else if (strstr(eme_namespace, "openpgp"))
+            weechat_string_dyn_concat(dyn_tags, "OpenPGP", -1);
+        else if (strstr(eme_namespace, "encryption"))
+            weechat_string_dyn_concat(dyn_tags, "PGP", -1);
+        else
+            weechat_string_dyn_concat(dyn_tags, "encrypted", -1);
+    }
 
     if (channel->type == weechat::channel::chat_type::PM)
         weechat_string_dyn_concat(dyn_tags, ",private", -1);
@@ -1654,6 +1676,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     FEATURE("urn:xmpp:reply:0");  // XEP-0461: Message Replies
     FEATURE("urn:xmpp:sid:0");  // XEP-0359: Stanza IDs
     FEATURE("urn:xmpp:styling:0");
+    FEATURE("urn:xmpp:eme:0");  // XEP-0380: Explicit Message Encryption
     FEATURE("http://jabber.org/protocol/mood");  // XEP-0107: User Mood
     FEATURE("http://jabber.org/protocol/mood+notify");  // Subscribe to mood updates
     FEATURE("http://jabber.org/protocol/activity");  // XEP-0108: User Activity
