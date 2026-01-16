@@ -1185,14 +1185,19 @@ int command__ping(const void *pointer, void *data,
     char *id = xmpp_uuid_gen(ptr_account->context);
     iq = xmpp_iq_new(ptr_account->context, "get", id);
     
+    // Track ping time for response measurement
+    ptr_account->user_ping_queries[id] = time(NULL);
+    
     if (target)
     {
         xmpp_stanza_set_to(iq, target);
-        weechat_printf(buffer, "xmpp: sending ping to %s", target);
+        weechat_printf(buffer, "%sSending ping to %s...",
+                       weechat_prefix("network"), target);
     }
     else
     {
-        weechat_printf(buffer, "xmpp: sending ping to server");
+        weechat_printf(buffer, "%sSending ping to server...",
+                       weechat_prefix("network"));
     }
     
     xmpp_stanza_t *ping = xmpp_stanza_new(ptr_account->context);

@@ -1045,6 +1045,37 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
         return true;
     }
     
+    // Handle ping responses (XEP-0199)
+    if (type && (weechat_strcasecmp(type, "result") == 0 || weechat_strcasecmp(type, "error") == 0))
+    {
+        const char *stanza_id = xmpp_stanza_get_id(stanza);
+        if (stanza_id && account.user_ping_queries.count(stanza_id))
+        {
+            time_t start_time = account.user_ping_queries[stanza_id];
+            time_t now = time(NULL);
+            long rtt_ms = (now - start_time) * 1000;  // Convert to milliseconds
+            
+            account.user_ping_queries.erase(stanza_id);
+            
+            const char *from_jid = from ? from : account.jid().data();
+            
+            if (weechat_strcasecmp(type, "result") == 0)
+            {
+                weechat_printf(account.buffer, "%sPong from %s (RTT: %ld ms)",
+                              weechat_prefix("network"), from_jid, rtt_ms);
+            }
+            else
+            {
+                // Error response
+                xmpp_stanza_t *error = xmpp_stanza_get_child_by_name(stanza, "error");
+                const char *error_type = error ? xmpp_stanza_get_attribute(error, "type") : "unknown";
+                weechat_printf(account.buffer, "%sPing failed to %s: %s",
+                              weechat_prefix("error"), from_jid, error_type);
+            }
+            return true;
+        }
+    }
+    
     query = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "query", "http://jabber.org/protocol/disco#info");
     if (query && type)

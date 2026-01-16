@@ -94,6 +94,7 @@ namespace weechat
         std::unordered_map<std::string, struct t_config_option *> options;
         
         std::unordered_set<std::string> user_disco_queries;
+        std::unordered_map<std::string, time_t> user_ping_queries;  // ping_id -> start_time
         
         // MAM cache database
         lmdb::env mam_db_env = nullptr;
