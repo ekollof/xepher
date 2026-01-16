@@ -17,6 +17,7 @@
 #include <lmdb++.h>
 
 #include "plugin.hh"
+#include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
 #include "config.hh"
 #include "input.hh"
@@ -258,6 +259,13 @@ void weechat::account::disconnect(int reconnect)
     // Safety check: if plugin is destroyed, don't call weechat functions
     if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
         return;
+        
+    // Clean up Client State Indication hooks
+    if (idle_timer_hook)
+    {
+        weechat_unhook(idle_timer_hook);
+        idle_timer_hook = nullptr;
+    }
         
     if (is_connected)
     {
@@ -870,4 +878,68 @@ bool weechat::account::caps_cache_get(const std::string& verification_hash,
         return true;
     }
     return false;
+}
+
+// Client State Indication (XEP-0352) - Idle timer callback
+int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaining_calls)
+{
+    (void) data;
+    (void) remaining_calls;
+
+    if (weechat::g_plugin_unloading || !weechat::plugin::instance)
+        return WEECHAT_RC_OK;
+
+    account *account = (struct account *)pointer;
+    if (!account || !account->connection || !xmpp_conn_is_connected(account->connection))
+        return WEECHAT_RC_OK;
+
+    time_t now = time(NULL);
+    time_t idle_time = now - account->last_activity;
+
+    // If idle for more than 5 minutes and currently active, send inactive
+    if (idle_time > 300 && account->csi_active)
+    {
+        account->connection.send(stanza::xep0352::inactive()
+                                .build(account->context)
+                                .get());
+        account->csi_active = false;
+        weechat_printf(account->buffer, "%sClient state: inactive (idle for %ld seconds)",
+                      weechat_prefix("network"), idle_time);
+    }
+
+    return WEECHAT_RC_OK;
+}
+
+// Client State Indication (XEP-0352) - Activity callback
+int weechat::account::activity_cb(const void *pointer, void *data,
+                                  const char *signal, const char *type_data,
+                                  void *signal_data)
+{
+    (void) data;
+    (void) signal;
+    (void) type_data;
+    (void) signal_data;
+
+    if (weechat::g_plugin_unloading || !weechat::plugin::instance)
+        return WEECHAT_RC_OK;
+
+    account *account = (struct account *)pointer;
+    if (!account || !account->connection || !xmpp_conn_is_connected(account->connection))
+        return WEECHAT_RC_OK;
+
+    // Update last activity timestamp
+    account->last_activity = time(NULL);
+
+    // If currently inactive, send active
+    if (!account->csi_active)
+    {
+        account->connection.send(stanza::xep0352::active()
+                                .build(account->context)
+                                .get());
+        account->csi_active = true;
+        weechat_printf(account->buffer, "%sClient state: active",
+                      weechat_prefix("network"));
+    }
+
+    return WEECHAT_RC_OK;
 }

@@ -92,6 +92,11 @@ namespace weechat
                              const char *const area, const char *const msg);
 
     public:
+        // Client State Indication (XEP-0352)
+        bool csi_active = true;
+        time_t last_activity = 0;
+        struct t_hook *idle_timer_hook = nullptr;
+
         std::string name;
         weechat::xmpp::pgp pgp;
         weechat::xmpp::omemo omemo;
@@ -128,6 +133,10 @@ namespace weechat
         static bool search(account* &out,
                            const std::string name, bool casesensitive = false);
         static int timer_cb(const void *pointer, void *data, int remaining_calls);
+        static int idle_timer_cb(const void *pointer, void *data, int remaining_calls);
+        static int activity_cb(const void *pointer, void *data,
+                              const char *signal, const char *type_data,
+                              void *signal_data);
         static void disconnect_all();
 
         bool connected() { return is_connected; }

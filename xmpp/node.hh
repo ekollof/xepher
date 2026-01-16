@@ -175,6 +175,7 @@ namespace stanza {
 #include "xep-0115.inl"
 #include "xep-0280.inl"
 #include "xep-0319.inl"
+#include "xep-0352.inl"
 #include "rfc-6121.inl"
 
 namespace stanza {

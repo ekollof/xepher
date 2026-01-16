@@ -1687,6 +1687,24 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             xmpp_stanza_release(children[0]);
         }
 
+        // Initialize Client State Indication (XEP-0352)
+        account.last_activity = time(NULL);
+        account.csi_active = true;
+        
+        // Send initial active state
+        this->send(stanza::xep0352::active()
+                   .build(account.context)
+                   .get());
+        
+        // Hook user activity signals to detect when user becomes active
+        weechat_hook_signal("input_text_changed", &account::activity_cb, &account, nullptr);
+        weechat_hook_signal("buffer_switch", &account::activity_cb, &account, nullptr);
+        weechat_hook_signal("key_pressed", &account::activity_cb, &account, nullptr);
+        
+        // Set up idle timer (check every 60 seconds)
+        account.idle_timer_hook = weechat_hook_timer(60 * 1000, 0, 0,
+                                                     &account::idle_timer_cb, &account, nullptr);
+
         (void) weechat_hook_signal_send("xmpp_account_connected",
                                         WEECHAT_HOOK_SIGNAL_STRING, account.name.data());
     }
