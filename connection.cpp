@@ -612,7 +612,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza)
             xmpp_stanza_release(message__thread);
         }
 
-        xmpp_send(account.connection, message);
+        account.connection.send( message);
         xmpp_stanza_release(message);
 
         channel->unreads.push_back(*unread);

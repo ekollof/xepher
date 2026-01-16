@@ -863,7 +863,7 @@ int weechat::channel::send_message(std::string to, std::string body,
     xmpp_stanza_add_child(message, message__store);
     xmpp_stanza_release(message__store);
 
-    xmpp_send(account.connection, message);
+    account.connection.send( message);
     xmpp_stanza_release(message);
     if (type != weechat::channel::chat_type::MUC)
     {
@@ -1062,7 +1062,7 @@ int weechat::channel::send_message(const char *to, const char *body)
     xmpp_stanza_add_child(message, message__store);
     xmpp_stanza_release(message__store);
 
-    xmpp_send(account.connection, message);
+    account.connection.send( message);
     xmpp_stanza_release(message);
     if (type != weechat::channel::chat_type::MUC)
     {
@@ -1110,7 +1110,7 @@ void weechat::channel::send_reads()
         xmpp_stanza_add_child(message, message__displayed);
         xmpp_stanza_release(message__displayed);
 
-        xmpp_send(account.connection, message);
+        account.connection.send( message);
         xmpp_stanza_release(message);
 
         i = unreads.erase(i);
@@ -1133,7 +1133,7 @@ void weechat::channel::send_typing(weechat::user *user)
         xmpp_stanza_add_child(message, message__composing);
         xmpp_stanza_release(message__composing);
 
-        xmpp_send(account.connection, message);
+        account.connection.send( message);
         xmpp_stanza_release(message);
     }
 }
@@ -1152,7 +1152,7 @@ void weechat::channel::send_paused(weechat::user *user)
     xmpp_stanza_add_child(message, message__paused);
     xmpp_stanza_release(message__paused);
 
-    xmpp_send(account.connection, message);
+    account.connection.send( message);
     xmpp_stanza_release(message);
 }
 
@@ -1170,7 +1170,7 @@ void weechat::channel::send_inactive(weechat::user *user)
     xmpp_stanza_add_child(message, message__inactive);
     xmpp_stanza_release(message__inactive);
 
-    xmpp_send(account.connection, message);
+    account.connection.send( message);
     xmpp_stanza_release(message);
 }
 
@@ -1188,7 +1188,7 @@ void weechat::channel::send_gone(weechat::user *user)
     xmpp_stanza_add_child(message, message__gone);
     xmpp_stanza_release(message__gone);
 
-    xmpp_send(account.connection, message);
+    account.connection.send( message);
     xmpp_stanza_release(message);
 }
 
@@ -1333,6 +1333,6 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
     xmpp_stanza_add_child(iq, query);
     xmpp_stanza_release(query);
 
-    xmpp_send(account.connection, iq);
+    account.connection.send(iq);
     xmpp_stanza_release(iq);
 }
