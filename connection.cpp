@@ -86,18 +86,34 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza)
         auto ver = caps->verification;
 
         clientid = fmt::format("{}#{}", node, ver);
-
-        account.connection.send(stanza::iq()
-                    .from(binding.to ? binding.to->full : "")
-                    .to(binding.from
-                        .transform([](auto& x) { return x.full; })
-                        .value_or(std::string()))
-                    .type("get")
-                    .id(stanza::uuid(account.context))
-                    .xep0030()
-                    .query()
-                    .build(account.context)
-                    .get());
+        
+        // Check if we have this capability hash cached (XEP-0115)
+        std::vector<std::string> cached_features;
+        if (account.caps_cache_get(ver, cached_features))
+        {
+            // We have cached features, no need to query
+            // Could use cached_features here if needed
+        }
+        else
+        {
+            // Not cached, send disco query and mark for caching
+            char *disco_id = xmpp_uuid_gen(account.context);
+            account.caps_disco_queries[disco_id] = ver;  // Track this query for caching
+            
+            account.connection.send(stanza::iq()
+                        .from(binding.to ? binding.to->full : "")
+                        .to(binding.from
+                            .transform([](auto& x) { return x.full; })
+                            .value_or(std::string()))
+                        .type("get")
+                        .id(disco_id)
+                        .xep0030()
+                        .query()
+                        .build(account.context)
+                        .get());
+            
+            xmpp_free(account.context, disco_id);
+        }
     }
 
     channel = account.channels.contains(binding.from->bare.data())
@@ -1101,6 +1117,26 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
         {
             const char *stanza_id = xmpp_stanza_get_id(stanza);
             bool user_initiated = stanza_id && account.user_disco_queries.count(stanza_id);
+            bool caps_query = stanza_id && account.caps_disco_queries.count(stanza_id);
+            
+            // Extract features for capability caching
+            std::vector<std::string> features;
+            if (caps_query)
+            {
+                xmpp_stanza_t *feature = xmpp_stanza_get_child_by_name(query, "feature");
+                while (feature)
+                {
+                    const char *var = xmpp_stanza_get_attribute(feature, "var");
+                    if (var)
+                        features.push_back(var);
+                    feature = xmpp_stanza_get_next(feature);
+                }
+                
+                // Save to capability cache
+                std::string ver_hash = account.caps_disco_queries[stanza_id];
+                account.caps_cache_save(ver_hash, features);
+                account.caps_disco_queries.erase(stanza_id);
+            }
             
             if (user_initiated)
             {

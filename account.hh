@@ -104,12 +104,17 @@ namespace weechat
         
         std::unordered_set<std::string> user_disco_queries;
         std::unordered_map<std::string, time_t> user_ping_queries;  // ping_id -> start_time
+        std::unordered_map<std::string, std::string> caps_disco_queries;  // disco_id -> verification_hash
+        
+        // Capability cache (XEP-0115)
+        std::unordered_map<std::string, std::vector<std::string>> caps_cache;  // verification_hash -> features
         
         // MAM cache database
         lmdb::env mam_db_env = nullptr;
         struct mam_dbi {
             lmdb::dbi messages = 0;
             lmdb::dbi timestamps = 0;
+            lmdb::dbi capabilities = 0;  // XEP-0115 capability cache
         } mam_dbi;
         std::string mam_db_path;
 
@@ -146,6 +151,11 @@ namespace weechat
         time_t mam_cache_get_last_timestamp(const std::string& channel_jid);
         void mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp);
         void send_bookmarks();
+        
+        // Capability cache methods (XEP-0115)
+        void caps_cache_load();
+        void caps_cache_save(const std::string& verification_hash, const std::vector<std::string>& features);
+        bool caps_cache_get(const std::string& verification_hash, std::vector<std::string>& features);
 
         struct t_gui_buffer* create_buffer();
 

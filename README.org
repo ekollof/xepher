@@ -57,6 +57,7 @@
     - Roster management - /roster command to display, add, and remove contacts
     - Bookmark management - /bookmark command to add, delete, list, and toggle autojoin for MUC rooms
     - Room explorer - /list command to search public MUC rooms via search.jabber.network
+    - Entity capability caching (XEP-0115) - caches disco#info results to reduce network queries
 
   *Known limitation*: Plugin reload while weechat is running is not supported due to 
   fundamental race conditions with timer hooks. Always restart weechat instead of 
@@ -514,7 +515,7 @@
      * [ ] [#D] Multiple media inline (protocol?)
      * [ ] [#C] Encrypted (pgp/omemo)
    * [X] Join and handle events asynchronously
-   * [ ] Cache caps
+   * [X] Cache caps
    * [ ] Handle wide errors gracefully
      * [ ] [#C] Event-driven MUC entrance
       * [X] XMPP Ping (xep-199)

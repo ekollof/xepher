@@ -511,8 +511,12 @@ void weechat::account::mam_cache_init()
 
         mam_dbi.messages = lmdb::dbi::open(transaction, "messages", MDB_CREATE);
         mam_dbi.timestamps = lmdb::dbi::open(transaction, "timestamps", MDB_CREATE);
+        mam_dbi.capabilities = lmdb::dbi::open(transaction, "capabilities", MDB_CREATE);
 
         transaction.commit();
+        
+        // Load capability cache from database
+        caps_cache_load();
     } catch (const lmdb::error& ex) {
         weechat_printf(NULL, "%sxmpp: MAM cache init failed - %s",
                       weechat_prefix("error"), ex.what());
@@ -770,4 +774,100 @@ void weechat::account::send_bookmarks()
     
     connection.send(iq);
     xmpp_stanza_release(iq);
+}
+
+// Capability cache implementation (XEP-0115)
+
+void weechat::account::caps_cache_load()
+{
+    if (!mam_db_env) return;
+    
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
+        
+        MDB_cursor *cursor;
+        mdb_cursor_open(txn.handle(), mam_dbi.capabilities.handle(), &cursor);
+        
+        MDB_val key, value;
+        int count = 0;
+        
+        while (mdb_cursor_get(cursor, &key, &value, MDB_NEXT) == 0)
+        {
+            std::string ver_hash((char*)key.mv_data, key.mv_size);
+            std::string features_str((char*)value.mv_data, value.mv_size);
+            
+            // Parse features (stored as comma-separated)
+            std::vector<std::string> features;
+            size_t pos = 0;
+            while (pos < features_str.length())
+            {
+                size_t next = features_str.find(',', pos);
+                if (next == std::string::npos)
+                {
+                    features.push_back(features_str.substr(pos));
+                    break;
+                }
+                features.push_back(features_str.substr(pos, next - pos));
+                pos = next + 1;
+            }
+            
+            caps_cache[ver_hash] = features;
+            count++;
+        }
+        
+        mdb_cursor_close(cursor);
+        txn.abort();
+        
+        if (count > 0)
+        {
+            weechat_printf(buffer, "%sLoaded %d capability entries from cache",
+                          weechat_prefix("network"), count);
+        }
+    } catch (const lmdb::error& ex) {
+        // Silently ignore read errors
+    }
+}
+
+void weechat::account::caps_cache_save(const std::string& verification_hash, 
+                                        const std::vector<std::string>& features)
+{
+    if (!mam_db_env) return;
+    
+    // Store in memory cache
+    caps_cache[verification_hash] = features;
+    
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+        
+        // Join features with commas
+        std::string features_str;
+        for (size_t i = 0; i < features.size(); i++)
+        {
+            if (i > 0) features_str += ",";
+            features_str += features[i];
+        }
+        
+        MDB_val key = {verification_hash.size(), (void*)verification_hash.data()};
+        MDB_val value = {features_str.size(), (void*)features_str.data()};
+        
+        mdb_put(txn.handle(), mam_dbi.capabilities.handle(), &key, &value, 0);
+        
+        txn.commit();
+    } catch (const lmdb::error& ex) {
+        // Silently ignore write errors
+    }
+}
+
+bool weechat::account::caps_cache_get(const std::string& verification_hash,
+                                       std::vector<std::string>& features)
+{
+    auto it = caps_cache.find(verification_hash);
+    if (it != caps_cache.end())
+    {
+        features = it->second;
+        return true;
+    }
+    return false;
 }
