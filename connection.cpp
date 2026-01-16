@@ -364,9 +364,19 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
             if (!channel)
             {
                 if (weechat_strcasecmp(type, "groupchat") == 0)
-                    channel = new weechat::channel(account, weechat::channel::chat_type::MUC, from_bare, from_bare);
+                {
+                    channel = &account.channels.emplace(
+                        std::make_pair(from_bare, weechat::channel {
+                                account, weechat::channel::chat_type::MUC, from_bare, from_bare
+                            })).first->second;
+                }
                 else
-                    channel = new weechat::channel(account, weechat::channel::chat_type::PM, from_bare, from_bare);
+                {
+                    channel = &account.channels.emplace(
+                        std::make_pair(from_bare, weechat::channel {
+                                account, weechat::channel::chat_type::PM, from_bare, from_bare
+                            })).first->second;
+                }
             }
             channel->update_topic(intext ? intext : "", from, 0);
             if (intext != NULL)
@@ -433,6 +443,44 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 xmpp_stanza_t *message = xmpp_stanza_get_child_by_name(forwarded, "message");
                 if (message)
                 {
+                    const char *debug_from = xmpp_stanza_get_from(message);
+                    const char *debug_to = xmpp_stanza_get_to(message);
+                    const char *debug_type = xmpp_stanza_get_type(message);
+                    
+                    // For global MAM queries, create PM channels based on conversation partners
+                    // Since we can't reliably get the query ID from individual result messages,
+                    // we'll create channels for all 1-on-1 conversations (non-MUC)
+                    if (!debug_type || weechat_strcasecmp(debug_type, "groupchat") != 0)
+                    {
+                        const char *from_bare = debug_from ? xmpp_jid_bare(account.context, debug_from) : NULL;
+                        const char *to_bare = debug_to ? xmpp_jid_bare(account.context, debug_to) : NULL;
+                        
+                        // Determine the conversation partner JID
+                        const char *partner_jid = NULL;
+                        if (from_bare && weechat_strcasecmp(from_bare, account.jid().data()) != 0)
+                            partner_jid = from_bare;  // Message FROM someone else
+                        else if (to_bare && weechat_strcasecmp(to_bare, account.jid().data()) != 0)
+                            partner_jid = to_bare;  // Message TO someone else (sent by us)
+                        
+                        // Create PM channel if it doesn't exist
+                        if (partner_jid && !account.channels.contains(partner_jid))
+                        {
+                            weechat_printf(account.buffer, "%sDiscovered conversation with %s",
+                                          weechat_prefix("network"), partner_jid);
+                            
+                            account.channels.emplace(
+                                std::make_pair(partner_jid, weechat::channel {
+                                        account, weechat::channel::chat_type::PM,
+                                        partner_jid, partner_jid
+                                    }));
+                        }
+                        
+                        if (from_bare)
+                            xmpp_free(account.context, (void*)from_bare);
+                        if (to_bare)
+                            xmpp_free(account.context, (void*)to_bare);
+                    }
+                    
                     // Extract message details for caching
                     const char *msg_id = xmpp_stanza_get_id(message);
                     const char *msg_from = xmpp_stanza_get_from(message);
@@ -579,14 +627,24 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     const char *pm_id = account.jid() == from_bare ? to : from;
     channel = parent_channel;
     if (!channel)
-        channel = new weechat::channel(account,
-                               weechat_strcasecmp(type, "groupchat") == 0
-                               ? weechat::channel::chat_type::MUC : weechat::channel::chat_type::PM,
-                               channel_id, channel_id);
+    {
+        channel = &account.channels.emplace(
+            std::make_pair(channel_id, weechat::channel {
+                    account,
+                    weechat_strcasecmp(type, "groupchat") == 0
+                        ? weechat::channel::chat_type::MUC : weechat::channel::chat_type::PM,
+                    channel_id, channel_id
+                })).first->second;
+    }
     if (channel && channel->type == weechat::channel::chat_type::MUC
         && weechat_strcasecmp(type, "chat") == 0)
-        channel = new weechat::channel(account, weechat::channel::chat_type::PM,
-                               pm_id, pm_id);
+    {
+        channel = &account.channels.emplace(
+            std::make_pair(pm_id, weechat::channel {
+                    account, weechat::channel::chat_type::PM,
+                    pm_id, pm_id
+                })).first->second;
+    }
 
     if (id && (markable || request))
     {
@@ -1578,6 +1636,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             fin, "set", "http://jabber.org/protocol/rsm");
         if (set && account.mam_query_search(&mam_query, id))
         {
+            // Check if this is a global MAM query (empty 'with')
+            bool is_global_query = mam_query.with.empty();
+            
             auto channel = account.channels.find(mam_query.with.data());
 
             set__last = xmpp_stanza_get_child_by_name(set, "last");
@@ -1600,6 +1661,16 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     account.mam_cache_set_last_timestamp(channel->second.id, channel->second.last_mam_fetch);
                     weechat_printf(channel->second.buffer, 
                                   "%sMAM history loaded",
+                                  weechat_prefix("network"));
+                    account.mam_query_remove(mam_query.id);
+                }
+            }
+            else if (is_global_query)
+            {
+                // Global MAM query complete - conversations were auto-created during message processing
+                if (!set__last__text)
+                {
+                    weechat_printf(account.buffer, "%sMAM conversation discovery complete",
                                   weechat_prefix("network"));
                     account.mam_query_remove(mam_query.id);
                 }
@@ -1955,6 +2026,84 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             xmpp_stanza_release(children[0]);
         }
 
+        // Query MAM globally to discover recent conversations
+        weechat_printf(account.buffer, "%sQuerying MAM for recent conversations...",
+                      weechat_prefix("network"));
+        
+        time_t now = time(NULL);
+        time_t start = now - (7 * 86400);  // Last 7 days
+        char *global_mam_id = xmpp_uuid_gen(account.context);
+        account.add_mam_query(global_mam_id, "",  // Empty 'with' means global query
+                             std::optional<time_t>(start), std::optional<time_t>(now));
+        
+        // Build MAM query manually (global query - no 'with' field)
+        xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", global_mam_id);
+        xmpp_stanza_set_id(iq, global_mam_id);
+        
+        xmpp_stanza_t *query = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(query, "query");
+        xmpp_stanza_set_ns(query, "urn:xmpp:mam:2");
+        
+        xmpp_stanza_t *x = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(x, "x");
+        xmpp_stanza_set_ns(x, "jabber:x:data");
+        xmpp_stanza_set_attribute(x, "type", "submit");
+        
+        // FORM_TYPE field
+        {
+            xmpp_stanza_t *field = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(field, "field");
+            xmpp_stanza_set_attribute(field, "var", "FORM_TYPE");
+            xmpp_stanza_set_attribute(field, "type", "hidden");
+            
+            xmpp_stanza_t *value = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(value, "value");
+            
+            xmpp_stanza_t *text = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_text(text, "urn:xmpp:mam:2");
+            xmpp_stanza_add_child(value, text);
+            xmpp_stanza_release(text);
+            
+            xmpp_stanza_add_child(field, value);
+            xmpp_stanza_release(value);
+            
+            xmpp_stanza_add_child(x, field);
+            xmpp_stanza_release(field);
+        }
+        
+        // Start time field
+        {
+            xmpp_stanza_t *field = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(field, "field");
+            xmpp_stanza_set_attribute(field, "var", "start");
+            
+            xmpp_stanza_t *value = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(value, "value");
+            
+            xmpp_stanza_t *text = xmpp_stanza_new(account.context);
+            char time_buf[256];
+            strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&start));
+            xmpp_stanza_set_text(text, time_buf);
+            xmpp_stanza_add_child(value, text);
+            xmpp_stanza_release(text);
+            
+            xmpp_stanza_add_child(field, value);
+            xmpp_stanza_release(value);
+            
+            xmpp_stanza_add_child(x, field);
+            xmpp_stanza_release(field);
+        }
+        
+        xmpp_stanza_add_child(query, x);
+        xmpp_stanza_release(x);
+        
+        xmpp_stanza_add_child(iq, query);
+        xmpp_stanza_release(query);
+        
+        this->send(iq);
+        xmpp_stanza_release(iq);
+        xmpp_free(account.context, global_mam_id);
+
         // Restore existing PM buffers from previous session
         struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
         struct t_gui_buffer *ptr_buffer = (struct t_gui_buffer*)weechat_hdata_get_list(hdata_buffer, "gui_buffers");
@@ -1979,8 +2128,11 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                                       weechat_prefix("network"), ptr_remote_jid);
                         
                         // Create channel object for existing buffer
-                        new weechat::channel(account, weechat::channel::chat_type::PM,
-                                           ptr_remote_jid, ptr_remote_jid);
+                        account.channels.emplace(
+                            std::make_pair(ptr_remote_jid, weechat::channel {
+                                    account, weechat::channel::chat_type::PM,
+                                    ptr_remote_jid, ptr_remote_jid
+                                }));
                     }
                 }
             }
