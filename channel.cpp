@@ -248,22 +248,31 @@ weechat::channel::channel(weechat::account& account,
         time_t now = time(NULL);
         time_t start;
         
+        weechat_printf(buffer, "%s[DEBUG] PM channel created, checking MAM...",
+                      weechat_prefix("network"));
+        
         // Load last fetch timestamp from cache
         if (last_mam_fetch == 0)
         {
             last_mam_fetch = account.mam_cache_get_last_timestamp(id);
+            weechat_printf(buffer, "%s[DEBUG] Last MAM fetch from cache: %ld",
+                          weechat_prefix("network"), last_mam_fetch);
         }
         
         // Skip MAM entirely if channel was deliberately closed (timestamp == -1)
         if (last_mam_fetch == -1)
         {
             // User closed this channel, don't auto-fetch history
+            weechat_printf(buffer, "%s[DEBUG] Channel was closed, skipping MAM",
+                          weechat_prefix("network"));
             return;
         }
         
         // Load and display cached messages
         if (last_mam_fetch > 0)
         {
+            weechat_printf(buffer, "%s[DEBUG] Loading cached MAM messages...",
+                          weechat_prefix("network"));
             account.mam_cache_load_messages(id, buffer);
         }
         
