@@ -1083,18 +1083,31 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     if (display_prefix.empty())
         display_prefix = user::as_prefix_raw(from_bare);
     
+    // Apply XEP-0393 Message Styling
+    const char *display_text = text;
+    std::string styled_text;
+    if (text && !difftext)  // Don't style diffs (already styled)
+    {
+        styled_text = apply_xep393_styling(text);
+        display_text = styled_text.c_str();
+    }
+    else if (difftext)
+    {
+        display_text = difftext;
+    }
+    
     if (channel_id == from_bare && to == channel->id)
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t[to %s]: %s",
                                  edit, display_prefix.data(),
-                                 to, difftext ? difftext : text ? text : "");
+                                 to, display_text ? display_text : "");
     else if (weechat_string_match(text, "/me *", 0))
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s %s",
                                  edit, weechat_prefix("action"), display_prefix.data(),
-                                 difftext ? difftext+4 : text ? text+4 : "");
+                                 difftext ? difftext+4 : display_text ? display_text+4 : "");
     else
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s",
                                  edit, display_prefix.data(),
-                                 difftext ? difftext : text ? text : "");
+                                 display_text ? display_text : "");
 
     weechat_string_dyn_free(dyn_tags, 1);
 
@@ -1172,6 +1185,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
   //FEATURE("urn:xmpp:jingle:transports:s5b:1");
     FEATURE("urn:xmpp:message-correct:0");
     FEATURE("urn:xmpp:message-retract:1");
+    FEATURE("urn:xmpp:styling:0");
     FEATURE("urn:xmpp:ping");
     FEATURE("urn:xmpp:receipts");
     FEATURE("urn:xmpp:time");

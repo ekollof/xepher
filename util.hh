@@ -13,3 +13,6 @@ char *exec(const char *command);
 char *stanza_xml(struct _xmpp_stanza_t *stanza);
 
 std::string unescape(const std::string& str);
+
+// XEP-0393: Message Styling
+std::string apply_xep393_styling(const std::string& text);
