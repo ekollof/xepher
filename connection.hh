@@ -64,9 +64,9 @@ namespace weechat {
         void process(xmpp_ctx_t *context, const unsigned long timeout);
 
         bool version_handler(xmpp_stanza_t *stanza);
-        bool presence_handler(xmpp_stanza_t *stanza);
-        bool message_handler(xmpp_stanza_t *stanza);
-        bool iq_handler(xmpp_stanza_t *stanza);
+        bool presence_handler(xmpp_stanza_t *stanza, bool top_level = true);
+        bool message_handler(xmpp_stanza_t *stanza, bool top_level = true);
+        bool iq_handler(xmpp_stanza_t *stanza, bool top_level = true);
         bool sm_handler(xmpp_stanza_t *stanza);
 
         bool conn_handler(event status, int error, xmpp_stream_error_t *stream_error);

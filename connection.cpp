@@ -85,10 +85,11 @@ bool weechat::connection::version_handler(xmpp_stanza_t *stanza)
     return true;
 }
 
-bool weechat::connection::presence_handler(xmpp_stanza_t *stanza)
+bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level)
 {
     // Increment inbound counter for Stream Management (XEP-0198)
-    if (account.sm_enabled)
+    // Only count top-level stanzas, not nested/forwarded ones
+    if (account.sm_enabled && top_level)
         account.sm_h_inbound++;
 
     weechat::user *user;
@@ -309,10 +310,11 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza)
     return true;
 }
 
-bool weechat::connection::message_handler(xmpp_stanza_t *stanza)
+bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
 {
     // Increment inbound counter for Stream Management (XEP-0198)
-    if (account.sm_enabled)
+    // Only count top-level stanzas, not nested/forwarded ones
+    if (account.sm_enabled && top_level)
         account.sm_h_inbound++;
 
     weechat::channel *channel, *parent_channel;
@@ -398,7 +400,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza)
         if ((sent || received) && forwarded != NULL)
         {
             xmpp_stanza_t *message = xmpp_stanza_get_children(forwarded);
-            return message_handler(message);
+            return message_handler(message, false);  // Don't double-count nested stanza
         }
 
         result = xmpp_stanza_get_child_by_name_and_ns(
@@ -1065,10 +1067,11 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     return reply;
 }
 
-bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
+bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 {
     // Increment inbound counter for Stream Management (XEP-0198)
-    if (account.sm_enabled)
+    // Only count top-level stanzas, not nested/forwarded ones
+    if (account.sm_enabled && top_level)
         account.sm_h_inbound++;
 
     xmpp_stanza_t *reply, *query, *text, *fin;
