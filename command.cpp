@@ -741,6 +741,75 @@ int command__me(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int command__invite(const void *pointer, void *data,
+                    struct t_gui_buffer *buffer, int argc,
+                    char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(
+            ptr_account->buffer,
+            _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "invite");
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer,
+                        _("%s%s: you are not connected to server"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: missing argument for \"%s\" command"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "invite");
+        return WEECHAT_RC_OK;
+    }
+
+    const char *invitee_jid = argv[1];
+    const char *reason = argc > 2 ? argv_eol[2] : nullptr;
+
+    // Build invitation message using XEP-0249
+    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, NULL, invitee_jid, NULL);
+    
+    xmpp_stanza_t *x = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(x, "x");
+    xmpp_stanza_set_ns(x, "jabber:x:conference");
+    xmpp_stanza_set_attribute(x, "jid", ptr_channel->name.data());
+    if (reason)
+        xmpp_stanza_set_attribute(x, "reason", reason);
+    
+    xmpp_stanza_add_child(message, x);
+    xmpp_stanza_release(x);
+    
+    ptr_account->connection.send(message);
+    xmpp_stanza_release(message);
+
+    weechat_printf(buffer,
+                    _("%sInvited %s to %s"),
+                    weechat_prefix("network"),
+                    invitee_jid,
+                    ptr_channel->name.data());
+
+    return WEECHAT_RC_OK;
+}
+
 int command__mam(const void *pointer, void *data,
                  struct t_gui_buffer *buffer, int argc,
                  char **argv, char **argv_eol)
@@ -1874,6 +1943,15 @@ void command__init()
         NULL, &command__me, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /me");
+
+    hook = weechat_hook_command(
+        "invite",
+        N_("invite a user to the current MUC room (XEP-0249)"),
+        N_("<jid> [<reason>]"),
+        N_("    jid: user to invite\n reason: optional invitation message"),
+        NULL, &command__invite, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /invite");
 
     hook = weechat_hook_command(
         "mam",

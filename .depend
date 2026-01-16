@@ -64,10 +64,10 @@ completion.hh:
  /usr/include/libxml2/libxml/xmlmemory.h \
  /usr/include/libxml2/libxml/threads.h plugin.hh strophe.hh xmpp/node.hh \
  xmpp/xep-0027.inl xmpp/ns.hh xmpp/xep-0030.inl xmpp/xep-0045.inl \
- xmpp/xep-0049.inl xmpp/xep-0115.inl xmpp/xep-0198.inl xmpp/xep-0280.inl \
- xmpp/xep-0319.inl xmpp/xep-0352.inl xmpp/rfc-6121.inl xmpp/stanza.hh \
- config.hh config/file.hh config/breadcrumb.hh config/section.hh \
- config/account.hh config/option.hh input.hh omemo.hh \
+ xmpp/xep-0049.inl xmpp/xep-0115.inl xmpp/xep-0198.inl xmpp/xep-0249.inl \
+ xmpp/xep-0280.inl xmpp/xep-0319.inl xmpp/xep-0352.inl xmpp/rfc-6121.inl \
+ xmpp/stanza.hh config.hh config/file.hh config/breadcrumb.hh \
+ config/section.hh config/account.hh config/option.hh input.hh omemo.hh \
  /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
  /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
  /usr/include/signal/session_record.h \
@@ -109,6 +109,7 @@ xmpp/xep-0045.inl:
 xmpp/xep-0049.inl:
 xmpp/xep-0115.inl:
 xmpp/xep-0198.inl:
+xmpp/xep-0249.inl:
 xmpp/xep-0280.inl:
 xmpp/xep-0319.inl:
 xmpp/xep-0352.inl:
@@ -198,7 +199,8 @@ buffer.hh:
  config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh input.hh \
  buffer.hh util.hh xmpp/node.hh xmpp/xep-0027.inl xmpp/xep-0030.inl \
  xmpp/xep-0045.inl xmpp/xep-0049.inl xmpp/xep-0115.inl xmpp/xep-0198.inl \
- xmpp/xep-0280.inl xmpp/xep-0319.inl xmpp/xep-0352.inl xmpp/rfc-6121.inl
+ xmpp/xep-0249.inl xmpp/xep-0280.inl xmpp/xep-0319.inl xmpp/xep-0352.inl \
+ xmpp/rfc-6121.inl
 plugin.hh:
 strophe.hh:
 account.hh:
@@ -238,6 +240,7 @@ xmpp/xep-0045.inl:
 xmpp/xep-0049.inl:
 xmpp/xep-0115.inl:
 xmpp/xep-0198.inl:
+xmpp/xep-0249.inl:
 xmpp/xep-0280.inl:
 xmpp/xep-0319.inl:
 xmpp/xep-0352.inl:
@@ -397,11 +400,12 @@ user.hh:
  /usr/include/libxml2/libxml/xmlIO.h /usr/include/libxml2/libxml/SAX2.h \
  /usr/include/libxml2/libxml/xlink.h plugin.hh strophe.hh xmpp/node.hh \
  xmpp/xep-0027.inl xmpp/ns.hh xmpp/xep-0030.inl xmpp/xep-0045.inl \
- xmpp/xep-0049.inl xmpp/xep-0115.inl xmpp/xep-0198.inl xmpp/xep-0280.inl \
- xmpp/xep-0319.inl xmpp/xep-0352.inl xmpp/rfc-6121.inl xmpp/stanza.hh \
- config.hh config/file.hh config/breadcrumb.hh config/section.hh \
- config/account.hh config/option.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
+ xmpp/xep-0049.inl xmpp/xep-0115.inl xmpp/xep-0198.inl xmpp/xep-0249.inl \
+ xmpp/xep-0280.inl xmpp/xep-0319.inl xmpp/xep-0352.inl xmpp/rfc-6121.inl \
+ xmpp/stanza.hh config.hh config/file.hh config/breadcrumb.hh \
+ config/section.hh config/account.hh config/option.hh account.hh pgp.hh \
+ omemo.hh /usr/include/signal/signal_protocol.h \
+ /usr/include/signal/ratchet.h \
  /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
  /usr/include/signal/session_record.h \
  /usr/include/signal/session_pre_key.h \
@@ -442,6 +446,7 @@ xmpp/xep-0045.inl:
 xmpp/xep-0049.inl:
 xmpp/xep-0115.inl:
 xmpp/xep-0198.inl:
+xmpp/xep-0249.inl:
 xmpp/xep-0280.inl:
 xmpp/xep-0319.inl:
 xmpp/xep-0352.inl:
@@ -849,8 +854,8 @@ xmpp/.iq.o: xmpp/iq.cpp xmpp/stanza.hh
 xmpp/stanza.hh:
 xmpp/.node.o: xmpp/node.cpp xmpp/node.hh xmpp/xep-0027.inl xmpp/ns.hh \
  xmpp/xep-0030.inl xmpp/xep-0045.inl xmpp/xep-0049.inl xmpp/xep-0115.inl \
- xmpp/xep-0198.inl xmpp/xep-0280.inl xmpp/xep-0319.inl xmpp/xep-0352.inl \
- xmpp/rfc-6121.inl
+ xmpp/xep-0198.inl xmpp/xep-0249.inl xmpp/xep-0280.inl xmpp/xep-0319.inl \
+ xmpp/xep-0352.inl xmpp/rfc-6121.inl
 xmpp/node.hh:
 xmpp/xep-0027.inl:
 xmpp/ns.hh:
@@ -859,6 +864,7 @@ xmpp/xep-0045.inl:
 xmpp/xep-0049.inl:
 xmpp/xep-0115.inl:
 xmpp/xep-0198.inl:
+xmpp/xep-0249.inl:
 xmpp/xep-0280.inl:
 xmpp/xep-0319.inl:
 xmpp/xep-0352.inl:

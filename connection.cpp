@@ -621,6 +621,38 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         channel->unreads.push_back(*unread);
     }
 
+    // XEP-0249: Direct MUC Invitations
+    x = xmpp_stanza_get_child_by_name_and_ns(stanza, "x", "jabber:x:conference");
+    if (x)
+    {
+        const char *room_jid = xmpp_stanza_get_attribute(x, "jid");
+        const char *password = xmpp_stanza_get_attribute(x, "password");
+        const char *reason = xmpp_stanza_get_attribute(x, "reason");
+        
+        if (room_jid)
+        {
+            from = xmpp_stanza_get_from(stanza);
+            from_bare = from ? xmpp_jid_bare(account.context, from) : "unknown";
+            
+            weechat_printf(account.buffer,
+                          _("%s%s invited you to %s%s%s"),
+                          weechat_prefix("network"),
+                          from_bare,
+                          room_jid,
+                          reason ? " (" : "",
+                          reason ? reason : "");
+            if (reason)
+                weechat_printf(account.buffer, "%s)", "");
+            weechat_printf(account.buffer,
+                          _("%sTo join: /join %s%s%s"),
+                          weechat_prefix("network"),
+                          room_jid,
+                          password ? " " : "",
+                          password ? password : "");
+        }
+        return 1;
+    }
+
     encrypted = xmpp_stanza_get_child_by_name_and_ns(stanza, "encrypted",
                                                      "eu.siacs.conversations.axolotl");
     x = xmpp_stanza_get_child_by_name_and_ns(stanza, "x", "jabber:x:encrypted");

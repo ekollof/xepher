@@ -189,6 +189,23 @@
     /me jumps for joy
     #+end_src
 
+*** /invite
+    Invite a user to join the current MUC room (XEP-0249: Direct MUC Invitations)
+
+    *Usage:*
+    #+begin_src
+    /invite <jid> [<reason>]
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /invite friend@example.com
+    /invite colleague@example.com Join us for the meeting!
+    #+end_src
+
+    *Note:* Can only be used in MUC (room) buffers. The invited user will 
+    receive a notification with instructions to join.
+
 *** /edit
     Edit the last message sent (XEP-0308: Message Correction)
 
