@@ -1279,22 +1279,42 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza)
                             .get());
                 if (weechat_strcasecmp(autojoin, "true") == 0)
                 {
-                    char **command = weechat_string_dyn_alloc(256);
-                    weechat_string_dyn_concat(command, "/enter ", -1);
-                    weechat_string_dyn_concat(command, jid, -1);
-                    if (nick)
+                    // Skip autojoin for biboumi (IRC gateway) rooms
+                    // Biboumi JIDs typically contain % (e.g., #channel%irc.server.org@gateway)
+                    // or have 'biboumi' in the server component
+                    bool is_biboumi = false;
+                    if (jid)
                     {
-                        weechat_string_dyn_concat(command, "/", -1);
-                        weechat_string_dyn_concat(command, intext, -1);
+                        is_biboumi = (strchr(jid, '%') != NULL) ||
+                                    (strstr(jid, "biboumi") != NULL) ||
+                                    (strstr(jid, "@irc.") != NULL);
                     }
-                    weechat_command(account.buffer, *command);
-                    auto ptr_channel = account.channels.find(jid);
-                    struct t_gui_buffer *ptr_buffer =
-                        ptr_channel != account.channels.end()
-                        ? ptr_channel->second.buffer : NULL;
-                    if (ptr_buffer)
-                        weechat_buffer_set(ptr_buffer, "short_name", name);
-                    weechat_string_dyn_free(command, 1);
+                    
+                    if (is_biboumi)
+                    {
+                        weechat_printf(account.buffer, 
+                                      "%sSkipping autojoin for IRC gateway room: %s",
+                                      weechat_prefix("network"), jid);
+                    }
+                    else
+                    {
+                        char **command = weechat_string_dyn_alloc(256);
+                        weechat_string_dyn_concat(command, "/enter ", -1);
+                        weechat_string_dyn_concat(command, jid, -1);
+                        if (nick)
+                        {
+                            weechat_string_dyn_concat(command, "/", -1);
+                            weechat_string_dyn_concat(command, intext, -1);
+                        }
+                        weechat_command(account.buffer, *command);
+                        auto ptr_channel = account.channels.find(jid);
+                        struct t_gui_buffer *ptr_buffer =
+                            ptr_channel != account.channels.end()
+                            ? ptr_channel->second.buffer : NULL;
+                        if (ptr_buffer)
+                            weechat_buffer_set(ptr_buffer, "short_name", name);
+                        weechat_string_dyn_free(command, 1);
+                    }
                 }
 
                 if (nick)

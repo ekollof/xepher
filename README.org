@@ -314,7 +314,10 @@
 
     *Note:* Bookmarks are stored on the server and synchronized across 
     all clients. Rooms with autojoin enabled will be automatically joined 
-    on connect. Aliases =delete= and =remove= can be used instead of =del=.
+    on connect, except for IRC gateway rooms (biboumi) which are skipped 
+    to prevent connection issues. These are detected by the presence of 
+    =%=, =biboumi=, or =@irc.= in the JID. Aliases =delete= and =remove= 
+    can be used instead of =del=.
 
 ** Network & Debugging
 
@@ -521,7 +524,7 @@
      * [ ] [#B] MUC Icons
    * [X] Bookmarks / Roster (xep-048)
      * [X] Autojoin bookmarks
-       * [ ] [#A] Except biboumi rooms
+       * [X] [#A] Except biboumi rooms
      * [X] [#B] Add bookmarks
      * [X] [#B] Delete bookmarks
      * [X] [#B] List bookmarks  
