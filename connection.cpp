@@ -1894,11 +1894,11 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         account.idle_timer_hook = weechat_hook_timer(60 * 1000, 0, 0,
                                                      &account::idle_timer_cb, &account, nullptr);
 
-        // DISABLED: Stream Management (XEP-0198) - causing crashes
-        // TODO: Re-enable after debugging
-        // this->send(stanza::xep0198::enable(true, 300)
-        //            .build(account.context)
-        //            .get());
+        // Enable Stream Management (XEP-0198) after authentication
+        // Request resumable session with max 300 seconds (5 minutes)
+        this->send(stanza::xep0198::enable(true, 300)
+                   .build(account.context)
+                   .get());
 
         (void) weechat_hook_signal_send("xmpp_account_connected",
                                         WEECHAT_HOOK_SIGNAL_STRING, account.name.data());
