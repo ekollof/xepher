@@ -687,7 +687,6 @@ int command__me(const void *pointer, void *data,
     weechat::account *ptr_account = NULL;
     weechat::channel *ptr_channel = NULL;
     xmpp_stanza_t *message;
-    char *text;
 
     (void) pointer;
     (void) data;
@@ -726,12 +725,17 @@ int command__me(const void *pointer, void *data,
         ptr_account->connection.send( message);
         xmpp_stanza_release(message);
         if (ptr_channel->type != weechat::channel::chat_type::MUC)
+        {
+            auto display_prefix = weechat::user::as_prefix_raw(ptr_account, ptr_account->jid().data());
+            if (display_prefix.empty())
+                display_prefix = ptr_account->jid();
             weechat_printf_date_tags(ptr_channel->buffer, 0,
                                      "xmpp_message,message,action,private,notify_none,self_msg,log1",
                                      "%s%s %s",
                                      weechat_prefix("action"),
-                                     weechat::user::search(ptr_account, ptr_account->jid().data())->as_prefix_raw().data(),
+                                     display_prefix.data(),
                                      argv_eol[1]);
+        }
     }
 
     return WEECHAT_RC_OK;
