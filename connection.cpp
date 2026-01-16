@@ -1558,6 +1558,8 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     FEATURE("urn:xmpp:reply:0");  // XEP-0461: Message Replies
     FEATURE("urn:xmpp:sid:0");  // XEP-0359: Stanza IDs
     FEATURE("urn:xmpp:styling:0");
+    FEATURE("http://jabber.org/protocol/mood");  // XEP-0107: User Mood
+    FEATURE("http://jabber.org/protocol/mood+notify");  // Subscribe to mood updates
     FEATURE("urn:xmpp:ping");
     FEATURE("urn:xmpp:receipts");
     FEATURE("urn:xmpp:time");

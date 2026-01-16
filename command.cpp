@@ -1916,6 +1916,174 @@ int command__ping(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int command__mood(const void *pointer, void *data,
+                  struct t_gui_buffer *buffer, int argc,
+                  char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argv;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // XEP-0107 mood values (from spec)
+    const char *valid_moods[] = {
+        "afraid", "amazed", "angry", "amorous", "annoyed", "anxious",
+        "aroused", "ashamed", "bored", "brave", "calm", "cautious",
+        "cold", "confident", "confused", "contemplative", "contented",
+        "cranky", "crazy", "creative", "curious", "dejected", "depressed",
+        "disappointed", "disgusted", "dismayed", "distracted", "embarrassed",
+        "envious", "excited", "flirtatious", "frustrated", "grumpy", "guilty",
+        "happy", "hopeful", "hot", "humbled", "humiliated", "hungry",
+        "hurt", "impressed", "in_awe", "in_love", "indignant", "interested",
+        "intoxicated", "invincible", "jealous", "lonely", "lucky", "mean",
+        "moody", "nervous", "neutral", "offended", "outraged", "playful",
+        "proud", "relaxed", "relieved", "remorseful", "restless", "sad",
+        "sarcastic", "serious", "shocked", "shy", "sick", "sleepy",
+        "spontaneous", "stressed", "strong", "surprised", "thankful",
+        "thirsty", "tired", "undefined", "weak", "worried", NULL
+    };
+
+    const char *mood = NULL;
+    const char *text = NULL;
+
+    if (argc >= 2)
+    {
+        mood = argv[1];
+        if (argc >= 3)
+            text = argv_eol[2];
+    }
+
+    // Build PEP mood publish stanza
+    // <iq type='set' id='...'>
+    //   <pubsub xmlns='http://jabber.org/protocol/pubsub'>
+    //     <publish node='http://jabber.org/protocol/mood'>
+    //       <item>
+    //         <mood xmlns='http://jabber.org/protocol/mood'>
+    //           <happy/>  <!-- or other mood -->
+    //           <text>Feeling great!</text>  <!-- optional -->
+    //         </mood>
+    //       </item>
+    //     </publish>
+    //   </pubsub>
+    // </iq>
+
+    char *id = xmpp_uuid_gen(ptr_account->context);
+    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", id);
+    xmpp_free(ptr_account->context, id);
+
+    // <pubsub xmlns='http://jabber.org/protocol/pubsub'>
+    xmpp_stanza_t *pubsub = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(pubsub, "pubsub");
+    xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
+
+    // <publish node='http://jabber.org/protocol/mood'>
+    xmpp_stanza_t *publish = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(publish, "publish");
+    xmpp_stanza_set_attribute(publish, "node", "http://jabber.org/protocol/mood");
+
+    // <item>
+    xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(item, "item");
+
+    // <mood xmlns='http://jabber.org/protocol/mood'>
+    xmpp_stanza_t *mood_elem = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(mood_elem, "mood");
+    xmpp_stanza_set_ns(mood_elem, "http://jabber.org/protocol/mood");
+
+    if (mood)
+    {
+        // Validate mood
+        bool valid = false;
+        for (int i = 0; valid_moods[i] != NULL; i++)
+        {
+            if (weechat_strcasecmp(mood, valid_moods[i]) == 0)
+            {
+                valid = true;
+                break;
+            }
+        }
+
+        if (!valid)
+        {
+            weechat_printf(buffer, "%sxmpp: invalid mood '%s'", 
+                          weechat_prefix("error"), mood);
+            weechat_printf(buffer, "%sValid moods: happy, sad, angry, excited, tired, etc.",
+                          weechat_prefix("error"));
+            
+            xmpp_stanza_release(mood_elem);
+            xmpp_stanza_release(item);
+            xmpp_stanza_release(publish);
+            xmpp_stanza_release(pubsub);
+            xmpp_stanza_release(iq);
+            return WEECHAT_RC_OK;
+        }
+
+        // Add mood element (e.g., <happy/>)
+        xmpp_stanza_t *mood_value = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(mood_value, mood);
+        xmpp_stanza_add_child(mood_elem, mood_value);
+        xmpp_stanza_release(mood_value);
+
+        // Add optional text
+        if (text)
+        {
+            xmpp_stanza_t *text_elem = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(text_elem, "text");
+            xmpp_stanza_t *text_content = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_text(text_content, text);
+            xmpp_stanza_add_child(text_elem, text_content);
+            xmpp_stanza_add_child(mood_elem, text_elem);
+            xmpp_stanza_release(text_content);
+            xmpp_stanza_release(text_elem);
+        }
+    }
+    // If no mood specified, publish empty <mood/> to clear
+
+    xmpp_stanza_add_child(item, mood_elem);
+    xmpp_stanza_add_child(publish, item);
+    xmpp_stanza_add_child(pubsub, publish);
+    xmpp_stanza_add_child(iq, pubsub);
+
+    ptr_account->connection.send(iq);
+
+    xmpp_stanza_release(mood_elem);
+    xmpp_stanza_release(item);
+    xmpp_stanza_release(publish);
+    xmpp_stanza_release(pubsub);
+    xmpp_stanza_release(iq);
+
+    if (mood)
+    {
+        if (text)
+            weechat_printf(buffer, "%sxmpp: mood set to '%s': %s",
+                          weechat_prefix("network"), mood, text);
+        else
+            weechat_printf(buffer, "%sxmpp: mood set to '%s'",
+                          weechat_prefix("network"), mood);
+    }
+    else
+    {
+        weechat_printf(buffer, "%sxmpp: mood cleared",
+                      weechat_prefix("network"));
+    }
+
+    return WEECHAT_RC_OK;
+}
+
 int command__selfping(const void *pointer, void *data,
                      struct t_gui_buffer *buffer, int argc,
                      char **argv, char **argv_eol)
@@ -2982,6 +3150,22 @@ void command__init()
         NULL, &command__ping, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /ping");
+
+    hook = weechat_hook_command(
+        "mood",
+        N_("set or clear your mood (XEP-0107)"),
+        N_("[<mood> [text]]"),
+        N_("  mood: mood value (happy, sad, angry, excited, tired, etc.)\n"
+           "  text: optional descriptive text\n\n"
+           "Sets your mood which is published via PEP and visible to contacts.\n"
+           "Examples:\n"
+           "  /mood happy\n"
+           "  /mood excited Working on a cool project!\n"
+           "  /mood tired\n"
+           "  /mood (clears mood)"),
+        NULL, &command__mood, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /mood");
 
     hook = weechat_hook_command(
         "edit",
