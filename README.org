@@ -69,6 +69,7 @@
     - Enhanced chat state notifications (XEP-0085) - active, composing, paused, inactive, gone states with visual feedback
     - User mood (XEP-0107) - /mood command to publish your current mood status
     - User activity (XEP-0108) - /activity command to publish what you're currently doing
+    - PEP Native Bookmarks (XEP-0402) - modern PEP-based bookmark storage instead of Private XML
     - PGP key persistence - keys set with /pgp now persist across restarts per JID/MUC
     - Encryption status bar item (xmpp_encryption) - shows current buffer's encryption mode
     - Roster management - /roster command to display, add, and remove contacts
@@ -109,7 +110,7 @@
     - ✅ XEP-0461: Message Replies (/reply command)
 
 *** Additional Implemented XEPs
-    - ✅ XEP-0048: Bookmark Storage (/bookmark command)
+    - ✅ XEP-0048: Bookmark Storage (Private XML, deprecated)
     - ✅ XEP-0049: Private XML Storage
     - ✅ XEP-0085: Chat State Notifications (enhanced with all 5 states)
     - ✅ XEP-0107: User Mood (/mood command for PEP mood publishing)
@@ -124,11 +125,11 @@
     - ✅ XEP-0352: Client State Indication
     - ✅ XEP-0359: Unique and Stable Stanza IDs (message deduplication)
     - ✅ XEP-0384: OMEMO Encryption (complete implementation)
+    - ✅ XEP-0402: PEP Native Bookmarks (modern PEP-based bookmark storage)
 
 *** Planned for Future Releases
     - ⏳ XEP-0084: User Avatar (PEP foundation in place)
     - ⏳ XEP-0153: vCard-Based Avatars
-    - ⏳ XEP-0402: PEP Native Bookmarks (PEP foundation in place)
     - ⏳ XEP-0398: Avatar Conversion
 
 * Description

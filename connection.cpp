@@ -633,6 +633,102 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         }
                     }
                 }
+                
+                // XEP-0402: PEP Native Bookmarks  
+                if (items_node
+                    && weechat_strcasecmp(items_node, "urn:xmpp:bookmarks:1") == 0)
+                {
+                    // Clear existing bookmarks before loading from PEP
+                    account.bookmarks.clear();
+                    
+                    for (item = xmpp_stanza_get_children(items);
+                         item; item = xmpp_stanza_get_next(item))
+                    {
+                        const char *item_name = xmpp_stanza_get_name(item);
+                        if (weechat_strcasecmp(item_name, "item") != 0)
+                            continue;
+                        
+                        // <item id='roomjid@conference.example.org'>
+                        //   <conference xmlns='urn:xmpp:bookmarks:1'
+                        //               name='The Play Room'
+                        //               autojoin='true'>
+                        //     <nick>FeatherBrain</nick>
+                        //   </conference>
+                        // </item>
+                        
+                        const char *item_id = xmpp_stanza_get_id(item);
+                        if (!item_id)
+                            continue;  // Item ID is the room JID
+                        
+                        xmpp_stanza_t *conference = xmpp_stanza_get_child_by_name_and_ns(
+                            item, "conference", "urn:xmpp:bookmarks:1");
+                        if (!conference)
+                            continue;
+                        
+                        const char *name = xmpp_stanza_get_attribute(conference, "name");
+                        const char *autojoin = xmpp_stanza_get_attribute(conference, "autojoin");
+                        
+                        xmpp_stanza_t *nick_elem = xmpp_stanza_get_child_by_name(conference, "nick");
+                        char *nick_text = NULL;
+                        if (nick_elem)
+                            nick_text = xmpp_stanza_get_text(nick_elem);
+                        
+                        // Store bookmark
+                        account.bookmarks[item_id].jid = item_id;
+                        account.bookmarks[item_id].name = name ? name : "";
+                        account.bookmarks[item_id].nick = nick_text ? nick_text : "";
+                        account.bookmarks[item_id].autojoin = autojoin && 
+                            (weechat_strcasecmp(autojoin, "true") == 0 || 
+                             weechat_strcasecmp(autojoin, "1") == 0);
+                        
+                        if (nick_text)
+                            xmpp_free(account.context, nick_text);
+                        
+                        // Autodisco the room
+                        account.connection.send(stanza::iq()
+                                    .from(to)
+                                    .to(item_id)
+                                    .type("get")
+                                    .id(stanza::uuid(account.context))
+                                    .xep0030()
+                                    .query()
+                                    .build(account.context)
+                                    .get());
+                        
+                        // Autojoin if enabled
+                        if (account.bookmarks[item_id].autojoin)
+                        {
+                            // Skip biboumi (IRC gateway) rooms
+                            bool is_biboumi = (strchr(item_id, '%') != NULL) ||
+                                            (strstr(item_id, "biboumi") != NULL) ||
+                                            (strstr(item_id, "@irc.") != NULL);
+                            
+                            if (!is_biboumi)
+                            {
+                                char **command = weechat_string_dyn_alloc(256);
+                                weechat_string_dyn_concat(command, "/enter ", -1);
+                                weechat_string_dyn_concat(command, item_id, -1);
+                                if (nick_text && strlen(nick_text) > 0)
+                                {
+                                    weechat_string_dyn_concat(command, "/", -1);
+                                    weechat_string_dyn_concat(command, nick_text, -1);
+                                }
+                                weechat_command(account.buffer, *command);
+                                weechat_string_dyn_free(command, 1);
+                            }
+                            else
+                            {
+                                weechat_printf(account.buffer, 
+                                              "%sSkipping autojoin for IRC gateway room: %s",
+                                              weechat_prefix("network"), item_id);
+                            }
+                        }
+                    }
+                    
+                    weechat_printf(account.buffer, "%sLoaded %zu bookmarks from PEP",
+                                  weechat_prefix("network"),
+                                  account.bookmarks.size());
+                }
             }
         }
 
@@ -1562,6 +1658,8 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     FEATURE("http://jabber.org/protocol/mood+notify");  // Subscribe to mood updates
     FEATURE("http://jabber.org/protocol/activity");  // XEP-0108: User Activity
     FEATURE("http://jabber.org/protocol/activity+notify");  // Subscribe to activity updates
+    FEATURE("urn:xmpp:bookmarks:1");  // XEP-0402: PEP Native Bookmarks
+    FEATURE("urn:xmpp:bookmarks:1+notify");  // Subscribe to bookmark updates
     FEATURE("urn:xmpp:ping");
     FEATURE("urn:xmpp:receipts");
     FEATURE("urn:xmpp:time");

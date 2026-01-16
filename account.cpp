@@ -867,31 +867,64 @@ void weechat::account::mam_cache_set_last_timestamp(const std::string& channel_j
 
 void weechat::account::send_bookmarks()
 {
-    // Build bookmark storage stanza
-    xmpp_stanza_t *iq = xmpp_iq_new(context, "set", xmpp_uuid_gen(context));
-    xmpp_stanza_set_to(iq, jid().data());
+    // XEP-0402: PEP Native Bookmarks (preferred)
+    // Build PEP bookmark publish stanza
+    // <iq type='set' id='...'>
+    //   <pubsub xmlns='http://jabber.org/protocol/pubsub'>
+    //     <publish node='urn:xmpp:bookmarks:1'>
+    //       <item id='roomjid@conference.example.org'>
+    //         <conference xmlns='urn:xmpp:bookmarks:1' name='...' autojoin='true'>
+    //           <nick>...</nick>
+    //         </conference>
+    //       </item>
+    //       ... more items ...
+    //     </publish>
+    //     <publish-options>
+    //       <x xmlns='jabber:x:data' type='submit'>
+    //         <field var='FORM_TYPE' type='hidden'>
+    //           <value>http://jabber.org/protocol/pubsub#publish-options</value>
+    //         </field>
+    //         <field var='pubsub#persist_items'><value>true</value></field>
+    //         <field var='pubsub#access_model'><value>whitelist</value></field>
+    //       </x>
+    //     </publish-options>
+    //   </pubsub>
+    // </iq>
     
-    xmpp_stanza_t *query = xmpp_stanza_new(context);
-    xmpp_stanza_set_name(query, "query");
-    xmpp_stanza_set_ns(query, "jabber:iq:private");
+    char *id = xmpp_uuid_gen(context);
+    xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id);
+    xmpp_free(context, id);
     
-    xmpp_stanza_t *storage = xmpp_stanza_new(context);
-    xmpp_stanza_set_name(storage, "storage");
-    xmpp_stanza_set_ns(storage, "storage:bookmarks");
+    xmpp_stanza_t *pubsub = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(pubsub, "pubsub");
+    xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
     
-    // Add all bookmarks
+    xmpp_stanza_t *publish = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(publish, "publish");
+    xmpp_stanza_set_attribute(publish, "node", "urn:xmpp:bookmarks:1");
+    
+    // Add all bookmarks as items
     for (const auto& bookmark_pair : bookmarks)
     {
         const auto& bookmark = bookmark_pair.second;
         
+        // <item id='jid'>
+        xmpp_stanza_t *item = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(item, "item");
+        xmpp_stanza_set_id(item, bookmark.jid.data());
+        
+        // <conference xmlns='urn:xmpp:bookmarks:1'>
         xmpp_stanza_t *conference = xmpp_stanza_new(context);
         xmpp_stanza_set_name(conference, "conference");
-        xmpp_stanza_set_attribute(conference, "jid", bookmark.jid.data());
-        xmpp_stanza_set_attribute(conference, "autojoin", bookmark.autojoin ? "true" : "false");
+        xmpp_stanza_set_ns(conference, "urn:xmpp:bookmarks:1");
         
         if (!bookmark.name.empty())
             xmpp_stanza_set_attribute(conference, "name", bookmark.name.data());
         
+        if (bookmark.autojoin)
+            xmpp_stanza_set_attribute(conference, "autojoin", "true");
+        
+        // <nick>
         if (!bookmark.nick.empty())
         {
             xmpp_stanza_t *nick = xmpp_stanza_new(context);
@@ -899,21 +932,84 @@ void weechat::account::send_bookmarks()
             xmpp_stanza_t *nick_text = xmpp_stanza_new(context);
             xmpp_stanza_set_text(nick_text, bookmark.nick.data());
             xmpp_stanza_add_child(nick, nick_text);
-            xmpp_stanza_release(nick_text);
             xmpp_stanza_add_child(conference, nick);
+            xmpp_stanza_release(nick_text);
             xmpp_stanza_release(nick);
         }
         
-        xmpp_stanza_add_child(storage, conference);
+        xmpp_stanza_add_child(item, conference);
+        xmpp_stanza_add_child(publish, item);
         xmpp_stanza_release(conference);
+        xmpp_stanza_release(item);
     }
     
-    xmpp_stanza_add_child(query, storage);
-    xmpp_stanza_release(storage);
-    xmpp_stanza_add_child(iq, query);
-    xmpp_stanza_release(query);
+    // Add publish-options to ensure persistence and privacy
+    xmpp_stanza_t *publish_options = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(publish_options, "publish-options");
+    
+    xmpp_stanza_t *x = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(x, "x");
+    xmpp_stanza_set_ns(x, "jabber:x:data");
+    xmpp_stanza_set_attribute(x, "type", "submit");
+    
+    // FORM_TYPE field
+    xmpp_stanza_t *field1 = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(field1, "field");
+    xmpp_stanza_set_attribute(field1, "var", "FORM_TYPE");
+    xmpp_stanza_set_attribute(field1, "type", "hidden");
+    xmpp_stanza_t *value1 = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(value1, "value");
+    xmpp_stanza_t *value1_text = xmpp_stanza_new(context);
+    xmpp_stanza_set_text(value1_text, "http://jabber.org/protocol/pubsub#publish-options");
+    xmpp_stanza_add_child(value1, value1_text);
+    xmpp_stanza_add_child(field1, value1);
+    xmpp_stanza_add_child(x, field1);
+    xmpp_stanza_release(value1_text);
+    xmpp_stanza_release(value1);
+    xmpp_stanza_release(field1);
+    
+    // persist_items field
+    xmpp_stanza_t *field2 = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(field2, "field");
+    xmpp_stanza_set_attribute(field2, "var", "pubsub#persist_items");
+    xmpp_stanza_t *value2 = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(value2, "value");
+    xmpp_stanza_t *value2_text = xmpp_stanza_new(context);
+    xmpp_stanza_set_text(value2_text, "true");
+    xmpp_stanza_add_child(value2, value2_text);
+    xmpp_stanza_add_child(field2, value2);
+    xmpp_stanza_add_child(x, field2);
+    xmpp_stanza_release(value2_text);
+    xmpp_stanza_release(value2);
+    xmpp_stanza_release(field2);
+    
+    // access_model field
+    xmpp_stanza_t *field3 = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(field3, "field");
+    xmpp_stanza_set_attribute(field3, "var", "pubsub#access_model");
+    xmpp_stanza_t *value3 = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(value3, "value");
+    xmpp_stanza_t *value3_text = xmpp_stanza_new(context);
+    xmpp_stanza_set_text(value3_text, "whitelist");
+    xmpp_stanza_add_child(value3, value3_text);
+    xmpp_stanza_add_child(field3, value3);
+    xmpp_stanza_add_child(x, field3);
+    xmpp_stanza_release(value3_text);
+    xmpp_stanza_release(value3);
+    xmpp_stanza_release(field3);
+    
+    xmpp_stanza_add_child(publish_options, x);
+    xmpp_stanza_release(x);
+    
+    xmpp_stanza_add_child(pubsub, publish);
+    xmpp_stanza_add_child(pubsub, publish_options);
+    xmpp_stanza_add_child(iq, pubsub);
     
     connection.send(iq);
+    
+    xmpp_stanza_release(publish_options);
+    xmpp_stanza_release(publish);
+    xmpp_stanza_release(pubsub);
     xmpp_stanza_release(iq);
 }
 
