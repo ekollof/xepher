@@ -1353,6 +1353,178 @@ int command__whois(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int command__block(const void *pointer, void *data,
+                  struct t_gui_buffer *buffer, int argc,
+                  char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+    xmpp_stanza_t *iq;
+
+    (void) pointer;
+    (void) data;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2)
+    {
+        weechat_printf(buffer, "%s%s: missing JID argument",
+                      weechat_prefix("error"),
+                      argv[0]);
+        return WEECHAT_RC_OK;
+    }
+
+    // Block the specified JID(s)
+    const char **jids = (const char **)&argv[1];
+    int count = argc - 1;
+    
+    iq = xmpp_iq_new(ptr_account->context, "set", xmpp_uuid_gen(ptr_account->context));
+    
+    xmpp_stanza_t *block = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(block, "block");
+    xmpp_stanza_set_ns(block, "urn:xmpp:blocking");
+    
+    for (int i = 0; i < count; i++)
+    {
+        xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(item, "item");
+        xmpp_stanza_set_attribute(item, "jid", jids[i]);
+        xmpp_stanza_add_child(block, item);
+        xmpp_stanza_release(item);
+        
+        weechat_printf(buffer, "%sBlocking %s...",
+                       weechat_prefix("network"), jids[i]);
+    }
+    
+    xmpp_stanza_add_child(iq, block);
+    xmpp_stanza_release(block);
+    
+    ptr_account->connection.send(iq);
+    xmpp_stanza_release(iq);
+
+    return WEECHAT_RC_OK;
+}
+
+int command__unblock(const void *pointer, void *data,
+                    struct t_gui_buffer *buffer, int argc,
+                    char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+    xmpp_stanza_t *iq;
+
+    (void) pointer;
+    (void) data;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    iq = xmpp_iq_new(ptr_account->context, "set", xmpp_uuid_gen(ptr_account->context));
+    
+    xmpp_stanza_t *unblock = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(unblock, "unblock");
+    xmpp_stanza_set_ns(unblock, "urn:xmpp:blocking");
+    
+    if (argc > 1)
+    {
+        // Unblock specific JID(s)
+        const char **jids = (const char **)&argv[1];
+        int count = argc - 1;
+        
+        for (int i = 0; i < count; i++)
+        {
+            xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(item, "item");
+            xmpp_stanza_set_attribute(item, "jid", jids[i]);
+            xmpp_stanza_add_child(unblock, item);
+            xmpp_stanza_release(item);
+            
+            weechat_printf(buffer, "%sUnblocking %s...",
+                           weechat_prefix("network"), jids[i]);
+        }
+    }
+    else
+    {
+        // Empty unblock = unblock all
+        weechat_printf(buffer, "%sUnblocking all JIDs...",
+                       weechat_prefix("network"));
+    }
+    
+    xmpp_stanza_add_child(iq, unblock);
+    xmpp_stanza_release(unblock);
+    
+    ptr_account->connection.send(iq);
+    xmpp_stanza_release(iq);
+
+    return WEECHAT_RC_OK;
+}
+
+int command__blocklist(const void *pointer, void *data,
+                      struct t_gui_buffer *buffer, int argc,
+                      char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+    xmpp_stanza_t *iq;
+
+    (void) pointer;
+    (void) data;
+    (void) argv;
+    (void) argv_eol;
+    (void) argc;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // Request block list
+    iq = xmpp_iq_new(ptr_account->context, "get", xmpp_uuid_gen(ptr_account->context));
+    
+    xmpp_stanza_t *blocklist = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(blocklist, "blocklist");
+    xmpp_stanza_set_ns(blocklist, "urn:xmpp:blocking");
+    
+    xmpp_stanza_add_child(iq, blocklist);
+    xmpp_stanza_release(blocklist);
+    
+    weechat_printf(buffer, "%sRequesting block list...",
+                   weechat_prefix("network"));
+    
+    ptr_account->connection.send(iq);
+    xmpp_stanza_release(iq);
+
+    return WEECHAT_RC_OK;
+}
+
 int command__disco(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
@@ -2048,6 +2220,33 @@ void command__init()
         NULL, &command__plain, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /plain");
+
+    hook = weechat_hook_command(
+        "block",
+        N_("block one or more JIDs"),
+        N_("<jid> [<jid>...]"),
+        N_("jid: JID to block"),
+        NULL, &command__block, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /block");
+
+    hook = weechat_hook_command(
+        "unblock",
+        N_("unblock one or more JIDs (or all if no JID specified)"),
+        N_("[<jid> [<jid>...]]"),
+        N_("jid: JID to unblock (omit to unblock all)"),
+        NULL, &command__unblock, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /unblock");
+
+    hook = weechat_hook_command(
+        "blocklist",
+        N_("list all blocked JIDs"),
+        N_(""),
+        N_(""),
+        NULL, &command__blocklist, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /blocklist");
 
     hook = weechat_hook_command(
         "xml",

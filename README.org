@@ -239,6 +239,46 @@
     *Note:* Displays available vCard information including full name, 
     nickname, email, URL, and description if provided by the user.
 
+** Privacy & Blocking
+
+*** /block
+    Block one or more JIDs (XEP-0191: Blocking Command)
+
+    *Usage:*
+    #+begin_src
+    /block <jid> [<jid>...]
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /block spam@example.com
+    /block user1@server.com user2@server.com
+    #+end_src
+
+    *Note:* Blocked users cannot send you messages or presence updates.
+
+*** /unblock
+    Unblock one or more JIDs, or all blocked JIDs (XEP-0191: Blocking Command)
+
+    *Usage:*
+    #+begin_src
+    /unblock [<jid> [<jid>...]]
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /unblock spam@example.com
+    /unblock (unblocks all JIDs)
+    #+end_src
+
+*** /blocklist
+    Display all currently blocked JIDs (XEP-0191: Blocking Command)
+
+    *Usage:*
+    #+begin_src
+    /blocklist
+    #+end_src
+
 ** Encryption
 
 *** /omemo

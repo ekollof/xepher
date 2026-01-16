@@ -1311,6 +1311,57 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         return true;
     }
     
+    // XEP-0191: Blocking Command
+    xmpp_stanza_t *blocklist = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "blocklist", "urn:xmpp:blocking");
+    xmpp_stanza_t *block = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "block", "urn:xmpp:blocking");
+    xmpp_stanza_t *unblock = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "unblock", "urn:xmpp:blocking");
+    
+    if (blocklist && type && weechat_strcasecmp(type, "result") == 0)
+    {
+        // Handle blocklist response
+        xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(blocklist, "item");
+        
+        if (item)
+        {
+            weechat_printf(account.buffer, "%sBlocked JIDs:",
+                          weechat_prefix("network"));
+            
+            while (item)
+            {
+                const char *jid = xmpp_stanza_get_attribute(item, "jid");
+                if (jid)
+                {
+                    weechat_printf(account.buffer, "  %s", jid);
+                }
+                item = xmpp_stanza_get_next(item);
+            }
+        }
+        else
+        {
+            weechat_printf(account.buffer, "%sNo JIDs blocked",
+                          weechat_prefix("network"));
+        }
+        
+        return true;
+    }
+    
+    if (block && type && weechat_strcasecmp(type, "result") == 0)
+    {
+        weechat_printf(account.buffer, "%sBlock request successful",
+                      weechat_prefix("network"));
+        return true;
+    }
+    
+    if (unblock && type && weechat_strcasecmp(type, "result") == 0)
+    {
+        weechat_printf(account.buffer, "%sUnblock request successful",
+                      weechat_prefix("network"));
+        return true;
+    }
+    
     query = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "query", "http://jabber.org/protocol/disco#info");
     if (query && type)
