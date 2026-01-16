@@ -117,6 +117,7 @@
     - ✅ XEP-0092: Software Version (responds to version queries)
     - ✅ XEP-0107: User Mood (/mood command for PEP mood publishing)
     - ✅ XEP-0108: User Activity (/activity command for PEP activity publishing)
+    - ✅ XEP-0172: User Nickname (subscribes to nickname updates via PEP)
     - ✅ XEP-0184: Message Delivery Receipts
     - ✅ XEP-0199: XMPP Ping (/ping command)
     - ✅ XEP-0202: Entity Time (responds to time queries)
