@@ -595,10 +595,16 @@ int command__open(const void *pointer, void *data,
 
             auto channel = ptr_account->channels.find(jid);
             if (channel == ptr_account->channels.end())
+            {
+                // Reset MAM timestamp for this channel so history will be fetched
+                // (it might be -1 if previously closed)
+                ptr_account->mam_cache_set_last_timestamp(jid, 0);
+                
                 channel = ptr_account->channels.emplace(
                     std::make_pair(jid, weechat::channel {
                             *ptr_account, weechat::channel::chat_type::PM, jid, jid
                         })).first;
+            }
 
             if (argc > 2)
             {
