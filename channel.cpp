@@ -441,13 +441,23 @@ int weechat::channel::add_typing(weechat::user *user)
     {
         weechat::channel::typing& new_typing = typings.emplace_back();
         new_typing.user = user;
-        // Extract bare JID (without resource) for display
+        // For MUC, show nickname (resource); for PM, show bare JID
         if (user->id)
         {
-            char *bare_jid = xmpp_jid_bare(account.context, user->id);
-            new_typing.name = bare_jid ? bare_jid : user->id;
-            if (bare_jid)
-                xmpp_free(account.context, bare_jid);
+            if (type == chat_type::MUC)
+            {
+                char *nick = xmpp_jid_resource(account.context, user->id);
+                new_typing.name = nick ? nick : user->id;
+                if (nick)
+                    xmpp_free(account.context, nick);
+            }
+            else
+            {
+                char *bare_jid = xmpp_jid_bare(account.context, user->id);
+                new_typing.name = bare_jid ? bare_jid : user->id;
+                if (bare_jid)
+                    xmpp_free(account.context, bare_jid);
+            }
         }
         else
         {
