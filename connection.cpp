@@ -154,14 +154,13 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             // Skip generic "Unspecified" errors that don't have useful context
             if (strcmp(error_reason, "Unspecified") != 0 || error->description)
             {
-                weechat_printf(channel->buffer, "[!]\t%s%sError: %s%s%s",
+                weechat_printf(channel->buffer, "[!]\t%s%sError: %s%s%s%s",
                                weechat_color("gray"),
                                binding.muc() ? "MUC " : "",
                                error_reason,
                                error->description ? " (" : "",
-                               error->description ? error->description->data() : "");
-                if (error->description)
-                    weechat_printf(channel->buffer, "%s)", "");
+                               error->description ? error->description->data() : "",
+                               error->description ? ")" : "");
             }
             else
             {
