@@ -11,6 +11,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <optional>
+#include <utility>
 #include <lmdb++.h>
 
 #include "fmt/core.h"
@@ -182,7 +183,7 @@ namespace weechat
         std::string_view password() { return this->option_password.string(); }
         void password(std::string password) { this->option_password = password; }
         tls_policy tls() { return static_cast<tls_policy>(this->option_tls.integer()); }
-        void tls(tls_policy tls) { this->option_tls = fmt::format("%d", static_cast<int>(tls)); }
+        void tls(tls_policy tls) { this->option_tls = fmt::format("%d", std::to_underlying(tls)); }
         void tls(std::string tls) { this->option_tls = tls; }
         std::string_view nickname() { return this->option_nickname.string(); }
         void nickname(std::string nickname) { this->option_nickname = nickname; }

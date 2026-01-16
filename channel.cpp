@@ -424,10 +424,10 @@ int weechat::channel::typing_cb(const void *pointer, void *data, int remaining_c
     return WEECHAT_RC_OK;
 }
 
-weechat::channel::typing *weechat::channel::typing_search(weechat::user *user)
+std::optional<weechat::channel::typing*> weechat::channel::typing_search(weechat::user *user)
 {
     if (!user)
-        return nullptr;
+        return std::nullopt;
 
     for (auto& ptr_typing : typings)
     {
@@ -435,16 +435,16 @@ weechat::channel::typing *weechat::channel::typing_search(weechat::user *user)
             return &ptr_typing;
     }
 
-    return nullptr;
+    return std::nullopt;
 }
 
 int weechat::channel::add_typing(weechat::user *user)
 {
-    weechat::channel::typing *the_typing;
+    weechat::channel::typing *the_typing = nullptr;
     int ret = 0;
 
-    the_typing = weechat::channel::typing_search(user);
-    if (!the_typing)
+    auto typing_opt = weechat::channel::typing_search(user);
+    if (!typing_opt)
     {
         weechat::channel::typing& new_typing = typings.emplace_back();
         new_typing.user = user;
@@ -473,6 +473,10 @@ int weechat::channel::add_typing(weechat::user *user)
 
         the_typing = &new_typing;
         ret = 1;
+    }
+    else
+    {
+        the_typing = *typing_opt;
     }
     the_typing->ts = time(nullptr);
 
@@ -510,7 +514,7 @@ int weechat::channel::self_typing_cb(const void *pointer, void *data, int remain
     return WEECHAT_RC_OK;
 }
 
-weechat::channel::typing *weechat::channel::self_typing_search(weechat::user *user)
+std::optional<weechat::channel::typing*> weechat::channel::self_typing_search(weechat::user *user)
 {
     for (auto& ptr_typing : self_typings)
     {
@@ -518,16 +522,16 @@ weechat::channel::typing *weechat::channel::self_typing_search(weechat::user *us
             return &ptr_typing;
     }
 
-    return nullptr;
+    return std::nullopt;
 }
 
 int weechat::channel::add_self_typing(weechat::user *user)
 {
-    weechat::channel::typing *the_typing;
+    weechat::channel::typing *the_typing = nullptr;
     int ret = 0;
 
-    the_typing = weechat::channel::self_typing_search(user);
-    if (!the_typing)
+    auto typing_opt = weechat::channel::self_typing_search(user);
+    if (!typing_opt)
     {
         weechat::channel::typing& new_typing = self_typings.emplace_back();
         new_typing.user = user;
@@ -546,6 +550,10 @@ int weechat::channel::add_self_typing(weechat::user *user)
 
         the_typing = &new_typing;
         ret = 1;
+    }
+    else
+    {
+        the_typing = *typing_opt;
     }
 
     self_typing_cb(this, nullptr, 0);
@@ -648,7 +656,7 @@ void weechat::channel::update_name(const char* name)
         weechat_buffer_set(buffer, "short_name", "");
 }
 
-weechat::channel::member *weechat::channel::add_member(const char *id, const char *client)
+std::optional<weechat::channel::member*> weechat::channel::add_member(const char *id, const char *client)
 {
     weechat::channel::member *member;
     weechat::user *user;
@@ -659,10 +667,11 @@ weechat::channel::member *weechat::channel::add_member(const char *id, const cha
     {
         weechat_printf_date_tags(buffer, 0, "log2", "%sMUC: %s",
                                  weechat_prefix("network"), id);
-        return nullptr;
+        return std::nullopt;
     }
 
-    if (!(member = member_search(id)))
+    auto member_opt = member_search(id);
+    if (!member_opt)
     {
         member = new weechat::channel::member();
         member->id = strdup(id);
@@ -670,8 +679,12 @@ weechat::channel::member *weechat::channel::add_member(const char *id, const cha
         member->role = NULL;
         member->affiliation = NULL;
     }
-    else if (user)
-        user->nicklist_remove(&account, this);
+    else
+    {
+        member = *member_opt;
+        if (user)
+            user->nicklist_remove(&account, this);
+    }
 
     if (user)
         user->nicklist_add(&account, this);
@@ -728,10 +741,10 @@ weechat::channel::member *weechat::channel::add_member(const char *id, const cha
     return member;
 }
 
-weechat::channel::member *weechat::channel::member_search(const char *id)
+std::optional<weechat::channel::member*> weechat::channel::member_search(const char *id)
 {
     if (!id)
-        return nullptr;
+        return std::nullopt;
 
     for (auto& ptr_member : members)
     {
@@ -739,20 +752,19 @@ weechat::channel::member *weechat::channel::member_search(const char *id)
             return &ptr_member.second;
     }
 
-    return nullptr;
+    return std::nullopt;
 }
 
-weechat::channel::member *weechat::channel::remove_member(const char *id, const char *reason)
+std::optional<weechat::channel::member*> weechat::channel::remove_member(const char *id, const char *reason)
 {
-    weechat::channel::member *member;
     weechat::user *user;
 
     user = user::search(&account, id);
     if (user)
         user->nicklist_remove(&account, this);
-    else return nullptr; // TODO !!
+    else return std::nullopt;
 
-    member = member_search(id);
+    auto member_opt = member_search(id);
 
     char *jid_bare = xmpp_jid_bare(account.context, user->id);
     char *jid_resource = xmpp_jid_resource(account.context, user->id);
@@ -781,7 +793,7 @@ weechat::channel::member *weechat::channel::remove_member(const char *id, const 
                                  reason ? reason : "",
                                  reason ? "]" : "");
 
-    return member;
+    return member_opt;
 }
 
 int weechat::channel::send_message(std::string to, std::string body,

@@ -131,11 +131,11 @@ namespace weechat
         void member_speaking_rename_if_present(const char *nick);
 
         static int typing_cb(const void *pointer, void *data, int remaining_calls);
-        typing *typing_search(weechat::user *user);
+        std::optional<typing*> typing_search(weechat::user *user);
         int add_typing(weechat::user *user);
 
         static int self_typing_cb(const void *pointer, void *data, int remaining_calls);
-        typing *self_typing_search(weechat::user *user);
+        std::optional<typing*> self_typing_search(weechat::user *user);
         int add_self_typing(weechat::user *user);
 
         static int hotlist_update_cb(const void *pointer, void *data,
@@ -149,9 +149,9 @@ namespace weechat
         void update_name(const char* name);
         void update_purpose(const char* purpose, const char* creator, int last_set);
 
-        member *add_member(const char *id, const char *client);
-        member *member_search(const char *id);
-        member *remove_member(const char *id, const char *reason);
+        std::optional<member*> add_member(const char *id, const char *client);
+        std::optional<member*> member_search(const char *id);
+        std::optional<member*> remove_member(const char *id, const char *reason);
 
         int send_message(std::string to, std::string body,
                          std::optional<std::string> oob = {});
