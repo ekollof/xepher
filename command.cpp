@@ -1698,6 +1698,158 @@ int command__reply(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int command__moderate(const void *pointer, void *data,
+                      struct t_gui_buffer *buffer, int argc,
+                      char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argv;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel)
+    {
+        weechat_printf(buffer, "%sxmpp: you must be in a MUC channel to moderate messages",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // XEP-0425 is only for MUC moderation
+    if (ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer, "%sxmpp: message moderation is only available in MUC rooms",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // Optional: reason for moderation
+    const char *reason = (argc > 1) ? argv_eol[1] : NULL;
+
+    // Find the last message in buffer (from anyone, including self)
+    void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
+                                        buffer, "lines");
+    if (!lines)
+    {
+        weechat_printf(buffer, "%sxmpp: no lines found in buffer",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
+                                            lines, "last_line");
+    const char *target_id = NULL;
+
+    while (last_line)
+    {
+        void *line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
+                                                last_line, "data");
+        if (line_data)
+        {
+            // Extract message ID from tags
+            int tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
+                                                   line_data, "tags_count");
+            char str_tag[24] = {0};
+            for (int n_tag = 0; n_tag < tags_count; n_tag++)
+            {
+                snprintf(str_tag, sizeof(str_tag), "%d|tags_array", n_tag);
+                const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
+                                                       line_data, str_tag);
+                
+                // Skip retracted messages
+                if (weechat_strcasecmp(tag, "xmpp_retracted") == 0)
+                    break;
+                
+                if (strlen(tag) > strlen("id_") &&
+                    strncmp(tag, "id_", strlen("id_")) == 0)
+                {
+                    target_id = tag + strlen("id_");
+                    break;
+                }
+            }
+            
+            if (target_id)
+                break;
+        }
+
+        last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
+                                          last_line, "prev_line");
+    }
+
+    if (!target_id)
+    {
+        weechat_printf(buffer, "%sxmpp: no message found to moderate",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // Send XEP-0425 moderation request (IQ stanza to the MUC service)
+    const char *room_jid = ptr_channel->id.data();
+    
+    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", NULL);
+    xmpp_stanza_set_to(iq, room_jid);
+    
+    // <apply-to xmlns='urn:xmpp:fasten:0' id='target-message-id'>
+    xmpp_stanza_t *apply_to = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(apply_to, "apply-to");
+    xmpp_stanza_set_ns(apply_to, "urn:xmpp:fasten:0");
+    xmpp_stanza_set_attribute(apply_to, "id", target_id);
+    
+    // <moderate xmlns='urn:xmpp:message-moderate:1'>
+    xmpp_stanza_t *moderate = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(moderate, "moderate");
+    xmpp_stanza_set_ns(moderate, "urn:xmpp:message-moderate:1");
+    
+    // <retract xmlns='urn:xmpp:message-retract:1'/>
+    xmpp_stanza_t *retract = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(retract, "retract");
+    xmpp_stanza_set_ns(retract, "urn:xmpp:message-retract:1");
+    xmpp_stanza_add_child(moderate, retract);
+    
+    // Optional: <reason>text</reason>
+    if (reason)
+    {
+        xmpp_stanza_t *reason_elem = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(reason_elem, "reason");
+        xmpp_stanza_t *reason_text = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_text(reason_text, reason);
+        xmpp_stanza_add_child(reason_elem, reason_text);
+        xmpp_stanza_add_child(moderate, reason_elem);
+        xmpp_stanza_release(reason_text);
+        xmpp_stanza_release(reason_elem);
+    }
+    
+    xmpp_stanza_add_child(apply_to, moderate);
+    xmpp_stanza_add_child(iq, apply_to);
+    
+    ptr_account->connection.send(iq);
+    
+    xmpp_stanza_release(retract);
+    xmpp_stanza_release(moderate);
+    xmpp_stanza_release(apply_to);
+    xmpp_stanza_release(iq);
+
+    weechat_printf(buffer, "%sxmpp: moderation request sent%s",
+                  weechat_prefix("network"),
+                  reason ? " with reason" : "");
+
+    return WEECHAT_RC_OK;
+}
+
 int command__ping(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
@@ -2878,6 +3030,22 @@ void command__init()
         NULL, &command__reply, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /reply");
+
+    hook = weechat_hook_command(
+        "moderate",
+        N_("moderate (retract) the last message in MUC (XEP-0425)"),
+        N_("[reason]"),
+        N_("reason: optional reason for moderation\n\n"
+           "Moderates (retracts) the last message in the current MUC room.\n"
+           "This command is for MUC moderators to remove messages from other users.\n"
+           "Use /retract to delete your own messages.\n"
+           "Examples:\n"
+           "  /moderate\n"
+           "  /moderate Spam message\n"
+           "  /moderate Violates community guidelines"),
+        NULL, &command__moderate, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /moderate");
 
     hook = weechat_hook_command(
         "disco",

@@ -292,11 +292,29 @@
       </xmpp:SupportedXep>
     </implements>
 
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0422.html'/>
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.2.0</xmpp:version>
+        <xmpp:note xml:lang='en'>Message Fastening - used by Message Moderation (XEP-0425)</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0425.html'/>
+        <xmpp:status>complete</xmpp:status>
+        <xmpp:version>0.3.0</xmpp:version>
+        <xmpp:note xml:lang='en'>Message Moderation - allows MUC moderators to retract messages from other users</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
     <release>
       <Version>
         <revision>0.3.0-fork</revision>
         <created>2026-01-16</created>
-        <xmpp:note xml:lang='en'>Fork with bug fixes and enhancements: typing indicators, auto-encryption detection, bookmark management, room discovery, capability caching, Stream Management (XEP-0198), Message Retraction (XEP-0424), Message Styling (XEP-0393), Stanza IDs (XEP-0359), Message Hints (XEP-0334), Message Reactions (XEP-0444), Message Replies (XEP-0461)</xmpp:note>
+        <xmpp:note xml:lang='en'>Fork with bug fixes and enhancements: typing indicators, auto-encryption detection, bookmark management, room discovery, capability caching, Stream Management (XEP-0198), Message Retraction (XEP-0424), Message Moderation (XEP-0425), Message Styling (XEP-0393), Stanza IDs (XEP-0359), Message Hints (XEP-0334), Message Reactions (XEP-0444), Message Replies (XEP-0461), Message Fastening (XEP-0422)</xmpp:note>
       </Version>
     </release>
   </Project>

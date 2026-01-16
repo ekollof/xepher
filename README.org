@@ -60,6 +60,7 @@
     - XMPP Ping (XEP-0199) - responds to ping requests and /ping command to send pings
     - Message correction (XEP-0308) - /edit command to correct last sent message
     - Message retraction (XEP-0424) - /retract command to delete last sent message with MAM support
+    - Message moderation (XEP-0425) - /moderate command for MUC moderators to remove others' messages
     - Message styling (XEP-0393) - automatic rendering of formatted text
     - Message reactions (XEP-0444) - /react command to send emoji reactions to messages
     - Message replies (XEP-0461) - /reply command to reply to messages with context
@@ -101,6 +102,7 @@
     - ✅ XEP-0393: Message Styling (automatic text formatting)
     - ✅ XEP-0410: MUC Self-Ping (/selfping for membership verification)
     - ✅ XEP-0424: Message Retraction (/retract command)
+    - ✅ XEP-0425: Message Moderation (/moderate command for MUC moderators)
     - ✅ XEP-0444: Message Reactions (/react command)
     - ✅ XEP-0461: Message Replies (/reply command)
 
@@ -317,6 +319,26 @@
     be replaced with a tombstone "[Message deleted]" in the buffer. Note that 
     recipients may have already seen the message before retraction. Works in both 
     PM and MUC channels.
+
+*** /moderate
+    Moderate (retract) the last message in a MUC (XEP-0425: Message Moderation)
+
+    *Usage:*
+    #+begin_src
+    /moderate [reason]
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /moderate
+    /moderate Spam message
+    /moderate Violates community guidelines
+    #+end_src
+
+    *Note:* This command is for MUC moderators to remove messages from other users.
+    Moderated messages are replaced with a tombstone showing the moderation reason.
+    Use /retract to delete your own messages. Only works in MUC rooms where you
+    have moderator privileges. The server must support XEP-0425.
 
 *** /react
     Send an emoji reaction to the last received message (XEP-0444: Message Reactions)

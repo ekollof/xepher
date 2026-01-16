@@ -931,6 +931,130 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         }
     }
 
+    // XEP-0425: Message Moderation (extends XEP-0424)
+    // Look for <apply-to xmlns='urn:xmpp:fasten:0'><moderate xmlns='urn:xmpp:message-moderate:1'>
+    xmpp_stanza_t *apply_to = xmpp_stanza_get_child_by_name_and_ns(stanza, "apply-to",
+                                                                    "urn:xmpp:fasten:0");
+    const char *moderate_id = NULL;
+    const char *moderate_reason = NULL;
+    
+    if (apply_to)
+    {
+        moderate_id = xmpp_stanza_get_attribute(apply_to, "id");
+        xmpp_stanza_t *moderate = xmpp_stanza_get_child_by_name_and_ns(apply_to, "moderate",
+                                                                        "urn:xmpp:message-moderate:1");
+        if (moderate && moderate_id)
+        {
+            // Extract optional reason
+            xmpp_stanza_t *reason_elem = xmpp_stanza_get_child_by_name(moderate, "reason");
+            if (reason_elem)
+            {
+                char *reason_text = xmpp_stanza_get_text(reason_elem);
+                moderate_reason = reason_text;  // Will be freed later
+            }
+            
+            // Save moderation to MAM cache
+            const char *channel_id = account.jid() == from_bare ? to_bare : from_bare;
+            account.mam_cache_retract_message(channel_id, moderate_id);
+            
+            // Find and tombstone the moderated message in buffer
+            void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
+                                                channel->buffer, "lines");
+            if (lines)
+            {
+                void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
+                                                        lines, "last_line");
+                while (last_line)
+                {
+                    void *line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
+                                                            last_line, "data");
+                    if (line_data)
+                    {
+                        int tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
+                                                               line_data, "tags_count");
+                        char str_tag[24] = {0};
+                        for (int n_tag = 0; n_tag < tags_count; n_tag++)
+                        {
+                            snprintf(str_tag, sizeof(str_tag), "%d|tags_array", n_tag);
+                            const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
+                                                                   line_data, str_tag);
+                            if (strlen(tag) > strlen("id_") &&
+                                weechat_strcasecmp(tag+strlen("id_"), moderate_id) == 0)
+                            {
+                                // Found the message to moderate - update it with tombstone
+                                char tombstone[512];
+                                if (moderate_reason)
+                                    snprintf(tombstone, sizeof(tombstone), 
+                                            "%s[Message moderated: %s]%s", 
+                                            weechat_color("darkgray"),
+                                            moderate_reason,
+                                            weechat_color("resetcolor"));
+                                else
+                                    snprintf(tombstone, sizeof(tombstone), 
+                                            "%s[Message moderated by room moderator]%s", 
+                                            weechat_color("darkgray"),
+                                            weechat_color("resetcolor"));
+                                
+                                // Update the line with tombstone
+                                struct t_hashtable *hashtable = weechat_hashtable_new(8,
+                                    WEECHAT_HASHTABLE_STRING,
+                                    WEECHAT_HASHTABLE_STRING,
+                                    NULL, NULL);
+                                weechat_hashtable_set(hashtable, "message", tombstone);
+                                weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,xmpp_moderated,notify_none");
+                                weechat_hdata_update(weechat_hdata_get("line_data"), line_data, hashtable);
+                                weechat_hashtable_free(hashtable);
+                                
+                                // Print notification
+                                if (moderate_reason)
+                                    weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                                        "%s%s moderated a message: %s",
+                                        weechat_prefix("network"),
+                                        from_bare, moderate_reason);
+                                else
+                                    weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                                        "%s%s moderated a message",
+                                        weechat_prefix("network"),
+                                        from_bare);
+                                
+                                if (moderate_reason)
+                                    xmpp_free(account.context, (void*)moderate_reason);
+                                xmpp_free(account.context, (void*)from_bare);
+                                if (to_bare) xmpp_free(account.context, (void*)to_bare);
+                                if (cleartext) free(cleartext);
+                                if (intext) xmpp_free(account.context, intext);
+                                return 1;
+                            }
+                        }
+                    }
+
+                    last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
+                                                      last_line, "prev_line");
+                }
+            }
+            
+            // If we didn't find the message, still print notification
+            if (moderate_reason)
+                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                    "%s%s moderated a message (not found in buffer): %s",
+                    weechat_prefix("network"),
+                    from_bare, moderate_reason);
+            else
+                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                    "%s%s moderated a message (not found in buffer)",
+                    weechat_prefix("network"),
+                    from_bare);
+            
+            if (moderate_reason)
+                xmpp_free(account.context, (void*)moderate_reason);
+            xmpp_free(account.context, (void*)from_bare);
+            if (to_bare) xmpp_free(account.context, (void*)to_bare);
+            if (cleartext) free(cleartext);
+            if (intext) xmpp_free(account.context, intext);
+            return 1;
+        }
+    }
+
     // XEP-0424: Message Retraction
     xmpp_stanza_t *retract = xmpp_stanza_get_child_by_name_and_ns(stanza, "retract",
                                                                    "urn:xmpp:message-retract:1");
@@ -1401,6 +1525,8 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
   //FEATURE("urn:xmpp:jingle:transports:s5b:1");
     FEATURE("urn:xmpp:message-correct:0");
     FEATURE("urn:xmpp:message-retract:1");
+    FEATURE("urn:xmpp:message-moderate:1");  // XEP-0425: Message Moderation
+    FEATURE("urn:xmpp:fasten:0");  // XEP-0422: Message Fastening (used by moderation)
     FEATURE("urn:xmpp:reactions:0");  // XEP-0444: Message Reactions
     FEATURE("urn:xmpp:reply:0");  // XEP-0461: Message Replies
     FEATURE("urn:xmpp:sid:0");  // XEP-0359: Stanza IDs
