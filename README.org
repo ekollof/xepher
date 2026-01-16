@@ -67,7 +67,7 @@
     - Unique and stable stanza IDs (XEP-0359) - tracks message IDs for reliable references
     - Message processing hints (XEP-0334) - optimizes MAM storage for transient messages
     - Enhanced chat state notifications (XEP-0085) - active, composing, paused, inactive, gone states with visual feedback
-    - HTTP File Upload (XEP-0363) - /upload command to share files via HTTP PUT
+    - HTTP File Upload (XEP-0363) - /upload command with smart file picker (GUI/fzf/manual)
     - User mood (XEP-0107) - /mood command to publish your current mood status
     - User activity (XEP-0108) - /activity command to publish what you're currently doing
     - PEP Native Bookmarks (XEP-0402) - modern PEP-based bookmark storage instead of Private XML
@@ -494,15 +494,23 @@
 
     *Usage:*
     #+begin_src
-    /upload <filename>
+    /upload [<filename>]
     #+end_src
 
     *Examples:*
     #+begin_src
-    /upload /path/to/image.jpg
+    /upload                      # Interactive file picker
+    /upload /path/to/image.jpg   # Direct path
     /upload ~/Documents/file.pdf
     /upload screenshot.png
     #+end_src
+
+    *Interactive File Picker:* When called without arguments, ==/upload== automatically
+    launches an interactive file picker:
+    - Detects X11/Wayland display servers via =$DISPLAY= and =$WAYLAND_DISPLAY=
+    - Tries GUI file dialogs: ==zenity== (GTK) or ==kdialog== (KDE)
+    - Falls back to ==fzf== in terminal if no GUI available
+    - Shows helpful error if no picker tools are installed
 
     *Note:* The file will be uploaded to the server's HTTP upload service
     and a URL will be automatically sent in the chat with XEP-0066 Out of Band Data.

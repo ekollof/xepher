@@ -3139,6 +3139,72 @@ int command__list(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+// Smart file picker: tries GUI dialogs, then fzf, then gives usage
+std::optional<std::string> pick_file_interactive()
+{
+    // Check for GUI environment
+    const char *wayland_display = getenv("WAYLAND_DISPLAY");
+    const char *x11_display = getenv("DISPLAY");
+    bool has_gui = (wayland_display && wayland_display[0]) || (x11_display && x11_display[0]);
+    
+    if (has_gui)
+    {
+        // Try zenity (works on both X11 and Wayland)
+        FILE *fp = popen("zenity --file-selection --title='Select file to upload' 2>/dev/null", "r");
+        if (fp)
+        {
+            char path[4096] = {0};
+            if (fgets(path, sizeof(path), fp))
+            {
+                pclose(fp);
+                // Remove trailing newline
+                size_t len = strlen(path);
+                if (len > 0 && path[len-1] == '\n')
+                    path[len-1] = '\0';
+                if (path[0])
+                    return std::string(path);
+            }
+            pclose(fp);
+        }
+        
+        // Try kdialog (KDE)
+        fp = popen("kdialog --getopenfilename ~ 2>/dev/null", "r");
+        if (fp)
+        {
+            char path[4096] = {0};
+            if (fgets(path, sizeof(path), fp))
+            {
+                pclose(fp);
+                size_t len = strlen(path);
+                if (len > 0 && path[len-1] == '\n')
+                    path[len-1] = '\0';
+                if (path[0])
+                    return std::string(path);
+            }
+            pclose(fp);
+        }
+    }
+    
+    // Try fzf in terminal (works everywhere)
+    FILE *fp = popen("fzf --prompt='Select file to upload: ' --preview='file {}' 2>/dev/null", "r");
+    if (fp)
+    {
+        char path[4096] = {0};
+        if (fgets(path, sizeof(path), fp))
+        {
+            pclose(fp);
+            size_t len = strlen(path);
+            if (len > 0 && path[len-1] == '\n')
+                path[len-1] = '\0';
+            if (path[0])
+                return std::string(path);
+        }
+        pclose(fp);
+    }
+    
+    return std::nullopt;
+}
+
 int command__upload(const void *pointer, void *data,
                     t_gui_buffer *buffer, int argc,
                     char **argv, char **argv_eol)
@@ -3169,14 +3235,31 @@ int command__upload(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
+    std::string filename;
+    
     if (argc < 2)
     {
-        weechat_printf(buffer, "%s%s: missing argument for \"%s\" command",
-                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "upload");
-        return WEECHAT_RC_OK;
+        // Try interactive file picker
+        auto picked = pick_file_interactive();
+        if (picked)
+        {
+            filename = *picked;
+            weechat_printf(buffer, "%sSelected file: %s",
+                          weechat_prefix("network"), filename.c_str());
+        }
+        else
+        {
+            weechat_printf(buffer, "%s%s: no file selected. Usage: /upload <filename>",
+                          weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            weechat_printf(buffer, "%sNote: Install zenity, kdialog, or fzf for interactive file picker",
+                          weechat_prefix("error"));
+            return WEECHAT_RC_OK;
+        }
     }
-
-    std::string filename = argv[1];
+    else
+    {
+        filename = argv[1];
+    }
     
     // Check if file exists and is readable
     FILE *file = fopen(filename.c_str(), "rb");
@@ -3637,8 +3720,11 @@ void command__init()
     hook = weechat_hook_command(
         "upload",
         N_("upload a file via HTTP File Upload (XEP-0363)"),
-        N_("<filename>"),
-        N_("filename: path to file to upload\n\n"
+        N_("[<filename>]"),
+        N_("filename: path to file to upload (optional)\n\n"
+           "If no filename is provided, an interactive file picker will be used.\n"
+           "The picker tries GUI dialogs (zenity/kdialog) when X11/Wayland is detected,\n"
+           "falls back to fzf in terminal, or prompts for manual entry.\n\n"
            "The file will be uploaded to the server and a URL will be sent in the chat."),
         "%(filename)", &command__upload, NULL, NULL);
     if (!hook)
