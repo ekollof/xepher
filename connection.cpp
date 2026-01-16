@@ -1941,6 +1941,22 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
     {
         weechat_printf(account.buffer, "%s[DEBUG] Disconnecting due to status=%d",
                       weechat_prefix("error"), (int)status);
+        
+        // Clear SM session on clean disconnect (server-initiated or normal close)
+        // This prevents trying to resume a session the server has already closed
+        if (status == event::disconnect && error == 0)
+        {
+            if (!account.sm_id.empty())
+            {
+                weechat_printf(account.buffer, "%sSM session %s closed by server",
+                              weechat_prefix("network"), account.sm_id.data());
+            }
+            account.sm_id = "";
+            account.sm_h_inbound = 0;
+            account.sm_h_outbound = 0;
+            account.sm_last_ack = 0;
+        }
+        
         account.disconnect(1);
       //xmpp_stop(account.context); //keep context?
     }
