@@ -395,6 +395,11 @@ void weechat::account::reset()
 
 int weechat::account::connect()
 {
+    return connect(false);  // Not a manual connect
+}
+
+int weechat::account::connect(bool manual)
+{
     if (!buffer)
     {
         if (!create_buffer())
@@ -405,8 +410,12 @@ int weechat::account::connect()
 
     reset();
     
-    // Reset SM availability on manual connect (allow retry)
-    sm_available = true;
+    // Only reset SM availability on MANUAL connect (allow retry)
+    // Auto-reconnects preserve the sm_available state
+    if (manual)
+    {
+        sm_available = true;
+    }
 
     is_connected = connection.connect(std::string(jid()), std::string(password()), tls());
 

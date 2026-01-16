@@ -211,7 +211,7 @@ int command__connect_account(weechat::account *account)
             account->name.data());
     }
 
-    account->connect();
+    account->connect(true);  // Manual connect from user command
 
     return 1;
 }

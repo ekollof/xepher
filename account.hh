@@ -163,6 +163,11 @@ namespace weechat
         bool mam_query_search(mam_query* out, const std::string id);
         void mam_query_remove(const std::string id);
         void mam_query_free_all();
+
+        void disconnect(int reconnect);
+        void reset();
+        int connect();
+        int connect(bool manual);  // manual=true means user-initiated /connect
         
         void mam_cache_init();
         void mam_cache_cleanup();
@@ -180,10 +185,6 @@ namespace weechat
         bool caps_cache_get(const std::string& verification_hash, std::vector<std::string>& features);
 
         struct t_gui_buffer* create_buffer();
-
-        void disconnect(int reconnect);
-        void reset();
-        int connect();
 
         std::string_view jid() {
             if (connection && xmpp_conn_is_connected(connection))
