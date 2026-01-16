@@ -114,6 +114,15 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0092.html'/>
+        <xmpp:status>complete</xmpp:status>
+        <xmpp:version>1.1</xmpp:version>
+        <xmpp:note xml:lang='en'>Software Version - responds to version queries with client name and version</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0107.html'/>
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.2.2</xmpp:version>
@@ -163,6 +172,15 @@
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>2.0.1</xmpp:version>
         <xmpp:note xml:lang='en'>XMPP Ping</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0202.html'/>
+        <xmpp:status>complete</xmpp:status>
+        <xmpp:version>2.0</xmpp:version>
+        <xmpp:note xml:lang='en'>Entity Time - responds to time queries with UTC time and timezone offset</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

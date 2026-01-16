@@ -114,10 +114,12 @@
     - ✅ XEP-0049: Private XML Storage
     - ✅ XEP-0066: Out of Band Data (URL sharing in messages)
     - ✅ XEP-0085: Chat State Notifications (enhanced with all 5 states)
+    - ✅ XEP-0092: Software Version (responds to version queries)
     - ✅ XEP-0107: User Mood (/mood command for PEP mood publishing)
     - ✅ XEP-0108: User Activity (/activity command for PEP activity publishing)
     - ✅ XEP-0184: Message Delivery Receipts
     - ✅ XEP-0199: XMPP Ping (/ping command)
+    - ✅ XEP-0202: Entity Time (responds to time queries)
     - ✅ XEP-0203: Delayed Delivery (proper timestamps for offline/MAM messages)
     - ✅ XEP-0280: Message Carbons
     - ✅ XEP-0313: Message Archive Management (MAM) with LMDB caching

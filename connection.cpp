@@ -85,6 +85,51 @@ bool weechat::connection::version_handler(xmpp_stanza_t *stanza)
     return true;
 }
 
+bool weechat::connection::time_handler(xmpp_stanza_t *stanza)
+{
+    weechat_printf(NULL, "Received time request from %s", xmpp_stanza_get_from(stanza));
+
+    auto reply = libstrophe::stanza::reply(stanza)
+        .set_type("result");
+
+    auto query = libstrophe::stanza(account.context)
+        .set_name("time");
+    if (const char *ns = xmpp_stanza_get_ns(xmpp_stanza_get_children(stanza)); ns) {
+        query.set_ns(ns);
+    }
+
+    // Get current time
+    time_t now = time(NULL);
+    struct tm *tm_utc = gmtime(&now);
+    struct tm *tm_local = localtime(&now);
+    
+    // Format UTC time as ISO 8601: YYYY-MM-DDTHH:MM:SSZ
+    char utc_str[32];
+    strftime(utc_str, sizeof(utc_str), "%Y-%m-%dT%H:%M:%SZ", tm_utc);
+    
+    // Calculate timezone offset
+    long tz_offset = tm_local->tm_gmtoff;  // Offset in seconds
+    int tz_hours = tz_offset / 3600;
+    int tz_mins = abs((tz_offset % 3600) / 60);
+    char tzo_str[16];
+    snprintf(tzo_str, sizeof(tzo_str), "%+03d:%02d", tz_hours, tz_mins);
+
+    query.add_child(libstrophe::stanza(account.context)
+                    .set_name("utc")
+                    .add_child(libstrophe::stanza(account.context)
+                               .set_text(utc_str)));
+    query.add_child(libstrophe::stanza(account.context)
+                    .set_name("tzo")
+                    .add_child(libstrophe::stanza(account.context)
+                               .set_text(tzo_str)));
+
+    reply.add_child(query);
+
+    account.connection.send(reply);
+
+    return true;
+}
+
 bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level)
 {
     // SM counter incremented in libstrophe wrapper, not here
@@ -2679,6 +2724,12 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                     auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
                     if (connection != conn) throw std::invalid_argument("connection != conn");
                     return connection.version_handler(stanza) ? 1 : 0;
+                });
+            this->handler_add<urn::xmpp::time>(
+                "iq", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) throw std::invalid_argument("connection != conn");
+                    return connection.time_handler(stanza) ? 1 : 0;
                 });
             this->handler_add(
                 "presence", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
