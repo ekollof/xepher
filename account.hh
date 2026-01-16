@@ -100,6 +100,7 @@ namespace weechat
 
         // Stream Management (XEP-0198)
         bool sm_enabled = false;
+        bool sm_available = true;       // Can we try to enable SM?
         bool sm_handlers_registered = false;  // Track if handlers are already added
         std::string sm_id;              // session ID for resumption
         uint32_t sm_h_inbound = 0;      // stanzas we've received and handled

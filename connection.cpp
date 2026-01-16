@@ -1646,12 +1646,19 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
                           weechat_prefix("error"));
         }
 
-        // Reset SM state
+        // Reset SM state (but don't try to enable again this session)
         account.sm_enabled = false;
         account.sm_id = "";
         account.sm_h_inbound = 0;
         account.sm_h_outbound = 0;
         account.sm_last_ack = 0;
+        
+        // Mark SM as unavailable to prevent retry loops
+        // (Will be reset when user manually reconnects)
+        account.sm_available = false;
+        
+        weechat_printf(account.buffer, "%sStream Management disabled for this session",
+                      weechat_prefix("network"));
     }
     else if (element_name == "a")
     {
@@ -1895,11 +1902,14 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         account.idle_timer_hook = weechat_hook_timer(60 * 1000, 0, 0,
                                                      &account::idle_timer_cb, &account, nullptr);
 
-        // Enable Stream Management (XEP-0198) after authentication
-        // Request resumable session with max 300 seconds (5 minutes)
-        this->send(stanza::xep0198::enable(true, 300)
-                   .build(account.context)
-                   .get());
+        // Enable Stream Management (XEP-0198) if available
+        // Only try once per manual connect - don't retry on auto-reconnect if failed
+        if (account.sm_available)
+        {
+            this->send(stanza::xep0198::enable(true, 300)
+                       .build(account.context)
+                       .get());
+        }
 
         (void) weechat_hook_signal_send("xmpp_account_connected",
                                         WEECHAT_HOOK_SIGNAL_STRING, account.name.data());

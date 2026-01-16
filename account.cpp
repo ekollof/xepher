@@ -404,6 +404,9 @@ int weechat::account::connect()
     }
 
     reset();
+    
+    // Reset SM availability on manual connect (allow retry)
+    sm_available = true;
 
     is_connected = connection.connect(std::string(jid()), std::string(password()), tls());
 
