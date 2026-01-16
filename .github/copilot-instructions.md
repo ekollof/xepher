@@ -284,3 +284,4 @@ git push
 - **Test incrementally** - build after each logical change
 - **Document as you go** - don't leave docs for later
 - **Ask before major changes** - discuss architecture decisions
+- **Never create loose summary/planning documents** - only update README.org, DOAP.xml, or code comments
