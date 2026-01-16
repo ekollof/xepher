@@ -630,6 +630,46 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
     }
 }
 
+void weechat::account::mam_cache_clear_messages(const std::string& channel_jid)
+{
+    if (!mam_db_env) return;
+    
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+        
+        MDB_cursor *cursor;
+        mdb_cursor_open(txn.handle(), mam_dbi.messages.handle(), &cursor);
+        
+        // Start with channel prefix
+        std::string prefix = channel_jid + ":";
+        MDB_val key = {prefix.size(), (void*)prefix.data()};
+        MDB_val value;
+        
+        int rc = mdb_cursor_get(cursor, &key, &value, MDB_SET_RANGE);
+        
+        while (rc == 0)
+        {
+            std::string key_str((char*)key.mv_data, key.mv_size);
+            
+            // Check if key still belongs to our channel
+            if (key_str.substr(0, prefix.size()) != prefix)
+                break;
+            
+            // Delete this entry
+            mdb_cursor_del(cursor, 0);
+            
+            // Move to next
+            rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT);
+        }
+        
+        mdb_cursor_close(cursor);
+        txn.commit();
+    } catch (const lmdb::error& ex) {
+        // Silently ignore errors
+    }
+}
+
 time_t weechat::account::mam_cache_get_last_timestamp(const std::string& channel_jid)
 {
     if (!mam_db_env) return 0;

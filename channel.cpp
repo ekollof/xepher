@@ -254,6 +254,13 @@ weechat::channel::channel(weechat::account& account,
             last_mam_fetch = account.mam_cache_get_last_timestamp(id);
         }
         
+        // Skip MAM entirely if channel was deliberately closed (timestamp == -1)
+        if (last_mam_fetch == -1)
+        {
+            // User closed this channel, don't auto-fetch history
+            return;
+        }
+        
         // Load and display cached messages
         if (last_mam_fetch > 0)
         {
@@ -564,10 +571,11 @@ weechat::channel::~channel()
         self_typing_hook_timer = nullptr;
     }
     
-    // Clear MAM cache timestamp for PM channels to prevent auto-recreation on reconnect
+    // Clear MAM cache for PM channels to prevent auto-recreation on reconnect
     if (type == chat_type::PM)
     {
-        account.mam_cache_set_last_timestamp(id, 0);
+        account.mam_cache_clear_messages(id);
+        account.mam_cache_set_last_timestamp(id, -1);  // -1 = deliberately closed
     }
     
     // NOTE: Other cleanup disabled - weechat frees these when closing buffers

@@ -133,6 +133,7 @@ namespace weechat
         void mam_cache_message(const std::string& channel_jid, const std::string& message_id,
                               const std::string& from, time_t timestamp, const std::string& body);
         void mam_cache_load_messages(const std::string& channel_jid, struct t_gui_buffer *buffer);
+        void mam_cache_clear_messages(const std::string& channel_jid);
         time_t mam_cache_get_last_timestamp(const std::string& channel_jid);
         void mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp);
 
