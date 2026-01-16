@@ -2,16 +2,15 @@
 .plugin.o: plugin.cpp plugin.hh strophe.hh config.hh config/file.hh \
  config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h channel.hh connection.hh xmpp/ns.hh user.hh \
- command.hh input.hh buffer.hh completion.hh
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h channel.hh \
+ connection.hh xmpp/ns.hh user.hh command.hh input.hh buffer.hh \
+ completion.hh
 plugin.hh:
 strophe.hh:
 config.hh:
@@ -23,20 +22,20 @@ config/option.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 channel.hh:
 connection.hh:
 xmpp/ns.hh:
@@ -66,17 +65,15 @@ completion.hh:
  xmpp/xep-0198.inl xmpp/xep-0249.inl xmpp/xep-0280.inl xmpp/xep-0319.inl \
  xmpp/xep-0352.inl xmpp/rfc-6121.inl xmpp/stanza.hh config.hh \
  config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
- config/option.hh input.hh omemo.hh /usr/include/signal/signal_protocol.h \
- /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h account.hh pgp.hh channel.hh connection.hh \
- user.hh buffer.hh
+ config/option.hh input.hh omemo.hh /usr/include/omemo/signal_protocol.h \
+ /usr/include/omemo/ratchet.h /usr/include/omemo/signal_protocol_types.h \
+ /usr/include/omemo/curve.h /usr/include/omemo/session_record.h \
+ /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h account.hh \
+ pgp.hh channel.hh connection.hh user.hh buffer.hh
 /usr/include/libxml2/libxml/xmlwriter.h:
 /usr/include/libxml2/libxml/xmlversion.h:
 /usr/include/libxml2/libxml/xmlexports.h:
@@ -120,20 +117,20 @@ config/account.hh:
 config/option.hh:
 input.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 account.hh:
 pgp.hh:
 channel.hh:
@@ -141,36 +138,34 @@ connection.hh:
 user.hh:
 buffer.hh:
 .buffer.o: buffer.cpp plugin.hh strophe.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config.hh config/file.hh \
- config/breadcrumb.hh config/section.hh config/account.hh \
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h config.hh \
+ config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh buffer.hh
 plugin.hh:
 strophe.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config.hh:
 config/file.hh:
 config/breadcrumb.hh:
@@ -183,16 +178,14 @@ xmpp/ns.hh:
 user.hh:
 buffer.hh:
 .channel.o: channel.cpp plugin.hh strophe.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config.hh config/file.hh \
- config/breadcrumb.hh config/section.hh config/account.hh \
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h config.hh \
+ config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh input.hh \
  buffer.hh util.hh xmpp/node.hh xmpp/xep-0027.inl xmpp/xep-0030.inl \
  xmpp/xep-0045.inl xmpp/xep-0049.inl xmpp/xep-0115.inl xmpp/xep-0198.inl \
@@ -203,20 +196,20 @@ strophe.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config.hh:
 config/file.hh:
 config/breadcrumb.hh:
@@ -243,16 +236,14 @@ xmpp/xep-0319.inl:
 xmpp/xep-0352.inl:
 xmpp/rfc-6121.inl:
 .command.o: command.cpp plugin.hh strophe.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config.hh config/file.hh \
- config/breadcrumb.hh config/section.hh config/account.hh \
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h config.hh \
+ config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh buffer.hh \
  message.hh command.hh sexp/driver.hh sexp/scanner.hh sexp/parser.tab.hh \
  sexp/location.hh
@@ -261,20 +252,20 @@ strophe.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config.hh:
 config/file.hh:
 config/breadcrumb.hh:
@@ -295,16 +286,14 @@ sexp/location.hh:
 .completion.o: completion.cpp plugin.hh strophe.hh config.hh \
  config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h channel.hh connection.hh xmpp/ns.hh user.hh \
- buffer.hh completion.hh
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h channel.hh \
+ connection.hh xmpp/ns.hh user.hh buffer.hh completion.hh
 plugin.hh:
 strophe.hh:
 config.hh:
@@ -316,20 +305,20 @@ config/option.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 channel.hh:
 connection.hh:
 xmpp/ns.hh:
@@ -337,36 +326,34 @@ user.hh:
 buffer.hh:
 completion.hh:
 .config.o: config.cpp plugin.hh strophe.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config.hh config/file.hh \
- config/breadcrumb.hh config/section.hh config/account.hh \
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h config.hh \
+ config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh
 plugin.hh:
 strophe.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config.hh:
 config/file.hh:
 config/breadcrumb.hh:
@@ -387,16 +374,14 @@ user.hh:
  xmpp/rfc-6121.inl xmpp/stanza.hh config.hh config/file.hh \
  config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h channel.hh connection.hh user.hh util.hh \
- deps/diff/diff.h
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h channel.hh \
+ connection.hh user.hh util.hh deps/diff/diff.h
 /usr/include/libxml2/libxml/uri.h:
 /usr/include/libxml2/libxml/xmlversion.h:
 /usr/include/libxml2/libxml/xmlexports.h:
@@ -426,36 +411,34 @@ config/option.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 channel.hh:
 connection.hh:
 user.hh:
 util.hh:
 deps/diff/diff.h:
 .input.o: input.cpp plugin.hh strophe.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config.hh config/file.hh \
- config/breadcrumb.hh config/section.hh config/account.hh \
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h config.hh \
+ config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh buffer.hh \
  message.hh input.hh
 plugin.hh:
@@ -463,20 +446,20 @@ strophe.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config.hh:
 config/file.hh:
 config/breadcrumb.hh:
@@ -491,36 +474,34 @@ buffer.hh:
 message.hh:
 input.hh:
 .message.o: message.cpp plugin.hh strophe.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config.hh config/file.hh \
- config/breadcrumb.hh config/section.hh config/account.hh \
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h config.hh \
+ config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh message.hh
 plugin.hh:
 strophe.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config.hh:
 config/file.hh:
 config/breadcrumb.hh:
@@ -533,17 +514,15 @@ xmpp/ns.hh:
 user.hh:
 message.hh:
 .omemo.o: omemo.cpp plugin.hh strophe.hh xmpp/stanza.hh account.hh pgp.hh \
- omemo.hh /usr/include/signal/signal_protocol.h \
- /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config.hh config/file.hh \
- config/breadcrumb.hh config/section.hh config/account.hh \
+ omemo.hh /usr/include/omemo/signal_protocol.h \
+ /usr/include/omemo/ratchet.h /usr/include/omemo/signal_protocol_types.h \
+ /usr/include/omemo/curve.h /usr/include/omemo/session_record.h \
+ /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h config.hh \
+ config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh gcrypt.hh \
  util.hh
 plugin.hh:
@@ -552,20 +531,20 @@ xmpp/stanza.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config.hh:
 config/file.hh:
 config/breadcrumb.hh:
@@ -583,36 +562,34 @@ plugin.hh:
 strophe.hh:
 pgp.hh:
 .user.o: user.cpp plugin.hh strophe.hh account.hh pgp.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config.hh config/file.hh \
- config/breadcrumb.hh config/section.hh config/account.hh \
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h config.hh \
+ config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
  config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh
 plugin.hh:
 strophe.hh:
 account.hh:
 pgp.hh:
 omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config.hh:
 config/file.hh:
 config/breadcrumb.hh:
@@ -634,15 +611,14 @@ config/../plugin.hh:
 config/../strophe.hh:
 config/.file.o: config/file.cpp config/../plugin.hh config/../strophe.hh \
  config/../account.hh config/../pgp.hh config/../omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h config/../signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config/../config.hh config/../config/file.hh \
+ /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
+ /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
+ /usr/include/omemo/session_record.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h config/../signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h \
+ config/../config.hh config/../config/file.hh \
  config/../config/breadcrumb.hh config/../config/section.hh \
  config/../config/account.hh config/../config/option.hh \
  config/../channel.hh config/../connection.hh config/../xmpp/ns.hh \
@@ -652,20 +628,20 @@ config/../strophe.hh:
 config/../account.hh:
 config/../pgp.hh:
 config/../omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 config/../signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config/../config.hh:
 config/../config/file.hh:
 config/../config/breadcrumb.hh:
@@ -678,16 +654,15 @@ config/../xmpp/ns.hh:
 config/../user.hh:
 config/.section.o: config/section.cpp config/../plugin.hh \
  config/../strophe.hh config/../account.hh config/../pgp.hh \
- config/../omemo.hh /usr/include/signal/signal_protocol.h \
- /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h config/../signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config/../config.hh config/../config/file.hh \
+ config/../omemo.hh /usr/include/omemo/signal_protocol.h \
+ /usr/include/omemo/ratchet.h /usr/include/omemo/signal_protocol_types.h \
+ /usr/include/omemo/curve.h /usr/include/omemo/session_record.h \
+ /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h config/../signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h \
+ config/../config.hh config/../config/file.hh \
  config/../config/breadcrumb.hh config/../config/section.hh \
  config/../config/account.hh config/../config/option.hh \
  config/../channel.hh config/../connection.hh config/../xmpp/ns.hh \
@@ -697,20 +672,20 @@ config/../strophe.hh:
 config/../account.hh:
 config/../pgp.hh:
 config/../omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 config/../signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config/../config.hh:
 config/../config/file.hh:
 config/../config/breadcrumb.hh:
@@ -723,16 +698,15 @@ config/../xmpp/ns.hh:
 config/../user.hh:
 config/.account.o: config/account.cpp config/../plugin.hh \
  config/../strophe.hh config/../account.hh config/../pgp.hh \
- config/../omemo.hh /usr/include/signal/signal_protocol.h \
- /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h config/../signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config/../config.hh config/../config/file.hh \
+ config/../omemo.hh /usr/include/omemo/signal_protocol.h \
+ /usr/include/omemo/ratchet.h /usr/include/omemo/signal_protocol_types.h \
+ /usr/include/omemo/curve.h /usr/include/omemo/session_record.h \
+ /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h config/../signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h \
+ config/../config.hh config/../config/file.hh \
  config/../config/breadcrumb.hh config/../config/section.hh \
  config/../config/account.hh config/../config/option.hh \
  config/../channel.hh config/../connection.hh config/../xmpp/ns.hh \
@@ -742,20 +716,20 @@ config/../strophe.hh:
 config/../account.hh:
 config/../pgp.hh:
 config/../omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 config/../signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config/../config.hh:
 config/../config/file.hh:
 config/../config/breadcrumb.hh:
@@ -768,16 +742,15 @@ config/../xmpp/ns.hh:
 config/../user.hh:
 config/.option.o: config/option.cpp config/../plugin.hh \
  config/../strophe.hh config/../account.hh config/../pgp.hh \
- config/../omemo.hh /usr/include/signal/signal_protocol.h \
- /usr/include/signal/ratchet.h \
- /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
- /usr/include/signal/session_record.h \
- /usr/include/signal/session_pre_key.h \
- /usr/include/signal/sender_key_record.h config/../signal.hh \
- /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
- /usr/include/signal/session_cipher.h \
- /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
- /usr/include/signal/curve.h config/../config.hh config/../config/file.hh \
+ config/../omemo.hh /usr/include/omemo/signal_protocol.h \
+ /usr/include/omemo/ratchet.h /usr/include/omemo/signal_protocol_types.h \
+ /usr/include/omemo/curve.h /usr/include/omemo/session_record.h \
+ /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/sender_key_record.h config/../signal.hh \
+ /usr/include/omemo/key_helper.h /usr/include/omemo/session_builder.h \
+ /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
+ /usr/include/omemo/protocol.h /usr/include/omemo/curve.h \
+ config/../config.hh config/../config/file.hh \
  config/../config/breadcrumb.hh config/../config/section.hh \
  config/../config/account.hh config/../config/option.hh \
  config/../channel.hh config/../connection.hh config/../xmpp/ns.hh \
@@ -787,20 +760,20 @@ config/../strophe.hh:
 config/../account.hh:
 config/../pgp.hh:
 config/../omemo.hh:
-/usr/include/signal/signal_protocol.h:
-/usr/include/signal/ratchet.h:
-/usr/include/signal/signal_protocol_types.h:
-/usr/include/signal/curve.h:
-/usr/include/signal/session_record.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/sender_key_record.h:
+/usr/include/omemo/signal_protocol.h:
+/usr/include/omemo/ratchet.h:
+/usr/include/omemo/signal_protocol_types.h:
+/usr/include/omemo/curve.h:
+/usr/include/omemo/session_record.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/sender_key_record.h:
 config/../signal.hh:
-/usr/include/signal/key_helper.h:
-/usr/include/signal/session_builder.h:
-/usr/include/signal/session_cipher.h:
-/usr/include/signal/session_pre_key.h:
-/usr/include/signal/protocol.h:
-/usr/include/signal/curve.h:
+/usr/include/omemo/key_helper.h:
+/usr/include/omemo/session_builder.h:
+/usr/include/omemo/session_cipher.h:
+/usr/include/omemo/session_pre_key.h:
+/usr/include/omemo/protocol.h:
+/usr/include/omemo/curve.h:
 config/../config.hh:
 config/../config/file.hh:
 config/../config/breadcrumb.hh:

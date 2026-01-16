@@ -1,8 +1,10 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<rdf:RDF xmlns='http://usefulinc.com/ns/doap#'
-         xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'
-         xmlns:xmpp='https://linkmauve.fr/ns/xmpp-doap#'
-         xmlns:schema='https://schema.org'>
+<?xml version='1.0' encoding='UTF-8' ?>
+<rdf:RDF
+    xmlns='http://usefulinc.com/ns/doap#'
+    xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+    xmlns:xmpp='https://linkmauve.fr/ns/xmpp-doap#'
+    xmlns:schema='https://schema.org'
+>
   <Project>
     <name>weechat-xmpp</name>
 
@@ -11,14 +13,22 @@
     <shortdesc xml:lang='en'>Weechat XMPP client</shortdesc>
     <shortdesc xml:lang='fr'>Client XMPP pour Weechat</shortdesc>
 
-    <description xml:lang='en'>Weechat plugin for accessing XMPP, written in C++. This fork includes bug fixes and feature enhancements.</description>
+    <description
+            xml:lang='en'
+        >Weechat plugin for accessing XMPP, written in C++. This fork includes bug fixes and feature enhancements.</description>
 
-    <homepage rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed'/>
-    <bug-database rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed/issues'/>
-    <developer-forum rdf:resource='xmpp:weechat@muc.xa0.uk?join'/>
-    <support-forum rdf:resource='xmpp:weechat@muc.xa0.uk?join'/>
+    <homepage
+            rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed'
+        />
+    <bug-database
+            rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed/issues'
+        />
+    <developer-forum rdf:resource='xmpp:weechat@muc.xa0.uk?join' />
+    <support-forum rdf:resource='xmpp:weechat@muc.xa0.uk?join' />
 
-    <license rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed/src/branch/master/LICENSE'/>
+    <license
+            rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed/src/branch/master/LICENSE'
+        />
 
     <language>en</language>
 
@@ -26,32 +36,40 @@
 
     <os>Linux</os>
 
-    <category rdf:resource='https://linkmauve.fr/ns/xmpp-doap#category-client'/>
+    <category
+            rdf:resource='https://linkmauve.fr/ns/xmpp-doap#category-client'
+        />
 
     <repository>
       <GitRepository>
-        <browse rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed'/>
-        <location rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed.git'/>
+        <browse
+                    rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed'
+                />
+        <location
+                    rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed.git'
+                />
       </GitRepository>
     </repository>
 
-    <implements rdf:resource='https://xmpp.org/rfcs/rfc6120.html'/>
-    <implements rdf:resource='https://xmpp.org/rfcs/rfc6121.html'/>
-    <implements rdf:resource='https://xmpp.org/rfcs/rfc6122.html'/>
-    <implements rdf:resource='https://xmpp.org/rfcs/rfc7590.html'/>
+    <implements rdf:resource='https://xmpp.org/rfcs/rfc6120.html' />
+    <implements rdf:resource='https://xmpp.org/rfcs/rfc6121.html' />
+    <implements rdf:resource='https://xmpp.org/rfcs/rfc6122.html' />
+    <implements rdf:resource='https://xmpp.org/rfcs/rfc7590.html' />
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0027.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0027.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.4.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Current Jabber OpenPGP Usage (deprecated but supported)</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Current Jabber OpenPGP Usage (deprecated but supported)</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0030.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0030.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>2.5.0</xmpp:version>
         <xmpp:note xml:lang='en'>Service Discovery</xmpp:note>
@@ -60,7 +78,7 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0045.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0045.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.35.1</xmpp:version>
         <xmpp:note xml:lang='en'>Multi-User Chat (MUC)</xmpp:note>
@@ -69,7 +87,7 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0048.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0048.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.2.1</xmpp:version>
         <xmpp:note xml:lang='en'>Bookmark Storage</xmpp:note>
@@ -78,7 +96,7 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0049.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0049.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.3.0</xmpp:version>
         <xmpp:note xml:lang='en'>Private XML Storage (for bookmarks)</xmpp:note>
@@ -87,88 +105,106 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0054.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0054.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.2</xmpp:version>
-        <xmpp:note xml:lang='en'>vcard-temp (requesting vCards only, not publishing)</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >vcard-temp (requesting vCards only, not publishing)</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0066.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0066.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.5.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Out of Band Data - display URLs shared in messages with optional descriptions</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Out of Band Data - display URLs shared in messages with optional descriptions</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0085.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0085.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>2.1</xmpp:version>
-        <xmpp:note xml:lang='en'>Chat State Notifications - all 5 states (active, composing, paused, inactive, gone) with visual indicators</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Chat State Notifications - all 5 states (active, composing, paused, inactive, gone) with visual indicators</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0092.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0092.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.1</xmpp:version>
-        <xmpp:note xml:lang='en'>Software Version - responds to version queries with client name and version</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Software Version - responds to version queries with client name and version</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0107.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0107.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.2.2</xmpp:version>
-        <xmpp:note xml:lang='en'>User Mood - publish and subscribe to mood updates via PEP</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >User Mood - publish and subscribe to mood updates via PEP</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0108.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0108.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.3.1</xmpp:version>
-        <xmpp:note xml:lang='en'>User Activity - publish and subscribe to activity updates via PEP</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >User Activity - publish and subscribe to activity updates via PEP</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0115.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0115.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.6.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Entity Capabilities with persistent caching</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Entity Capabilities with persistent caching</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0163.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0163.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.2.2</xmpp:version>
-        <xmpp:note xml:lang='en'>Personal Eventing Protocol (PEP) - receives and logs events</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Personal Eventing Protocol (PEP) - receives and logs events</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0172.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0172.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.1</xmpp:version>
-        <xmpp:note xml:lang='en'>User Nickname - subscribes to nickname updates via PEP</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >User Nickname - subscribes to nickname updates via PEP</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0184.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0184.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.4.0</xmpp:version>
         <xmpp:note xml:lang='en'>Message Delivery Receipts</xmpp:note>
@@ -177,7 +213,7 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0199.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0199.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>2.0.1</xmpp:version>
         <xmpp:note xml:lang='en'>XMPP Ping</xmpp:note>
@@ -186,25 +222,40 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0202.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0202.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>2.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Entity Time - responds to time queries with UTC time and timezone offset</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Entity Time - responds to time queries with UTC time and timezone offset</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0203.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0203.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>2.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Delayed Delivery - proper timestamps for offline messages and MAM history</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Delayed Delivery - proper timestamps for offline messages and MAM history</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0280.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0223.html' />
+        <xmpp:status>complete</xmpp:status>
+        <xmpp:version>1.1</xmpp:version>
+        <xmpp:note
+                    xml:lang='en'
+                >Persistent Storage of Private Data via PubSub - used for bookmarks, mood, and activity with publish-options</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0280.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.0.1</xmpp:version>
         <xmpp:note xml:lang='en'>Message Carbons</xmpp:note>
@@ -213,7 +264,7 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0308.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0308.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.2.0</xmpp:version>
         <xmpp:note xml:lang='en'>Last Message Correction</xmpp:note>
@@ -222,16 +273,18 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0313.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0313.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.1.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Message Archive Management (MAM) v2 with persistent local caching</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Message Archive Management (MAM) v2 with persistent local caching</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0319.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0319.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.0.2</xmpp:version>
         <xmpp:note xml:lang='en'>Last User Interaction in Presence</xmpp:note>
@@ -240,7 +293,7 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0333.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0333.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.4.0</xmpp:version>
         <xmpp:note xml:lang='en'>Chat Markers</xmpp:note>
@@ -249,7 +302,7 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0363.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0363.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.1.0</xmpp:version>
         <xmpp:note xml:lang='en'>HTTP File Upload</xmpp:note>
@@ -258,145 +311,177 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0384.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0384.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.8.3</xmpp:version>
-        <xmpp:note xml:lang='en'>OMEMO Encryption with auto-detection</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >OMEMO Encryption with auto-detection</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0402.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0402.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.2.0</xmpp:version>
-        <xmpp:note xml:lang='en'>PEP Native Bookmarks - modern PEP-based bookmark storage</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >PEP Native Bookmarks - modern PEP-based bookmark storage</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0191.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0191.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.3.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Blocking Command for privacy and spam protection</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Blocking Command for privacy and spam protection</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0198.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0198.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.6.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Stream Management for reliable message delivery and session resumption</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Stream Management for reliable message delivery and session resumption</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0245.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0245.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.0.0</xmpp:version>
-        <xmpp:note xml:lang='en'>The /me Command for IRC-style action messages</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >The /me Command for IRC-style action messages</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0249.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0249.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.2.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Direct MUC Invitations - invite users to join chat rooms</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Direct MUC Invitations - invite users to join chat rooms</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0352.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0352.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.0.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Client State Indication for mobile optimization</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Client State Indication for mobile optimization</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0359.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0359.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.7.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Unique and Stable Stanza IDs - stable message identification and deduplication</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Unique and Stable Stanza IDs - stable message identification and deduplication</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0380.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0380.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.3.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Explicit Message Encryption - advertises encryption method (OMEMO/PGP) on messages</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Explicit Message Encryption - advertises encryption method (OMEMO/PGP) on messages</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0393.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0393.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.1.2</xmpp:version>
-        <xmpp:note xml:lang='en'>Message Styling - renders *bold*, _italic_, `code`, ~strikethrough~, quotes, and preformatted blocks</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Message Styling - renders *bold*, _italic_, `code`, ~strikethrough~, quotes, and preformatted blocks</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0410.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0410.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.1.0</xmpp:version>
-        <xmpp:note xml:lang='en'>MUC Self-Ping (Schrödinger's Chat) - verify MUC membership</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >MUC Self-Ping (Schrödinger's Chat) - verify MUC membership</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0424.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0424.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.4.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Message Retraction - allows users to retract/delete sent messages</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Message Retraction - allows users to retract/delete sent messages</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0444.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0444.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.3.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Message Reactions - send and receive emoji reactions to messages</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Message Reactions - send and receive emoji reactions to messages</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0461.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0461.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.2.1</xmpp:version>
-        <xmpp:note xml:lang='en'>Message Replies - reply to messages with context and reference</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Message Replies - reply to messages with context and reference</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0422.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0422.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.2.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Message Fastening - used by Message Moderation (XEP-0425)</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Message Fastening - used by Message Moderation (XEP-0425)</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0425.html'/>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0425.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.3.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Message Moderation - allows MUC moderators to retract messages from other users</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Message Moderation - allows MUC moderators to retract messages from other users</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -404,7 +489,9 @@
       <Version>
         <revision>0.3.0-fork</revision>
         <created>2026-01-16</created>
-        <xmpp:note xml:lang='en'>Fork with bug fixes and enhancements: typing indicators, auto-encryption detection, bookmark management, room discovery, capability caching, Stream Management (XEP-0198), Message Retraction (XEP-0424), Message Moderation (XEP-0425), Message Styling (XEP-0393), Stanza IDs (XEP-0359), Message Hints (XEP-0334), Message Reactions (XEP-0444), Message Replies (XEP-0461), Message Fastening (XEP-0422), Chat State Notifications (XEP-0085), User Mood (XEP-0107), User Activity (XEP-0108)</xmpp:note>
+        <xmpp:note
+                    xml:lang='en'
+                >Fork with bug fixes and enhancements: typing indicators, auto-encryption detection, bookmark management, room discovery, capability caching, Stream Management (XEP-0198), Message Retraction (XEP-0424), Message Moderation (XEP-0425), Message Styling (XEP-0393), Stanza IDs (XEP-0359), Message Hints (XEP-0334), Message Reactions (XEP-0444), Message Replies (XEP-0461), Message Fastening (XEP-0422), Chat State Notifications (XEP-0085), User Mood (XEP-0107), User Activity (XEP-0108)</xmpp:note>
       </Version>
     </release>
   </Project>

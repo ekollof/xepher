@@ -28,9 +28,9 @@
 
   This is a fork with critical bug fixes applied:
 
-  - *Memory corruption fixes*: Fixed malloc corruption from xmlDocDumpFormatMemory 
+  - *Memory corruption fixes*: Fixed malloc corruption from xmlDocDumpFormatMemory
     misuse and unaligned allocations that caused crashes
-  - *Segfault prevention*: Added comprehensive destructor safety checks to prevent 
+  - *Segfault prevention*: Added comprehensive destructor safety checks to prevent
     crashes on weechat exit
   - *WeeChat 4.3.0+ compatibility*: Updated base64 API calls for compatibility with
     newer WeeChat versions while maintaining backwards compatibility
@@ -41,7 +41,7 @@
     - Enabled automatic MAM retrieval on connect (7 days history for PM channels)
     - Full message caching with LMDB - instant message display from cache, then fetch new ones
   - *Display improvements*:
-    - Messages now show sender's JID instead of client resource ID (e.g., "user@domain.org" 
+    - Messages now show sender's JID instead of client resource ID (e.g., "user@domain.org"
       instead of "Conversations.xxxx")
     - Typing indicators show bare JID instead of resource ID (both in buffer and bar)
     - Encryption status indicator - visual indicator in status bar showing OMEMO/PGP/plaintext
@@ -79,13 +79,13 @@
 
   See the *XMPP Compliance* section below for a comprehensive list of implemented XEPs.
 
-  *Known limitation*: Plugin reload while weechat is running is not supported due to 
-  fundamental race conditions with timer hooks. Always restart weechat instead of 
+  *Known limitation*: Plugin reload while weechat is running is not supported due to
+  fundamental race conditions with timer hooks. Always restart weechat instead of
   reloading the plugin.
 
 ** XMPP Compliance (XEP-0459: CCS2022)
 
-   This fork implements a comprehensive set of XMPP Extension Protocols (XEPs) 
+   This fork implements a comprehensive set of XMPP Extension Protocols (XEPs)
    targeting compliance with CCS2022 (XMPP Compliance Suite 2022) for IM clients:
 
 *** Core IM Features
@@ -97,7 +97,7 @@
     - ✅ XEP-0191: Blocking Command (/block, /unblock, /blocklist)
     - ✅ XEP-0198: Stream Management (reliable message delivery)
 
-*** Advanced IM Features  
+*** Advanced IM Features
     - ✅ XEP-0245: The /me Command
     - ✅ XEP-0249: Direct MUC Invitations (/invite command)
     - ✅ XEP-0308: Last Message Correction (/edit command)
@@ -122,6 +122,7 @@
     - ✅ XEP-0199: XMPP Ping (/ping command)
     - ✅ XEP-0202: Entity Time (responds to time queries)
     - ✅ XEP-0203: Delayed Delivery (proper timestamps for offline/MAM messages)
+    - ✅ XEP-0223: Persistent Storage of Private Data via PubSub
     - ✅ XEP-0280: Message Carbons
     - ✅ XEP-0313: Message Archive Management (MAM) with LMDB caching
     - ✅ XEP-0319: Last User Interaction in Presence
@@ -278,7 +279,7 @@
     /invite colleague@example.com Join us for the meeting!
     #+end_src
 
-    *Note:* Can only be used in MUC (room) buffers. The invited user will 
+    *Note:* Can only be used in MUC (room) buffers. The invited user will
     receive a notification with instructions to join.
 
 *** /selfping
@@ -294,8 +295,8 @@
     /selfping (in a MUC room buffer)
     #+end_src
 
-    *Note:* Sends a ping to your own MUC nickname to verify you are still 
-    joined to the room. Useful after network interruptions or to detect 
+    *Note:* Sends a ping to your own MUC nickname to verify you are still
+    joined to the room. Useful after network interruptions or to detect
     silent kicks/disconnects. Can only be used in MUC (room) buffers.
 
 *** /edit
@@ -311,7 +312,7 @@
     /edit I meant to say something else!
     #+end_src
 
-    *Note:* The original message will be updated with a visual indicator 
+    *Note:* The original message will be updated with a visual indicator
     showing the diff between the old and new text.
 
 *** /retract
@@ -327,9 +328,9 @@
     /retract
     #+end_src
 
-    *Note:* This sends a retraction request to all recipients. The message will 
-    be replaced with a tombstone "[Message deleted]" in the buffer. Note that 
-    recipients may have already seen the message before retraction. Works in both 
+    *Note:* This sends a retraction request to all recipients. The message will
+    be replaced with a tombstone "[Message deleted]" in the buffer. Note that
+    recipients may have already seen the message before retraction. Works in both
     PM and MUC channels.
 
 *** /moderate
@@ -387,8 +388,8 @@
     #+end_src
 
     *Note:* Replies to the last message from another user in the current buffer.
-    The reply includes a reference to the original message, displayed with a 
-    cyan arrow (↪) and excerpt of the original message. Works in both PM and 
+    The reply includes a reference to the original message, displayed with a
+    cyan arrow (↪) and excerpt of the original message. Works in both PM and
     MUC channels. The server must support XEP-0461.
 
 *** /whois
@@ -405,7 +406,7 @@
     /whois (in a PM buffer - uses the current contact)
     #+end_src
 
-    *Note:* Displays available vCard information including full name, 
+    *Note:* Displays available vCard information including full name,
     nickname, email, URL, and description if provided by the user.
 
 ** Privacy & Blocking
@@ -458,7 +459,7 @@
     /omemo
     #+end_src
 
-    *Note:* OMEMO provides end-to-end encryption. Keys are automatically 
+    *Note:* OMEMO provides end-to-end encryption. Keys are automatically
     generated and managed by the plugin.
 
 *** /pgp
@@ -474,7 +475,7 @@
     /pgp A1B2C3D4E5F6
     #+end_src
 
-    *Note:* The PGP key setting persists across restarts for the current 
+    *Note:* The PGP key setting persists across restarts for the current
     JID/MUC. Uses your GPG keyring.
 
 *** /plain
@@ -501,7 +502,7 @@
     /mam 30     # Retrieve last 30 days
     #+end_src
 
-    *Note:* Messages are cached locally using LMDB and retrieved automatically 
+    *Note:* Messages are cached locally using LMDB and retrieved automatically
     on connect for PM channels.
 
 ** Service Discovery
@@ -554,8 +555,8 @@
     /list linux gaming       # Search for linux gaming rooms
     #+end_src
 
-    *Note:* This command queries the public room directory at 
-    search.jabber.network. Results show room address, name, user count, 
+    *Note:* This command queries the public room directory at
+    search.jabber.network. Results show room address, name, user count,
     and description. Use =/enter <address>= to join a room from the list.
 
 *** /bookmark
@@ -579,11 +580,11 @@
     /bookmark autojoin room@conference.example.com on
     #+end_src
 
-    *Note:* Bookmarks are stored on the server and synchronized across 
-    all clients. Rooms with autojoin enabled will be automatically joined 
-    on connect, except for IRC gateway rooms (biboumi) which are skipped 
-    to prevent connection issues. These are detected by the presence of 
-    =%=, =biboumi=, or =@irc.= in the JID. Aliases =delete= and =remove= 
+    *Note:* Bookmarks are stored on the server and synchronized across
+    all clients. Rooms with autojoin enabled will be automatically joined
+    on connect, except for IRC gateway rooms (biboumi) which are skipped
+    to prevent connection issues. These are detected by the presence of
+    =%=, =biboumi=, or =@irc.= in the JID. Aliases =delete= and =remove=
     can be used instead of =del=.
 
 ** Network & Debugging
@@ -602,7 +603,7 @@
     /ping user@example.com   # Ping a specific user (c2c)
     #+end_src
 
-    *Note:* Used to test connectivity and measure round-trip time. The plugin 
+    *Note:* Used to test connectivity and measure round-trip time. The plugin
     also automatically responds to incoming ping requests.
 
 *** /mood
@@ -623,19 +624,19 @@
     #+end_src
 
     *Supported moods:*
-    afraid, amazed, angry, amorous, annoyed, anxious, aroused, ashamed, bored, 
-    brave, calm, cautious, cold, confident, confused, contemplative, contented, 
-    cranky, crazy, creative, curious, dejected, depressed, disappointed, disgusted, 
-    dismayed, distracted, embarrassed, envious, excited, flirtatious, frustrated, 
-    grumpy, guilty, happy, hopeful, hot, humbled, humiliated, hungry, hurt, 
-    impressed, in_awe, in_love, indignant, interested, intoxicated, invincible, 
-    jealous, lonely, lucky, mean, moody, nervous, neutral, offended, outraged, 
-    playful, proud, relaxed, relieved, remorseful, restless, sad, sarcastic, 
-    serious, shocked, shy, sick, sleepy, spontaneous, stressed, strong, surprised, 
+    afraid, amazed, angry, amorous, annoyed, anxious, aroused, ashamed, bored,
+    brave, calm, cautious, cold, confident, confused, contemplative, contented,
+    cranky, crazy, creative, curious, dejected, depressed, disappointed, disgusted,
+    dismayed, distracted, embarrassed, envious, excited, flirtatious, frustrated,
+    grumpy, guilty, happy, hopeful, hot, humbled, humiliated, hungry, hurt,
+    impressed, in_awe, in_love, indignant, interested, intoxicated, invincible,
+    jealous, lonely, lucky, mean, moody, nervous, neutral, offended, outraged,
+    playful, proud, relaxed, relieved, remorseful, restless, sad, sarcastic,
+    serious, shocked, shy, sick, sleepy, spontaneous, stressed, strong, surprised,
     thankful, thirsty, tired, undefined, weak, worried
 
-    *Note:* Your mood is published via PEP (Personal Eventing Protocol) and 
-    visible to your contacts. The server must support XEP-0163 (PEP) and 
+    *Note:* Your mood is published via PEP (Personal Eventing Protocol) and
+    visible to your contacts. The server must support XEP-0163 (PEP) and
     XEP-0107 (User Mood).
 
 *** /activity
@@ -658,11 +659,11 @@
     #+end_src
 
     *Supported categories:*
-    doing_chores, drinking, eating, exercising, grooming, having_appointment, 
+    doing_chores, drinking, eating, exercising, grooming, having_appointment,
     inactive, relaxing, talking, traveling, working
 
     *Note:* Your activity is published via PEP and visible to your contacts.
-    The specific activity name (after /) can be any descriptive text. The server 
+    The specific activity name (after /) can be any descriptive text. The server
     must support XEP-0163 (PEP) and XEP-0108 (User Activity).
 
 *** /xml
@@ -678,7 +679,7 @@
     /xml <iq type='get' to='example.com'><query xmlns='http://jabber.org/protocol/disco#info'/></iq>
     #+end_src
 
-    *Warning:* This is an advanced command. Malformed stanzas may cause 
+    *Warning:* This is an advanced command. Malformed stanzas may cause
     unexpected behavior or connection issues.
 
 ** Information
@@ -701,7 +702,7 @@
     /trap
     #+end_src
 
-    *Warning:* This command is only useful for developers debugging the 
+    *Warning:* This command is only useful for developers debugging the
     plugin with a debugger like GDB. It will cause the plugin to halt.
 
 * Installing
@@ -727,8 +728,8 @@
    *Important*: WeeChat 4.3.0 (May 2024) introduced an API change for base64
    encoding/decoding functions. This fork is currently configured for WeeChat >= 4.3.0.
 
-   If you're using an older WeeChat version (< 4.3.0) and get compilation errors 
-   about =invalid conversion from 'int' to 'const char*'=, you need to adjust the 
+   If you're using an older WeeChat version (< 4.3.0) and get compilation errors
+   about =invalid conversion from 'int' to 'const char*'=, you need to adjust the
    API compatibility setting:
 
    1. Open =omemo.cpp=
@@ -859,7 +860,7 @@
        * [X] [#A] Except biboumi rooms
      * [X] [#B] Add bookmarks
      * [X] [#B] Delete bookmarks
-     * [X] [#B] List bookmarks  
+     * [X] [#B] List bookmarks
      * [X] [#B] Toggle autojoin
      * [X] [#B] Roster
        * [X] Display contacts with /roster
@@ -885,9 +886,9 @@
        * [X] Stream Management (xep-198)
        * [ ] User Avatar Compatibility (xep-398 xep-153)
        * [X] User Blocking (xep-191)
-       * [ ] PEP Native Bookmarks (xep-402) - PEP foundation in place
+       * [X] PEP Native Bookmarks (xep-402)
        * [X] MUC Self-Ping (xep-410)
-       * [ ] Persistent Storage (xep-223)
+       * [X] Persistent Storage (xep-223)
        * [X] XML Storage (xep-049)
        * [X] Message Correction (xep-308)
        * [ ] Direct File Transfer - Jingle (xep-234 xep-261)
@@ -901,9 +902,8 @@
      * [ ] Message Retraction (xep-424)
      * [ ] Message Moderation (xep-425)
 
-   **Progress**: Core features complete! 10 of 13 CCS2022 Advanced IM features implemented.
-   Remaining: User avatars (XEP-0084, 0153, 0398), PEP Native Bookmarks (XEP-0402), 
-   Persistent Storage (XEP-0223), and Jingle file transfer (XEP-234, 0261).
+   **Progress**: 12 of 13 CCS2022 Advanced IM features implemented!
+   Remaining: User avatars (XEP-0084, 0153, 0398) and Jingle file transfer (XEP-234, 0261).
 ** TODO [#D] Close all issues (milestone v1.0)
 
 * Contributing
