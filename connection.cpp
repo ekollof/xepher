@@ -1631,10 +1631,14 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         const char *xmlns_err = "urn:ietf:params:xml:ns:xmpp-stanzas";
         xmpp_stanza_t *error = xmpp_stanza_get_child_by_name_and_ns(stanza, "unexpected-request", xmlns_err);
         
+        if (!error)
+            error = xmpp_stanza_get_child_by_name_and_ns(stanza, "item-not-found", xmlns_err);
+        
         if (error)
         {
-            weechat_printf(account.buffer, "%sStream Management failed: unexpected-request",
-                          weechat_prefix("error"));
+            const char *error_name = xmpp_stanza_get_name(error);
+            weechat_printf(account.buffer, "%sSM error: %s",
+                          weechat_prefix("error"), error_name ? error_name : "unknown");
         }
         else
         {
@@ -1658,12 +1662,20 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
             uint32_t ack_count = std::stoul(h);
             account.sm_last_ack = ack_count;
             
-            // Debug: show ack status
-            weechat_printf(account.buffer, "%sReceived ack: h=%u (sent=%u, unacked=%u)",
+            // Guard against underflow
+            int32_t unacked = (int32_t)account.sm_h_outbound - (int32_t)ack_count;
+            if (unacked < 0) unacked = 0;
+            
+            weechat_printf(account.buffer, "%sReceived ack: h=%u (sent=%u, unacked=%d)",
                           weechat_prefix("network"),
                           ack_count,
                           account.sm_h_outbound,
-                          account.sm_h_outbound - ack_count);
+                          unacked);
+        }
+        else
+        {
+            weechat_printf(account.buffer, "%sSM error: 'a' stanza missing 'h' attribute",
+                          weechat_prefix("error"));
         }
     }
     else if (element_name == "r")
@@ -1718,37 +1730,42 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 return connection.iq_handler(stanza) ? 1 : 0;
             });
 
-        // Stream Management handlers (XEP-0198)
-        this->handler_add(
-            "enabled", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
-                auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
-                if (connection != conn) throw std::invalid_argument("connection != conn");
-                return connection.sm_handler(stanza) ? 1 : 0;
-            });
-        this->handler_add(
-            "resumed", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
-                auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
-                if (connection != conn) throw std::invalid_argument("connection != conn");
-                return connection.sm_handler(stanza) ? 1 : 0;
-            });
-        this->handler_add(
-            "failed", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
-                auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
-                if (connection != conn) throw std::invalid_argument("connection != conn");
-                return connection.sm_handler(stanza) ? 1 : 0;
-            });
-        this->handler_add(
-            "a", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
-                auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
-                if (connection != conn) throw std::invalid_argument("connection != conn");
-                return connection.sm_handler(stanza) ? 1 : 0;
-            });
-        this->handler_add(
-            "r", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
-                auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
-                if (connection != conn) throw std::invalid_argument("connection != conn");
-                return connection.sm_handler(stanza) ? 1 : 0;
-            });
+        // Stream Management handlers (XEP-0198) - only add once
+        if (!account.sm_handlers_registered)
+        {
+            this->handler_add(
+                "enabled", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) throw std::invalid_argument("connection != conn");
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
+            this->handler_add(
+                "resumed", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) throw std::invalid_argument("connection != conn");
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
+            this->handler_add(
+                "failed", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) throw std::invalid_argument("connection != conn");
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
+            this->handler_add(
+                "a", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) throw std::invalid_argument("connection != conn");
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
+            this->handler_add(
+                "r", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) throw std::invalid_argument("connection != conn");
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
+            
+            account.sm_handlers_registered = true;
+        }
 
         /* Send initial <presence/> so that we appear online to contacts */
         auto children = std::unique_ptr<xmpp_stanza_t*[]>(new xmpp_stanza_t*[3 + 1]);
