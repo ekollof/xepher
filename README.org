@@ -101,6 +101,253 @@
 
    The roster is automatically fetched when you connect to the server.
 
+* Commands
+
+  The plugin provides the following commands:
+
+** Account Management
+
+*** /account
+    Handle XMPP accounts
+
+    *Usage:*
+    #+begin_src
+    /account list
+    /account add <name> <jid> <password>
+    /account connect <account>
+    /account disconnect <account>
+    /account reconnect <account>
+    /account delete <account>
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /account add work user@example.com mypassword
+    /account connect work
+    /account list
+    /account disconnect work
+    /account delete work
+    #+end_src
+
+** Communication
+
+*** /enter
+    Enter an XMPP multi-user chat (MUC)
+
+    *Usage:*
+    #+begin_src
+    /enter <jid>
+    #+end_src
+
+    *Example:*
+    #+begin_src
+    /enter room@conference.example.com
+    #+end_src
+
+*** /open
+    Open a direct XMPP chat (private message)
+
+    *Usage:*
+    #+begin_src
+    /open <jid>
+    #+end_src
+
+    *Example:*
+    #+begin_src
+    /open friend@example.com
+    #+end_src
+
+*** /msg
+    Send an XMPP message to the current buffer
+
+    *Usage:*
+    #+begin_src
+    /msg <message>
+    #+end_src
+
+    *Example:*
+    #+begin_src
+    /msg Hello, how are you?
+    #+end_src
+
+*** /me
+    Send an XMPP action to the current buffer (third-person narrative)
+
+    *Usage:*
+    #+begin_src
+    /me <message>
+    #+end_src
+
+    *Example:*
+    #+begin_src
+    /me is away from keyboard
+    #+end_src
+
+*** /edit
+    Edit the last message sent (XEP-0308: Message Correction)
+
+    *Usage:*
+    #+begin_src
+    /edit <message>
+    #+end_src
+
+    *Example:*
+    #+begin_src
+    /edit I meant to say something else!
+    #+end_src
+
+    *Note:* The original message will be updated with a visual indicator 
+    showing the diff between the old and new text.
+
+** Encryption
+
+*** /omemo
+    Enable OMEMO encryption for the current buffer
+
+    *Usage:*
+    #+begin_src
+    /omemo
+    #+end_src
+
+    *Note:* OMEMO provides end-to-end encryption. Keys are automatically 
+    generated and managed by the plugin.
+
+*** /pgp
+    Enable PGP encryption for the current buffer
+
+    *Usage:*
+    #+begin_src
+    /pgp <keyid>
+    #+end_src
+
+    *Example:*
+    #+begin_src
+    /pgp A1B2C3D4E5F6
+    #+end_src
+
+    *Note:* The PGP key setting persists across restarts for the current 
+    JID/MUC. Uses your GPG keyring.
+
+*** /plain
+    Disable encryption for the current buffer (use plaintext)
+
+    *Usage:*
+    #+begin_src
+    /plain
+    #+end_src
+
+** History & Archive
+
+*** /mam
+    Retrieve archived messages using MAM (XEP-0313: Message Archive Management)
+
+    *Usage:*
+    #+begin_src
+    /mam [days]
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /mam        # Retrieve last 7 days by default
+    /mam 30     # Retrieve last 30 days
+    #+end_src
+
+    *Note:* Messages are cached locally using LMDB and retrieved automatically 
+    on connect for PM channels.
+
+** Service Discovery
+
+*** /disco
+    Discover XMPP services and features (XEP-0030: Service Discovery)
+
+    *Usage:*
+    #+begin_src
+    /disco [jid]
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /disco                           # Discover server features
+    /disco conference.example.com    # Discover MUC service
+    #+end_src
+
+*** /roster
+    Manage XMPP roster (contact list)
+
+    *Usage:*
+    #+begin_src
+    /roster
+    /roster add <jid> [name]
+    /roster del <jid>
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /roster                              # Display contact list
+    /roster add friend@example.com John  # Add contact with name
+    /roster del friend@example.com       # Remove contact
+    #+end_src
+
+    *Note:* Aliases =delete= and =remove= can be used instead of =del=.
+
+** Network & Debugging
+
+*** /ping
+    Send an XMPP ping (XEP-0199: XMPP Ping)
+
+    *Usage:*
+    #+begin_src
+    /ping [jid]
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /ping                    # Ping the server (c2s)
+    /ping user@example.com   # Ping a specific user (c2c)
+    #+end_src
+
+    *Note:* Used to test connectivity and measure round-trip time. The plugin 
+    also automatically responds to incoming ping requests.
+
+*** /xml
+    Send a raw XML stanza (for debugging and advanced usage)
+
+    *Usage:*
+    #+begin_src
+    /xml <stanza>
+    #+end_src
+
+    *Example:*
+    #+begin_src
+    /xml <iq type='get' to='example.com'><query xmlns='http://jabber.org/protocol/disco#info'/></iq>
+    #+end_src
+
+    *Warning:* This is an advanced command. Malformed stanzas may cause 
+    unexpected behavior or connection issues.
+
+** Information
+
+*** /xmpp
+    Display XMPP plugin version information
+
+    *Usage:*
+    #+begin_src
+    /xmpp
+    #+end_src
+
+** Debug Commands
+
+*** /trap
+    Trigger a debug trap (int3 breakpoint)
+
+    *Usage:*
+    #+begin_src
+    /trap
+    #+end_src
+
+    *Warning:* This command is only useful for developers debugging the 
+    plugin with a debugger like GDB. It will cause the plugin to halt.
+
 * Installing
 
   Place xmpp.so in the appropriate place for weechat plugins.
