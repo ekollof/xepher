@@ -919,6 +919,88 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         }
     }
 
+    // XEP-0424: Message Retraction
+    xmpp_stanza_t *retract = xmpp_stanza_get_child_by_name_and_ns(stanza, "retract",
+                                                                   "urn:xmpp:message-retract:1");
+    const char *retract_id = retract ? xmpp_stanza_get_attribute(retract, "id") : NULL;
+    
+    if (retract_id)
+    {
+        // Find and tombstone the retracted message
+        void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
+                                            channel->buffer, "lines");
+        if (lines)
+        {
+            void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
+                                                    lines, "last_line");
+            while (last_line)
+            {
+                void *line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
+                                                        last_line, "data");
+                if (line_data)
+                {
+                    int tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
+                                                           line_data, "tags_count");
+                    char str_tag[24] = {0};
+                    for (int n_tag = 0; n_tag < tags_count; n_tag++)
+                    {
+                        snprintf(str_tag, sizeof(str_tag), "%d|tags_array", n_tag);
+                        const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
+                                                               line_data, str_tag);
+                        if (strlen(tag) > strlen("id_") &&
+                            weechat_strcasecmp(tag+strlen("id_"), retract_id) == 0)
+                        {
+                            // Found the message to retract - update it with tombstone
+                            // Create tombstone text
+                            char tombstone[256];
+                            snprintf(tombstone, sizeof(tombstone), 
+                                    "%s[Message deleted]%s", 
+                                    weechat_color("darkgray"),
+                                    weechat_color("resetcolor"));
+                            
+                            // Update the line with tombstone
+                            struct t_hashtable *hashtable = weechat_hashtable_new(8,
+                                WEECHAT_HASHTABLE_STRING,
+                                WEECHAT_HASHTABLE_STRING,
+                                NULL, NULL);
+                            weechat_hashtable_set(hashtable, "message", tombstone);
+                            weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,notify_none");
+                            weechat_hdata_update(weechat_hdata_get("line_data"), line_data, hashtable);
+                            weechat_hashtable_free(hashtable);
+                            
+                            // Print notification
+                            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                                "%s%s retracted a message",
+                                weechat_prefix("network"),
+                                from_bare);
+                            
+                            xmpp_free(account.context, (void*)from_bare);
+                            if (to_bare) xmpp_free(account.context, (void*)to_bare);
+                            if (cleartext) free(cleartext);
+                            if (intext) xmpp_free(account.context, intext);
+                            return 1;
+                        }
+                    }
+                }
+
+                last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
+                                                  last_line, "prev_line");
+            }
+        }
+        
+        // If we didn't find the message, still print notification
+        weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+            "%s%s retracted a message (not found in buffer)",
+            weechat_prefix("network"),
+            from_bare);
+        
+        xmpp_free(account.context, (void*)from_bare);
+        if (to_bare) xmpp_free(account.context, (void*)to_bare);
+        if (cleartext) free(cleartext);
+        if (intext) xmpp_free(account.context, intext);
+        return 1;
+    }
+
     nick = from;
     const char *display_from = from_bare;
     if (weechat_strcasecmp(type, "groupchat") == 0)
@@ -1085,6 +1167,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
   //FEATURE("urn:xmpp:jingle:transports:ice-udp:1");
   //FEATURE("urn:xmpp:jingle:transports:s5b:1");
     FEATURE("urn:xmpp:message-correct:0");
+    FEATURE("urn:xmpp:message-retract:1");
     FEATURE("urn:xmpp:ping");
     FEATURE("urn:xmpp:receipts");
     FEATURE("urn:xmpp:time");

@@ -49,26 +49,25 @@ completion.hh:
  /usr/include/libxml2/libxml/xmlversion.h \
  /usr/include/libxml2/libxml/xmlexports.h \
  /usr/include/libxml2/libxml/xmlIO.h \
- /usr/include/libxml2/libxml/globals.h \
- /usr/include/libxml2/libxml/parser.h /usr/include/libxml2/libxml/tree.h \
+ /usr/include/libxml2/libxml/encoding.h \
+ /usr/include/libxml2/libxml/xmlerror.h \
+ /usr/include/libxml2/libxml/tree.h \
  /usr/include/libxml2/libxml/xmlstring.h \
+ /usr/include/libxml2/libxml/xmlmemory.h \
  /usr/include/libxml2/libxml/xmlregexp.h \
+ /usr/include/libxml2/libxml/list.h /usr/include/libxml2/libxml/parser.h \
  /usr/include/libxml2/libxml/dict.h /usr/include/libxml2/libxml/hash.h \
  /usr/include/libxml2/libxml/valid.h \
- /usr/include/libxml2/libxml/xmlerror.h \
- /usr/include/libxml2/libxml/list.h \
  /usr/include/libxml2/libxml/xmlautomata.h \
  /usr/include/libxml2/libxml/entities.h \
- /usr/include/libxml2/libxml/encoding.h \
- /usr/include/libxml2/libxml/SAX2.h /usr/include/libxml2/libxml/xlink.h \
- /usr/include/libxml2/libxml/xmlmemory.h \
- /usr/include/libxml2/libxml/threads.h plugin.hh strophe.hh xmpp/node.hh \
- xmpp/xep-0027.inl xmpp/ns.hh xmpp/xep-0030.inl xmpp/xep-0045.inl \
- xmpp/xep-0049.inl xmpp/xep-0115.inl xmpp/xep-0198.inl xmpp/xep-0249.inl \
- xmpp/xep-0280.inl xmpp/xep-0319.inl xmpp/xep-0352.inl xmpp/rfc-6121.inl \
- xmpp/stanza.hh config.hh config/file.hh config/breadcrumb.hh \
- config/section.hh config/account.hh config/option.hh input.hh omemo.hh \
- /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
+ /usr/include/libxml2/libxml/SAX2.h /usr/include/libxml2/libxml/threads.h \
+ plugin.hh strophe.hh xmpp/node.hh xmpp/xep-0027.inl xmpp/ns.hh \
+ xmpp/xep-0030.inl xmpp/xep-0045.inl xmpp/xep-0049.inl xmpp/xep-0115.inl \
+ xmpp/xep-0198.inl xmpp/xep-0249.inl xmpp/xep-0280.inl xmpp/xep-0319.inl \
+ xmpp/xep-0352.inl xmpp/rfc-6121.inl xmpp/stanza.hh config.hh \
+ config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
+ config/option.hh input.hh omemo.hh /usr/include/signal/signal_protocol.h \
+ /usr/include/signal/ratchet.h \
  /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
  /usr/include/signal/session_record.h \
  /usr/include/signal/session_pre_key.h \
@@ -82,22 +81,20 @@ completion.hh:
 /usr/include/libxml2/libxml/xmlversion.h:
 /usr/include/libxml2/libxml/xmlexports.h:
 /usr/include/libxml2/libxml/xmlIO.h:
-/usr/include/libxml2/libxml/globals.h:
-/usr/include/libxml2/libxml/parser.h:
+/usr/include/libxml2/libxml/encoding.h:
+/usr/include/libxml2/libxml/xmlerror.h:
 /usr/include/libxml2/libxml/tree.h:
 /usr/include/libxml2/libxml/xmlstring.h:
+/usr/include/libxml2/libxml/xmlmemory.h:
 /usr/include/libxml2/libxml/xmlregexp.h:
+/usr/include/libxml2/libxml/list.h:
+/usr/include/libxml2/libxml/parser.h:
 /usr/include/libxml2/libxml/dict.h:
 /usr/include/libxml2/libxml/hash.h:
 /usr/include/libxml2/libxml/valid.h:
-/usr/include/libxml2/libxml/xmlerror.h:
-/usr/include/libxml2/libxml/list.h:
 /usr/include/libxml2/libxml/xmlautomata.h:
 /usr/include/libxml2/libxml/entities.h:
-/usr/include/libxml2/libxml/encoding.h:
 /usr/include/libxml2/libxml/SAX2.h:
-/usr/include/libxml2/libxml/xlink.h:
-/usr/include/libxml2/libxml/xmlmemory.h:
 /usr/include/libxml2/libxml/threads.h:
 plugin.hh:
 strophe.hh:
@@ -383,29 +380,14 @@ user.hh:
 .connection.o: connection.cpp /usr/include/libxml2/libxml/uri.h \
  /usr/include/libxml2/libxml/xmlversion.h \
  /usr/include/libxml2/libxml/xmlexports.h \
- /usr/include/libxml2/libxml/tree.h \
- /usr/include/libxml2/libxml/xmlstring.h \
- /usr/include/libxml2/libxml/xmlregexp.h \
- /usr/include/libxml2/libxml/dict.h \
- /usr/include/libxml2/libxml/xmlmemory.h \
- /usr/include/libxml2/libxml/threads.h \
- /usr/include/libxml2/libxml/globals.h \
- /usr/include/libxml2/libxml/parser.h /usr/include/libxml2/libxml/hash.h \
- /usr/include/libxml2/libxml/valid.h \
- /usr/include/libxml2/libxml/xmlerror.h \
- /usr/include/libxml2/libxml/list.h \
- /usr/include/libxml2/libxml/xmlautomata.h \
- /usr/include/libxml2/libxml/entities.h \
- /usr/include/libxml2/libxml/encoding.h \
- /usr/include/libxml2/libxml/xmlIO.h /usr/include/libxml2/libxml/SAX2.h \
- /usr/include/libxml2/libxml/xlink.h plugin.hh strophe.hh xmpp/node.hh \
- xmpp/xep-0027.inl xmpp/ns.hh xmpp/xep-0030.inl xmpp/xep-0045.inl \
- xmpp/xep-0049.inl xmpp/xep-0115.inl xmpp/xep-0198.inl xmpp/xep-0249.inl \
- xmpp/xep-0280.inl xmpp/xep-0319.inl xmpp/xep-0352.inl xmpp/rfc-6121.inl \
- xmpp/stanza.hh config.hh config/file.hh config/breadcrumb.hh \
- config/section.hh config/account.hh config/option.hh account.hh pgp.hh \
- omemo.hh /usr/include/signal/signal_protocol.h \
- /usr/include/signal/ratchet.h \
+ /usr/include/libxml2/libxml/xmlstring.h plugin.hh strophe.hh \
+ xmpp/node.hh xmpp/xep-0027.inl xmpp/ns.hh xmpp/xep-0030.inl \
+ xmpp/xep-0045.inl xmpp/xep-0049.inl xmpp/xep-0115.inl xmpp/xep-0198.inl \
+ xmpp/xep-0249.inl xmpp/xep-0280.inl xmpp/xep-0319.inl xmpp/xep-0352.inl \
+ xmpp/rfc-6121.inl xmpp/stanza.hh config.hh config/file.hh \
+ config/breadcrumb.hh config/section.hh config/account.hh \
+ config/option.hh account.hh pgp.hh omemo.hh \
+ /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
  /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
  /usr/include/signal/session_record.h \
  /usr/include/signal/session_pre_key.h \
@@ -418,24 +400,7 @@ user.hh:
 /usr/include/libxml2/libxml/uri.h:
 /usr/include/libxml2/libxml/xmlversion.h:
 /usr/include/libxml2/libxml/xmlexports.h:
-/usr/include/libxml2/libxml/tree.h:
 /usr/include/libxml2/libxml/xmlstring.h:
-/usr/include/libxml2/libxml/xmlregexp.h:
-/usr/include/libxml2/libxml/dict.h:
-/usr/include/libxml2/libxml/xmlmemory.h:
-/usr/include/libxml2/libxml/threads.h:
-/usr/include/libxml2/libxml/globals.h:
-/usr/include/libxml2/libxml/parser.h:
-/usr/include/libxml2/libxml/hash.h:
-/usr/include/libxml2/libxml/valid.h:
-/usr/include/libxml2/libxml/xmlerror.h:
-/usr/include/libxml2/libxml/list.h:
-/usr/include/libxml2/libxml/xmlautomata.h:
-/usr/include/libxml2/libxml/entities.h:
-/usr/include/libxml2/libxml/encoding.h:
-/usr/include/libxml2/libxml/xmlIO.h:
-/usr/include/libxml2/libxml/SAX2.h:
-/usr/include/libxml2/libxml/xlink.h:
 plugin.hh:
 strophe.hh:
 xmpp/node.hh:

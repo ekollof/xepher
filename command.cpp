@@ -1227,6 +1227,157 @@ int command__edit(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int command__retract(const void *pointer, void *data,
+                     struct t_gui_buffer *buffer, int argc,
+                     char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argv;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel)
+    {
+        weechat_printf(buffer, "%sxmpp: you must be in a channel to retract messages",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc > 2)
+    {
+        weechat_printf(buffer, "%sxmpp: too many arguments (use /retract with no arguments)",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // Find the last message sent by us
+    struct t_hdata *hdata_line = weechat_hdata_get("line");
+    struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+    struct t_gui_lines *own_lines = (struct t_gui_lines*)weechat_hdata_pointer(
+        weechat_hdata_get("buffer"), buffer, "own_lines");
+    
+    if (!own_lines)
+    {
+        weechat_printf(buffer, "%sxmpp: cannot access buffer lines",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    struct t_gui_line *line = (struct t_gui_line*)weechat_hdata_pointer(
+        hdata_line, own_lines, "last_line");
+    
+    char *last_msg_id = NULL;
+    
+    // Search backwards for our last sent message
+    while (line && !last_msg_id)
+    {
+        struct t_gui_line_data *line_data = (struct t_gui_line_data*)weechat_hdata_pointer(
+            hdata_line, line, "data");
+        
+        if (line_data)
+        {
+            const char *tags = (const char*)weechat_hdata_string(hdata_line_data, line_data, "tags");
+            
+            // Check if this is our message (has self_msg tag and id_ tag)
+            if (tags && strstr(tags, "self_msg") && strstr(tags, "id_"))
+            {
+                // Extract the message ID from tags
+                char **tag_array = weechat_string_split(tags, ",", NULL, 0, 0, NULL);
+                if (tag_array)
+                {
+                    for (int i = 0; tag_array[i]; i++)
+                    {
+                        if (strncmp(tag_array[i], "id_", 3) == 0)
+                        {
+                            last_msg_id = strdup(tag_array[i] + 3);
+                            break;
+                        }
+                    }
+                    weechat_string_free_split(tag_array);
+                }
+                break;
+            }
+        }
+        
+        line = (struct t_gui_line*)weechat_hdata_move(hdata_line, line, -1);
+    }
+    
+    if (!last_msg_id)
+    {
+        weechat_printf(buffer, "%sxmpp: no message found to retract",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // Send message retraction (XEP-0424)
+    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
+                    ptr_channel->type == weechat::channel::chat_type::MUC
+                    ? "groupchat" : "chat",
+                    ptr_channel->id.data(), NULL);
+
+    char *id = xmpp_uuid_gen(ptr_account->context);
+    xmpp_stanza_set_id(message, id);
+    xmpp_free(ptr_account->context, id);
+
+    // Add retract element with original message ID
+    xmpp_stanza_t *retract = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(retract, "retract");
+    xmpp_stanza_set_ns(retract, "urn:xmpp:message-retract:1");
+    xmpp_stanza_set_attribute(retract, "id", last_msg_id);
+    xmpp_stanza_add_child(message, retract);
+    xmpp_stanza_release(retract);
+
+    // Add fallback body for clients that don't support XEP-0424
+    xmpp_stanza_t *body = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(body, "body");
+    xmpp_stanza_t *body_text = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_text(body_text, "This message was deleted");
+    xmpp_stanza_add_child(body, body_text);
+    xmpp_stanza_release(body_text);
+    xmpp_stanza_add_child(message, body);
+    xmpp_stanza_release(body);
+
+    // Add fallback element to indicate body is fallback
+    xmpp_stanza_t *fallback = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(fallback, "fallback");
+    xmpp_stanza_set_ns(fallback, "urn:xmpp:fallback:0");
+    xmpp_stanza_set_attribute(fallback, "for", "urn:xmpp:message-retract:1");
+    xmpp_stanza_add_child(message, fallback);
+    xmpp_stanza_release(fallback);
+
+    // Add store hint for MAM
+    xmpp_stanza_t *message__store = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(message__store, "store");
+    xmpp_stanza_set_ns(message__store, "urn:xmpp:hints");
+    xmpp_stanza_add_child(message, message__store);
+    xmpp_stanza_release(message__store);
+
+    ptr_account->connection.send(message);
+    xmpp_stanza_release(message);
+    
+    free(last_msg_id);
+
+    weechat_printf(buffer, "%sxmpp: message retraction sent",
+                  weechat_prefix("network"));
+
+    return WEECHAT_RC_OK;
+}
+
 int command__ping(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
@@ -2368,6 +2519,17 @@ void command__init()
         NULL, &command__edit, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /edit");
+
+    hook = weechat_hook_command(
+        "retract",
+        N_("retract (delete) the last message sent (XEP-0424)"),
+        N_(""),
+        N_("Retracts the last message you sent in the current buffer.\n"
+           "This sends a retraction request to all recipients.\n"
+           "Note: Recipients may have already seen the message."),
+        NULL, &command__retract, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /retract");
 
     hook = weechat_hook_command(
         "disco",
