@@ -105,6 +105,15 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza)
     if (!(binding.type && *binding.type == "unavailable") && !binding.muc_user() && !channel)
     {
         const char* jid = binding.from->bare.data();
+        
+        // Don't auto-create PM channel if user deliberately closed it (timestamp == -1)
+        time_t last_fetch = account.mam_cache_get_last_timestamp(jid);
+        if (last_fetch == -1)
+        {
+            // User closed this PM, don't recreate from presence
+            return 1;
+        }
+        
         channel = &account.channels.emplace(
             std::make_pair(jid, weechat::channel {
                     account, weechat::channel::chat_type::PM, jid, jid
