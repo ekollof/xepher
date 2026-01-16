@@ -56,6 +56,7 @@
     - Encryption status bar item (xmpp_encryption) - shows current buffer's encryption mode
     - Roster management - /roster command to display, add, and remove contacts
     - Bookmark management - /bookmark command to add, delete, list, and toggle autojoin for MUC rooms
+    - Room explorer - /list command to search public MUC rooms via search.jabber.network
 
   *Known limitation*: Plugin reload while weechat is running is not supported due to 
   fundamental race conditions with timer hooks. Always restart weechat instead of 
@@ -290,6 +291,25 @@
     #+end_src
 
     *Note:* Aliases =delete= and =remove= can be used instead of =del=.
+
+*** /list
+    Search for public MUC rooms using the search.jabber.network directory
+
+    *Usage:*
+    #+begin_src
+    /list [keywords]
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /list                    # List popular public rooms
+    /list xmpp               # Search for rooms about XMPP
+    /list linux gaming       # Search for linux gaming rooms
+    #+end_src
+
+    *Note:* This command queries the public room directory at 
+    search.jabber.network. Results show room address, name, user count, 
+    and description. Use =/enter <address>= to join a room from the list.
 
 *** /bookmark
     Manage XMPP bookmarks (XEP-0048: Bookmark Storage)
@@ -534,7 +554,7 @@
        * [X] Add contacts with /roster add
        * [X] Remove contacts with /roster del
    * [ ] [#D] OTR (libotr)
-   * [ ] [#C] Room Explorer (https://search.jabber.network/docs/api)
+   * [X] [#C] Room Explorer (https://search.jabber.network/docs/api)
    * [ ] [#C] DOAP
    * [ ] [#C] Link sniffing for oob
 ** TODO [#C] Adhere to CCS2022 (XEP-459) (milestone v0.3)
