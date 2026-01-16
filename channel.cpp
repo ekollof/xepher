@@ -235,7 +235,7 @@ weechat::channel::channel(weechat::account& account,
                                                 &weechat::channel::self_typing_cb,
                                                 this, nullptr);
 
-    omemo.enabled = type == weechat::channel::chat_type::PM ? 1 : 0;
+    omemo.enabled = 0;
     omemo.devicelist_requests = weechat_hashtable_new(64,
             WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_POINTER, nullptr, nullptr);
     omemo.bundle_requests = weechat_hashtable_new(64,
