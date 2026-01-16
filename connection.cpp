@@ -1902,15 +1902,16 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         account.idle_timer_hook = weechat_hook_timer(60 * 1000, 0, 0,
                                                      &account::idle_timer_cb, &account, nullptr);
 
-        // TEMPORARY: Disable SM completely to test if it's causing disconnects
         // Enable Stream Management (XEP-0198) if available
+        // Note: libstrophe's built-in SM is disabled via XMPP_CONN_FLAG_DISABLE_SM
+        // so we're using our own implementation
         // Only try once per manual connect - don't retry on auto-reconnect if failed
-        // if (account.sm_available)
-        // {
-        //     this->send(stanza::xep0198::enable(true, 300)
-        //                .build(account.context)
-        //                .get());
-        // }
+        if (account.sm_available)
+        {
+            this->send(stanza::xep0198::enable(true, 300)
+                       .build(account.context)
+                       .get());
+        }
 
         (void) weechat_hook_signal_send("xmpp_account_connected",
                                         WEECHAT_HOOK_SIGNAL_STRING, account.name.data());
