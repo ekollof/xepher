@@ -873,8 +873,6 @@ int command__omemo(const void *pointer, void *data,
 
     (void) pointer;
     (void) data;
-    (void) argc;
-    (void) argv;
     (void) argv_eol;
 
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
@@ -882,11 +880,59 @@ int command__omemo(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    // Handle subcommands
+    if (argc > 1)
+    {
+        if (weechat_strcasecmp(argv[1], "republish") == 0)
+        {
+            if (!ptr_account->omemo)
+            {
+                weechat_printf(ptr_account->buffer,
+                               _("%s%s: OMEMO not initialized for this account"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+
+            weechat_printf(ptr_account->buffer,
+                           _("%sRepublishing OMEMO devicelist and bundle..."),
+                           weechat_prefix("network"));
+
+            // Publish devicelist
+            xmpp_stanza_t *devicelist_stanza = ptr_account->get_devicelist();
+            if (devicelist_stanza)
+            {
+                ptr_account->connection.send(devicelist_stanza);
+                xmpp_stanza_release(devicelist_stanza);
+                weechat_printf(ptr_account->buffer,
+                               _("%sDevicelist published (device ID: %u)"),
+                               weechat_prefix("network"), ptr_account->omemo.device_id);
+            }
+
+            // Publish bundle
+            char *from = strdup(ptr_account->jid().data());
+            xmpp_stanza_t *bundle_stanza = ptr_account->omemo.get_bundle(
+                ptr_account->context, from, NULL);
+            if (bundle_stanza)
+            {
+                ptr_account->connection.send(bundle_stanza);
+                xmpp_stanza_release(bundle_stanza);
+                weechat_printf(ptr_account->buffer,
+                               _("%sBundle published for device %u"),
+                               weechat_prefix("network"), ptr_account->omemo.device_id);
+            }
+
+            return WEECHAT_RC_OK;
+        }
+
+        WEECHAT_COMMAND_ERROR;
+    }
+
+    // Default behavior: enable OMEMO for current channel
     if (!ptr_channel)
     {
         weechat_printf(
             ptr_account->buffer,
-            _("%s%s: \"%s\" command can not be executed on a account buffer"),
+            _("%s%s: \"%s\" command requires a channel buffer or use /omemo republish on account buffer"),
             weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "omemo");
         return WEECHAT_RC_OK;
     }
@@ -3538,10 +3584,17 @@ void command__init()
 
     hook = weechat_hook_command(
         "omemo",
-        N_("set the current buffer to use omemo encryption"),
-        N_(""),
-        N_(""),
-        NULL, &command__omemo, NULL, NULL);
+        N_("manage omemo encryption for current buffer or account"),
+        N_("[republish]"),
+        N_("republish: republish OMEMO devicelist and bundle to server (use on account buffer)\n"
+           "\n"
+           "Without arguments on a channel buffer: enable OMEMO encryption\n"
+           "With 'republish' on account buffer: force re-publish devicelist and bundle\n"
+           "\n"
+           "Examples:\n"
+           "  /omemo            : enable OMEMO for current channel\n"
+           "  /omemo republish  : republish bundle (fixes missing device keys)"),
+        "republish", &command__omemo, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /omemo");
 
