@@ -12,6 +12,10 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <curl/curl.h>
+#include <openssl/sha.h>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <openssl/buffer.h>
 #include <fmt/core.h>
 #include <fmt/chrono.h>
 #include <libxml/uri.h>
@@ -2165,6 +2169,38 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 long file_size = ftell(upload_file);
                 fseek(upload_file, 0, SEEK_SET);
                 
+                // Calculate SHA-256 hash for SIMS
+                unsigned char hash[SHA256_DIGEST_LENGTH];
+                SHA256_CTX sha256_ctx;
+                SHA256_Init(&sha256_ctx);
+                
+                unsigned char buffer[8192];
+                size_t bytes_read;
+                while ((bytes_read = fread(buffer, 1, sizeof(buffer), upload_file)) > 0)
+                {
+                    SHA256_Update(&sha256_ctx, buffer, bytes_read);
+                }
+                SHA256_Final(hash, &sha256_ctx);
+                
+                // Base64 encode the hash using OpenSSL
+                BIO *bio = BIO_new(BIO_s_mem());
+                BIO *b64 = BIO_new(BIO_f_base64());
+                BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+                bio = BIO_push(b64, bio);
+                BIO_write(bio, hash, SHA256_DIGEST_LENGTH);
+                BIO_flush(bio);
+                
+                BUF_MEM *buffer_ptr;
+                BIO_get_mem_ptr(bio, &buffer_ptr);
+                std::string sha256_b64(buffer_ptr->data, buffer_ptr->length);
+                BIO_free_all(bio);
+                
+                // Store hash in upload request for later use
+                req_it->second.sha256_hash = sha256_b64;
+                
+                // Reset file position for upload
+                fseek(upload_file, 0, SEEK_SET);
+                
                 // Initialize curl
                 CURL *curl = curl_easy_init();
                 if (!curl)
@@ -2216,14 +2252,22 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     weechat_printf(account.buffer, "%sFile uploaded successfully!",
                                   weechat_prefix("network"));
                     
-                    // Send message with URL
+                    // Send message with SIMS metadata
                     auto channel_it = account.channels.find(req_it->second.channel_id);
                     if (channel_it != account.channels.end())
                     {
+                        // Build file metadata for SIMS
+                        weechat::channel::file_metadata file_meta;
+                        file_meta.filename = req_it->second.filename;
+                        file_meta.content_type = req_it->second.content_type;
+                        file_meta.size = req_it->second.file_size;
+                        file_meta.sha256_hash = req_it->second.sha256_hash;
+                        
                         channel_it->second.send_message(
                             channel_it->second.id,
                             get_url,
-                            std::optional<std::string>(get_url)
+                            std::optional<std::string>(get_url),
+                            std::optional<weechat::channel::file_metadata>(file_meta)
                         );
                     }
                 }

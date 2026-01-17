@@ -3347,9 +3347,6 @@ int command__upload(const void *pointer, void *data,
     weechat_printf(buffer, "%sUsing sanitized filename: %s",
                   weechat_prefix("network"), sanitized_basename.c_str());
     
-    // Store upload request with both original path and sanitized filename
-    ptr_account->upload_requests[id] = {id, filename, sanitized_basename, ptr_channel->id};
-    
     // Determine content-type from file extension
     std::string content_type = "application/octet-stream";
     size_t dot_pos = sanitized_basename.find_last_of('.');
@@ -3368,8 +3365,30 @@ int command__upload(const void *pointer, void *data,
         else if (ext == "txt") content_type = "text/plain";
         else if (ext == "zip") content_type = "application/zip";
         else if (ext == "tar") content_type = "application/x-tar";
-        else if (ext == "gz") content_type = "application/gzip";
     }
+    
+    // Get file size
+    FILE* f = fopen(filename.c_str(), "rb");
+    if (!f)
+    {
+        weechat_printf(buffer, "%s%s: failed to open file: %s",
+                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, filename.c_str());
+        return WEECHAT_RC_ERROR;
+    }
+    fseek(f, 0, SEEK_END);
+    size_t file_size = ftell(f);
+    fclose(f);
+    
+    // Store upload request with metadata for SIMS
+    ptr_account->upload_requests[id] = {
+        id, 
+        filename, 
+        sanitized_basename, 
+        ptr_channel->id,
+        content_type,
+        file_size,
+        ""  // sha256_hash will be calculated during upload
+    };
     
     // Build upload slot request (XEP-0363 v0.3.0+)
     xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", id);
@@ -3383,7 +3402,7 @@ int command__upload(const void *pointer, void *data,
     xmpp_stanza_set_attribute(request, "filename", sanitized_basename.c_str());
     
     char size_str[32];
-    snprintf(size_str, sizeof(size_str), "%ld", filesize);
+    snprintf(size_str, sizeof(size_str), "%zu", file_size);
     xmpp_stanza_set_attribute(request, "size", size_str);
     
     // Add content-type attribute if applicable

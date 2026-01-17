@@ -824,7 +824,8 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
 }
 
 int weechat::channel::send_message(std::string to, std::string body,
-                                   std::optional<std::string> oob)
+                                   std::optional<std::string> oob,
+                                   std::optional<file_metadata> file_meta)
 {
     xmpp_stanza_t *message = xmpp_message_new(account.context,
                     type == weechat::channel::chat_type::MUC
@@ -845,8 +846,97 @@ int weechat::channel::send_message(std::string to, std::string body,
     xmpp_free(account.context, id);
     xmpp_message_set_body(message, body.data());
 
-    if (oob)
+    // XEP-0385: SIMS (Stateless Inline Media Sharing) + XEP-0066: Out of Band Data
+    if (oob && file_meta)
     {
+        // Build SIMS reference wrapper
+        xmpp_stanza_t *reference = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(reference, "reference");
+        xmpp_stanza_set_ns(reference, "urn:xmpp:reference:0");
+        xmpp_stanza_set_attribute(reference, "type", "data");
+        
+        // media-sharing container
+        xmpp_stanza_t *media_sharing = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(media_sharing, "media-sharing");
+        xmpp_stanza_set_ns(media_sharing, "urn:xmpp:sims:1");
+        
+        // file element with metadata
+        xmpp_stanza_t *file_elem = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(file_elem, "file");
+        xmpp_stanza_set_ns(file_elem, "urn:xmpp:jingle:apps:file-transfer:5");
+        
+        // media-type
+        xmpp_stanza_t *media_type = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(media_type, "media-type");
+        xmpp_stanza_t *media_type_text = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_text(media_type_text, file_meta->content_type.c_str());
+        xmpp_stanza_add_child(media_type, media_type_text);
+        xmpp_stanza_release(media_type_text);
+        xmpp_stanza_add_child(file_elem, media_type);
+        xmpp_stanza_release(media_type);
+        
+        // name
+        xmpp_stanza_t *name_elem = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(name_elem, "name");
+        xmpp_stanza_t *name_text = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_text(name_text, file_meta->filename.c_str());
+        xmpp_stanza_add_child(name_elem, name_text);
+        xmpp_stanza_release(name_text);
+        xmpp_stanza_add_child(file_elem, name_elem);
+        xmpp_stanza_release(name_elem);
+        
+        // size
+        xmpp_stanza_t *size_elem = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(size_elem, "size");
+        xmpp_stanza_t *size_text = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_text(size_text, std::to_string(file_meta->size).c_str());
+        xmpp_stanza_add_child(size_elem, size_text);
+        xmpp_stanza_release(size_text);
+        xmpp_stanza_add_child(file_elem, size_elem);
+        xmpp_stanza_release(size_elem);
+        
+        // hash (SHA-256)
+        if (!file_meta->sha256_hash.empty())
+        {
+            xmpp_stanza_t *hash_elem = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(hash_elem, "hash");
+            xmpp_stanza_set_ns(hash_elem, "urn:xmpp:hashes:2");
+            xmpp_stanza_set_attribute(hash_elem, "algo", "sha-256");
+            xmpp_stanza_t *hash_text = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_text(hash_text, file_meta->sha256_hash.c_str());
+            xmpp_stanza_add_child(hash_elem, hash_text);
+            xmpp_stanza_release(hash_text);
+            xmpp_stanza_add_child(file_elem, hash_elem);
+            xmpp_stanza_release(hash_elem);
+        }
+        
+        xmpp_stanza_add_child(media_sharing, file_elem);
+        xmpp_stanza_release(file_elem);
+        
+        // sources
+        xmpp_stanza_t *sources = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(sources, "sources");
+        
+        xmpp_stanza_t *source_ref = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(source_ref, "reference");
+        xmpp_stanza_set_ns(source_ref, "urn:xmpp:reference:0");
+        xmpp_stanza_set_attribute(source_ref, "type", "data");
+        xmpp_stanza_set_attribute(source_ref, "uri", oob->c_str());
+        xmpp_stanza_add_child(sources, source_ref);
+        xmpp_stanza_release(source_ref);
+        
+        xmpp_stanza_add_child(media_sharing, sources);
+        xmpp_stanza_release(sources);
+        
+        xmpp_stanza_add_child(reference, media_sharing);
+        xmpp_stanza_release(media_sharing);
+        
+        xmpp_stanza_add_child(message, reference);
+        xmpp_stanza_release(reference);
+    }
+    else if (oob)
+    {
+        // Fallback to plain XEP-0066 if no file metadata
         xmpp_stanza_t *message__x = xmpp_stanza_new(account.context);
         xmpp_stanza_set_name(message__x, "x");
         xmpp_stanza_set_ns(message__x, "jabber:x:oob");

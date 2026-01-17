@@ -74,6 +74,9 @@ namespace weechat
             std::string filepath;         // Full path for opening the file
             std::string filename;         // Sanitized filename for the server
             std::string channel_id;
+            std::string content_type;     // MIME type
+            size_t file_size = 0;         // Size in bytes
+            std::string sha256_hash;      // SHA-256 hash for SIMS
         };
 
     public:

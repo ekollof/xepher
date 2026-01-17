@@ -412,6 +412,17 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0385.html' />
+        <xmpp:status>complete</xmpp:status>
+        <xmpp:version>0.2.1</xmpp:version>
+        <xmpp:note
+                    xml:lang='en'
+                >Stateless Inline Media Sharing (SIMS) - wraps HTTP uploads with file metadata, hashes, and sources for rich media display</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0392.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.0.1</xmpp:version>

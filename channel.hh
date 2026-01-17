@@ -25,6 +25,15 @@ namespace weechat
 
         enum class transport { PLAIN, OMEMO, PGP, OTR, OX };
 
+        // XEP-0385: SIMS file metadata
+        struct file_metadata
+        {
+            std::string filename;
+            std::string content_type;
+            size_t size;
+            std::string sha256_hash;  // Base64-encoded SHA-256
+        };
+
         static const char *transport_name(enum transport transport)
         {
             switch (transport)
@@ -155,7 +164,8 @@ namespace weechat
         std::optional<member*> remove_member(const char *id, const char *reason);
 
         int send_message(std::string to, std::string body,
-                         std::optional<std::string> oob = {});
+                         std::optional<std::string> oob = {},
+                         std::optional<file_metadata> file_meta = {});
         int send_message(const char *to, const char *body);
 
         void send_reads();
