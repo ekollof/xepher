@@ -133,6 +133,7 @@
     - ✅ XEP-0359: Unique and Stable Stanza IDs (message deduplication)
     - ✅ XEP-0380: Explicit Message Encryption (encryption method tagging)
     - ✅ XEP-0384: OMEMO Encryption (complete implementation)
+    - ✅ XEP-0385: Stateless Inline Media Sharing (rich media with metadata and hashing)
     - ✅ XEP-0402: PEP Native Bookmarks (modern PEP-based bookmark storage)
 
 *** Planned for Future Releases
@@ -926,12 +927,12 @@
      * [X] Extras (from CCS2022)
        * [X] The /me Command (xep-245)
    * [ ] Additional Features (beyond CCS2022)
-     * [ ] Stateless Inline Media Sharing (xep-385)
+     * [X] Stateless Inline Media Sharing (xep-385)
      * [ ] Consistent Color Generation (xep-392)
      * [ ] Message Styling (xep-393)
      * [ ] Extended Channel Search (xep-433)
-     * [ ] Message Retraction (xep-424)
-     * [ ] Message Moderation (xep-425)
+     * [X] Message Retraction (xep-424)
+     * [X] Message Moderation (xep-425)
 
    **Progress**: 12 of 13 CCS2022 Advanced IM features implemented!
    Remaining: User avatars (XEP-0084, 0153, 0398) and Jingle file transfer (XEP-234, 0261).
