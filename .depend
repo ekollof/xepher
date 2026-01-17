@@ -177,6 +177,8 @@ connection.hh:
 xmpp/ns.hh:
 user.hh:
 buffer.hh:
+.color.o: color.cpp color.hh
+color.hh:
 .channel.o: channel.cpp plugin.hh strophe.hh account.hh pgp.hh omemo.hh \
  /usr/include/omemo/signal_protocol.h /usr/include/omemo/ratchet.h \
  /usr/include/omemo/signal_protocol_types.h /usr/include/omemo/curve.h \
@@ -570,7 +572,7 @@ pgp.hh:
  /usr/include/omemo/session_cipher.h /usr/include/omemo/session_pre_key.h \
  /usr/include/omemo/protocol.h /usr/include/omemo/curve.h config.hh \
  config/file.hh config/breadcrumb.hh config/section.hh config/account.hh \
- config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh
+ config/option.hh channel.hh connection.hh xmpp/ns.hh user.hh color.hh
 plugin.hh:
 strophe.hh:
 account.hh:
@@ -600,6 +602,7 @@ channel.hh:
 connection.hh:
 xmpp/ns.hh:
 user.hh:
+color.hh:
 .util.o: util.cpp plugin.hh strophe.hh util.hh
 plugin.hh:
 strophe.hh:

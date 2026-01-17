@@ -13,6 +13,7 @@
 #include "account.hh"
 #include "user.hh"
 #include "channel.hh"
+#include "color.hh"
 
 std::string weechat::user::get_colour()
 {
@@ -21,6 +22,12 @@ std::string weechat::user::get_colour()
 
 std::string weechat::user::get_colour(const char *name)
 {
+    // XEP-0392: Consistent Color Generation
+    std::string color_code = weechat::consistent_color(name);
+    if (!color_code.empty())
+        return weechat_color(color_code.c_str());
+    
+    // Fallback to WeeChat's built-in color if generation fails
     return weechat_info_get("nick_color", name);
 }
 
@@ -31,6 +38,12 @@ std::string weechat::user::get_colour_for_nicklist()
 
 std::string weechat::user::get_colour_for_nicklist(const char *name)
 {
+    // XEP-0392: Consistent Color Generation (return color name for nicklist)
+    std::string color_code = weechat::consistent_color(name);
+    if (!color_code.empty())
+        return color_code;
+    
+    // Fallback to WeeChat's built-in color if generation fails
     return weechat_info_get("nick_color_name", name);
 }
 

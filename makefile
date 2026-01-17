@@ -51,6 +51,7 @@ LDFLAGS+=$(DBGLDFLAGS) \
 LDLIBS=-lstrophe \
 	   -lpthread \
 	   -lcurl \
+	   -lcrypto \
 	   $(shell xml2-config --libs) \
 	   $(shell pkg-config --libs gpgme) \
 	   $(shell pkg-config --libs libsignal-protocol-c) \
@@ -64,6 +65,7 @@ HDRS=plugin.hh \
 	 account.hh \
 	 buffer.hh \
 	 channel.hh \
+	 color.hh \
 	 command.hh \
 	 completion.hh \
 	 config.hh \
@@ -88,6 +90,7 @@ HDRS=plugin.hh \
 SRCS=plugin.cpp \
 	 account.cpp \
 	 buffer.cpp \
+	 color.cpp \
 	 channel.cpp \
 	 command.cpp \
 	 completion.cpp \

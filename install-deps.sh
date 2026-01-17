@@ -16,7 +16,7 @@ fi
 echo "Detected OS: $OS"
 
 # Common packages across distros
-# Runtime deps: libstrophe, libxml2, lmdb, libomemo-c (libsignal-protocol-c), gpgme, libfmt, libcurl
+# Runtime deps: libstrophe, libxml2, lmdb, libomemo-c (libsignal-protocol-c), gpgme, libfmt, libcurl, libssl/libcrypto (OpenSSL)
 # Build deps: g++, bison, flex, git
 
 case "$OS" in
@@ -36,6 +36,7 @@ case "$OS" in
             libgpgme-dev \
             libfmt-dev \
             libcurl4-openssl-dev \
+            libssl-dev \
             weechat \
             weechat-dev
         ;;
@@ -54,6 +55,7 @@ case "$OS" in
             gpgme-devel \
             fmt-devel \
             libcurl-devel \
+            openssl-devel \
             weechat \
             weechat-devel
         ;;
@@ -72,6 +74,7 @@ case "$OS" in
             gpgme \
             fmt \
             curl \
+            openssl \
             weechat
         ;;
     
@@ -89,6 +92,7 @@ case "$OS" in
             gpgme-devel \
             fmt-devel \
             libcurl-devel \
+            libopenssl-devel \
             weechat \
             weechat-devel
         ;;
@@ -107,6 +111,7 @@ case "$OS" in
             gpgme-devel \
             fmt-devel \
             libcurl-devel \
+            openssl-devel \
             weechat
         ;;
     
@@ -124,6 +129,7 @@ case "$OS" in
             gpgme-dev \
             fmt-dev \
             curl-dev \
+            openssl-dev \
             weechat
         ;;
     
@@ -141,6 +147,7 @@ case "$OS" in
             app-crypt/gpgme \
             dev-libs/libfmt \
             net-misc/curl \
+            dev-libs/openssl \
             net-im/weechat
         ;;
     
@@ -148,7 +155,7 @@ case "$OS" in
         echo "Unknown or unsupported distribution: $OS"
         echo ""
         echo "Please install the following packages manually:"
-        echo "  Runtime: libstrophe, libxml2, lmdb, libsignal-protocol-c, gpgme, libfmt, libcurl, weechat"
+        echo "  Runtime: libstrophe, libxml2, lmdb, libsignal-protocol-c, gpgme, libfmt, libcurl, openssl, weechat"
         echo "  Build: g++ (>= GCC12), bison, flex, git"
         exit 1
         ;;
