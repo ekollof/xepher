@@ -136,7 +136,7 @@ bool weechat::connection::time_handler(xmpp_stanza_t *stanza)
     return true;
 }
 
-bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level)
+bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool /* top_level */)
 {
     // SM counter incremented in libstrophe wrapper, not here
     // top_level parameter kept for nested/recursive calls
@@ -382,7 +382,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
     return true;
 }
 
-bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
+bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_level */)
 {
     // SM counter incremented in libstrophe wrapper, not here
     // top_level parameter kept for nested/recursive calls
@@ -1895,7 +1895,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     return reply;
 }
 
-bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
+bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */)
 {
     // SM counter incremented in libstrophe wrapper, not here
     // top_level parameter kept for nested/recursive calls
@@ -2169,25 +2169,27 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 long file_size = ftell(upload_file);
                 fseek(upload_file, 0, SEEK_SET);
                 
-                // Calculate SHA-256 hash for SIMS
-                unsigned char hash[SHA256_DIGEST_LENGTH];
-                SHA256_CTX sha256_ctx;
-                SHA256_Init(&sha256_ctx);
+                // Calculate SHA-256 hash for SIMS using modern EVP API
+                unsigned char hash[EVP_MAX_MD_SIZE];
+                unsigned int hash_len = 0;
+                EVP_MD_CTX *sha256_ctx = EVP_MD_CTX_new();
+                EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), nullptr);
                 
                 unsigned char buffer[8192];
                 size_t bytes_read;
                 while ((bytes_read = fread(buffer, 1, sizeof(buffer), upload_file)) > 0)
                 {
-                    SHA256_Update(&sha256_ctx, buffer, bytes_read);
+                    EVP_DigestUpdate(sha256_ctx, buffer, bytes_read);
                 }
-                SHA256_Final(hash, &sha256_ctx);
+                EVP_DigestFinal_ex(sha256_ctx, hash, &hash_len);
+                EVP_MD_CTX_free(sha256_ctx);
                 
                 // Base64 encode the hash using OpenSSL
                 BIO *bio = BIO_new(BIO_s_mem());
                 BIO *b64 = BIO_new(BIO_f_base64());
                 BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
                 bio = BIO_push(b64, bio);
-                BIO_write(bio, hash, SHA256_DIGEST_LENGTH);
+                BIO_write(bio, hash, hash_len);
                 BIO_flush(bio);
                 
                 BUF_MEM *buffer_ptr;
@@ -2766,7 +2768,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 item = xmpp_stanza_get_child_by_name(items, "item");
                 if (item)
                 {
-                    const char *item_id = xmpp_stanza_get_id(item);
                     list = xmpp_stanza_get_child_by_name_and_ns(
                         item, "list", "eu.siacs.conversations.axolotl");
                     if (list && account.omemo)
@@ -2882,8 +2883,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         xmpp_stanza_t *set, *set__last;
         char *set__last__text;
         weechat::account::mam_query mam_query;
-        
-        const char *complete = xmpp_stanza_get_attribute(fin, "complete");
 
         set = xmpp_stanza_get_child_by_name_and_ns(
             fin, "set", "http://jabber.org/protocol/rsm");

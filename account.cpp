@@ -215,9 +215,9 @@ xmpp_mem_t make_memory(void *userdata)
 }
 
 weechat::account::account(config_file& config_file, const std::string name)
-    : name(name), memory(make_memory(this)), logger(make_logger(this))
-    , context(&memory, &logger), connection(*this, context)
-    , config_account(config_file, config_file.configuration.section_account, name.data())
+    : config_account(config_file, config_file.configuration.section_account, name.data())
+    , memory(make_memory(this)), logger(make_logger(this))
+    , name(name), context(&memory, &logger), connection(*this, context)
 {
     if (account* result = nullptr; account::search(result, name))
         throw std::invalid_argument("account already exists");

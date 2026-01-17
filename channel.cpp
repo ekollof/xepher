@@ -583,6 +583,7 @@ int weechat::channel::add_self_typing(weechat::user *user)
         the_typing = *typing_opt;
     }
 
+    (void)the_typing;  // Used for side effects, suppress warning
     self_typing_cb(this, nullptr, 0);
 
     return ret;

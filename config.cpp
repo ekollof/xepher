@@ -15,7 +15,7 @@
 
 // TODO: don't free file?!
 
-bool account_read_cb(weechat::config_section& section,
+bool account_read_cb(weechat::config_section& /* section */,
                      const char *option_name, const char *value)
 {
     if (!option_name)
