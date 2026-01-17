@@ -2194,6 +2194,18 @@ char *omemo::decode(weechat::account *account, const char *jid,
     char **format = weechat_string_dyn_alloc(256);
     weechat_string_dyn_concat(format, "omemo msg %s:\n%s..IV: %s", -1);
     int keys_found = 0, keys_for_this_device = 0;
+    
+    // Log ALL children of header element
+    weechat_printf(NULL, "%somemo decode: examining header children...",
+                   weechat_prefix("network"));
+    for (xmpp_stanza_t *child = xmpp_stanza_get_children(header);
+         child; child = xmpp_stanza_get_next(child))
+    {
+        const char *child_name = xmpp_stanza_get_name(child);
+        weechat_printf(NULL, "%s  child: <%s>",
+                       weechat_prefix("network"), child_name ? child_name : "NULL");
+    }
+    
     for (xmpp_stanza_t *key = xmpp_stanza_get_children(header);
          key; key = xmpp_stanza_get_next(key))
     {
@@ -2204,8 +2216,13 @@ char *omemo::decode(weechat::account *account, const char *jid,
         keys_found++;
         const char *key_prekey = xmpp_stanza_get_attribute(key, "prekey");
         const char *key_id = xmpp_stanza_get_attribute(key, "rid");
-        if (!key_id)
+        if (!key_id) {
+            weechat_printf(NULL, "%somemo decode: found <key> but no rid attribute!",
+                           weechat_prefix("error"));
             continue;
+        }
+        weechat_printf(NULL, "%somemo decode: found <key rid=\"%s\"%s>",
+                       weechat_prefix("network"), key_id, key_prekey ? " prekey=\"true\"" : "");
         if (strtol(key_id, NULL, 10) != omemo->device_id) {
             weechat_printf(NULL, "%somemo decode: skipping key for device %s (our device: %u)",
                            weechat_prefix("network"), key_id, omemo->device_id);
