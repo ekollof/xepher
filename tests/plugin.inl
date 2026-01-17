@@ -14,7 +14,7 @@
 #include <sys/wait.h>
 #include <weechat/weechat-plugin.h>
 #include "../deps/fdstream.hpp"
-#include "../plugin.hh"
+#include "../src/plugin.hh"
 
 std::vector<std::string> weechat_read_lines(std::vector<std::string_view> commands, bool echo = false) {
     std::ostringstream args;

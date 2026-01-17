@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "../config.hh"
+#include "../src/config.hh"
 
 TEST_CASE("create config")
 {

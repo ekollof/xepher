@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "../account.hh"
+#include "../src/account.hh"
 
 TEST_CASE("create account")
 {
