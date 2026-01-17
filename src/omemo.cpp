@@ -2221,10 +2221,20 @@ char *omemo::decode(weechat::account *account, const char *jid,
             .name = jid, .name_len = strlen(jid), .device_id = (int32_t)strtol(source_id, NULL, 10) };
         signal_message *key_message = NULL;
         struct signal_buffer *aes_key = NULL;
+        
+        weechat_printf(NULL, "%somemo decode: processing key for device %s, prekey=%s, source_id=%s",
+                       weechat_prefix("network"), key_id, key_prekey ? "true" : "false", source_id);
+        
         if (key_prekey) {
+            weechat_printf(NULL, "%somemo decode: using PRE-KEY message path",
+                           weechat_prefix("network"));
             pre_key_signal_message *pre_key_message = NULL;
             if ((ret = pre_key_signal_message_deserialize(&pre_key_message,
-                key_data, key_len, omemo->context))) return NULL;
+                key_data, key_len, omemo->context))) {
+                weechat_printf(NULL, "%somemo decode: pre_key_signal_message_deserialize failed (ret=%d)",
+                               weechat_prefix("error"), ret);
+                return NULL;
+            }
             ec_public_key *identity_key = pre_key_signal_message_get_identity_key(pre_key_message);
           //uint32_t device_id = pre_key_signal_message_get_registration_id(pre_key_message);
           //uint32_t pre_key_id = pre_key_signal_message_get_pre_key_id(pre_key_message);
@@ -2232,24 +2242,58 @@ char *omemo::decode(weechat::account *account, const char *jid,
           //ec_public_key *base_key = pre_key_signal_message_get_base_key(pre_key_message);
             key_message = pre_key_signal_message_get_signal_message(pre_key_message);
             struct signal_buffer *identity_buf;
-            if ((ret = ec_public_key_serialize(&identity_buf, identity_key))) return NULL;
+            if ((ret = ec_public_key_serialize(&identity_buf, identity_key))) {
+                weechat_printf(NULL, "%somemo decode: ec_public_key_serialize failed (ret=%d)",
+                               weechat_prefix("error"), ret);
+                return NULL;
+            }
             if ((ret = iks_save_identity(&address, signal_buffer_data(identity_buf),
-                                    signal_buffer_len(identity_buf), omemo))) return NULL;
+                                    signal_buffer_len(identity_buf), omemo))) {
+                weechat_printf(NULL, "%somemo decode: iks_save_identity failed (ret=%d)",
+                               weechat_prefix("error"), ret);
+                return NULL;
+            }
 
             struct session_cipher *cipher;
             if ((ret = session_cipher_create(&cipher, omemo->store_context,
-                                        &address, omemo->context))) return NULL;
+                                        &address, omemo->context))) {
+                weechat_printf(NULL, "%somemo decode: session_cipher_create failed (ret=%d)",
+                               weechat_prefix("error"), ret);
+                return NULL;
+            }
             if ((ret = session_cipher_decrypt_pre_key_signal_message(cipher,
                                                                 pre_key_message,
-                                                                0, &aes_key))) return NULL;
+                                                                0, &aes_key))) {
+                weechat_printf(NULL, "%somemo decode: session_cipher_decrypt_pre_key_signal_message failed (ret=%d)",
+                               weechat_prefix("error"), ret);
+                return NULL;
+            }
+            weechat_printf(NULL, "%somemo decode: pre-key decryption succeeded",
+                           weechat_prefix("network"));
         } else {
+            weechat_printf(NULL, "%somemo decode: using REGULAR message path (existing session)",
+                           weechat_prefix("network"));
             if ((ret = signal_message_deserialize(&key_message,
-                key_data, key_len, omemo->context))) return NULL;
+                key_data, key_len, omemo->context))) {
+                weechat_printf(NULL, "%somemo decode: signal_message_deserialize failed (ret=%d)",
+                               weechat_prefix("error"), ret);
+                return NULL;
+            }
             struct session_cipher *cipher;
             if ((ret = session_cipher_create(&cipher, omemo->store_context,
-                                        &address, omemo->context))) return NULL;
+                                        &address, omemo->context))) {
+                weechat_printf(NULL, "%somemo decode: session_cipher_create failed (ret=%d)",
+                               weechat_prefix("error"), ret);
+                return NULL;
+            }
             if ((ret = session_cipher_decrypt_signal_message(cipher, key_message,
-                                                        0, &aes_key))) return NULL;
+                                                        0, &aes_key))) {
+                weechat_printf(NULL, "%somemo decode: session_cipher_decrypt_signal_message failed (ret=%d)",
+                               weechat_prefix("error"), ret);
+                return NULL;
+            }
+            weechat_printf(NULL, "%somemo decode: regular message decryption succeeded",
+                           weechat_prefix("network"));
         }
 
         if (!aes_key) return NULL;
