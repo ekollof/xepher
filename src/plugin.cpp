@@ -2,6 +2,12 @@
 // License, version 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+// Suppress IntelliSense false positives for WeeChat opaque types
+// The compiler (GCC) correctly resolves these, but IntelliSense may not
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunknown-pragmas"
+#pragma clang diagnostic ignored "-Wincompatible-pointer-types-discards-qualifiers"
+
 #include <algorithm>
 #include <cstdlib>
 #include <cstdint>
@@ -182,3 +188,6 @@ weechat::plugin::~plugin()
     // Note: instance is being destroyed here, so we can't check it
     // This destructor should be empty anyway
 }
+
+#pragma GCC diagnostic pop
+
