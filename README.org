@@ -77,7 +77,6 @@
     - Bookmark management - /bookmark command to add, delete, list, and toggle autojoin for MUC rooms
     - Room explorer - /list command to search public MUC rooms via search.jabber.network
     - Entity capability caching (XEP-0115) - caches disco#info results to reduce network queries
-    - OMEMO key management - /omemo republish to force re-publication of device bundle
 
   See the *XMPP Compliance* section below for a comprehensive list of implemented XEPs.
 
@@ -455,50 +454,57 @@
 ** Encryption
 
 *** /omemo
-    Enable OMEMO encryption for the current buffer, or manage OMEMO keys
+    Manage OMEMO encryption for the current buffer
 
     *Usage:*
     #+begin_src
-    /omemo [check|republish]
+    /omemo [check | republish | status | reset-keys]
     #+end_src
 
     *Subcommands:*
-    - (no argument) :: Enable OMEMO encryption for current channel buffer
-    - =check= :: Query server for published devicelist and bundle (use on account buffer)
-    - =republish= :: Republish OMEMO devicelist and bundle (use on account buffer)
+    - (no args): Enable OMEMO for current channel
+    - =check=: Verify OMEMO bundle is published on server
+    - =republish=: Republish bundle (fixes missing device keys)
+    - =status=: Show OMEMO status and device ID
+    - =reset-keys=: Reset OMEMO key database to force key renegotiation
 
     *Examples:*
     #+begin_src
-    /omemo              # Enable OMEMO for current PM/MUC
-    /omemo check        # Verify keys are published on server
-    /omemo republish    # Force republish keys (on account buffer)
+    /omemo                    # Enable OMEMO for current channel
+    /omemo check              # Check bundle on server
+    /omemo republish          # Republish bundle
+    /omemo status             # Show device ID and status
+    /omemo reset-keys         # Reset keys (forces renegotiation)
     #+end_src
 
     *Note:* OMEMO provides end-to-end encryption. Keys are automatically
-    generated and managed by the plugin.
-
-    *Troubleshooting:* 
-    1. If contacts report they can't decrypt your messages, first verify your
-       bundle is published with =/omemo check=
-    2. If the server doesn't have your devicelist/bundle, use =/omemo republish=
-       to force re-publication
-    3. Ask contacts to restart their XMPP client to fetch your updated keys
+    generated and managed by the plugin. Use =reset-keys= if you're having
+    key exchange issues.
 
 *** /pgp
-    Enable PGP encryption for the current buffer
+    Manage PGP encryption for the current buffer
 
     *Usage:*
     #+begin_src
-    /pgp <keyid>
+    /pgp [<keyid> | status | reset]
     #+end_src
 
-    *Example:*
+    *Subcommands:*
+    - (no args): Enable PGP for current channel (use existing keys)
+    - =<keyid>=: Add or enable PGP with specific key ID
+    - =status=: Show configured PGP keys for current channel
+    - =reset=: Remove all PGP keys from current channel
+
+    *Examples:*
     #+begin_src
-    /pgp A1B2C3D4E5F6
+    /pgp                      # Enable PGP with existing keys
+    /pgp A1B2C3D4E5F6         # Add key to channel
+    /pgp status               # Show which keys are configured
+    /pgp reset                # Remove all keys from channel
     #+end_src
 
-    *Note:* The PGP key setting persists across restarts for the current
-    JID/MUC. Uses your GPG keyring.
+    *Note:* PGP key settings persist across restarts per JID/MUC. Uses
+    your local GPG keyring.
 
 *** /plain
     Disable encryption for the current buffer (use plaintext)

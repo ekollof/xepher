@@ -984,6 +984,72 @@ int command__omemo(const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
+        if (weechat_strcasecmp(argv[1], "reset-keys") == 0)
+        {
+            if (!ptr_account->omemo)
+            {
+                weechat_printf(ptr_account->buffer,
+                               _("%s%s: OMEMO not initialized for this account"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+
+            weechat_printf(ptr_account->buffer,
+                           _("%s%s: Resetting OMEMO key database to force renegotiation"),
+                           weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME);
+
+            try {
+                // Clear OMEMO database
+                if (ptr_account->omemo.db_env)
+                {
+                    lmdb::txn txn = lmdb::txn::begin(ptr_account->omemo.db_env);
+                    mdb_drop(txn.handle(), ptr_account->omemo.dbi.omemo, 0);
+                    txn.commit();
+                    weechat_printf(ptr_account->buffer,
+                                   _("%s%s: OMEMO key database cleared. Session keys will be renegotiated."),
+                                   weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME);
+                }
+            } catch (const lmdb::error& ex) {
+                weechat_printf(ptr_account->buffer,
+                               _("%s%s: Failed to reset OMEMO keys: %s"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, ex.what());
+            }
+
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "status") == 0)
+        {
+            if (!ptr_account->omemo)
+            {
+                weechat_printf(ptr_account->buffer,
+                               _("%s%s: OMEMO not initialized for this account"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+
+            weechat_printf(ptr_account->buffer,
+                           _("%sOMEMO Status for account %s:"),
+                           weechat_prefix("info"), ptr_account->name.data());
+            weechat_printf(ptr_account->buffer,
+                           _("%s  Device ID: %u"),
+                           weechat_prefix("info"), ptr_account->omemo.device_id);
+            weechat_printf(ptr_account->buffer,
+                           _("%s  Identity Key: %s"),
+                           weechat_prefix("info"), 
+                           ptr_account->omemo.identity ? "Initialized" : "Not initialized");
+
+            if (ptr_channel)
+            {
+                weechat_printf(ptr_account->buffer,
+                               _("%s  Channel '%s' encryption: %s"),
+                               weechat_prefix("info"), ptr_channel->name.data(),
+                               ptr_channel->omemo.enabled ? "ENABLED" : "disabled");
+            }
+
+            return WEECHAT_RC_OK;
+        }
+
         WEECHAT_COMMAND_ERROR;
     }
 
@@ -1017,7 +1083,6 @@ int command__pgp(const void *pointer, void *data,
 
     (void) pointer;
     (void) data;
-    (void) argv;
 
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 
@@ -1035,12 +1100,75 @@ int command__pgp(const void *pointer, void *data,
 
     if (argc > 1)
     {
-        keyid = argv_eol[1];
+        if (weechat_strcasecmp(argv[1], "status") == 0)
+        {
+            weechat_printf(ptr_account->buffer,
+                           _("%sPGP Status for channel %s:"),
+                           weechat_prefix("info"), ptr_channel->name.data());
+            weechat_printf(ptr_account->buffer,
+                           _("%s  Encryption: %s"),
+                           weechat_prefix("info"), ptr_channel->pgp.enabled ? "ENABLED" : "disabled");
 
+            if (ptr_channel->pgp.ids.empty())
+            {
+                weechat_printf(ptr_account->buffer,
+                               _("%s  No PGP keys configured"),
+                               weechat_prefix("info"));
+            }
+            else
+            {
+                weechat_printf(ptr_account->buffer,
+                               _("%s  Configured keys:"),
+                               weechat_prefix("info"));
+                for (const auto& key_id : ptr_channel->pgp.ids)
+                {
+                    weechat_printf(ptr_account->buffer,
+                                   _("%s    - %s"),
+                                   weechat_prefix("info"), key_id.data());
+                }
+            }
+
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "reset") == 0)
+        {
+            if (ptr_channel->pgp.ids.empty())
+            {
+                weechat_printf(ptr_account->buffer,
+                               _("%s%s: No PGP keys configured for this channel"),
+                               weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+
+            size_t count = ptr_channel->pgp.ids.size();
+            ptr_channel->pgp.ids.clear();
+            ptr_account->save_pgp_keys();
+            weechat::config::write();
+
+            weechat_printf(ptr_account->buffer,
+                           _("%s%s: Removed %zu PGP key(s) from channel '%s'"),
+                           weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME,
+                           count, ptr_channel->name.data());
+
+            return WEECHAT_RC_OK;
+        }
+
+        // Default: add key
+        keyid = argv_eol[1];
         ptr_channel->pgp.ids.emplace(keyid);
         ptr_account->save_pgp_keys();
         weechat::config::write();
+
+        weechat_printf(ptr_account->buffer,
+                       _("%s%s: Added PGP key '%s' to channel '%s'"),
+                       weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME,
+                       keyid, ptr_channel->name.data());
+
+        return WEECHAT_RC_OK;
     }
+
+    // Default: enable PGP for current channel
     ptr_channel->omemo.enabled = 0;
     ptr_channel->pgp.enabled = 1;
 
@@ -3655,18 +3783,24 @@ void command__init()
            "Examples:\n"
            "  /omemo            : enable OMEMO for current channel\n"
            "  /omemo check      : verify bundle is published on server\n"
-           "  /omemo republish  : republish bundle (fixes missing device keys)"),
+           "  /omemo republish  : republish bundle (fixes missing device keys)\n"
+           "  /omemo status     : show OMEMO status and device ID\n"
+           "  /omemo reset-keys : reset OMEMO key database to force renegotiation"),
         "check"
-        " || republish", &command__omemo, NULL, NULL);
+        " || republish"
+        " || status"
+        " || reset-keys", &command__omemo, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /omemo");
 
     hook = weechat_hook_command(
         "pgp",
-        N_("set the current buffer to use pgp encryption (with a given target pgp key)"),
-        N_("<keyid>"),
-        N_("keyid: recipient keyid"),
-        NULL, &command__pgp, NULL, NULL);
+        N_("manage PGP encryption for current channel"),
+        N_("[<keyid> | status | reset]"),
+        N_("keyid: recipient keyid (add key)\n"
+           "status: show configured PGP keys\n"
+           "reset: remove all configured PGP keys"),
+        "status || reset", &command__pgp, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /pgp");
 
