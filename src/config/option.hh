@@ -22,7 +22,15 @@ namespace weechat
     struct config_file;
     struct config_section;
 
-    struct config_option_free { void operator() (struct t_config_option *ptr) { weechat_config_option_free(ptr); } };
+    struct config_option_free { 
+        void operator() (struct t_config_option *ptr) { 
+            // Skip freeing during plugin unload to avoid double-free
+            // WeeChat will handle cleanup when the plugin unloads
+            if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
+                return;
+            weechat_config_option_free(ptr); 
+        } 
+    };
     struct config_option : public std::unique_ptr<struct t_config_option, config_option_free>, public config_breadcrumb {
         config_option(struct t_config_option *ptr, config_section& section, std::string name)
             : std::unique_ptr<struct t_config_option, config_option_free>(ptr)
