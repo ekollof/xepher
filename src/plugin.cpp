@@ -136,7 +136,11 @@ void weechat::plugin::init(int argc, char *argv[])
 }
 
 void weechat::plugin::end() {
-    // Unhook timer FIRST to stop any callbacks
+    // CRITICAL: Set flag FIRST to stop any in-flight callbacks
+    // If we unhook first, a callback could start before we set the flag
+    weechat::g_plugin_unloading = true;
+    
+    // Unhook timer to stop new callbacks from being scheduled
     if (m_process_timer) {
         weechat_unhook(m_process_timer);
         m_process_timer = nullptr;
@@ -152,9 +156,6 @@ void weechat::plugin::end() {
         weechat_unhook(m_input_text_changed_hook);
         m_input_text_changed_hook = nullptr;
     }
-    
-    // Set flag to prevent any in-flight callbacks from proceeding
-    weechat::g_plugin_unloading = true;
     
     if (m_typing_bar_item)
         weechat_bar_item_remove(m_typing_bar_item);
