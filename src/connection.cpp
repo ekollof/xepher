@@ -33,6 +33,8 @@
 #include "omemo.hh"
 #include "pgp.hh"
 #include "util.hh"
+#include "avatar.hh"
+#include "xmpp/xep-0084.inl"
 
 extern "C" {
 #include "diff/diff.h"
@@ -680,6 +682,121 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
 
                                 account.connection.send(children[0]);
                                 xmpp_stanza_release(children[0]);
+                            }
+                        }
+                    }
+                }
+                
+                // XEP-0084: User Avatar - Metadata  
+                if (items_node
+                    && weechat_strcasecmp(items_node, "urn:xmpp:avatar:metadata") == 0)
+                {
+                    item = xmpp_stanza_get_child_by_name(items, "item");
+                    if (item)
+                    {
+                        xmpp_stanza_t *metadata = xmpp_stanza_get_child_by_name_and_ns(
+                            item, "metadata", "urn:xmpp:avatar:metadata");
+                        
+                        if (metadata)
+                        {
+                            xmpp_stanza_t *info = xmpp_stanza_get_child_by_name(metadata, "info");
+                            if (info)
+                            {
+                                const char *info_id = xmpp_stanza_get_id(info);
+                                const char *info_type = xmpp_stanza_get_attribute(info, "type");
+                                const char *info_bytes = xmpp_stanza_get_attribute(info, "bytes");
+                                
+                                if (info_id)
+                                {
+                                    const char *from_jid = from ? from : account.jid().data();
+                                    
+                                    // Update user's avatar hash
+                                    weechat::user *user = weechat::user::search(&account, from_jid);
+                                    if (user)
+                                    {
+                                        free(user->profile.avatar_hash);
+                                        user->profile.avatar_hash = strdup(info_id);
+                                    }
+                                    
+                                    weechat_printf_date_tags(account.buffer, 0, "xmpp_avatar",
+                                                            "%sAvatar update from %s (hash: %.8s..., type: %s, bytes: %s)",
+                                                            weechat_prefix("network"),
+                                                            from_jid,
+                                                            info_id,
+                                                            info_type ? info_type : "unknown",
+                                                            info_bytes ? info_bytes : "unknown");
+                                    
+                                    // Request avatar data
+                                    weechat::avatar::request_data(account, from_jid, info_id);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // XEP-0084: User Avatar - Data
+                if (items_node
+                    && weechat_strcasecmp(items_node, "urn:xmpp:avatar:data") == 0)
+                {
+                    item = xmpp_stanza_get_child_by_name(items, "item");
+                    if (item)
+                    {
+                        xmpp_stanza_t *data_elem = xmpp_stanza_get_child_by_name_and_ns(
+                            item, "data", "urn:xmpp:avatar:data");
+                        
+                        if (data_elem)
+                        {
+                            char *b64_data = xmpp_stanza_get_text(data_elem);
+                            if (b64_data)
+                            {
+                                // Decode base64 avatar data
+                                BIO *bio, *b64;
+                                size_t decode_len = strlen(b64_data);
+                                std::vector<uint8_t> image_data(decode_len);
+                                
+                                bio = BIO_new_mem_buf(b64_data, -1);
+                                b64 = BIO_new(BIO_f_base64());
+                                bio = BIO_push(b64, bio);
+                                BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+                                
+                                int actual_len = BIO_read(bio, image_data.data(), decode_len);
+                                BIO_free_all(bio);
+                                
+                                if (actual_len > 0)
+                                {
+                                    image_data.resize(actual_len);
+                                    
+                                    const char *from_jid = from ? from : account.jid().data();
+                                    std::string hash = weechat::avatar::calculate_hash(image_data);
+                                    
+                                    // Save to cache
+                                    weechat::avatar::data avatar_data;
+                                    avatar_data.image_data = image_data;
+                                    avatar_data.meta.id = hash;
+                                    avatar_data.meta.bytes = actual_len;
+                                    avatar_data.meta.type = "image/png";  // Default, should get from metadata
+                                    
+                                    weechat::avatar::save_to_cache(account, hash, avatar_data);
+                                    
+                                    // Update user profile
+                                    weechat::user *user = weechat::user::search(&account, from_jid);
+                                    if (user)
+                                    {
+                                        user->profile.avatar_data = image_data;
+                                        user->profile.avatar_rendered = 
+                                            weechat::avatar::render_unicode_blocks(image_data, 
+                                                                                   avatar_data.meta.type);
+                                    }
+                                    
+                                    weechat_printf_date_tags(account.buffer, 0, "xmpp_avatar",
+                                                            "%sAvatar data received from %s (%d bytes, hash verified: %s)",
+                                                            weechat_prefix("network"),
+                                                            from_jid,
+                                                            actual_len,
+                                                            hash.c_str());
+                                }
+                                
+                                xmpp_free(account.context, b64_data);
                             }
                         }
                     }

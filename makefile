@@ -63,6 +63,7 @@ LIBDIR ?= $(PREFIX)/lib
 
 HDRS=src/plugin.hh \
 	 src/account.hh \
+	 src/avatar.hh \
 	 src/buffer.hh \
 	 src/channel.hh \
 	 src/color.hh \
@@ -89,6 +90,7 @@ HDRS=src/plugin.hh \
 
 SRCS=src/plugin.cpp \
 	 src/account.cpp \
+	 src/avatar.cpp \
 	 src/buffer.cpp \
 	 src/color.cpp \
 	 src/channel.cpp \

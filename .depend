@@ -51,27 +51,28 @@ obj/account.o: src/account.cpp /usr/include/libxml2/libxml/xmlwriter.h \
  /usr/include/libxml2/libxml/xmlversion.h \
  /usr/include/libxml2/libxml/xmlexports.h \
  /usr/include/libxml2/libxml/xmlIO.h \
- /usr/include/libxml2/libxml/encoding.h \
- /usr/include/libxml2/libxml/xmlerror.h \
- /usr/include/libxml2/libxml/tree.h \
+ /usr/include/libxml2/libxml/globals.h \
+ /usr/include/libxml2/libxml/parser.h /usr/include/libxml2/libxml/tree.h \
  /usr/include/libxml2/libxml/xmlstring.h \
- /usr/include/libxml2/libxml/xmlmemory.h \
  /usr/include/libxml2/libxml/xmlregexp.h \
- /usr/include/libxml2/libxml/list.h /usr/include/libxml2/libxml/parser.h \
  /usr/include/libxml2/libxml/dict.h /usr/include/libxml2/libxml/hash.h \
  /usr/include/libxml2/libxml/valid.h \
+ /usr/include/libxml2/libxml/xmlerror.h \
+ /usr/include/libxml2/libxml/list.h \
  /usr/include/libxml2/libxml/xmlautomata.h \
  /usr/include/libxml2/libxml/entities.h \
- /usr/include/libxml2/libxml/SAX2.h /usr/include/libxml2/libxml/threads.h \
- src/plugin.hh src/strophe.hh src/xmpp/node.hh src/xmpp/xep-0027.inl \
- src/xmpp/ns.hh src/xmpp/xep-0030.inl src/xmpp/xep-0045.inl \
- src/xmpp/xep-0049.inl src/xmpp/xep-0115.inl src/xmpp/xep-0198.inl \
- src/xmpp/xep-0249.inl src/xmpp/xep-0280.inl src/xmpp/xep-0319.inl \
- src/xmpp/xep-0352.inl src/xmpp/rfc-6121.inl src/xmpp/stanza.hh \
- src/config.hh src/config/file.hh src/config/breadcrumb.hh \
- src/config/section.hh src/config/account.hh src/config/option.hh \
- src/input.hh src/omemo.hh /usr/include/signal/signal_protocol.h \
- /usr/include/signal/ratchet.h \
+ /usr/include/libxml2/libxml/encoding.h \
+ /usr/include/libxml2/libxml/SAX2.h /usr/include/libxml2/libxml/xlink.h \
+ /usr/include/libxml2/libxml/xmlmemory.h \
+ /usr/include/libxml2/libxml/threads.h src/plugin.hh src/strophe.hh \
+ src/xmpp/node.hh src/xmpp/xep-0027.inl src/xmpp/ns.hh \
+ src/xmpp/xep-0030.inl src/xmpp/xep-0045.inl src/xmpp/xep-0049.inl \
+ src/xmpp/xep-0115.inl src/xmpp/xep-0198.inl src/xmpp/xep-0249.inl \
+ src/xmpp/xep-0280.inl src/xmpp/xep-0319.inl src/xmpp/xep-0352.inl \
+ src/xmpp/rfc-6121.inl src/xmpp/stanza.hh src/config.hh \
+ src/config/file.hh src/config/breadcrumb.hh src/config/section.hh \
+ src/config/account.hh src/config/option.hh src/input.hh src/omemo.hh \
+ /usr/include/signal/signal_protocol.h /usr/include/signal/ratchet.h \
  /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
  /usr/include/signal/session_record.h \
  /usr/include/signal/session_pre_key.h \
@@ -85,20 +86,22 @@ obj/account.o: src/account.cpp /usr/include/libxml2/libxml/xmlwriter.h \
 /usr/include/libxml2/libxml/xmlversion.h:
 /usr/include/libxml2/libxml/xmlexports.h:
 /usr/include/libxml2/libxml/xmlIO.h:
-/usr/include/libxml2/libxml/encoding.h:
-/usr/include/libxml2/libxml/xmlerror.h:
+/usr/include/libxml2/libxml/globals.h:
+/usr/include/libxml2/libxml/parser.h:
 /usr/include/libxml2/libxml/tree.h:
 /usr/include/libxml2/libxml/xmlstring.h:
-/usr/include/libxml2/libxml/xmlmemory.h:
 /usr/include/libxml2/libxml/xmlregexp.h:
-/usr/include/libxml2/libxml/list.h:
-/usr/include/libxml2/libxml/parser.h:
 /usr/include/libxml2/libxml/dict.h:
 /usr/include/libxml2/libxml/hash.h:
 /usr/include/libxml2/libxml/valid.h:
+/usr/include/libxml2/libxml/xmlerror.h:
+/usr/include/libxml2/libxml/list.h:
 /usr/include/libxml2/libxml/xmlautomata.h:
 /usr/include/libxml2/libxml/entities.h:
+/usr/include/libxml2/libxml/encoding.h:
 /usr/include/libxml2/libxml/SAX2.h:
+/usr/include/libxml2/libxml/xlink.h:
+/usr/include/libxml2/libxml/xmlmemory.h:
 /usr/include/libxml2/libxml/threads.h:
 src/plugin.hh:
 src/strophe.hh:
@@ -144,6 +147,53 @@ src/channel.hh:
 src/connection.hh:
 src/user.hh:
 src/buffer.hh:
+obj/avatar.o: src/avatar.cpp src/avatar.hh src/account.hh src/pgp.hh \
+ src/omemo.hh /usr/include/signal/signal_protocol.h \
+ /usr/include/signal/ratchet.h \
+ /usr/include/signal/signal_protocol_types.h /usr/include/signal/curve.h \
+ /usr/include/signal/session_record.h \
+ /usr/include/signal/session_pre_key.h \
+ /usr/include/signal/sender_key_record.h src/signal.hh \
+ /usr/include/signal/key_helper.h /usr/include/signal/session_builder.h \
+ /usr/include/signal/session_cipher.h \
+ /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
+ /usr/include/signal/curve.h src/config.hh src/plugin.hh src/strophe.hh \
+ src/config/file.hh src/config/breadcrumb.hh src/config/section.hh \
+ src/config/account.hh src/config/option.hh src/channel.hh \
+ src/connection.hh src/xmpp/ns.hh src/user.hh src/xmpp/stanza.hh \
+ src/xmpp/xep-0084.inl
+src/avatar.hh:
+src/account.hh:
+src/pgp.hh:
+src/omemo.hh:
+/usr/include/signal/signal_protocol.h:
+/usr/include/signal/ratchet.h:
+/usr/include/signal/signal_protocol_types.h:
+/usr/include/signal/curve.h:
+/usr/include/signal/session_record.h:
+/usr/include/signal/session_pre_key.h:
+/usr/include/signal/sender_key_record.h:
+src/signal.hh:
+/usr/include/signal/key_helper.h:
+/usr/include/signal/session_builder.h:
+/usr/include/signal/session_cipher.h:
+/usr/include/signal/session_pre_key.h:
+/usr/include/signal/protocol.h:
+/usr/include/signal/curve.h:
+src/config.hh:
+src/plugin.hh:
+src/strophe.hh:
+src/config/file.hh:
+src/config/breadcrumb.hh:
+src/config/section.hh:
+src/config/account.hh:
+src/config/option.hh:
+src/channel.hh:
+src/connection.hh:
+src/xmpp/ns.hh:
+src/user.hh:
+src/xmpp/stanza.hh:
+src/xmpp/xep-0084.inl:
 obj/buffer.o: src/buffer.cpp src/plugin.hh src/strophe.hh src/account.hh \
  src/pgp.hh src/omemo.hh /usr/include/signal/signal_protocol.h \
  /usr/include/signal/ratchet.h \
@@ -395,7 +445,22 @@ src/user.hh:
 obj/connection.o: src/connection.cpp /usr/include/libxml2/libxml/uri.h \
  /usr/include/libxml2/libxml/xmlversion.h \
  /usr/include/libxml2/libxml/xmlexports.h \
- /usr/include/libxml2/libxml/xmlstring.h src/plugin.hh src/strophe.hh \
+ /usr/include/libxml2/libxml/tree.h \
+ /usr/include/libxml2/libxml/xmlstring.h \
+ /usr/include/libxml2/libxml/xmlregexp.h \
+ /usr/include/libxml2/libxml/dict.h \
+ /usr/include/libxml2/libxml/xmlmemory.h \
+ /usr/include/libxml2/libxml/threads.h \
+ /usr/include/libxml2/libxml/globals.h \
+ /usr/include/libxml2/libxml/parser.h /usr/include/libxml2/libxml/hash.h \
+ /usr/include/libxml2/libxml/valid.h \
+ /usr/include/libxml2/libxml/xmlerror.h \
+ /usr/include/libxml2/libxml/list.h \
+ /usr/include/libxml2/libxml/xmlautomata.h \
+ /usr/include/libxml2/libxml/entities.h \
+ /usr/include/libxml2/libxml/encoding.h \
+ /usr/include/libxml2/libxml/xmlIO.h /usr/include/libxml2/libxml/SAX2.h \
+ /usr/include/libxml2/libxml/xlink.h src/plugin.hh src/strophe.hh \
  src/xmpp/node.hh src/xmpp/xep-0027.inl src/xmpp/ns.hh \
  src/xmpp/xep-0030.inl src/xmpp/xep-0045.inl src/xmpp/xep-0049.inl \
  src/xmpp/xep-0115.inl src/xmpp/xep-0198.inl src/xmpp/xep-0249.inl \
@@ -413,11 +478,28 @@ obj/connection.o: src/connection.cpp /usr/include/libxml2/libxml/uri.h \
  /usr/include/signal/session_cipher.h \
  /usr/include/signal/session_pre_key.h /usr/include/signal/protocol.h \
  /usr/include/signal/curve.h src/channel.hh src/connection.hh src/user.hh \
- src/util.hh deps/diff/diff.h
+ src/util.hh src/avatar.hh src/xmpp/xep-0084.inl deps/diff/diff.h
 /usr/include/libxml2/libxml/uri.h:
 /usr/include/libxml2/libxml/xmlversion.h:
 /usr/include/libxml2/libxml/xmlexports.h:
+/usr/include/libxml2/libxml/tree.h:
 /usr/include/libxml2/libxml/xmlstring.h:
+/usr/include/libxml2/libxml/xmlregexp.h:
+/usr/include/libxml2/libxml/dict.h:
+/usr/include/libxml2/libxml/xmlmemory.h:
+/usr/include/libxml2/libxml/threads.h:
+/usr/include/libxml2/libxml/globals.h:
+/usr/include/libxml2/libxml/parser.h:
+/usr/include/libxml2/libxml/hash.h:
+/usr/include/libxml2/libxml/valid.h:
+/usr/include/libxml2/libxml/xmlerror.h:
+/usr/include/libxml2/libxml/list.h:
+/usr/include/libxml2/libxml/xmlautomata.h:
+/usr/include/libxml2/libxml/entities.h:
+/usr/include/libxml2/libxml/encoding.h:
+/usr/include/libxml2/libxml/xmlIO.h:
+/usr/include/libxml2/libxml/SAX2.h:
+/usr/include/libxml2/libxml/xlink.h:
 src/plugin.hh:
 src/strophe.hh:
 src/xmpp/node.hh:
@@ -461,6 +543,8 @@ src/channel.hh:
 src/connection.hh:
 src/user.hh:
 src/util.hh:
+src/avatar.hh:
+src/xmpp/xep-0084.inl:
 deps/diff/diff.h:
 obj/input.o: src/input.cpp src/plugin.hh src/strophe.hh src/account.hh \
  src/pgp.hh src/omemo.hh /usr/include/signal/signal_protocol.h \

@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <optional>
+#include <vector>
 
 namespace weechat
 {
@@ -19,6 +20,8 @@ namespace weechat
         struct profile
         {
             char *avatar_hash = nullptr;
+            std::vector<uint8_t> avatar_data;  // Cached avatar image data
+            std::string avatar_rendered;        // Cached Unicode rendering
             char *status_text = nullptr;
             char *status = nullptr;
             std::optional<std::string> idle;

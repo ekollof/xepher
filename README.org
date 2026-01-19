@@ -77,6 +77,7 @@
     - Bookmark management - /bookmark command to add, delete, list, and toggle autojoin for MUC rooms
     - Room explorer - /list command to search public MUC rooms via search.jabber.network
     - Entity capability caching (XEP-0115) - caches disco#info results to reduce network queries
+    - User Avatar (XEP-0084) - automatic avatar fetching and caching from PEP events
 
   See the *XMPP Compliance* section below for a comprehensive list of implemented XEPs.
 
@@ -137,9 +138,8 @@
     - ✅ XEP-0402: PEP Native Bookmarks (modern PEP-based bookmark storage)
 
 *** Planned for Future Releases
-    - ⏳ XEP-0084: User Avatar (PEP foundation in place)
-    - ⏳ XEP-0153: vCard-Based Avatars
-    - ⏳ XEP-0398: Avatar Conversion
+    - ⏳ XEP-0153: vCard-Based Avatars (presence integration)
+    - ⏳ XEP-0398: Avatar Conversion (compatibility layer)
 
 * Description
 
@@ -960,8 +960,8 @@
      * [X] Message Retraction (xep-424)
      * [X] Message Moderation (xep-425)
 
-   **Progress**: 12 of 13 CCS2022 Advanced IM features implemented!
-   Remaining: User avatars (XEP-0084, 0153, 0398) and Jingle file transfer (XEP-234, 0261).
+   **Progress**: 13 of 13 CCS2022 Advanced IM features implemented!
+   Remaining: Jingle file transfer (XEP-234, 0261) and optional vCard-based avatar compatibility (XEP-0153, 0398).
 ** TODO [#D] Close all issues (milestone v1.0)
 
 * Contributing
