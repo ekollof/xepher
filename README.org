@@ -77,7 +77,7 @@
     - Bookmark management - /bookmark command to add, delete, list, and toggle autojoin for MUC rooms
     - Room explorer - /list command to search public MUC rooms via search.jabber.network
     - Entity capability caching (XEP-0115) - caches disco#info results to reduce network queries
-    - User Avatar (XEP-0084) - automatic avatar fetching and caching from PEP events
+    - User Avatar (XEP-0084) - automatic avatar fetching, caching, and display as colored Unicode symbols
 
   See the *XMPP Compliance* section below for a comprehensive list of implemented XEPs.
 
@@ -911,7 +911,7 @@
       * [X] Service Disco
      * [X] [#B] /disco [domain]
    * [ ] /whois [user|muc]
-     * [ ] [#B] User Avatars
+     * [X] [#B] User Avatars - Unicode symbols displayed in messages
      * [ ] [#B] MUC Icons
    * [X] Bookmarks / Roster (xep-048)
      * [X] Autojoin bookmarks

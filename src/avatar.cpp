@@ -113,10 +113,13 @@ std::string weechat::avatar::render_unicode_blocks(
     int target_width,
     int target_height)
 {
-    (void)mime_type;  // Unused for now - would need image decoder
+    (void)mime_type;       // Would need image decoder library for full rendering
+    (void)target_width;    // Currently rendering single symbol
+    (void)target_height;   // Currently rendering single symbol
     
-    // Without image decoding library, create a simple deterministic avatar
-    // based on the hash of the image data
+    // WeeChat plugins can only output text - we generate a colored Unicode symbol
+    // that's deterministic based on the avatar's image data hash.
+    // This works in all terminals and provides visual distinction between users.
     
     if (image_data.empty())
         return "";

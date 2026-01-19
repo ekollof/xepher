@@ -121,7 +121,7 @@
         <xmpp:version>1.1.4</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >User Avatar - PEP-based avatars with caching (receiving only)</xmpp:note>
+                >User Avatar - PEP-based avatars with caching and Unicode symbol display (receiving only)</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

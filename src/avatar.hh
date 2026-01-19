@@ -32,7 +32,8 @@ namespace weechat
             std::string rendered;              // Cached Unicode block rendering
         };
         
-        // Render avatar to Unicode block art (simple algorithm without chafa)
+        // Render avatar to colored Unicode symbol (deterministic based on image hash)
+        // Returns a single colored geometric shape character (●, ★, ◆, etc.)
         static std::string render_unicode_blocks(const std::vector<uint8_t>& image_data,
                                                   const std::string& mime_type,
                                                   int target_width = 2,
