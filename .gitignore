@@ -65,3 +65,12 @@ sexp/parser.tab.cc
 sexp/parser.tab.hh
 sexp/position.hh
 sexp/stack.hh
+
+# Dependency build artifacts
+deps/diff/configure.local
+deps/diff/config.h
+deps/diff/config.log
+deps/diff/Makefile.configure
+
+# Package build output
+packaging/build/
