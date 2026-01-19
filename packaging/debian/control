@@ -1,0 +1,49 @@
+Source: weechat-xmpp
+Section: net
+Priority: optional
+Maintainer: Emiel Kollof <emiel@kollof.nl>
+Build-Depends: debhelper-compat (= 13),
+               g++ (>= 12),
+               git,
+               bison,
+               flex,
+               libstrophe-dev,
+               libxml2-dev,
+               liblmdb-dev,
+               libsignal-protocol-c-dev,
+               libgpgme-dev,
+               libfmt-dev,
+               libcurl4-openssl-dev,
+               libssl-dev,
+               weechat-dev
+Standards-Version: 4.6.0
+Homepage: https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed
+Vcs-Git: https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed.git
+Vcs-Browser: https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed
+
+Package: weechat-xmpp
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         weechat (>= 1.0),
+         libstrophe0,
+         libxml2,
+         liblmdb0,
+         libsignal-protocol-c2,
+         libgpgme11,
+         libfmt9,
+         libcurl4,
+         libssl3
+Description: WeeChat plugin for XMPP/Jabber protocol
+ This plugin provides XMPP/Jabber protocol support for WeeChat IRC client.
+ .
+ Features include:
+  * Multi-user chat (MUC) support
+  * Message Archive Management (MAM - XEP-0313)
+  * OMEMO encryption (XEP-0384)
+  * PGP encryption (XEP-0027)
+  * Service Discovery (XEP-0030)
+  * User Avatar (XEP-0084)
+  * HTTP File Upload (XEP-0363)
+  * Message Carbons (XEP-0280)
+  * Chat State Notifications (typing indicators)
+  * Bookmarks management (XEP-0048)

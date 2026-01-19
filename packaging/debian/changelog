@@ -1,0 +1,15 @@
+weechat-xmpp (0.2.0-1) unstable; urgency=medium
+
+  * Initial Debian package release
+  * Feature: PM buffer close fix (prevents unwanted reopening)
+  * Feature: Typing indicators show nicknames in MUC
+  * Feature: Plain text is default for new PMs
+  * Feature: Auto-encryption detection
+  * Feature: /bookmark command for MUC management
+  * Feature: /list command for room discovery
+  * Feature: /ping command with feedback
+  * Feature: Capability caching
+  * Feature: HTTP Upload support (XEP-0363)
+  * Fix: Biboumi/IRC gateway room handling
+
+ -- Emiel Kollof <emiel@kollof.nl>  Sun, 19 Jan 2026 22:51:00 +0000
