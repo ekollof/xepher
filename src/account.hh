@@ -165,6 +165,14 @@ namespace weechat
         };
         std::unordered_map<std::string, whois_query_info> whois_queries;  // iq_id -> info
 
+        // XEP-0054 /setvcard read-merge: pending field change waiting for self-vCard fetch
+        struct setvcard_query_info {
+            struct t_gui_buffer *buffer;  // buffer for feedback
+            std::string field;            // e.g. "fn", "email", …
+            std::string value;            // new value to set
+        };
+        std::unordered_map<std::string, setvcard_query_info> setvcard_queries;  // iq_id -> info
+
         // Capability cache (XEP-0115)
         std::unordered_map<std::string, std::vector<std::string>> caps_cache;  // verification_hash -> features
         

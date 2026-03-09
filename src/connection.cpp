@@ -3352,6 +3352,70 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
     {
         const char *from_jid = from ? from : account.jid().data();
 
+        // Check if this is a /setvcard read-merge response (self-fetch before update).
+        if (id)
+        {
+            auto sv_it = account.setvcard_queries.find(id);
+            if (sv_it != account.setvcard_queries.end())
+            {
+                auto &sv = sv_it->second;
+                struct t_gui_buffer *sv_buf = sv.buffer;
+
+                // Build a vcard_fields struct pre-populated from the server's vCard.
+                auto ctext = [&](xmpp_stanza_t *parent, const char *name) -> std::string {
+                    xmpp_stanza_t *ch = xmpp_stanza_get_child_by_name(parent, name);
+                    if (!ch) return {};
+                    char *txt = xmpp_stanza_get_text(ch);
+                    if (!txt) return {};
+                    std::string s(txt); xmpp_free(account.context, txt); return s;
+                };
+                ::xmpp::xep0054::vcard_fields f;
+                f.fn       = ctext(vcard, "FN");
+                f.nickname = ctext(vcard, "NICKNAME");
+                f.url      = ctext(vcard, "URL");
+                f.desc     = ctext(vcard, "DESC");
+                f.bday     = ctext(vcard, "BDAY");
+                f.note     = ctext(vcard, "NOTE");
+                f.title    = ctext(vcard, "TITLE");
+                {
+                    xmpp_stanza_t *org_el = xmpp_stanza_get_child_by_name(vcard, "ORG");
+                    if (org_el) f.org = ctext(org_el, "ORGNAME");
+                }
+                {
+                    xmpp_stanza_t *email_el = xmpp_stanza_get_child_by_name(vcard, "EMAIL");
+                    if (email_el) f.email = ctext(email_el, "USERID");
+                }
+                {
+                    xmpp_stanza_t *tel_el = xmpp_stanza_get_child_by_name(vcard, "TEL");
+                    if (tel_el) f.tel = ctext(tel_el, "NUMBER");
+                }
+
+                // Apply the requested override.
+                const std::string &fld = sv.field;
+                const std::string &val = sv.value;
+                if      (fld == "fn")       f.fn       = val;
+                else if (fld == "nickname") f.nickname = val;
+                else if (fld == "email")    f.email    = val;
+                else if (fld == "url")      f.url      = val;
+                else if (fld == "desc")     f.desc     = val;
+                else if (fld == "org")      f.org      = val;
+                else if (fld == "title")    f.title    = val;
+                else if (fld == "tel")      f.tel      = val;
+                else if (fld == "bday")     f.bday     = val;
+                else if (fld == "note")     f.note     = val;
+
+                // Publish the merged vCard.
+                xmpp_stanza_t *set_iq = ::xmpp::xep0054::vcard_set(account.context, f);
+                account.connection.send(set_iq);
+                xmpp_stanza_release(set_iq);
+                weechat_printf(sv_buf, "%svCard field %s updated",
+                               weechat_prefix("network"), fld.c_str());
+
+                account.setvcard_queries.erase(sv_it);
+                return true;
+            }
+        }
+
         // Determine which buffer to print into: the one that issued /whois, or
         // the account buffer for auto-fetched vCards (XEP-0153 trigger).
         struct t_gui_buffer *target_buf = account.buffer;

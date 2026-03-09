@@ -2707,18 +2707,11 @@ int command__setvcard(const void *pointer, void *data,
     std::string field(argv[1]);
     std::string value(argv_eol[2]);
 
-    xmpp::xep0054::vcard_fields f;
-    if      (field == "fn")       f.fn       = value;
-    else if (field == "nickname") f.nickname = value;
-    else if (field == "email")    f.email    = value;
-    else if (field == "url")      f.url      = value;
-    else if (field == "desc")     f.desc     = value;
-    else if (field == "org")      f.org      = value;
-    else if (field == "title")    f.title    = value;
-    else if (field == "tel")      f.tel      = value;
-    else if (field == "bday")     f.bday     = value;
-    else if (field == "note")     f.note     = value;
-    else
+    // Validate the field name first
+    static const std::vector<std::string> valid_fields = {
+        "fn", "nickname", "email", "url", "desc", "org", "title", "tel", "bday", "note"
+    };
+    if (std::find(valid_fields.begin(), valid_fields.end(), field) == valid_fields.end())
     {
         weechat_printf(buffer,
                        "%s%s: unknown vCard field '%s'\n"
@@ -2727,8 +2720,13 @@ int command__setvcard(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    xmpp_stanza_t *iq = xmpp::xep0054::vcard_set(ptr_account->context, f);
-    weechat_printf(buffer, "%sPublishing vCard field %s...",
+    // Fetch our own vCard first so we can merge the single field change without
+    // clobbering the rest of the vCard (XEP-0054 IQ set replaces the entire vCard).
+    xmpp_stanza_t *iq = xmpp::xep0054::vcard_request(ptr_account->context, nullptr);
+    const char *req_id = xmpp_stanza_get_id(iq);
+    if (req_id)
+        ptr_account->setvcard_queries[req_id] = { buffer, field, value };
+    weechat_printf(buffer, "%sFetching current vCard before updating %s...",
                    weechat_prefix("network"), field.c_str());
     ptr_account->connection.send(iq);
     xmpp_stanza_release(iq);
