@@ -172,16 +172,16 @@ std::string weechat::avatar::render_unicode_blocks(
     return std::string(result);
 }
 
-void weechat::avatar::request_metadata(account& acc, const char *jid)
+void weechat::avatar::request_metadata(account& /*acc*/, const char * /*jid*/)
 {
     // Subscribe to avatar metadata PEP node
-    // This is automatically done via disco caps advertising 
+    // This is automatically done via disco caps advertising
     // "urn:xmpp:avatar:metadata+notify"
     // Nothing needed here - just document that subscription is implicit
 }
 
-void weechat::avatar::request_data(account& acc, const char *jid, 
-                                    const std::string& hash)
+void weechat::avatar::request_data(account& acc, const char *jid,
+                                    const std::string& /*hash*/)
 {
     // Generate unique IQ ID
     std::unique_ptr<char> id(xmpp_uuid_gen(acc.context));

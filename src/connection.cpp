@@ -1829,7 +1829,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                 {
                     // Free original intext (if any) and replace with rich version
                     if (intext) xmpp_free(account.context, intext);
+                    // xmpp_strdup is deprecated but is the only allocator-paired
+                    // string dup available; xmpp_alloc/xmpp_strndup are equally deprecated
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
                     intext = xmpp_strdup(account.context, xhtml_fallback.c_str());
+#pragma GCC diagnostic pop
                 }
             }
         }
