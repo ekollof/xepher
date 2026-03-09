@@ -135,12 +135,17 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
         if (!short_name ||
             (localvar_remote_jid && (strcmp(localvar_remote_jid, short_name) == 0)))
         {
-            weechat_buffer_set(ptr_buffer, "short_name",
-                               xmpp_jid_node(account.context, name));
+            char *node = xmpp_jid_node(account.context, name);
+            weechat_buffer_set(ptr_buffer, "short_name", node);
+            xmpp_free(account.context, node);
         }
     }
     if(!(account.nickname().size()))
-        account.nickname(xmpp_jid_node(account.context, account.jid().data()));
+    {
+        char *node = xmpp_jid_node(account.context, account.jid().data());
+        account.nickname(node);
+        xmpp_free(account.context, node);
+    }
 
     // Set notify level for buffer: "0" = never add to hotlist
     //                              "1" = add for highlights only

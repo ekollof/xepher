@@ -268,12 +268,14 @@ int buffer__close_cb(const void *pointer, void *data,
                     const char* nick = weechat_buffer_get_string(buffer, "localvar_nick");
                     if (nick && nick[0])
                     {
-                        char *pres_jid = xmpp_jid_new(
-                            ptr_account->context,
-                            xmpp_jid_node(ptr_account->context, ptr_channel->id.data()),
-                            xmpp_jid_domain(ptr_account->context, ptr_channel->id.data()),
-                            nick);
-                        xmpp_stanza_set_to(pres, pres_jid);
+                        xmpp_string_guard node_g(ptr_account->context,
+                            xmpp_jid_node(ptr_account->context, ptr_channel->id.data()));
+                        xmpp_string_guard domain_g(ptr_account->context,
+                            xmpp_jid_domain(ptr_account->context, ptr_channel->id.data()));
+                        xmpp_string_guard pres_jid_g(ptr_account->context,
+                            xmpp_jid_new(ptr_account->context,
+                                node_g.c_str(), domain_g.c_str(), nick));
+                        xmpp_stanza_set_to(pres, pres_jid_g.c_str());
                     }
                     else
                     {
