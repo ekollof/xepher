@@ -91,7 +91,7 @@
     - User Avatar (XEP-0084) - automatic avatar fetching, caching, and display as colored Unicode symbols
     - MUC status code handling (XEP-0045) - displays kick/ban/nick-change/affiliation events
     - Ad-hoc Commands (XEP-0050) - execute server-side commands from WeeChat
-    - XHTML-IM rendering (XEP-0071) - strips HTML markup and renders plain text from rich messages
+    - XHTML-IM rendering (XEP-0071) - full WeeChat color/attribute rendering of rich messages: bold, italic, underline, inline code, blockquotes, links, and CSS color spans
     - Message Displayed Synchronization (XEP-0490 / XEP-0283) - syncs read state across devices
     - References (XEP-0372) - renders @mentions and URI references inline
     - Message status glyphs - sent messages show ⌛ (pending), ✓ (delivered), ✓✓ (read) inline
@@ -133,7 +133,7 @@
     - ✅ XEP-0049: Private XML Storage
     - ✅ XEP-0050: Ad-Hoc Commands (execute server-side commands)
     - ✅ XEP-0066: Out of Band Data (URL sharing in messages)
-    - ✅ XEP-0071: XHTML-IM (strips HTML, renders plain text from rich messages)
+    - ✅ XEP-0071: XHTML-IM (full WeeChat color/attribute rendering: bold, italic, underline, code, blockquotes, links, CSS color spans)
     - ✅ XEP-0085: Chat State Notifications (enhanced with all 5 states)
     - ✅ XEP-0092: Software Version (responds to version queries)
     - ✅ XEP-0107: User Mood (/mood command for PEP mood publishing)
@@ -244,12 +244,74 @@
 
    No configuration required; glyphs appear automatically on outgoing messages.
 
+** XHTML-IM Rendering (XEP-0071)
 
-   - =/roster= - Display your contact list with names, subscriptions, and groups
-   - =/roster add <jid> [name]= - Add a contact to your roster and send subscription request
-   - =/roster del <jid>= - Remove a contact from your roster
+   When a message contains an =<html>= body (XEP-0071: XHTML-IM), the plugin
+   renders it with full WeeChat color and attribute support instead of showing
+   raw markup. The XHTML body replaces the plain-text body entirely (unless the
+   message is encrypted, in which case the plain body is used as a fallback).
 
-   The roster is automatically fetched when you connect to the server.
+   Supported elements and their rendering:
+
+   | Element                          | Rendered as                              |
+   |----------------------------------|------------------------------------------|
+   | =<b>=, =<strong>=                | Bold                                     |
+   | =<i>=, =<em>=                    | Italic                                   |
+   | =<u>=                            | Underline                                |
+   | =<del>=, =<s>=, =<strike>=       | Darkgray (strikethrough approximation)   |
+   | =<code>=, =<tt>=                 | Gray monospace                           |
+   | =<pre>=                          | Gray-wrapped preformatted block          |
+   | =<a href="...">text</a>=         | =text (blue URL)= or just blue URL       |
+   | =<img alt="..."/>=               | =[alt]= placeholder                      |
+   | =<br>=                           | Newline                                  |
+   | =<p>=, =<div>=, =<li>=           | Block with surrounding newlines          |
+   | =<blockquote>=                   | Green => = prefix on every line          |
+   | =<span style="color:...">=       | Terminal color (16 named + #rgb hex)     |
+   | =<span style="font-weight:bold">= | Bold                                    |
+   | =<span style="font-style:italic">= | Italic                                 |
+   | Unknown/container tags           | Transparent pass-through                 |
+
+   Background colors in CSS =style= attributes are intentionally ignored to
+   avoid unreadable output on dark or light terminal themes.
+
+** Ad-Hoc Commands and Data Forms (XEP-0050 / XEP-0004)
+
+   The =/adhoc= command lets you execute server-side commands directly from
+   WeeChat. When a command returns a data form (XEP-0004), the form is rendered
+   inline in the current buffer.
+
+*** Reading a rendered form
+
+   A rendered form looks like:
+
+   #+begin_src
+   ── Ad-Hoc Form: Announce ──
+   Instructions: Fill in the announcement details.
+
+    1. Subject* [subject/text-single] = (empty)
+    2. Body*    [body/text-multi]     = (empty)
+    3. Urgent   [urgent/boolean]      = false
+   ──────────────────────────────────────────────
+   Submit: /adhoc example.com announce <sessionid> subject=... body=... urgent=...
+   #+end_src
+
+   - Fields marked with =*= are required.
+   - =list-single=/=list-multi= fields show all options with the current
+     selection highlighted in green.
+   - =text-private= fields display as =********=.
+   - =hidden= fields are silently omitted.
+
+*** Submitting a form
+
+   Copy the submit hint at the bottom of the form and fill in your values:
+
+   #+begin_src
+   /adhoc example.com announce <sessionid> subject=Hello body=World urgent=true
+   #+end_src
+
+   For multi-line values, use a space-separated list of =field=value= pairs.
+   Multi-step sessions are supported; each response includes the session ID for
+   the next step.
 
 * Commands
 
@@ -647,6 +709,35 @@
     /disco                           # Discover server features
     /disco conference.example.com    # Discover MUC service
     #+end_src
+
+*** /adhoc
+    Execute server-side ad-hoc commands (XEP-0050)
+
+    *Usage:*
+    #+begin_src
+    /adhoc <jid>
+    /adhoc <jid> <node>
+    /adhoc <jid> <node> <sessionid> [field=value ...]
+    #+end_src
+
+    *Examples:*
+    #+begin_src
+    /adhoc example.com                           # List available commands on the server
+    /adhoc example.com announce                  # Execute the 'announce' command
+    /adhoc example.com config <sessionid> subject=Hello body=World  # Submit a form
+    #+end_src
+
+    *Workflow:*
+
+    1. Run =/adhoc <jid>= to see a list of available commands (nodes).
+    2. Run =/adhoc <jid> <node>= to execute a command. If it returns a data form,
+       the form is rendered inline in the current buffer with field names, types,
+       current values, and a submit hint.
+    3. Copy the submit hint and fill in field values, then send it as the next
+       command: =/adhoc <jid> <node> <sessionid> field1=value field2=value=
+
+    *Note:* Multi-step sessions are supported. Each form response includes the
+    session ID needed for the next submission step.
 
 *** /roster
     Manage XMPP roster (contact list)
