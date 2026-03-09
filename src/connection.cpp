@@ -38,6 +38,7 @@
 #include "avatar.hh"
 #include "xmpp/xep-0054.inl"
 #include "xmpp/xep-0084.inl"
+#include "xmpp/xep-0172.inl"
 #include "xmpp/xep-0292.inl"
 
 extern "C" {
@@ -5339,6 +5340,16 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                                                     nullptr, account.jid().data(), nullptr, nullptr);
             this->send(pres);
             xmpp_stanza_release(pres);
+        }
+
+        // XEP-0172: publish own nickname via PEP so contacts see a display name
+        if (!account.nickname().empty())
+        {
+            xmpp_stanza_t *nick_iq = ::xmpp::xep0172::publish_nick(
+                account.context, std::string(account.nickname()).c_str());
+            xmpp_stanza_set_from(nick_iq, account.jid().data());
+            this->send(nick_iq);
+            xmpp_stanza_release(nick_iq);
         }
 
         this->send(stanza::iq()
