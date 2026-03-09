@@ -125,13 +125,13 @@ xmpp_stanza_t *weechat::account::get_devicelist()
     std::vector<xmpp_stanza_t*> children_vec(devices.size() + 4, nullptr);
     xmpp_stanza_t **children = children_vec.data();
     children[i++] = stanza__iq_pubsub_publish_item_list_device(
-        context, NULL, with_noop(device.name.data()), NULL);
+        context, NULL, with_noop(device.name.data()), with_noop(nullptr));
 
     for (auto& device : devices)
     {
         if (device.first != omemo.device_id)
             children[i++] = stanza__iq_pubsub_publish_item_list_device(
-                context, NULL, with_noop(device.second.name.data()), NULL);
+                context, NULL, with_noop(device.second.name.data()), with_noop(nullptr));
     }
 
     children[i] = NULL;

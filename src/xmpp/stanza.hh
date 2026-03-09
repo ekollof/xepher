@@ -6,66 +6,41 @@
 
 #ifdef __cplusplus
 #include <cstdlib>
+#include <string>
 #include <strophe.h>
 #endif
 
+// Stack-allocated RAII string wrapper replacing the old malloc-based t_string.
+// with_noop / with_free / with_xmpp_free construct the value; callers pass
+// by value (cheap move) and functions consume via .value.c_str().
 struct t_string
 {
-    char *value;
-
-    void (*finalize)(struct t_string *);
-    void *pointer;
+    std::string value;
 };
 
-static void t_string_noop(struct t_string *string)
-{ (void)string; }
+static inline t_string with_noop(const char *const v)
+{ return {v ? v : ""}; }
 
-static void t_string_free(struct t_string *string)
-{ free(string->value); }
-
-static void t_string_xmpp_free(struct t_string *string)
-{ xmpp_free((const xmpp_ctx_t*)string->pointer, string->value); }
-
-static inline struct t_string *with_noop(const char *const value)
+static inline t_string with_free(char *v)
 {
-    struct t_string *string = (struct t_string *)malloc(sizeof(struct t_string));
-    string->value = (char*)value;
-    string->finalize = &t_string_noop;
-    string->pointer = NULL;
-    return string;
+    t_string s{v ? v : ""};
+    free(v);
+    return s;
 }
 
-static inline struct t_string *with_free(char *value)
+static inline t_string with_xmpp_free(char *v, xmpp_ctx_t *ctx)
 {
-    struct t_string *string = (struct t_string *)malloc(sizeof(struct t_string));
-    string->value = value;
-    string->finalize = &t_string_free;
-    string->pointer = NULL;
-    return string;
-}
-
-static inline struct t_string *with_xmpp_free(char *value, xmpp_ctx_t *pointer)
-{
-    struct t_string *string = (struct t_string *)malloc(sizeof(struct t_string));
-    string->value = value;
-    string->finalize = &t_string_xmpp_free;
-    string->pointer = pointer;
-    return string;
+    t_string s{v ? v : ""};
+    xmpp_free(ctx, v);
+    return s;
 }
 
 static inline void stanza__set_text(xmpp_ctx_t *context, xmpp_stanza_t *parent,
-                                    struct t_string *value)
+                                    t_string value)
 {
     xmpp_stanza_t *text = xmpp_stanza_new(context);
-
-    if (value)
-    {
-        xmpp_stanza_set_text(text, value->value);
-        xmpp_stanza_add_child(parent, text);
-        value->finalize(value);
-        free(value);
-    }
-
+    xmpp_stanza_set_text(text, value.value.c_str());
+    xmpp_stanza_add_child(parent, text);
     xmpp_stanza_release(text);
 }
 
@@ -78,30 +53,30 @@ xmpp_stanza_t *stanza__iq(xmpp_ctx_t *context, xmpp_stanza_t *base,
                           const char *from, const char *to, const char *type);
 
 xmpp_stanza_t *stanza__iq_pubsub(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                 xmpp_stanza_t **children, struct t_string *ns);
+                                 xmpp_stanza_t **children, t_string ns);
 
 xmpp_stanza_t *stanza__iq_pubsub_items(xmpp_ctx_t *context, xmpp_stanza_t *base, const char *node);
 
 xmpp_stanza_t *stanza__iq_pubsub_subscribe(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                           struct t_string *node, struct t_string *jid);
+                                           t_string node, t_string jid);
 
 xmpp_stanza_t *stanza__iq_pubsub_publish(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                         xmpp_stanza_t **children, struct t_string *node);
+                                         xmpp_stanza_t **children, t_string node);
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                              xmpp_stanza_t **children, struct t_string *id);
+                                              xmpp_stanza_t **children, t_string id);
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_list(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                                   xmpp_stanza_t **children, struct t_string *ns);
+                                                   xmpp_stanza_t **children, t_string ns);
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_list_device(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                                          struct t_string *id, struct t_string *label);
+                                                          t_string id, t_string label);
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                                     xmpp_stanza_t **children, struct t_string *ns);
+                                                     xmpp_stanza_t **children, t_string ns);
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_signedPreKeyPublic(
-    xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children, struct t_string *signedPreKeyId);
+    xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children, t_string signedPreKeyId);
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_signedPreKeySignature(
     xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children);
@@ -113,13 +88,13 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_prekeys(
     xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children);
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_prekeys_preKeyPublic(
-    xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children, struct t_string *preKeyId);
+    xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children, t_string preKeyId);
 
 xmpp_stanza_t *stanza__iq_enable(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                 struct t_string *ns);
+                                 t_string ns);
 
 xmpp_stanza_t *stanza__iq_ping(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                               struct t_string *ns);
+                               t_string ns);
 
 xmpp_stanza_t *stanza__iq_query(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                struct t_string *ns, struct t_string *node);
+                                t_string ns, t_string node);

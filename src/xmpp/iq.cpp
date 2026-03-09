@@ -41,7 +41,7 @@ xmpp_stanza_t *stanza__iq(xmpp_ctx_t *context, xmpp_stanza_t *base,
 }
 
 xmpp_stanza_t *stanza__iq_pubsub(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                 xmpp_stanza_t **children, struct t_string *ns)
+                                 xmpp_stanza_t **children, t_string ns)
 {
     xmpp_stanza_t *parent = base;
     xmpp_stanza_t **child = children;
@@ -52,12 +52,8 @@ xmpp_stanza_t *stanza__iq_pubsub(xmpp_ctx_t *context, xmpp_stanza_t *base,
         xmpp_stanza_set_name(parent, "pubsub");
     }
 
-    if (ns)
-    {
-        xmpp_stanza_set_ns(parent, ns->value);
-        ns->finalize(ns);
-        free(ns);
-    }
+    if (!ns.value.empty())
+        xmpp_stanza_set_ns(parent, ns.value.c_str());
 
     while (*child)
     {
@@ -87,7 +83,7 @@ xmpp_stanza_t *stanza__iq_pubsub_items(xmpp_ctx_t *context, xmpp_stanza_t *base,
 }
 
 xmpp_stanza_t *stanza__iq_pubsub_subscribe(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                           struct t_string *node, struct t_string *jid)
+                                           t_string node, t_string jid)
 {
     xmpp_stanza_t *parent = base;
 
@@ -97,25 +93,17 @@ xmpp_stanza_t *stanza__iq_pubsub_subscribe(xmpp_ctx_t *context, xmpp_stanza_t *b
         xmpp_stanza_set_name(parent, "subscribe");
     }
 
-    if (node)
-    {
-        xmpp_stanza_set_attribute(parent, "node", node->value);
-        node->finalize(node);
-        free(node);
-    }
+    if (!node.value.empty())
+        xmpp_stanza_set_attribute(parent, "node", node.value.c_str());
 
-    if (jid)
-    {
-        xmpp_stanza_set_attribute(parent, "jid", jid->value);
-        jid->finalize(jid);
-        free(jid);
-    }
+    if (!jid.value.empty())
+        xmpp_stanza_set_attribute(parent, "jid", jid.value.c_str());
 
     return parent;
 }
 
 xmpp_stanza_t *stanza__iq_pubsub_publish(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                         xmpp_stanza_t **children, struct t_string *node)
+                                         xmpp_stanza_t **children, t_string node)
 {
     xmpp_stanza_t *parent = base;
     xmpp_stanza_t **child = children;
@@ -126,12 +114,8 @@ xmpp_stanza_t *stanza__iq_pubsub_publish(xmpp_ctx_t *context, xmpp_stanza_t *bas
         xmpp_stanza_set_name(parent, "publish");
     }
 
-    if (node)
-    {
-        xmpp_stanza_set_attribute(parent, "node", node->value);
-        node->finalize(node);
-        free(node);
-    }
+    if (!node.value.empty())
+        xmpp_stanza_set_attribute(parent, "node", node.value.c_str());
 
     while (*child)
     {
@@ -145,7 +129,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish(xmpp_ctx_t *context, xmpp_stanza_t *bas
 }
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                              xmpp_stanza_t **children, struct t_string *id)
+                                              xmpp_stanza_t **children, t_string id)
 {
     xmpp_stanza_t *parent = base;
     xmpp_stanza_t **child = children;
@@ -156,12 +140,8 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item(xmpp_ctx_t *context, xmpp_stanza_t
         xmpp_stanza_set_name(parent, "item");
     }
 
-    if (id)
-    {
-        xmpp_stanza_set_id(parent, id->value);
-        id->finalize(id);
-        free(id);
-    }
+    if (!id.value.empty())
+        xmpp_stanza_set_id(parent, id.value.c_str());
 
     while (*child)
     {
@@ -175,7 +155,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item(xmpp_ctx_t *context, xmpp_stanza_t
 }
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_list(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                                   xmpp_stanza_t **children, struct t_string *ns)
+                                                   xmpp_stanza_t **children, t_string ns)
 {
     xmpp_stanza_t *parent = base;
     xmpp_stanza_t **child = children;
@@ -186,12 +166,8 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_list(xmpp_ctx_t *context, xmpp_sta
         xmpp_stanza_set_name(parent, "list");
     }
 
-    if (ns)
-    {
-        xmpp_stanza_set_ns(parent, ns->value);
-        ns->finalize(ns);
-        free(ns);
-    }
+    if (!ns.value.empty())
+        xmpp_stanza_set_ns(parent, ns.value.c_str());
 
     while (*child)
     {
@@ -203,7 +179,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_list(xmpp_ctx_t *context, xmpp_sta
 }
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_list_device(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                                          struct t_string *id, struct t_string *label)
+                                                          t_string id, t_string label)
 {
     xmpp_stanza_t *parent = base;
 
@@ -213,25 +189,17 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_list_device(xmpp_ctx_t *context, x
         xmpp_stanza_set_name(parent, "device");
     }
 
-    if (id)
-    {
-        xmpp_stanza_set_id(parent, id->value);
-        id->finalize(id);
-        free(id);
-    }
+    if (!id.value.empty())
+        xmpp_stanza_set_id(parent, id.value.c_str());
 
-    if (label)
-    {
-        xmpp_stanza_set_attribute(parent, "label", label->value);
-        label->finalize(label);
-        free(label);
-    }
+    if (!label.value.empty())
+        xmpp_stanza_set_attribute(parent, "label", label.value.c_str());
 
     return parent;
 }
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                                     xmpp_stanza_t **children, struct t_string *ns)
+                                                     xmpp_stanza_t **children, t_string ns)
 {
     xmpp_stanza_t *parent = base;
     xmpp_stanza_t **child = children;
@@ -242,12 +210,8 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle(xmpp_ctx_t *context, xmpp_s
         xmpp_stanza_set_name(parent, "bundle");
     }
 
-    if (ns)
-    {
-        xmpp_stanza_set_ns(parent, ns->value);
-        ns->finalize(ns);
-        free(ns);
-    }
+    if (!ns.value.empty())
+        xmpp_stanza_set_ns(parent, ns.value.c_str());
 
     while (child && *child)
     {
@@ -259,7 +223,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle(xmpp_ctx_t *context, xmpp_s
 }
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_signedPreKeyPublic(
-    xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children, struct t_string *signedPreKeyId)
+    xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children, t_string signedPreKeyId)
 {
     xmpp_stanza_t *parent = base;
     xmpp_stanza_t **child = children;
@@ -270,12 +234,8 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_signedPreKeyPublic(
         xmpp_stanza_set_name(parent, "signedPreKeyPublic");
     }
 
-    if (signedPreKeyId)
-    {
-        xmpp_stanza_set_attribute(parent, "signedPreKeyId", signedPreKeyId->value);
-        signedPreKeyId->finalize(signedPreKeyId);
-        free(signedPreKeyId);
-    }
+    if (!signedPreKeyId.value.empty())
+        xmpp_stanza_set_attribute(parent, "signedPreKeyId", signedPreKeyId.value.c_str());
 
     while (child && *child)
     {
@@ -350,7 +310,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_prekeys(
 }
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_prekeys_preKeyPublic(
-    xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children, struct t_string *preKeyId)
+    xmpp_ctx_t *context, xmpp_stanza_t *base, xmpp_stanza_t **children, t_string preKeyId)
 {
     xmpp_stanza_t *parent = base;
     xmpp_stanza_t **child = children;
@@ -361,12 +321,8 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_prekeys_preKeyPublic(
         xmpp_stanza_set_name(parent, "preKeyPublic");
     }
 
-    if (preKeyId)
-    {
-        xmpp_stanza_set_attribute(parent, "preKeyId", preKeyId->value);
-        preKeyId->finalize(preKeyId);
-        free(preKeyId);
-    }
+    if (!preKeyId.value.empty())
+        xmpp_stanza_set_attribute(parent, "preKeyId", preKeyId.value.c_str());
 
     while (child && *child)
     {
@@ -378,7 +334,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_prekeys_preKeyPublic(
 }
 
 xmpp_stanza_t *stanza__iq_enable(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                 struct t_string *ns)
+                                 t_string ns)
 {
     xmpp_stanza_t *parent = base;
 
@@ -388,18 +344,14 @@ xmpp_stanza_t *stanza__iq_enable(xmpp_ctx_t *context, xmpp_stanza_t *base,
         xmpp_stanza_set_name(parent, "enable");
     }
 
-    if (ns)
-    {
-        xmpp_stanza_set_ns(parent, ns->value);
-        ns->finalize(ns);
-        free(ns);
-    }
+    if (!ns.value.empty())
+        xmpp_stanza_set_ns(parent, ns.value.c_str());
 
     return parent;
 }
 
 xmpp_stanza_t *stanza__iq_ping(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                               struct t_string *ns)
+                               t_string ns)
 {
     xmpp_stanza_t *parent = base;
 
@@ -409,18 +361,14 @@ xmpp_stanza_t *stanza__iq_ping(xmpp_ctx_t *context, xmpp_stanza_t *base,
         xmpp_stanza_set_name(parent, "ping");
     }
 
-    if (ns)
-    {
-        xmpp_stanza_set_ns(parent, ns->value);
-        ns->finalize(ns);
-        free(ns);
-    }
+    if (!ns.value.empty())
+        xmpp_stanza_set_ns(parent, ns.value.c_str());
 
     return parent;
 }
 
 xmpp_stanza_t *stanza__iq_query(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                struct t_string *ns, struct t_string *node)
+                                t_string ns, t_string node)
 {
     xmpp_stanza_t *parent = base;
 
@@ -430,19 +378,11 @@ xmpp_stanza_t *stanza__iq_query(xmpp_ctx_t *context, xmpp_stanza_t *base,
         xmpp_stanza_set_name(parent, "query");
     }
 
-    if (ns)
-    {
-        xmpp_stanza_set_ns(parent, ns->value);
-        ns->finalize(ns);
-        free(ns);
-    }
+    if (!ns.value.empty())
+        xmpp_stanza_set_ns(parent, ns.value.c_str());
 
-    if (node)
-    {
-        xmpp_stanza_set_attribute(parent, "node", node->value);
-        node->finalize(node);
-        free(node);
-    }
+    if (!node.value.empty())
+        xmpp_stanza_set_attribute(parent, "node", node.value.c_str());
 
     return parent;
 }

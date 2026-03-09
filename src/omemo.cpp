@@ -1843,7 +1843,7 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
     children[1] = NULL;
 
     children[0] = stanza__iq_pubsub_publish_item(
-            context, NULL, children, NULL);
+            context, NULL, children, with_noop(nullptr));
 
     std::string bundle_node_s = fmt::format("eu.siacs.conversations.axolotl.bundles:{}", omemo->device_id);
     children[0] = stanza__iq_pubsub_publish(
