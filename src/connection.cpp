@@ -96,7 +96,7 @@ bool weechat::connection::version_handler(xmpp_stanza_t *stanza)
                     .add_child(libstrophe::stanza(account.context)
                                .set_text(weechat_version.get())));
 
-    reply.add_child(query);
+    reply.add_child(std::move(query));
 
     account.connection.send(reply);
 
@@ -141,7 +141,7 @@ bool weechat::connection::time_handler(xmpp_stanza_t *stanza)
                     .add_child(libstrophe::stanza(account.context)
                                .set_text(tzo_str)));
 
-    reply.add_child(query);
+    reply.add_child(std::move(query));
 
     account.connection.send(reply);
 
@@ -3899,8 +3899,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                 {
                     auto &c = *ctx_copy;
 
-                    // Open file
-                    FILE *upload_file = fopen(filepath_copy.c_str(), "rb");
+                    // Open file with RAII guard
+                    auto file_deleter = [](FILE *f) { if (f) fclose(f); };
+                    std::unique_ptr<FILE, decltype(file_deleter)>
+                        upload_file_guard(fopen(filepath_copy.c_str(), "rb"), file_deleter);
+                    FILE *upload_file = upload_file_guard.get();
                     if (!upload_file)
                     {
                         c.success   = false;
@@ -3909,35 +3912,58 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                         return;
                     }
 
-                    // Get file size
-                    fseek(upload_file, 0, SEEK_END);
+                    // Get file size — check fseek/ftell for non-seekable streams
+                    if (fseek(upload_file, 0, SEEK_END) != 0)
+                    {
+                        c.success    = false;
+                        c.curl_error = "failed to seek to end of file";
+                        ::write(c.pipe_write_fd, "x", 1);
+                        return;
+                    }
                     long file_size = ftell(upload_file);
-                    fseek(upload_file, 0, SEEK_SET);
+                    if (file_size < 0)
+                    {
+                        c.success    = false;
+                        c.curl_error = "failed to determine file size";
+                        ::write(c.pipe_write_fd, "x", 1);
+                        return;
+                    }
+                    if (fseek(upload_file, 0, SEEK_SET) != 0)
+                    {
+                        c.success    = false;
+                        c.curl_error = "failed to rewind file";
+                        ::write(c.pipe_write_fd, "x", 1);
+                        return;
+                    }
                     c.file_size = static_cast<size_t>(file_size);
 
-                    // Calculate SHA-256 hash for SIMS using EVP API
+                    // Calculate SHA-256 hash for SIMS using EVP API (RAII ctx)
                     unsigned char hash[EVP_MAX_MD_SIZE];
                     unsigned int  hash_len = 0;
-                    EVP_MD_CTX *sha256_ctx = EVP_MD_CTX_new();
-                    EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), nullptr);
-                    unsigned char buf[8192];
-                    size_t bytes_read;
-                    while ((bytes_read = fread(buf, 1, sizeof(buf), upload_file)) > 0)
-                        EVP_DigestUpdate(sha256_ctx, buf, bytes_read);
-                    EVP_DigestFinal_ex(sha256_ctx, hash, &hash_len);
-                    EVP_MD_CTX_free(sha256_ctx);
+                    {
+                        std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>
+                            sha256_ctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+                        EVP_DigestInit_ex(sha256_ctx.get(), EVP_sha256(), nullptr);
+                        unsigned char buf[8192];
+                        size_t bytes_read;
+                        while ((bytes_read = fread(buf, 1, sizeof(buf), upload_file)) > 0)
+                            EVP_DigestUpdate(sha256_ctx.get(), buf, bytes_read);
+                        EVP_DigestFinal_ex(sha256_ctx.get(), hash, &hash_len);
+                    } // sha256_ctx freed here
 
-                    // Base64-encode the hash
-                    BIO *bio = BIO_new(BIO_s_mem());
-                    BIO *b64 = BIO_new(BIO_f_base64());
-                    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-                    bio = BIO_push(b64, bio);
-                    BIO_write(bio, hash, static_cast<int>(hash_len));
-                    BIO_flush(bio);
-                    BUF_MEM *bptr;
-                    BIO_get_mem_ptr(bio, &bptr);
-                    c.sha256_hash = std::string(bptr->data, bptr->length);
-                    BIO_free_all(bio);
+                    // Base64-encode the hash (RAII BIO chain)
+                    {
+                        std::unique_ptr<BIO, decltype(&BIO_free_all)>
+                            bio_chain(BIO_push(BIO_new(BIO_f_base64()),
+                                               BIO_new(BIO_s_mem())),
+                                      BIO_free_all);
+                        BIO_set_flags(bio_chain.get(), BIO_FLAGS_BASE64_NO_NL);
+                        BIO_write(bio_chain.get(), hash, static_cast<int>(hash_len));
+                        BIO_flush(bio_chain.get());
+                        BUF_MEM *bptr;
+                        BIO_get_mem_ptr(bio_chain.get(), &bptr);
+                        c.sha256_hash = std::string(bptr->data, bptr->length);
+                    } // bio_chain freed here
 
                     // Reset file position for upload
                     fseek(upload_file, 0, SEEK_SET);

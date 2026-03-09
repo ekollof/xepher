@@ -89,11 +89,10 @@ bool weechat::account::search_device(weechat::account::device* out, std::uint32_
 
     if (auto device = devices.find(id); device != devices.end())
     {
-        out = &device->second;
+        *out = device->second;
         return true;
     }
 
-    (void) out;
     return false;
 }
 

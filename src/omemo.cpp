@@ -320,15 +320,14 @@ void cp_hmac_sha256_cleanup(void *hmac_context, void *) {
 }
 
 int cp_sha512_digest_init(void **digest_context, void *) {
-    gcry_md_hd_t* ctx = (gcry_md_hd_t*)malloc(sizeof(gcry_mac_hd_t));
+    auto ctx = std::make_unique<gcry_md_hd_t>();
     if (!ctx) return SG_ERR_NOMEM;
 
-    if (gcry_md_open(ctx, GCRY_MD_SHA512, 0)) {
-        free(ctx);
+    if (gcry_md_open(ctx.get(), GCRY_MD_SHA512, 0)) {
         return SG_ERR_UNKNOWN;
     }
 
-    *digest_context = ctx;
+    *digest_context = ctx.release();
 
     return SG_SUCCESS;
 }
@@ -360,10 +359,10 @@ int cp_sha512_digest_final(void *digest_context, struct signal_buffer **output, 
 }
 
 void cp_sha512_digest_cleanup(void *digest_context, void *) {
-    gcry_md_hd_t* ctx = (gcry_md_hd_t*)digest_context;
+    gcry_md_hd_t* ctx = static_cast<gcry_md_hd_t*>(digest_context);
     if (ctx) {
         gcry_md_close(*ctx);
-        free(ctx);
+        delete ctx;
     }
 }
 
@@ -2153,6 +2152,12 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
 {
     auto omemo = &account->omemo;
     heap_buf iv_data_buf{nullptr, free};
+    // key_data_buf owns the calloc'd base64-decoded key; reset to null once
+    // ownership transfers to libsignal (aes_key_buf below).
+    heap_buf key_data_buf{nullptr, free};
+    // aes_key_buf owns the signal_buffer returned by session_cipher_decrypt_*.
+    std::unique_ptr<signal_buffer, decltype(&signal_buffer_free)>
+        aes_key_buf{nullptr, signal_buffer_free};
     uint8_t *key_data = NULL, *tag_data = NULL, *iv_data = NULL, *payload_data = NULL;
     size_t key_len = 0, tag_len = 0, iv_len = 0, payload_len = 0;
 
@@ -2197,6 +2202,7 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
             continue;
         free(key_data); key_data = NULL;
         key_len = base64_decode(data, strlen(data), &key_data);
+        key_data_buf.reset(key_data);
 
         weechat_string_dyn_concat(format, "\n%2$s..K ", -1);
         if (key_prekey)
@@ -2214,6 +2220,7 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
             .name = jid, .name_len = strlen(jid), .device_id = (int32_t)strtol(source_id, NULL, 10) };
         signal_message *key_message = NULL;
         struct signal_buffer *aes_key = NULL;
+        aes_key_buf.reset(nullptr); // reset before each iteration
         
         if (key_prekey) {
             pre_key_signal_message *pre_key_message = NULL;
@@ -2265,6 +2272,7 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
             }
             session_cipher_free(cipher);
             SIGNAL_UNREF(pre_key_message);
+            aes_key_buf.reset(aes_key);
             weechat_printf(buffer, "%somemo: new session established with %s device %s",
                            weechat_prefix("network"), jid, source_id);
         } else {
@@ -2292,11 +2300,14 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
             }
             session_cipher_free(cipher);
             SIGNAL_UNREF(key_message);
+            aes_key_buf.reset(aes_key);
         }
         decrypted_ok = true;
 
         if (!aes_key) return NULL;
-        free(key_data); key_data = NULL;  // Release calloc'd buffer; aes_key owns the data now
+        // Release the calloc'd buffer — aes_key_buf now owns the signal_buffer.
+        // key_data/tag_data become non-owning views into aes_key's storage.
+        key_data_buf.release();
         key_data = signal_buffer_data(aes_key);
         key_len = signal_buffer_len(aes_key);
         if (key_len >= AES_KEY_SIZE) {
@@ -2417,12 +2428,17 @@ xmpp_stanza_t *omemo::encode(weechat::account *account, struct t_gui_buffer *buf
                 &key, &iv, &tag, &tag_len,
                 &ciphertext, &ciphertext_len);
 
-    uint8_t *key_and_tag = (uint8_t *)malloc(sizeof(uint8_t) * (AES_KEY_SIZE+tag_len));
+    auto key_and_tag_buf = std::unique_ptr<uint8_t[], decltype(&free)>(
+        static_cast<uint8_t*>(malloc(sizeof(uint8_t) * (AES_KEY_SIZE + tag_len))), free);
+    if (!key_and_tag_buf) {
+        free(key); free(tag); free(iv); free(ciphertext);
+        return NULL;
+    }
+    uint8_t *key_and_tag = key_and_tag_buf.get();
     memcpy(key_and_tag, key, AES_KEY_SIZE);
     free(key);
     memcpy(key_and_tag+AES_KEY_SIZE, tag, tag_len);
     free(tag);
-    std::unique_ptr<uint8_t[], decltype(&free)> key_and_tag_buf(key_and_tag, free);
     char *key64 = NULL;
     base64_encode(key_and_tag, AES_KEY_SIZE+tag_len, &key64);
     std::unique_ptr<char, decltype(&free)> key64_buf(key64, free);
