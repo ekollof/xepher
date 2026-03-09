@@ -2350,6 +2350,9 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
         return NULL;
     }
 
+    // payload_data_buf must outlive the if-block so payload_data stays valid
+    // through the aes_decrypt call below.
+    heap_buf payload_data_buf{nullptr, free};
     xmpp_stanza_t *payload = xmpp_stanza_get_child_by_name(encrypted, "payload");
     if (payload && (payload = xmpp_stanza_get_children(payload)))
     {
@@ -2359,7 +2362,7 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
             return NULL;
         }
         payload_len = base64_decode(payload_text, strlen(payload_text), &payload_data);
-        heap_buf payload_data_buf = make_heap_buf(payload_data);
+        payload_data_buf = make_heap_buf(payload_data);
         weechat_string_dyn_concat(format, "\n%2$s..PL: ", -1);
         weechat_string_dyn_concat(format, payload_text, -1);
     }

@@ -3972,7 +3972,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                     CURL *curl = curl_easy_init();
                     if (!curl)
                     {
-                        fclose(upload_file);
+                        // upload_file_guard will close the file on return
                         c.success    = false;
                         c.curl_error = "failed to initialize curl";
                         ::write(c.pipe_write_fd, "x", 1);
@@ -5037,7 +5037,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
 
         set = xmpp_stanza_get_child_by_name_and_ns(
             fin, "set", "http://jabber.org/protocol/rsm");
-        if (account.mam_query_search(&mam_query, id))
+        if (id && account.mam_query_search(&mam_query, id))
         {
             // Check if this is a global MAM query (empty 'with')
             bool is_global_query = mam_query.with.empty();

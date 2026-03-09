@@ -3926,13 +3926,12 @@ int command__spoiler(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    const char *hint = "";
     const char *text = argv_eol[1];
 
     // Check if "hint: message" form is used
     if (argc >= 3 && argv[1][strlen(argv[1])-1] == ':')
     {
-        hint = argv[1];
+        const char *hint = argv[1];
         // Strip trailing colon
         std::string hint_str(hint, strlen(hint)-1);
         text = argv_eol[2];
