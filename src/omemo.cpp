@@ -1683,7 +1683,8 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
 {
     auto omemo = this;
 
-    xmpp_stanza_t **children = (xmpp_stanza_t **)malloc(sizeof(*children) * (100 + 1));
+    auto children_buf = std::make_unique<xmpp_stanza_t*[]>(101);
+    xmpp_stanza_t **children = children_buf.get();
     xmpp_stanza_t *parent = NULL;
     struct signal_buffer *record = NULL;
     ec_key_pair *keypair = NULL;
@@ -1811,10 +1812,10 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
     base64_encode(signal_buffer_data(record), signal_buffer_len(record),
             &signed_pre_key_public);
     signal_buffer_free(record);
-    char *signed_pre_key_id_str = (char *)malloc(sizeof(char) * (10 + 1));
-    snprintf(signed_pre_key_id_str, 10+1, "%u", signed_pre_key_id);
+    std::string signed_pre_key_id_str_s = fmt::format("{}", signed_pre_key_id);
+    char *signed_pre_key_id_str = signed_pre_key_id_str_s.data();
     children[0] = stanza__iq_pubsub_publish_item_bundle_signedPreKeyPublic(
-            context, NULL, NULL, with_free(signed_pre_key_id_str));
+            context, NULL, NULL, with_noop(signed_pre_key_id_str));
     stanza__set_text(context, children[0], with_free(signed_pre_key_public));
 
     const uint8_t *keysig = session_signed_pre_key_get_signature(signed_pre_key);
@@ -1844,12 +1845,9 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
     children[0] = stanza__iq_pubsub_publish_item(
             context, NULL, children, NULL);
 
-    size_t bundle_node_len = strlen("eu.siacs.conversations.axolotl.bundles:") + 10;
-    char *bundle_node = (char *)malloc(sizeof(char) * (bundle_node_len + 1));
-    snprintf(bundle_node, bundle_node_len+1,
-            "eu.siacs.conversations.axolotl.bundles:%u", omemo->device_id);
+    std::string bundle_node_s = fmt::format("eu.siacs.conversations.axolotl.bundles:{}", omemo->device_id);
     children[0] = stanza__iq_pubsub_publish(
-            context, NULL, children, with_free(bundle_node));
+            context, NULL, children, with_noop(bundle_node_s.c_str()));
 
     omemo->handle_bundle(from, omemo->device_id, children[0]);
 
@@ -1858,8 +1856,7 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
 
     parent = stanza__iq(
         context, NULL, children, NULL, "announce2", from, to, "set");
-    free(children);
-
+    // children_buf auto-frees here
     return parent;
 }
 
