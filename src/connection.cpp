@@ -1030,13 +1030,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                         forwarded, "delay", "urn:xmpp:delay");
                     const char *timestamp_str = delay ? xmpp_stanza_get_attribute(delay, "stamp") : NULL;
                     
-                    // Parse timestamp
+                    // Parse timestamp (stamp is always UTC, use timegm not mktime)
                     time_t msg_timestamp = 0;
                     if (timestamp_str)
                     {
                         struct tm time = {0};
                         strptime(timestamp_str, "%FT%T", &time);
-                        msg_timestamp = mktime(&time);
+                        msg_timestamp = timegm(&time);
                     }
                     
                     // Cache the message if we have all required fields
@@ -1449,11 +1449,57 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                     weechat::channel *ch = account.channels.contains(bare)
                         ? &account.channels.find(bare)->second : nullptr;
                     if (ch)
-                        weechat_printf_date_tags(ch->buffer, 0, "xmpp_receipt,notify_none",
-                                                "%s%sDelivered (id: %.8s…)",
-                                                weechat_prefix("network"),
-                                                weechat_color("darkgray"),
-                                                acked_id);
+                    {
+                        // Find the sent message line tagged id_<acked_id> and update glyph ⌛→✓
+                        struct t_hdata *hdata_line      = weechat_hdata_get("line");
+                        struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+                        struct t_hdata *hdata_lines     = weechat_hdata_get("lines");
+                        struct t_hdata *hdata_buffer    = weechat_hdata_get("buffer");
+                        void *lines     = weechat_hdata_pointer(hdata_buffer, ch->buffer, "lines");
+                        void *last_line = lines ? weechat_hdata_pointer(hdata_lines, lines, "last_line") : nullptr;
+                        std::string target_tag = std::string("id_") + acked_id;
+                        while (last_line)
+                        {
+                            void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
+                            if (line_data)
+                            {
+                                int tags_count = weechat_hdata_integer(hdata_line_data, line_data, "tags_count");
+                                char str_tag[24] = {0};
+                                bool found = false;
+                                for (int n = 0; n < tags_count && !found; n++)
+                                {
+                                    snprintf(str_tag, sizeof(str_tag), "%d|tags_array", n);
+                                    const char *tag = weechat_hdata_string(hdata_line_data, line_data, str_tag);
+                                    if (tag && weechat_strcasecmp(tag, target_tag.c_str()) == 0)
+                                        found = true;
+                                }
+                                if (found)
+                                {
+                                    const char *cur_msg = weechat_hdata_string(hdata_line_data, line_data, "message");
+                                    std::string new_msg = cur_msg ? cur_msg : "";
+                                    // Strip any pending/delivered glyph suffix
+                                    for (const char *glyph : { " ⌛", " ✓", " ✓✓" })
+                                    {
+                                        std::string g(glyph);
+                                        if (new_msg.size() >= g.size() &&
+                                            new_msg.compare(new_msg.size() - g.size(), g.size(), g) == 0)
+                                        {
+                                            new_msg.erase(new_msg.size() - g.size());
+                                            break;
+                                        }
+                                    }
+                                    new_msg += " ✓";
+                                    struct t_hashtable *ht = weechat_hashtable_new(4,
+                                        WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING, NULL, NULL);
+                                    weechat_hashtable_set(ht, "message", new_msg.c_str());
+                                    weechat_hdata_update(hdata_line_data, line_data, ht);
+                                    weechat_hashtable_free(ht);
+                                    break;
+                                }
+                            }
+                            last_line = weechat_hdata_pointer(hdata_line, last_line, "prev_line");
+                        }
+                    }
                     xmpp_free(account.context, (void*)bare);
                 }
                 return 1;
@@ -1474,20 +1520,59 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                 if (marker_from && acked_id)
                 {
                     const char *bare = xmpp_jid_bare(account.context, marker_from);
-                    const char *nick = xmpp_jid_resource(account.context, marker_from);
                     weechat::channel *ch = account.channels.contains(bare)
                         ? &account.channels.find(bare)->second : nullptr;
                     if (ch)
                     {
-                        const char *display_name = (ch->type == weechat::channel::chat_type::MUC && nick)
-                            ? nick : bare;
-                        weechat_printf_date_tags(ch->buffer, 0, "xmpp_marker,notify_none",
-                                                "%s%s%s %s (id: %.8s…)",
-                                                weechat_prefix("network"),
-                                                weechat_color("darkgray"),
-                                                display_name,
-                                                marker_displayed ? "displayed" : "read",
-                                                acked_id);
+                        // Find the sent message line tagged id_<acked_id> and update glyph ⌛/✓→✓✓
+                        struct t_hdata *hdata_line      = weechat_hdata_get("line");
+                        struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+                        struct t_hdata *hdata_lines     = weechat_hdata_get("lines");
+                        struct t_hdata *hdata_buffer    = weechat_hdata_get("buffer");
+                        void *lines     = weechat_hdata_pointer(hdata_buffer, ch->buffer, "lines");
+                        void *last_line = lines ? weechat_hdata_pointer(hdata_lines, lines, "last_line") : nullptr;
+                        std::string target_tag = std::string("id_") + acked_id;
+                        while (last_line)
+                        {
+                            void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
+                            if (line_data)
+                            {
+                                int tags_count = weechat_hdata_integer(hdata_line_data, line_data, "tags_count");
+                                char str_tag[24] = {0};
+                                bool found = false;
+                                for (int n = 0; n < tags_count && !found; n++)
+                                {
+                                    snprintf(str_tag, sizeof(str_tag), "%d|tags_array", n);
+                                    const char *tag = weechat_hdata_string(hdata_line_data, line_data, str_tag);
+                                    if (tag && weechat_strcasecmp(tag, target_tag.c_str()) == 0)
+                                        found = true;
+                                }
+                                if (found)
+                                {
+                                    const char *cur_msg = weechat_hdata_string(hdata_line_data, line_data, "message");
+                                    std::string new_msg = cur_msg ? cur_msg : "";
+                                    // Strip any pending/delivered/seen glyph suffix
+                                    for (const char *glyph : { " ⌛", " ✓", " ✓✓" })
+                                    {
+                                        std::string g(glyph);
+                                        if (new_msg.size() >= g.size() &&
+                                            new_msg.compare(new_msg.size() - g.size(), g.size(), g) == 0)
+                                        {
+                                            new_msg.erase(new_msg.size() - g.size());
+                                            break;
+                                        }
+                                    }
+                                    new_msg += " ✓✓";
+                                    struct t_hashtable *ht = weechat_hashtable_new(4,
+                                        WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING, NULL, NULL);
+                                    weechat_hashtable_set(ht, "message", new_msg.c_str());
+                                    weechat_hdata_update(hdata_line_data, line_data, ht);
+                                    weechat_hashtable_free(ht);
+                                    break;
+                                }
+                            }
+                            last_line = weechat_hdata_pointer(hdata_line, last_line, "prev_line");
+                        }
                     }
                     xmpp_free(account.context, (void*)bare);
                 }
@@ -2241,7 +2326,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
     if (timestamp)
     {
         strptime(timestamp, "%FT%T", &time);
-        date = mktime(&time);
+        date = timegm(&time);
     }
 
     // XEP-0085: receiving a message implicitly clears the composing state
@@ -4153,14 +4238,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
 
         set = xmpp_stanza_get_child_by_name_and_ns(
             fin, "set", "http://jabber.org/protocol/rsm");
-        if (set && account.mam_query_search(&mam_query, id))
+        if (account.mam_query_search(&mam_query, id))
         {
             // Check if this is a global MAM query (empty 'with')
             bool is_global_query = mam_query.with.empty();
             
             auto channel = account.channels.find(mam_query.with.data());
 
-            set__last = xmpp_stanza_get_child_by_name(set, "last");
+            set__last = set ? xmpp_stanza_get_child_by_name(set, "last") : nullptr;
             set__last__text = set__last
                 ? xmpp_stanza_get_text(set__last) : NULL;
 
@@ -4181,32 +4266,100 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                     // MAM fetch complete, update last fetch timestamp
                     channel->second.last_mam_fetch = time(NULL);
                     account.mam_cache_set_last_timestamp(channel->second.id, channel->second.last_mam_fetch);
-                    weechat_printf(channel->second.buffer, 
-                                  "%sMAM history loaded",
-                                  weechat_prefix("network"));
                     account.mam_query_remove(mam_query.id);
                 }
             }
             else if (is_global_query)
             {
-                // Global MAM query complete - conversations were auto-created during message processing
-                if (!set__last__text)
+                if (set__last__text)
                 {
-                    weechat_printf(account.buffer, "%sMAM conversation discovery complete",
-                                  weechat_prefix("network"));
+                    // More pages — issue next page of global MAM query with <after> token
+                    account.mam_query_remove(mam_query.id);
+
+                    char *next_id = xmpp_uuid_gen(account.context);
+                    account.add_mam_query(next_id, "",
+                                          mam_query.start, mam_query.end);
+
+                    xmpp_stanza_t *next_iq = xmpp_iq_new(account.context, "set", next_id);
+
+                    xmpp_stanza_t *next_query = xmpp_stanza_new(account.context);
+                    xmpp_stanza_set_name(next_query, "query");
+                    xmpp_stanza_set_ns(next_query, "urn:xmpp:mam:2");
+
+                    // Data form
+                    xmpp_stanza_t *nx = xmpp_stanza_new(account.context);
+                    xmpp_stanza_set_name(nx, "x");
+                    xmpp_stanza_set_ns(nx, "jabber:x:data");
+                    xmpp_stanza_set_attribute(nx, "type", "submit");
+
+                    // FORM_TYPE field
+                    {
+                        xmpp_stanza_t *f = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_name(f, "field");
+                        xmpp_stanza_set_attribute(f, "var", "FORM_TYPE");
+                        xmpp_stanza_set_attribute(f, "type", "hidden");
+                        xmpp_stanza_t *v = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_name(v, "value");
+                        xmpp_stanza_t *t = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_text(t, "urn:xmpp:mam:2");
+                        xmpp_stanza_add_child(v, t); xmpp_stanza_release(t);
+                        xmpp_stanza_add_child(f, v); xmpp_stanza_release(v);
+                        xmpp_stanza_add_child(nx, f); xmpp_stanza_release(f);
+                    }
+
+                    // Start time field (same window as original query)
+                    if (mam_query.start)
+                    {
+                        xmpp_stanza_t *f = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_name(f, "field");
+                        xmpp_stanza_set_attribute(f, "var", "start");
+                        xmpp_stanza_t *v = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_name(v, "value");
+                        xmpp_stanza_t *t = xmpp_stanza_new(account.context);
+                        char tbuf[256];
+                        time_t tval = *mam_query.start;
+                        strftime(tbuf, sizeof(tbuf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&tval));
+                        xmpp_stanza_set_text(t, tbuf);
+                        xmpp_stanza_add_child(v, t); xmpp_stanza_release(t);
+                        xmpp_stanza_add_child(f, v); xmpp_stanza_release(v);
+                        xmpp_stanza_add_child(nx, f); xmpp_stanza_release(f);
+                    }
+
+                    xmpp_stanza_add_child(next_query, nx);
+                    xmpp_stanza_release(nx);
+
+                    // RSM <after> element for paging
+                    {
+                        xmpp_stanza_t *rset = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_name(rset, "set");
+                        xmpp_stanza_set_ns(rset, "http://jabber.org/protocol/rsm");
+                        xmpp_stanza_t *after_el = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_name(after_el, "after");
+                        xmpp_stanza_t *after_t = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_text(after_t, set__last__text);
+                        xmpp_stanza_add_child(after_el, after_t); xmpp_stanza_release(after_t);
+                        xmpp_stanza_add_child(rset, after_el); xmpp_stanza_release(after_el);
+                        xmpp_stanza_add_child(next_query, rset); xmpp_stanza_release(rset);
+                    }
+
+                    xmpp_stanza_add_child(next_iq, next_query);
+                    xmpp_stanza_release(next_query);
+
+                    this->send(next_iq);
+                    xmpp_stanza_release(next_iq);
+                    xmpp_free(account.context, next_id);
+                }
+                else
+                {
+                    // Global MAM query complete
                     account.mam_query_remove(mam_query.id);
                 }
             }
             else
             {
-                if (!set__last)
+                if (!set__last__text)
                     account.mam_query_remove(mam_query.id);
             }
-        }
-        else
-        {
-            weechat_printf(account.buffer, "MAM query not found or no set: id=%s, set=%s", 
-                id ? id : "null", set ? "yes" : "no");
         }
     }
 
@@ -4577,9 +4730,6 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         xmpp_free(account.context, disco_items_id);
 
         // Query MAM globally to discover recent conversations
-        weechat_printf(account.buffer, "%sQuerying MAM for recent conversations...",
-                      weechat_prefix("network"));
-        
         time_t now = time(NULL);
         time_t start = now - (7 * 86400);  // Last 7 days
         char *global_mam_id = xmpp_uuid_gen(account.context);
@@ -4674,8 +4824,6 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                     // Check if channel already exists
                     if (!account.channels.contains(ptr_remote_jid))
                     {
-                        weechat_printf(account.buffer, "%sRestoring PM buffer: %s",
-                                      weechat_prefix("network"), ptr_remote_jid);
                         
                         // Create channel object for existing buffer
                         account.channels.emplace(

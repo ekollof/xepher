@@ -247,58 +247,31 @@ weechat::channel::channel(weechat::account& account,
         time_t now = time(NULL);
         time_t start;
         
-        weechat_printf(buffer, "%s[DEBUG] PM channel created, checking MAM...",
-                      weechat_prefix("network"));
-        
         // Load last fetch timestamp from cache
         if (last_mam_fetch == 0)
-        {
             last_mam_fetch = account.mam_cache_get_last_timestamp(id);
-            weechat_printf(buffer, "%s[DEBUG] Last MAM fetch from cache: %ld",
-                          weechat_prefix("network"), last_mam_fetch);
-        }
         
-        // Skip MAM entirely if channel was deliberately closed (timestamp == -1)
+        // If the channel was previously closed (-1), treat it as a fresh open:
+        // reset the flag so MAM runs normally this time.
         if (last_mam_fetch == -1)
         {
-            // User closed this channel, don't auto-fetch history
-            weechat_printf(buffer, "%s[DEBUG] Channel was closed, skipping MAM",
-                          weechat_prefix("network"));
-            return;
+            last_mam_fetch = 0;
+            account.mam_cache_set_last_timestamp(id, 0);
         }
         
         // Load and display cached messages
         if (last_mam_fetch > 0)
-        {
-            weechat_printf(buffer, "%s[DEBUG] Loading cached MAM messages...",
-                          weechat_prefix("network"));
             account.mam_cache_load_messages(id, buffer);
-        }
         
         // If we've fetched recently, only get new messages since last fetch
         if (last_mam_fetch > 0 && (now - last_mam_fetch) < 300)  // Less than 5 minutes
         {
-            // Fetch only messages since last fetch
             start = last_mam_fetch;
-            weechat_printf(buffer, "%sFetching new MAM messages since last check (%ld seconds ago)...",
-                          weechat_prefix("network"),
-                          now - last_mam_fetch);
         }
         else
         {
             // Fetch last 7 days
             start = now - (7 * 86400);
-            if (last_mam_fetch > 0)
-            {
-                weechat_printf(buffer, "%sFetching MAM messages (last check was %ld seconds ago, fetching 7 days)...",
-                              weechat_prefix("network"),
-                              now - last_mam_fetch);
-            }
-            else
-            {
-                weechat_printf(buffer, "%sFetching MAM messages (7 days)...",
-                              weechat_prefix("network"));
-            }
         }
         
         time_t end = now;
@@ -805,6 +778,7 @@ int weechat::channel::send_message(std::string to, std::string body,
     xmpp_stanza_add_child(message, origin_id);
     xmpp_stanza_release(origin_id);
     
+    std::string saved_id(id);
     xmpp_free(account.context, id);
     xmpp_message_set_body(message, body.data());
 
@@ -948,9 +922,10 @@ int weechat::channel::send_message(std::string to, std::string body,
     {
         auto *self_user = user::search(&account, account.jid().data());
         auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
+        std::string tag = "xmpp_message,message,private,notify_none,self_msg,log1,id_" + saved_id;
         weechat_printf_date_tags(buffer, 0,
-                                 "xmpp_message,message,private,notify_none,self_msg,log1",
-                                 "%s\t%s",
+                                 tag.c_str(),
+                                 "%s\t%s ⌛",
                                  prefix.data(),
                                  body.data());
     }
@@ -978,6 +953,7 @@ int weechat::channel::send_message(const char *to, const char *body)
     xmpp_stanza_add_child(message, origin_id_elem);
     xmpp_stanza_release(origin_id_elem);
 
+    std::string saved_id(id);
     xmpp_free(account.context, id);
 
     if (account.omemo && omemo.enabled)
@@ -1156,9 +1132,10 @@ int weechat::channel::send_message(const char *to, const char *body)
     {
         auto *self_user = user::search(&account, account.jid().data());
         auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
+        std::string tag = "xmpp_message,message,private,notify_none,self_msg,log1,id_" + saved_id;
         weechat_printf_date_tags(buffer, 0,
-                                 "xmpp_message,message,private,notify_none,self_msg,log1",
-                                 "%s\t%s",
+                                 tag.c_str(),
+                                 "%s\t%s ⌛",
                                  prefix.data(),
                                  body);
     }
@@ -1377,8 +1354,15 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
     if (gen_id) { xmpp_free(account.context, gen_id); gen_id = nullptr; }
     const char *mam_id = mam_id_str.c_str();
     xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", mam_id);
-    // XEP-0313 MUC MAM: must be addressed to the MUC room's bare JID
-    xmpp_stanza_set_to(iq, this->id.data());
+    // XEP-0313: MUC MAM is addressed to the room JID; PM MAM goes to own server.
+    if (type == weechat::channel::chat_type::MUC)
+        xmpp_stanza_set_to(iq, this->id.data());
+    else
+    {
+        const char *server = xmpp_jid_domain(account.context, account.jid().data());
+        if (server) xmpp_stanza_set_to(iq, server);
+        xmpp_free(account.context, (void*)server);
+    }
 
     xmpp_stanza_t *query = xmpp_stanza_new(account.context);
     xmpp_stanza_set_name(query, "query");
@@ -1507,7 +1491,6 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
     }
     else
     {
-        weechat_printf(buffer, "Storing MAM query: id=%s, with=%s", mam_id, this->id.data());
         account.add_mam_query(mam_id, this->id,
                 start ? std::optional(*start) : std::optional<time_t>(),
                 end ? std::optional(*end) : std::optional<time_t>());
