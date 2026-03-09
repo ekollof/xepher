@@ -944,6 +944,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                                                     ? nick : from)).first->second;
             }
 
+            // XEP-0085 §5.1: record that this JID supports chat states so we
+            // may send states back to them.
+            channel->mark_chat_state_supported(std::string(from));
+            channel->mark_chat_state_supported(std::string(from_bare));
+
             if (composing)
             {
                 channel->add_typing(user);

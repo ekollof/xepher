@@ -149,6 +149,11 @@ weechat::config::config()
                 nullptr, 0, 0,
                 "on", nullptr, false,
                 {}, {}, {}},
+            .send_chat_states{file, section_look, "send_chat_states", "boolean",
+                "send XEP-0085 chat state notifications (active/composing/paused/inactive/gone)",
+                nullptr, 0, 0,
+                "on", nullptr, false,
+                {}, {}, {}},
             .smart_filter{file, section_look, "smart_filter", "boolean",
                 "hide join/leave/nick-change messages for users who have not spoken recently "
                 "(suppress initial MUC presence flood); see also look.smart_filter_delay",

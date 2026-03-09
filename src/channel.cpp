@@ -250,6 +250,10 @@ weechat::channel::channel(weechat::account& account,
 
     if (type != weechat::channel::chat_type::MUC)
     {
+        // XEP-0085: announce <active> when opening a new PM conversation
+        auto *self_user = weechat::user::search(&account, account.jid_device().data());
+        send_active(self_user);
+
         time_t now = time(NULL);
         time_t start;
         
@@ -628,6 +632,35 @@ bool weechat::channel::smart_filter_nick(const char *nick) const
     int delay_minutes = weechat::config::instance->look.smart_filter_delay.integer();
     time_t threshold = std::time(nullptr) - static_cast<time_t>(delay_minutes) * 60;
     return it->second < threshold;
+}
+
+void weechat::channel::mark_chat_state_supported(const std::string& from_jid)
+{
+    chat_state_supported.insert(from_jid);
+}
+
+bool weechat::channel::is_chat_state_supported(const std::string& to_jid) const
+{
+    // For MUC, always send — the room broadcasts to all participants and
+    // all modern clients in a room implicitly support chat states.
+    if (type == weechat::channel::chat_type::MUC)
+        return true;
+
+    // For PM: only send if the contact has previously sent us a chat state,
+    // or if the full JID (with resource) or bare JID is in the support set.
+    if (chat_state_supported.count(to_jid))
+        return true;
+
+    // Also check bare JID
+    const auto sep = to_jid.find('/');
+    if (sep != std::string::npos)
+    {
+        std::string bare = to_jid.substr(0, sep);
+        if (chat_state_supported.count(bare))
+            return true;
+    }
+
+    return false;
 }
 
 void weechat::channel::update_topic(const char* topic, const char* creator, int last_set)
@@ -1461,8 +1494,46 @@ void weechat::channel::send_reads()
     }
 }
 
+void weechat::channel::send_active(weechat::user *user)
+{
+    if (!weechat::config::instance
+            || !weechat::config::instance->look.send_chat_states.boolean())
+        return;
+
+    // XEP-0085 §5.1: only send to contacts that have indicated support
+    std::string to_jid = user ? std::string(user->id) : id;
+    if (!is_chat_state_supported(to_jid))
+        return;
+
+    xmpp_stanza_t *message = xmpp_message_new(account.context,
+                                              type == weechat::channel::chat_type::MUC
+                                              ? "groupchat" : "chat",
+                                              (user ? user->id : id).data(), NULL);
+
+    xmpp_stanza_t *message__active = xmpp_stanza_new(account.context);
+    xmpp_stanza_set_name(message__active, "active");
+    xmpp_stanza_set_ns(message__active, "http://jabber.org/protocol/chatstates");
+
+    xmpp_stanza_add_child(message, message__active);
+    xmpp_stanza_release(message__active);
+
+    // XEP-0334: Don't store chat state notifications
+    xmpp_stanza_t *no_store = xmpp_stanza_new(account.context);
+    xmpp_stanza_set_name(no_store, "no-store");
+    xmpp_stanza_set_ns(no_store, "urn:xmpp:hints");
+    xmpp_stanza_add_child(message, no_store);
+    xmpp_stanza_release(no_store);
+
+    account.connection.send( message);
+    xmpp_stanza_release(message);
+}
+
 void weechat::channel::send_typing(weechat::user *user)
 {
+    if (!weechat::config::instance
+            || !weechat::config::instance->look.send_chat_states.boolean())
+        return;
+
     if (add_self_typing(user))
     {
         xmpp_stanza_t *message = xmpp_message_new(account.context,
@@ -1491,6 +1562,10 @@ void weechat::channel::send_typing(weechat::user *user)
 
 void weechat::channel::send_paused(weechat::user *user)
 {
+    if (!weechat::config::instance
+            || !weechat::config::instance->look.send_chat_states.boolean())
+        return;
+
     xmpp_stanza_t *message = xmpp_message_new(account.context,
                                               type == weechat::channel::chat_type::MUC
                                               ? "groupchat" : "chat",
@@ -1516,6 +1591,15 @@ void weechat::channel::send_paused(weechat::user *user)
 
 void weechat::channel::send_inactive(weechat::user *user)
 {
+    if (!weechat::config::instance
+            || !weechat::config::instance->look.send_chat_states.boolean())
+        return;
+
+    // XEP-0085 §5.1: only send to contacts that have indicated support
+    std::string to_jid = user ? std::string(user->id) : id;
+    if (!is_chat_state_supported(to_jid))
+        return;
+
     xmpp_stanza_t *message = xmpp_message_new(account.context,
                                               type == weechat::channel::chat_type::MUC
                                               ? "groupchat" : "chat",
@@ -1541,6 +1625,10 @@ void weechat::channel::send_inactive(weechat::user *user)
 
 void weechat::channel::send_gone(weechat::user *user)
 {
+    if (!weechat::config::instance
+            || !weechat::config::instance->look.send_chat_states.boolean())
+        return;
+
     xmpp_stanza_t *message = xmpp_message_new(account.context,
                                               type == weechat::channel::chat_type::MUC
                                               ? "groupchat" : "chat",

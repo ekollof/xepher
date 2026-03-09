@@ -124,6 +124,11 @@ namespace weechat
         // (between receiving status 110 and the first non-presence stanza / explicit reset)
         bool joining = false;
 
+        // XEP-0085: JIDs that have sent us at least one chat state notification,
+        // meaning they support the protocol and we may send states back to them.
+        // For MUC we always send (room echoes tell us all clients support it).
+        std::unordered_set<std::string> chat_state_supported;
+
     public:
         struct t_gui_buffer *buffer;
 
@@ -154,10 +159,6 @@ namespace weechat
         std::optional<typing*> self_typing_search(weechat::user *user);
         int add_self_typing(weechat::user *user);
 
-        static int hotlist_update_cb(const void *pointer, void *data,
-                                     const char *signal, const char *type_data,
-                                     void *signal_data);
-
         void free(channel *channel);
         void free_all();
 
@@ -173,6 +174,10 @@ namespace weechat
         void record_speak(const char *nick);
         bool smart_filter_nick(const char *nick) const;
 
+        // XEP-0085 chat state support tracking
+        void mark_chat_state_supported(const std::string& jid);
+        bool is_chat_state_supported(const std::string& jid) const;
+
         int send_message(std::string to, std::string body,
                          std::optional<std::string> oob = {},
                          std::optional<file_metadata> file_meta = {});
@@ -181,6 +186,7 @@ namespace weechat
         void send_link_preview(const std::string& to, const std::string& url);
 
         void send_reads();
+        void send_active(weechat::user *user);
         void send_typing(weechat::user *user);
         void send_paused(weechat::user *user);
         void send_inactive(weechat::user *user);

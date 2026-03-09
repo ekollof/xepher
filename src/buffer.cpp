@@ -150,11 +150,45 @@ int buffer__switch_cb(const void *pointer, void *data,
     (void) data;
     (void) signal;
     (void) type_data;
-    (void) signal_data;
-    
+
     // Update encryption bar item when switching buffers
     weechat_bar_item_update("xmpp_encryption");
-    
+
+    struct t_gui_buffer *new_buffer = static_cast<struct t_gui_buffer*>(signal_data);
+
+    // Track the previously-active buffer so we can send <inactive> to it
+    static struct t_gui_buffer *prev_buffer = nullptr;
+
+    // Send <inactive> to the channel we just left (if it was an XMPP channel)
+    if (prev_buffer && prev_buffer != new_buffer)
+    {
+        weechat::account *prev_account = nullptr;
+        weechat::channel *prev_channel = nullptr;
+        buffer__get_account_and_channel(prev_buffer, &prev_account, &prev_channel);
+        if (prev_account && prev_channel && prev_account->connected())
+        {
+            auto *self_user = weechat::user::search(prev_account,
+                                                    prev_account->jid_device().data());
+            prev_channel->send_inactive(self_user);
+        }
+    }
+
+    // Send <active> to the channel we just switched into (if it is an XMPP channel)
+    if (new_buffer)
+    {
+        weechat::account *new_account = nullptr;
+        weechat::channel *new_channel = nullptr;
+        buffer__get_account_and_channel(new_buffer, &new_account, &new_channel);
+        if (new_account && new_channel && new_account->connected())
+        {
+            auto *self_user = weechat::user::search(new_account,
+                                                    new_account->jid_device().data());
+            new_channel->send_active(self_user);
+        }
+    }
+
+    prev_buffer = new_buffer;
+
     return WEECHAT_RC_OK;
 }
 
