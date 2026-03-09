@@ -2583,6 +2583,95 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
         }
     }
     
+    // XEP-0511: Link Metadata — parse <rdf:Description> containing OpenGraph metadata
+    xmpp_stanza_t *rdf_desc = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "Description", "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+    std::string og_preview;
+    if (rdf_desc)
+    {
+        // Multiple <rdf:Description> children may appear (one per URL); collect all previews
+        for (xmpp_stanza_t *desc = rdf_desc; desc;
+             desc = xmpp_stanza_get_next(desc))
+        {
+            const char *desc_name = xmpp_stanza_get_name(desc);
+            const char *desc_ns   = xmpp_stanza_get_ns(desc);
+            if (!desc_name || !desc_ns) continue;
+            if (strcmp(desc_name, "Description") != 0
+                || strcmp(desc_ns, "http://www.w3.org/1999/02/22-rdf-syntax-ns#") != 0)
+                continue;
+
+            std::string og_title, og_desc, og_url, og_image;
+            for (xmpp_stanza_t *prop = xmpp_stanza_get_children(desc);
+                 prop; prop = xmpp_stanza_get_next(prop))
+            {
+                const char *prop_name = xmpp_stanza_get_name(prop);
+                const char *prop_ns   = xmpp_stanza_get_ns(prop);
+                if (!prop_name || !prop_ns) continue;
+                if (strcmp(prop_ns, "https://ogp.me/ns#") != 0) continue;
+
+                char *val = xmpp_stanza_get_text(prop);
+                if (!val) continue;
+
+                if (strcmp(prop_name, "title") == 0 && og_title.empty())
+                    og_title = val;
+                else if (strcmp(prop_name, "description") == 0 && og_desc.empty())
+                    og_desc = val;
+                else if (strcmp(prop_name, "url") == 0 && og_url.empty())
+                    og_url = val;
+                else if (strcmp(prop_name, "image") == 0 && og_image.empty())
+                {
+                    // Only store HTTP(S) image URLs; skip cid:, ni:, data: URIs
+                    if (strncmp(val, "http", 4) == 0)
+                        og_image = val;
+                }
+                xmpp_free(account.context, val);
+            }
+
+            if (!og_title.empty() || !og_desc.empty() || !og_url.empty())
+            {
+                og_preview += "\n\t";
+                og_preview += weechat_color("darkgray");
+                og_preview += "┌ ";
+                og_preview += weechat_color("bold");
+                og_preview += og_title.empty() ? (og_url.empty() ? "Link" : og_url) : og_title;
+                og_preview += weechat_color("-bold");
+                if (!og_desc.empty())
+                {
+                    og_preview += "\n\t";
+                    og_preview += weechat_color("darkgray");
+                    og_preview += "│ ";
+                    og_preview += weechat_color("resetcolor");
+                    og_preview += weechat_color("darkgray");
+                    // Truncate long descriptions to ~120 chars
+                    if (og_desc.size() > 120)
+                    {
+                        og_preview += og_desc.substr(0, 117);
+                        og_preview += "...";
+                    }
+                    else
+                    {
+                        og_preview += og_desc;
+                    }
+                }
+                if (!og_url.empty() && og_url != og_title)
+                {
+                    og_preview += "\n\t";
+                    og_preview += weechat_color("darkgray");
+                    og_preview += "└ ";
+                    og_preview += weechat_color("blue");
+                    og_preview += og_url;
+                }
+                if (!og_image.empty())
+                {
+                    og_preview += " ";
+                    og_preview += weechat_color("darkgray");
+                    og_preview += "[img]";
+                }
+                og_preview += weechat_color("resetcolor");
+            }
+        }
+    }
+
     // Apply XEP-0393 Message Styling
     // Skip if <unstyled xmlns='urn:xmpp:styling:0'/> hint is present
     const char *display_text = text;
@@ -2631,7 +2720,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
         final_text += oob_suffix;
         display_text = final_text.c_str();
     }
-    
+
+    // Append XEP-0511 link preview if present
+    if (!og_preview.empty())
+    {
+        if (final_text.empty())
+            final_text = display_text ? display_text : "";
+        final_text += og_preview;
+        display_text = final_text.c_str();
+    }
+
     if (channel_id == from_bare && to == channel->id)
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t[to %s]: %s",
                                  edit, display_prefix.data(),

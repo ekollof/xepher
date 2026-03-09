@@ -95,6 +95,7 @@
     - Message Displayed Synchronization (XEP-0490 / XEP-0283) - syncs read state across devices
     - References (XEP-0372) - renders @mentions and URI references inline
     - Message status glyphs - sent messages show ⌛ (pending), ✓ (delivered), ✓✓ (read) inline
+    - Link Metadata (XEP-0511) - renders inline link previews (title, description, URL) from OpenGraph metadata injected into messages
 
   See the *XMPP Compliance* section below for a comprehensive list of implemented XEPs.
 
@@ -158,6 +159,7 @@
     - ✅ XEP-0385: Stateless Inline Media Sharing (rich media with metadata and hashing)
     - ✅ XEP-0402: PEP Native Bookmarks (modern PEP-based bookmark storage)
     - ✅ XEP-0490: Message Displayed Synchronization (read state sync across devices)
+    - ✅ XEP-0511: Link Metadata (inline link previews from OpenGraph metadata: title, description, URL)
 
 *** Planned for Future Releases
     - ⏳ XEP-0153: vCard-Based Avatars (presence integration)
@@ -273,6 +275,37 @@
 
    Background colors in CSS =style= attributes are intentionally ignored to
    avoid unreadable output on dark or light terminal themes.
+
+** Link Metadata / Link Previews (XEP-0511)
+
+   When a message contains an =<rdf:Description>= element (XEP-0511) carrying
+   OpenGraph metadata, the plugin renders a compact preview block below the
+   message body. This can be injected by the sender's client or by the server.
+
+   A preview looks like:
+
+   #+begin_src
+   alice: Check this out! https://example.com/article
+           ┌ The Best Webpage
+           │ This is a great webpage and you will really like it
+           └ https://example.com/canonical-url [img]
+   #+end_src
+
+   Supported OpenGraph properties:
+
+   | Property        | Rendered as                              |
+   |-----------------|------------------------------------------|
+   | =og:title=      | Bold header line (=┌=)                   |
+   | =og:description= | Body line (=│=), truncated to 120 chars |
+   | =og:url=        | Blue URL footer line (=└=)               |
+   | =og:image=      | =[img]= badge appended to URL line       |
+
+   - If no =og:title= is present, the =og:url= is used as the header instead.
+   - =cid:=, =ni:=, and =data:= image URIs are ignored; only HTTP(S) images are noted.
+   - Multiple =<rdf:Description>= blocks in one message are each rendered as a
+     separate preview.
+   - No configuration required; previews appear automatically when the sender
+     or server injects XEP-0511 metadata.
 
 ** Ad-Hoc Commands and Data Forms (XEP-0050 / XEP-0004)
 
