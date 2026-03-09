@@ -2077,9 +2077,12 @@ void omemo::handle_bundle(const char *jid, uint32_t device_id,
     for (xmpp_stanza_t *prekey = xmpp_stanza_get_children(prekeys);
          prekey; prekey = xmpp_stanza_get_next(prekey))
         num_prekeys++;
-    struct t_pre_key **pre_keys = (struct t_pre_key **)malloc(sizeof(struct t_pre_key) * num_prekeys);
+    // Use vectors for RAII: no malloc/free, no null-terminator off-by-one bug.
+    std::vector<t_pre_key> pre_key_storage;
+    pre_key_storage.reserve(num_prekeys);
+    std::vector<t_pre_key *> pre_keys_ptrs;
+    pre_keys_ptrs.reserve(num_prekeys + 1); // +1 for null terminator
 
-    num_prekeys = -1;
     char **format = weechat_string_dyn_alloc(256);
     weechat_string_dyn_concat(format, "omemo bundle %s/%u:\n%s..SPK %u: %s\n%3$s..SKS: %s\n%3$s..IK: %s", -1);
     std::vector<xmpp_string_guard> pre_key_guards;
@@ -2101,16 +2104,16 @@ void omemo::handle_bundle(const char *jid, uint32_t device_id,
             continue;
         }
 
-        pre_keys[++num_prekeys] = (struct t_pre_key*)malloc(sizeof(struct t_pre_key));
-        pre_keys[num_prekeys]->id = pre_key_id;
-        pre_keys[num_prekeys]->public_key = pre_key;
+        pre_key_storage.push_back({.id = pre_key_id, .public_key = pre_key});
+        pre_keys_ptrs.push_back(&pre_key_storage.back());
 
         weechat_string_dyn_concat(format, "\n%3$s..PK ", -1);
         weechat_string_dyn_concat(format, pre_key_id, -1);
         weechat_string_dyn_concat(format, ": ", -1);
         weechat_string_dyn_concat(format, pre_key, -1);
     }
-    pre_keys[num_prekeys] = NULL;
+    pre_keys_ptrs.push_back(nullptr); // null terminator for bks_store_bundle
+    struct t_pre_key **pre_keys = pre_keys_ptrs.data();
     weechat_string_dyn_free(format, 1);
 
     struct t_pre_key signed_key = {
