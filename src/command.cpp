@@ -4053,6 +4053,302 @@ int command__adhoc(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * XEP-0045 MUC management commands: /kick, /ban, /topic, /nick
+ * ----------------------------------------------------------------------- */
+
+int command__kick(const void *pointer, void *data,
+                  struct t_gui_buffer *buffer, int argc,
+                  char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "kick");
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer,
+                        _("%s%s: you are not connected to server"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: missing argument for \"%s\" command"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "kick");
+        return WEECHAT_RC_OK;
+    }
+
+    const char *nick = argv[1];
+    const char *reason = argc > 2 ? argv_eol[2] : NULL;
+
+    /* IQ set to room: <query xmlns='…muc#admin'><item nick='NICK' role='none'/></query> */
+    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set",
+                                     xmpp_uuid_gen(ptr_account->context));
+    xmpp_stanza_set_to(iq, ptr_channel->id.data());
+
+    xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(query, "query");
+    xmpp_stanza_set_ns(query, "http://jabber.org/protocol/muc#admin");
+
+    xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(item, "item");
+    xmpp_stanza_set_attribute(item, "nick", nick);
+    xmpp_stanza_set_attribute(item, "role", "none");
+
+    if (reason)
+    {
+        xmpp_stanza_t *reason_elem = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(reason_elem, "reason");
+        xmpp_stanza_t *reason_text = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_text(reason_text, reason);
+        xmpp_stanza_add_child(reason_elem, reason_text);
+        xmpp_stanza_release(reason_text);
+        xmpp_stanza_add_child(item, reason_elem);
+        xmpp_stanza_release(reason_elem);
+    }
+
+    xmpp_stanza_add_child(query, item);
+    xmpp_stanza_release(item);
+    xmpp_stanza_add_child(iq, query);
+    xmpp_stanza_release(query);
+
+    ptr_account->connection.send(iq);
+    xmpp_stanza_release(iq);
+
+    weechat_printf(buffer, _("%sKicked %s from %s%s%s"),
+                   weechat_prefix("network"), nick,
+                   ptr_channel->id.data(),
+                   reason ? ": " : "",
+                   reason ? reason : "");
+
+    return WEECHAT_RC_OK;
+}
+
+int command__ban(const void *pointer, void *data,
+                 struct t_gui_buffer *buffer, int argc,
+                 char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "ban");
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer,
+                        _("%s%s: you are not connected to server"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: missing argument for \"%s\" command"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "ban");
+        return WEECHAT_RC_OK;
+    }
+
+    const char *target_jid = argv[1];
+    const char *reason = argc > 2 ? argv_eol[2] : NULL;
+
+    /* IQ set to room: <query xmlns='…muc#admin'><item jid='JID' affiliation='outcast'/></query> */
+    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set",
+                                     xmpp_uuid_gen(ptr_account->context));
+    xmpp_stanza_set_to(iq, ptr_channel->id.data());
+
+    xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(query, "query");
+    xmpp_stanza_set_ns(query, "http://jabber.org/protocol/muc#admin");
+
+    xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(item, "item");
+    xmpp_stanza_set_attribute(item, "jid", target_jid);
+    xmpp_stanza_set_attribute(item, "affiliation", "outcast");
+
+    if (reason)
+    {
+        xmpp_stanza_t *reason_elem = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(reason_elem, "reason");
+        xmpp_stanza_t *reason_text = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_text(reason_text, reason);
+        xmpp_stanza_add_child(reason_elem, reason_text);
+        xmpp_stanza_release(reason_text);
+        xmpp_stanza_add_child(item, reason_elem);
+        xmpp_stanza_release(reason_elem);
+    }
+
+    xmpp_stanza_add_child(query, item);
+    xmpp_stanza_release(item);
+    xmpp_stanza_add_child(iq, query);
+    xmpp_stanza_release(query);
+
+    ptr_account->connection.send(iq);
+    xmpp_stanza_release(iq);
+
+    weechat_printf(buffer, _("%sBanned %s from %s%s%s"),
+                   weechat_prefix("network"), target_jid,
+                   ptr_channel->id.data(),
+                   reason ? ": " : "",
+                   reason ? reason : "");
+
+    return WEECHAT_RC_OK;
+}
+
+int command__topic(const void *pointer, void *data,
+                   struct t_gui_buffer *buffer, int argc,
+                   char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argv;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "topic");
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer,
+                        _("%s%s: you are not connected to server"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    /* <message type='groupchat' to='room'><subject>TEXT</subject></message>
+     * An empty <subject/> clears the topic. */
+    const char *new_topic = argc > 1 ? argv_eol[1] : "";
+
+    xmpp_stanza_t *msg = xmpp_message_new(ptr_account->context,
+                                           "groupchat", ptr_channel->id.data(), NULL);
+
+    xmpp_stanza_t *subject = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(subject, "subject");
+
+    if (argc > 1)
+    {
+        xmpp_stanza_t *subject_text = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_text(subject_text, new_topic);
+        xmpp_stanza_add_child(subject, subject_text);
+        xmpp_stanza_release(subject_text);
+    }
+
+    xmpp_stanza_add_child(msg, subject);
+    xmpp_stanza_release(subject);
+
+    ptr_account->connection.send(msg);
+    xmpp_stanza_release(msg);
+
+    return WEECHAT_RC_OK;
+}
+
+int command__muc_nick(const void *pointer, void *data,
+                      struct t_gui_buffer *buffer, int argc,
+                      char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "nick");
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer,
+                        _("%s%s: you are not connected to server"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2)
+    {
+        /* Print current nick */
+        const char *current_nick = weechat_buffer_get_string(buffer, "localvar_nick");
+        weechat_printf(buffer, _("%sCurrent nick in %s: %s"),
+                        weechat_prefix("network"),
+                        ptr_channel->id.data(),
+                        current_nick ? current_nick : "(unknown)");
+        return WEECHAT_RC_OK;
+    }
+
+    const char *new_nick = argv[1];
+
+    /* Send presence to room@muc/newnick — the server will respond with
+     * a presence from room@muc/newnick that updates our local nick. */
+    const char *new_full_jid = xmpp_jid_new(
+        ptr_account->context,
+        xmpp_jid_node(ptr_account->context, ptr_channel->id.data()),
+        xmpp_jid_domain(ptr_account->context, ptr_channel->id.data()),
+        new_nick);
+
+    xmpp_stanza_t *pres = xmpp_presence_new(ptr_account->context);
+    xmpp_stanza_set_from(pres, ptr_account->jid().data());
+    xmpp_stanza_set_to(pres, new_full_jid);
+
+    ptr_account->connection.send(pres);
+    xmpp_stanza_release(pres);
+
+    return WEECHAT_RC_OK;
+}
+
 void command__init()
 {
     auto *hook = weechat_hook_command(
@@ -4529,4 +4825,55 @@ void command__init()
         NULL, &command__adhoc, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /adhoc");
+
+    hook = weechat_hook_command(
+        "kick",
+        N_("kick a user from a MUC room (XEP-0045)"),
+        N_("<nick> [<reason>]"),
+        N_("  nick: nickname of the user to kick\n"
+           "reason: optional reason for the kick\n\n"
+           "Requires moderator role in the room.\n\n"
+           "Examples:\n"
+           "  /kick annoyinguser\n"
+           "  /kick spammer Repeatedly posting spam"),
+        NULL, &command__kick, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /kick");
+
+    hook = weechat_hook_command(
+        "ban",
+        N_("ban a user from a MUC room (XEP-0045)"),
+        N_("<jid> [<reason>]"),
+        N_("   jid: bare JID of the user to ban\n"
+           "reason: optional reason for the ban\n\n"
+           "Sets the user's affiliation to 'outcast'. Requires admin or owner role.\n\n"
+           "Examples:\n"
+           "  /ban bad@example.com\n"
+           "  /ban troll@example.com Persistent harassment"),
+        NULL, &command__ban, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /ban");
+
+    hook = weechat_hook_command(
+        "topic",
+        N_("set or clear the MUC room topic (XEP-0045)"),
+        N_("[<text>]"),
+        N_("text: new topic text (omit to clear the topic)\n\n"
+           "Examples:\n"
+           "  /topic Welcome to #general!\n"
+           "  /topic"),
+        NULL, &command__topic, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /topic");
+
+    hook = weechat_hook_command(
+        "nick",
+        N_("change your nickname in the current MUC room (XEP-0045)"),
+        N_("[<newnick>]"),
+        N_("newnick: new nickname to use (shows current nick if omitted)\n\n"
+           "Examples:\n"
+           "  /nick mynewnick"),
+        NULL, &command__muc_nick, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /nick");
 }
