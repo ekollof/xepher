@@ -5205,7 +5205,8 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         }
 
         /* Send initial <presence/> so that we appear online to contacts */
-        auto children = std::unique_ptr<xmpp_stanza_t*[]>(new xmpp_stanza_t*[3 + 1]);
+        /* children layout: [0]=<c/> [1]=<status/> [2]=<x vcard-temp:x:update/> [3]=<x pgp/> [4]=NULL */
+        auto children = std::unique_ptr<xmpp_stanza_t*[]>(new xmpp_stanza_t*[4 + 1]);
 
         pres__c = xmpp_stanza_new(account.context);
         xmpp_stanza_set_name(pres__c, "c");
@@ -5232,7 +5233,32 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         xmpp_stanza_release(pres__status__text);
 
         children[1] = pres__status;
-        children[2] = NULL;
+
+        /* XEP-0153: vCard-Based Avatars — broadcast own photo hash in presence */
+        {
+            xmpp_stanza_t *vcard_x = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(vcard_x, "x");
+            xmpp_stanza_set_ns(vcard_x, "vcard-temp:x:update");
+
+            xmpp_stanza_t *photo_elem = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(photo_elem, "photo");
+
+            weechat::user *self_user = weechat::user::search(&account, account.jid().data());
+            if (self_user && !self_user->profile.avatar_hash.empty())
+            {
+                xmpp_stanza_t *photo_text = xmpp_stanza_new(account.context);
+                xmpp_stanza_set_text(photo_text, self_user->profile.avatar_hash.data());
+                xmpp_stanza_add_child(photo_elem, photo_text);
+                xmpp_stanza_release(photo_text);
+            }
+
+            xmpp_stanza_add_child(vcard_x, photo_elem);
+            xmpp_stanza_release(photo_elem);
+
+            children[2] = vcard_x;
+        }
+
+        children[3] = NULL;
 
         if (!account.pgp_keyid().empty())
         {
@@ -5247,14 +5273,16 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             xmpp_stanza_add_child(pres__x, pres__x__text);
             xmpp_stanza_release(pres__x__text);
 
-            children[2] = pres__x;
-            children[3] = NULL;
+            children[3] = pres__x;
+            children[4] = NULL;
         }
 
-        this->send(stanza::presence()
-                    .from(account.jid())
-                    .build(account.context)
-                    .get());
+        {
+            xmpp_stanza_t *pres = stanza__presence(account.context, nullptr, children.get(),
+                                                    nullptr, account.jid().data(), nullptr, nullptr);
+            this->send(pres);
+            xmpp_stanza_release(pres);
+        }
 
         this->send(stanza::iq()
                     .from(account.jid())
