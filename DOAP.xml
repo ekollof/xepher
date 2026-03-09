@@ -435,11 +435,11 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0385.html' />
-        <xmpp:status>partial</xmpp:status>
+        <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.2.1</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >Stateless Inline Media Sharing (SIMS) - wraps HTTP uploads with file metadata, hashes, and sources for rich media display (send only; receive-side parsing not yet implemented)</xmpp:note>
+                >Stateless Inline Media Sharing (SIMS) - sends file metadata + sources on upload; parses received SIMS references to display filename, MIME type, size, and download URL</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

@@ -2640,7 +2640,106 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
             }
         }
     }
-    
+
+    // XEP-0385: Stateless Inline Media Sharing (SIMS)
+    // Parse <reference type="data"><media-sharing xmlns="urn:xmpp:sims:1">
+    std::string sims_suffix;
+    for (xmpp_stanza_t *ref = xmpp_stanza_get_children(stanza);
+         ref; ref = xmpp_stanza_get_next(ref))
+    {
+        const char *ref_name = xmpp_stanza_get_name(ref);
+        const char *ref_ns   = xmpp_stanza_get_ns(ref);
+        if (!ref_name || !ref_ns) continue;
+        if (strcmp(ref_name, "reference") != 0
+            || strcmp(ref_ns, "urn:xmpp:reference:0") != 0) continue;
+
+        const char *ref_type = xmpp_stanza_get_attribute(ref, "type");
+        if (!ref_type || strcmp(ref_type, "data") != 0) continue;
+
+        xmpp_stanza_t *ms = xmpp_stanza_get_child_by_name_and_ns(
+            ref, "media-sharing", "urn:xmpp:sims:1");
+        if (!ms) continue;
+
+        // Extract file info from <file xmlns='urn:xmpp:jingle:apps:file-transfer:5'>
+        xmpp_stanza_t *file_elem = xmpp_stanza_get_child_by_name_and_ns(
+            ms, "file", "urn:xmpp:jingle:apps:file-transfer:5");
+
+        std::string sims_name, sims_mime, sims_size_str;
+        if (file_elem)
+        {
+            xmpp_stanza_t *name_e = xmpp_stanza_get_child_by_name(file_elem, "name");
+            xmpp_stanza_t *mime_e = xmpp_stanza_get_child_by_name(file_elem, "media-type");
+            xmpp_stanza_t *size_e = xmpp_stanza_get_child_by_name(file_elem, "size");
+
+            if (name_e) { char *t = xmpp_stanza_get_text(name_e); if (t) { sims_name = t; xmpp_free(account.context, t); } }
+            if (mime_e) { char *t = xmpp_stanza_get_text(mime_e); if (t) { sims_mime = t; xmpp_free(account.context, t); } }
+            if (size_e) { char *t = xmpp_stanza_get_text(size_e); if (t) { sims_size_str = t; xmpp_free(account.context, t); } }
+        }
+
+        // Extract first source URL from <sources>
+        xmpp_stanza_t *sources = xmpp_stanza_get_child_by_name(ms, "sources");
+        std::string sims_url;
+        if (sources)
+        {
+            // Try <reference type="data" uri="https://...">
+            for (xmpp_stanza_t *src = xmpp_stanza_get_children(sources);
+                 src && sims_url.empty(); src = xmpp_stanza_get_next(src))
+            {
+                const char *sname = xmpp_stanza_get_name(src);
+                const char *sns   = xmpp_stanza_get_ns(src);
+                if (!sname || !sns) continue;
+                if (strcmp(sname, "reference") == 0
+                    && strcmp(sns, "urn:xmpp:reference:0") == 0)
+                {
+                    const char *uri = xmpp_stanza_get_attribute(src, "uri");
+                    if (uri) sims_url = uri;
+                }
+                else if (strcmp(sname, "url-data") == 0)
+                {
+                    const char *target = xmpp_stanza_get_attribute(src, "target");
+                    if (target) sims_url = target;
+                }
+            }
+        }
+
+        if (!sims_url.empty())
+        {
+            // Build display line: [File: name (mime, size) URL]
+            sims_suffix += std::string("\n") + weechat_color("cyan") + "[File: ";
+            if (!sims_name.empty())
+                sims_suffix += sims_name;
+            else
+                sims_suffix += sims_url;
+
+            if (!sims_mime.empty() || !sims_size_str.empty())
+            {
+                sims_suffix += " (";
+                if (!sims_mime.empty())
+                    sims_suffix += sims_mime;
+                if (!sims_mime.empty() && !sims_size_str.empty())
+                    sims_suffix += ", ";
+                if (!sims_size_str.empty())
+                {
+                    // Human-readable size
+                    long long sz = std::stoll(sims_size_str);
+                    if (sz >= 1024 * 1024)
+                        sims_suffix += fmt::format("{:.1f} MB", sz / 1048576.0);
+                    else if (sz >= 1024)
+                        sims_suffix += fmt::format("{:.1f} KB", sz / 1024.0);
+                    else
+                        sims_suffix += fmt::format("{} B", sz);
+                }
+                sims_suffix += ")";
+            }
+            sims_suffix += " " + sims_url;
+            sims_suffix += "]" + std::string(weechat_color("resetcolor"));
+
+            // If OOB already shows this same URL, suppress the OOB suffix to avoid duplication
+            if (!oob_suffix.empty() && oob_suffix.find(sims_url) != std::string::npos)
+                oob_suffix.clear();
+        }
+    }
+
     // XEP-0511: Link Metadata — parse <rdf:Description> containing OpenGraph metadata
     xmpp_stanza_t *rdf_desc = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "Description", "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
@@ -2776,6 +2875,15 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
         if (final_text.empty())
             final_text = display_text ? display_text : "";
         final_text += oob_suffix;
+        display_text = final_text.c_str();
+    }
+
+    // Append SIMS file info if present (XEP-0385)
+    if (!sims_suffix.empty())
+    {
+        if (final_text.empty())
+            final_text = display_text ? display_text : "";
+        final_text += sims_suffix;
         display_text = final_text.c_str();
     }
 
