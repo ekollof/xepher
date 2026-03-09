@@ -243,7 +243,15 @@ weechat::account::~account()
     // Let the OS reclaim resources instead of trying to clean up
     if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
         return;
-    
+
+    // sm_outqueue holds shared_ptr<xmpp_stanza_t> which call xmpp_stanza_release()
+    // on destruction. xmpp_stanza_release() needs the libstrophe context to be alive.
+    // However, `context` is a member declared after `sm_outqueue`, so it is destroyed
+    // FIRST in reverse-declaration order — meaning the deque destructor would call
+    // xmpp_stanza_release() on an already-freed context, causing a segfault.
+    // Explicitly drain the queue here, while the context is still valid.
+    sm_outqueue.clear();
+
     mam_cache_cleanup();
         
     /*
