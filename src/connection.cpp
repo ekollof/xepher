@@ -227,6 +227,9 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool /* top_le
 
     if (auto x = binding.muc_user())
     {
+        bool is_nick_change = false;
+        bool is_new_room = false;
+        bool is_server_nick = false;
         for (int& status : x->statuses)
         {
             switch (status)
@@ -235,7 +238,11 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool /* top_le
                     if (channel)
                         weechat_buffer_set(channel->buffer, "notify", "2");
                     break;
-                case 101: // : [message (out of band) | Affiliation change]: Inform user that his or her affiliation changed while not in the room
+                case 101: // Affiliation change: room visibility changed, JID now visible to all
+                    if (channel)
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                                                 "%s%s[Room] Your affiliation changed; your full JID is now visible to all occupants",
+                                                 weechat_prefix("network"), weechat_color("gray"));
                     break;
                 case 102: // : [message | Configuration change]: Inform occupants that room now shows unavailable members
                     break;
@@ -245,24 +252,53 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool /* top_le
                     break;
                 case 110: // Self-Presence: [presence | Any room presence]: Inform user that presence refers to one of its own room occupants
                     break;
-                case 170: // Logging Active: [message or initial presence | Configuration change]: Inform occupants that room logging is now enabled
+                case 170: // Logging Active: room logging enabled — privacy notice
+                    if (channel)
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                                                 "%s%s[Room] Warning: room logging is now %senabled%s — messages are being stored",
+                                                 weechat_prefix("network"), weechat_color("yellow"),
+                                                 weechat_color("yellow,bold"), weechat_color("reset"));
                     break;
-                case 171: // : [message | Configuration change]: Inform occupants that room logging is now disabled
+                case 171: // Logging disabled
+                    if (channel)
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                                                 "%s%s[Room] Room logging is now disabled",
+                                                 weechat_prefix("network"), weechat_color("gray"));
                     break;
-                case 172: // : [message | Configuration change]: Inform occupants that the room is now non-anonymous
+                case 172: // Room is now non-anonymous (full JIDs visible)
+                    if (channel)
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                                                 "%s%s[Room] Room is now %snon-anonymous%s — full JIDs are visible to all occupants",
+                                                 weechat_prefix("network"), weechat_color("yellow"),
+                                                 weechat_color("yellow,bold"), weechat_color("reset"));
                     break;
-                case 173: // : [message | Configuration change]: Inform occupants that the room is now semi-anonymous
+                case 173: // Room is now semi-anonymous
+                    if (channel)
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                                                 "%s%s[Room] Room is now semi-anonymous — full JIDs visible to moderators only",
+                                                 weechat_prefix("network"), weechat_color("gray"));
                     break;
-                case 174: // : [message | Configuration change]: Inform occupants that the room is now fully-anonymous
+                case 174: // Room is now fully-anonymous
+                    if (channel)
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                                                 "%s%s[Room] Room is now fully-anonymous — JIDs are hidden from all occupants",
+                                                 weechat_prefix("network"), weechat_color("gray"));
                     break;
-                case 201: // : [presence | Entering a room]: Inform user that a new room has been created
+                case 201: // New room created — must accept default config to unlock it
+                    is_new_room = true;
+                    if (channel)
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                                                 "%s%s[Room] New room created; accepting default configuration",
+                                                 weechat_prefix("network"), weechat_color("gray"));
                     break;
-                case 210: // Nick Modified: [presence | Entering a room]: Inform user that the service has assigned or modified the occupant's roomnick
+                case 210: // Server assigned/modified nick
+                    is_server_nick = true;
                     break;
                 case 301: // : [presence | Removal from room]: Inform user that he or she has been banned from the room
                     weechat_printf(channel->buffer, "[!]\t%sBanned from Room", weechat_color("gray"));
                     break;
-                case 303: // : [presence | Exiting a room]: Inform all occupants of new room nickname
+                case 303: // Nick change — this unavailable presence means occupant is changing nick
+                    is_nick_change = true;
                     break;
                 case 307: // : [presence | Removal from room]: Inform user that he or she has been kicked from the room
                     weechat_printf(channel->buffer, "[!]\t%sKicked from room", weechat_color("gray"));
@@ -303,27 +339,88 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool /* top_le
             auto status = binding.status();
             auto show = binding.show();
             auto idle = binding.idle_since();
-            user->profile.status_text = status ? strdup(status->data()) : NULL;
-            user->profile.status = show ? strdup(show->data()) : NULL;
+            user->profile.status_text = status ? std::optional<std::string>(status->data()) : std::nullopt;
+            user->profile.status = show ? std::optional<std::string>(show->data()) : std::nullopt;
             user->profile.idle = idle ? fmt::format("{}", *idle) : std::string();
             user->is_away = show ? *show == "away" : false;
-            user->profile.role = role.size() ? strdup(role.data()) : NULL;
-            user->profile.affiliation = affiliation.size() && affiliation == "none"
-                ? strdup(affiliation.data()) : NULL;
+            user->profile.role = role.size() ? std::optional<std::string>(role.data()) : std::nullopt;
+            user->profile.affiliation = (affiliation.size() && affiliation != "none")
+                ? std::optional<std::string>(affiliation.data()) : std::nullopt;
             if (channel)
             {
                 if (auto signature = binding.signature())
                 {
-                    user->profile.pgp_id = account.pgp.verify(channel->buffer, signature->data());
-                    if (channel->type != weechat::channel::chat_type::MUC)
-                        channel->pgp.ids.emplace(user->profile.pgp_id);
+                    char *pgp_raw = account.pgp.verify(channel->buffer, signature->data());
+                    user->profile.pgp_id = pgp_raw ? std::optional<std::string>(pgp_raw) : std::nullopt;
+                    free(pgp_raw);
+                    if (user->profile.pgp_id.has_value() && channel->type != weechat::channel::chat_type::MUC)
+                        channel->pgp.ids.emplace(user->profile.pgp_id.value());
                 }
 
                 if (weechat_strcasecmp(role.data(), "none") == 0)
-                    channel->remove_member(binding.from->full.data(), status ? status->data() : nullptr);
+                {
+                    if (is_nick_change && item.nick && channel)
+                    {
+                        // Status 303: nick change — print rename notice instead of "left"
+                        const char *old_nick = binding.from->resource.size()
+                            ? binding.from->resource.data() : binding.from->full.data();
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,nick,log4",
+                                                 "%s%s%s%s is now known as %s%s",
+                                                 weechat_prefix("network"),
+                                                 weechat_color("irc.color.nick_change"),
+                                                 old_nick,
+                                                 weechat_color("reset"),
+                                                 weechat_color("irc.color.nick_change"),
+                                                 item.nick->data());
+                        // Still remove from nicklist so the new presence can re-add
+                        weechat::user *leaving = weechat::user::search(&account, binding.from->full.data());
+                        if (leaving)
+                            leaving->nicklist_remove(&account, channel);
+                    }
+                    else
+                        channel->remove_member(binding.from->full.data(), status ? status->data() : nullptr);
+                }
                 else
+                {
                     channel->add_member(binding.from->full.data(), jid.data());
+                    if (is_server_nick && channel)
+                    {
+                        // Status 210: server assigned a different nick than requested
+                        const char *assigned = binding.from->resource.size()
+                            ? binding.from->resource.data() : binding.from->full.data();
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                                                 "%s%s[Room] Server assigned you the nick: %s%s%s",
+                                                 weechat_prefix("network"), weechat_color("gray"),
+                                                 weechat_color("irc.color.nick_change"),
+                                                 assigned,
+                                                 weechat_color("reset"));
+                    }
+                }
             }
+        }
+
+        if (is_new_room && channel)
+        {
+            // Status 201: new room was created — send empty config submit to unlock it
+            char *room_jid = xmpp_jid_bare(account.context, binding.from->full.data());
+            char *owner_id = xmpp_uuid_gen(account.context);
+            xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", owner_id);
+            xmpp_stanza_set_to(iq, room_jid);
+            xmpp_stanza_t *query = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(query, "query");
+            xmpp_stanza_set_ns(query, "http://jabber.org/protocol/muc#owner");
+            xmpp_stanza_t *x_form = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(x_form, "x");
+            xmpp_stanza_set_ns(x_form, "jabber:x:data");
+            xmpp_stanza_set_attribute(x_form, "type", "submit");
+            xmpp_stanza_add_child(query, x_form);
+            xmpp_stanza_add_child(iq, query);
+            xmpp_stanza_release(x_form);
+            xmpp_stanza_release(query);
+            xmpp_send(account.connection, iq);
+            xmpp_stanza_release(iq);
+            xmpp_free(account.context, owner_id);
+            xmpp_free(account.context, room_jid);
         }
     }
     else
@@ -342,12 +439,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool /* top_le
         auto status = binding.status();
         auto show = binding.show();
         auto idle = binding.idle_since();
-        user->profile.status_text = status ? strdup(status->data()) : NULL;
-        user->profile.status = show ? strdup(show->data()) : NULL;
+        user->profile.status_text = status ? std::optional<std::string>(status->data()) : std::nullopt;
+        user->profile.status = show ? std::optional<std::string>(show->data()) : std::nullopt;
         user->profile.idle = idle ? fmt::format("{}", *idle) : std::string();
         user->is_away = show ? *show == "away" : false;
-        user->profile.role = NULL;
-        user->profile.affiliation = NULL;
+        user->profile.role = std::nullopt;
+        user->profile.affiliation = std::nullopt;
         
         // For roster contacts (not in a MUC), manage account buffer nicklist
         if (!channel)
@@ -369,19 +466,382 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool /* top_le
         {
             if (auto signature = binding.signature(); signature)
             {
-                user->profile.pgp_id = account.pgp.verify(channel->buffer, signature->data());
-                if (channel->type != weechat::channel::chat_type::MUC)
-                    channel->pgp.ids.emplace(user->profile.pgp_id);
+                char *pgp_raw = account.pgp.verify(channel->buffer, signature->data());
+                user->profile.pgp_id = pgp_raw ? std::optional<std::string>(pgp_raw) : std::nullopt;
+                free(pgp_raw);
+                if (user->profile.pgp_id.has_value() && channel->type != weechat::channel::chat_type::MUC)
+                    channel->pgp.ids.emplace(user->profile.pgp_id.value());
             }
 
-            if (user->profile.role)
+            if (user->profile.role.has_value())
                 channel->remove_member(binding.from->full.data(), status ? status->data() : nullptr);
             else
                 channel->add_member(binding.from->full.data(), clientid.data());
         }
     }
 
+    // XEP-0153: vCard-Based Avatars — parse photo hash from presence <x>
+    {
+        xmpp_stanza_t *vcard_x = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "x", "vcard-temp:x:update");
+        if (vcard_x && user)
+        {
+            xmpp_stanza_t *photo = xmpp_stanza_get_child_by_name(vcard_x, "photo");
+            if (photo)
+            {
+                char *photo_hash = xmpp_stanza_get_text(photo);
+                if (photo_hash && strlen(photo_hash) > 0)
+                {
+                    // Store the vCard avatar hash if we don't already have one
+                    // from XEP-0084 (prefer PEP avatar over legacy vCard avatar)
+                    if (user->profile.avatar_hash.empty())
+                    {
+                        user->profile.avatar_hash = photo_hash;
+                    }
+                    xmpp_free(account.context, photo_hash);
+                }
+            }
+        }
+    }
+
     return true;
+}
+
+// XEP-0071: XHTML-IM — recursively extract plain text from an XHTML stanza tree.
+// Handles block elements (p, div, br) by inserting newlines/spaces.
+// Map a CSS color value (name or #rrggbb/#rgb) to a WeeChat color string.
+// Returns empty string if no reasonable mapping found.
+static std::string css_color_to_weechat(const std::string &css)
+{
+    // Named colors → WeeChat terminal color names
+    struct { const char *css; const char *wc; } table[] = {
+        {"black",   "black"},
+        {"white",   "white"},
+        {"red",     "red"},
+        {"green",   "green"},
+        {"blue",    "blue"},
+        {"yellow",  "yellow"},
+        {"cyan",    "cyan"},
+        {"magenta", "magenta"},
+        {"orange",  "214"},    // WeeChat 256-color index
+        {"gray",    "gray"},
+        {"grey",    "gray"},
+        {"darkgray","darkgray"},
+        {"darkgrey","darkgray"},
+        {"purple",  "magenta"},
+        {"pink",    "213"},
+        {"brown",   "130"},
+        {"lime",    "46"},
+        {"teal",    "30"},
+        {"navy",    "18"},
+        {"silver",  "250"},
+        {nullptr, nullptr}
+    };
+    // Lowercase the input for comparison
+    std::string lc = css;
+    for (auto &c : lc) c = (char)tolower((unsigned char)c);
+    // Strip leading/trailing spaces
+    auto s = lc.find_first_not_of(" \t");
+    auto e = lc.find_last_not_of(" \t");
+    if (s == std::string::npos) return "";
+    lc = lc.substr(s, e - s + 1);
+
+    for (int i = 0; table[i].css; ++i)
+        if (lc == table[i].css) return table[i].wc;
+
+    // #rrggbb or #rgb → WeeChat uses "color(r,g,b)" syntax for 24-bit,
+    // but for broad terminal compat map to nearest of the 16 named colors.
+    if (lc.size() >= 4 && lc[0] == '#')
+    {
+        unsigned r = 0, g = 0, b = 0;
+        if (lc.size() == 7)
+        {
+            r = std::stoul(lc.substr(1,2), nullptr, 16);
+            g = std::stoul(lc.substr(3,2), nullptr, 16);
+            b = std::stoul(lc.substr(5,2), nullptr, 16);
+        }
+        else if (lc.size() == 4)
+        {
+            r = std::stoul(lc.substr(1,1), nullptr, 16) * 17;
+            g = std::stoul(lc.substr(2,1), nullptr, 16) * 17;
+            b = std::stoul(lc.substr(3,1), nullptr, 16) * 17;
+        }
+        // Map to nearest basic color
+        if (r > 200 && g < 100 && b < 100) return "red";
+        if (r < 100 && g > 150 && b < 100) return "green";
+        if (r < 100 && g < 100 && b > 150) return "blue";
+        if (r > 150 && g > 150 && b < 100) return "yellow";
+        if (r < 100 && g > 150 && b > 150) return "cyan";
+        if (r > 150 && g < 100 && b > 150) return "magenta";
+        if (r > 180 && g > 120 && b < 80)  return "214"; // orange
+        if (r > 180 && g > 180 && b > 180) return "white";
+        if (r < 80  && g < 80  && b < 80)  return "black";
+        if (r > 100 && g > 100 && b > 100) return "gray";
+    }
+    return "";
+}
+
+// Parse an inline CSS style string and return opening/closing WeeChat color codes.
+// Handles: color, background-color, font-weight, font-style, text-decoration.
+static std::pair<std::string, std::string> css_style_to_weechat(const char *style)
+{
+    if (!style) return {"", ""};
+
+    std::string open, close;
+    std::string s(style);
+
+    // Iterate over semicolon-separated declarations
+    size_t pos = 0;
+    while (pos < s.size())
+    {
+        size_t semi = s.find(';', pos);
+        std::string decl = s.substr(pos, semi == std::string::npos ? std::string::npos : semi - pos);
+        pos = (semi == std::string::npos) ? s.size() : semi + 1;
+
+        size_t colon = decl.find(':');
+        if (colon == std::string::npos) continue;
+        std::string prop = decl.substr(0, colon);
+        std::string val  = decl.substr(colon + 1);
+
+        // Trim
+        auto trim = [](std::string &str) {
+            auto a = str.find_first_not_of(" \t");
+            auto b = str.find_last_not_of(" \t");
+            str = (a == std::string::npos) ? "" : str.substr(a, b - a + 1);
+            for (auto &c : str) c = (char)tolower((unsigned char)c);
+        };
+        trim(prop); trim(val);
+
+        if (prop == "font-weight" && val == "bold")
+        {
+            open  += weechat_color("bold");
+            close  = std::string(weechat_color("-bold")) + close;
+        }
+        else if (prop == "font-style" && val == "italic")
+        {
+            open  += weechat_color("italic");
+            close  = std::string(weechat_color("-italic")) + close;
+        }
+        else if (prop == "text-decoration" && val == "underline")
+        {
+            open  += weechat_color("underline");
+            close  = std::string(weechat_color("-underline")) + close;
+        }
+        else if (prop == "color")
+        {
+            std::string wc = css_color_to_weechat(val);
+            if (!wc.empty())
+            {
+                open  += weechat_color(wc.c_str());
+                close  = std::string(weechat_color("resetcolor")) + close;
+            }
+        }
+        // background-color: intentionally ignored (terminal BG control is risky)
+    }
+    return {open, close};
+}
+
+// Recursively convert an XHTML-IM stanza tree to a WeeChat-formatted string.
+// Inline elements emit WeeChat color/attribute codes; block elements add newlines.
+// blockquote content is prefixed with "> " in green on each line.
+static std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote = false)
+{
+    std::string result;
+    for (xmpp_stanza_t *child = xmpp_stanza_get_children(stanza);
+         child; child = xmpp_stanza_get_next(child))
+    {
+        if (xmpp_stanza_is_text(child))
+        {
+            const char *raw = xmpp_stanza_get_text_ptr(child);
+            if (!raw) continue;
+            if (in_blockquote)
+            {
+                // Prefix every line with "> "
+                std::string txt(raw);
+                std::string line;
+                for (char c : txt)
+                {
+                    if (c == '\n')
+                    {
+                        result += weechat_color("green");
+                        result += "> ";
+                        result += weechat_color("resetcolor");
+                        result += line;
+                        result += '\n';
+                        line.clear();
+                    }
+                    else line += c;
+                }
+                if (!line.empty())
+                {
+                    result += weechat_color("green");
+                    result += "> ";
+                    result += weechat_color("resetcolor");
+                    result += line;
+                }
+            }
+            else
+            {
+                result += raw;
+            }
+            continue;
+        }
+
+        const char *name = xmpp_stanza_get_name(child);
+        if (!name) continue;
+
+        // ── Block-level elements ──────────────────────────────────────
+        bool is_block = (strcmp(name, "p") == 0
+                      || strcmp(name, "div") == 0
+                      || strcmp(name, "li") == 0);
+        bool is_br         = (strcmp(name, "br") == 0);
+        bool is_blockquote = (strcmp(name, "blockquote") == 0);
+        bool is_pre        = (strcmp(name, "pre") == 0);
+
+        if (is_br)
+        {
+            result += '\n';
+            if (in_blockquote)
+            {
+                result += weechat_color("green");
+                result += "> ";
+                result += weechat_color("resetcolor");
+            }
+            continue;
+        }
+
+        if (is_blockquote)
+        {
+            if (!result.empty() && result.back() != '\n') result += '\n';
+            // Render blockquote contents with in_blockquote=true
+            std::string inner = xhtml_to_weechat(child, true);
+            // Prefix the very first line too
+            result += weechat_color("green");
+            result += "> ";
+            result += weechat_color("resetcolor");
+            result += inner;
+            if (!result.empty() && result.back() != '\n') result += '\n';
+            continue;
+        }
+
+        if (is_pre)
+        {
+            if (!result.empty() && result.back() != '\n') result += '\n';
+            result += weechat_color("gray");
+            result += xhtml_to_weechat(child, in_blockquote);
+            result += weechat_color("resetcolor");
+            if (!result.empty() && result.back() != '\n') result += '\n';
+            continue;
+        }
+
+        if (is_block)
+        {
+            if (!result.empty() && result.back() != '\n') result += '\n';
+            result += xhtml_to_weechat(child, in_blockquote);
+            if (!result.empty() && result.back() != '\n') result += '\n';
+            continue;
+        }
+
+        // ── Inline elements ───────────────────────────────────────────
+        if (strcmp(name, "b") == 0 || strcmp(name, "strong") == 0)
+        {
+            result += weechat_color("bold");
+            result += xhtml_to_weechat(child, in_blockquote);
+            result += weechat_color("-bold");
+            continue;
+        }
+
+        if (strcmp(name, "i") == 0 || strcmp(name, "em") == 0)
+        {
+            result += weechat_color("italic");
+            result += xhtml_to_weechat(child, in_blockquote);
+            result += weechat_color("-italic");
+            continue;
+        }
+
+        if (strcmp(name, "u") == 0)
+        {
+            result += weechat_color("underline");
+            result += xhtml_to_weechat(child, in_blockquote);
+            result += weechat_color("-underline");
+            continue;
+        }
+
+        if (strcmp(name, "del") == 0 || strcmp(name, "s") == 0 || strcmp(name, "strike") == 0)
+        {
+            // No real strikethrough in most terminals; use dim/darkgray
+            result += weechat_color("darkgray");
+            result += xhtml_to_weechat(child, in_blockquote);
+            result += weechat_color("resetcolor");
+            continue;
+        }
+
+        if (strcmp(name, "code") == 0 || strcmp(name, "tt") == 0)
+        {
+            result += weechat_color("gray");
+            result += xhtml_to_weechat(child, in_blockquote);
+            result += weechat_color("resetcolor");
+            continue;
+        }
+
+        if (strcmp(name, "span") == 0)
+        {
+            const char *style_attr = xmpp_stanza_get_attribute(child, "style");
+            auto [open, close] = css_style_to_weechat(style_attr);
+            result += open;
+            result += xhtml_to_weechat(child, in_blockquote);
+            result += close;
+            continue;
+        }
+
+        if (strcmp(name, "a") == 0)
+        {
+            const char *href = xmpp_stanza_get_attribute(child, "href");
+            std::string link_text = xhtml_to_weechat(child, in_blockquote);
+            if (href && *href)
+            {
+                // If link text equals the URL, just show it in blue
+                if (link_text == href)
+                {
+                    result += weechat_color("blue");
+                    result += href;
+                    result += weechat_color("resetcolor");
+                }
+                else
+                {
+                    result += link_text;
+                    result += ' ';
+                    result += weechat_color("blue");
+                    result += '(';
+                    result += href;
+                    result += ')';
+                    result += weechat_color("resetcolor");
+                }
+            }
+            else
+            {
+                result += link_text;
+            }
+            continue;
+        }
+
+        if (strcmp(name, "img") == 0)
+        {
+            // Show alt text, or a placeholder
+            const char *alt = xmpp_stanza_get_attribute(child, "alt");
+            const char *src = xmpp_stanza_get_attribute(child, "src");
+            result += weechat_color("darkgray");
+            result += '[';
+            result += (alt && *alt) ? alt : (src ? src : "image");
+            result += ']';
+            result += weechat_color("resetcolor");
+            continue;
+        }
+
+        // Fallback: recurse without any special formatting (e.g. <body>, <html>, unknown tags)
+        result += xhtml_to_weechat(child, in_blockquote);
+    }
+    return result;
 }
 
 bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_level */)
@@ -392,7 +852,15 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
     weechat::channel *channel, *parent_channel;
     xmpp_stanza_t *x, *body, *delay, *topic, *replace, *request, *markable, *composing, *sent, *received, *result, *forwarded, *event, *items, *item, *list, *device, *encrypted;
     const char *type, *from, *nick, *from_bare, *to, *to_bare, *id, *thread, *replace_id, *timestamp;
-    char *text, *intext, *difftext = NULL, *cleartext = NULL;
+    const char *text = nullptr;
+    struct xmpp_guard { xmpp_ctx_t *ctx; char *ptr; ~xmpp_guard() { if (ptr) xmpp_free(ctx, ptr); } };
+    struct free_guard { char *ptr; ~free_guard() { if (ptr) ::free(ptr); } };
+    xmpp_guard intext_g { account.context, nullptr };
+    char *&intext = intext_g.ptr;
+    free_guard cleartext_g { nullptr };
+    char *&cleartext = cleartext_g.ptr;
+    free_guard difftext_g { nullptr };
+    char *&difftext = difftext_g.ptr;
     struct tm time = {0};
     time_t date = 0;
 
@@ -432,8 +900,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                 }
             }
             channel->update_topic(intext ? intext : "", from, 0);
-            if (intext != NULL)
-                xmpp_free(account.context, intext);
+            intext = nullptr;  // Released by RAII guard (was xmpp_free)
         }
 
         // XEP-0085: Chat State Notifications - handle all states
@@ -469,25 +936,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                                                     weechat_strcasecmp(from_bare, channel->id.data()) == 0
                                                                     ? nick : from)).first->second;
             }
-            
-            // For PMs, always use bare JID; for MUCs use nick
-            const char *display_name = channel->type == weechat::channel::chat_type::MUC 
-                ? nick 
-                : from_bare;
-            
+
             if (composing)
             {
                 channel->add_typing(user);
-                weechat_printf(channel->buffer, "...\t%s%s is typing...",
-                               weechat_color("gray"),
-                               display_name);
             }
             else if (paused)
             {
-                channel->add_typing(user);  // Keep in typing list but update state
-                weechat_printf(channel->buffer, "...\t%s%s paused typing",
-                               weechat_color("darkgray"),
-                               display_name);
+                // <paused> means stopped typing but hasn't sent yet — remove from
+                // typing list so the indicator clears immediately
+                channel->remove_typing(user);
             }
             else if (active || inactive || gone)
             {
@@ -670,14 +1128,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                 children[1] = NULL;
                                 children[0] =
                                 stanza__iq_pubsub_items(account.context, NULL,
-                                                        strdup(bundle_node));
+                                                        bundle_node);
                                 children[0] =
                                 stanza__iq_pubsub(account.context, NULL, children.get(),
                                                   with_noop("http://jabber.org/protocol/pubsub"));
                                 char *uuid = xmpp_uuid_gen(account.context);
                                 children[0] =
                                 stanza__iq(account.context, NULL, children.get(), NULL, uuid,
-                                            strdup(to), strdup(from), strdup("get"));
+                                            to, from, "get");
                                 xmpp_free(account.context, uuid);
 
                                 account.connection.send(children[0]);
@@ -714,8 +1172,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                     weechat::user *user = weechat::user::search(&account, from_jid);
                                     if (user)
                                     {
-                                        free(user->profile.avatar_hash);
-                                        user->profile.avatar_hash = strdup(info_id);
+                                        user->profile.avatar_hash = info_id;
                                     }
                                     
                                     weechat_printf_date_tags(account.buffer, 0, "xmpp_avatar",
@@ -897,6 +1354,174 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                   weechat_prefix("network"),
                                   account.bookmarks.size());
                 }
+
+                // XEP-0490: Message Displayed Synchronization
+                // <items node='urn:xmpp:mds:displayed:0'>
+                //   <item id='thecontactjid@example.org'>
+                //     <displayed xmlns='urn:xmpp:mds:displayed:0'>
+                //       <stanza-id xmlns='urn:xmpp:sid:0' by='thecontactjid@example.org' id='stanza-id-of-last-displayed'/>
+                //     </displayed>
+                //   </item>
+                // </items>
+                if (items_node
+                    && weechat_strcasecmp(items_node, "urn:xmpp:mds:displayed:0") == 0)
+                {
+                    for (item = xmpp_stanza_get_children(items);
+                         item; item = xmpp_stanza_get_next(item))
+                    {
+                        if (weechat_strcasecmp(xmpp_stanza_get_name(item), "item") != 0)
+                            continue;
+
+                        const char *peer_jid = xmpp_stanza_get_id(item);
+                        if (!peer_jid)
+                            continue;
+
+                        xmpp_stanza_t *displayed_elem = xmpp_stanza_get_child_by_name_and_ns(
+                            item, "displayed", "urn:xmpp:mds:displayed:0");
+                        if (!displayed_elem)
+                            continue;
+
+                        // Extract the stanza-id of the last displayed message
+                        xmpp_stanza_t *sid_elem = xmpp_stanza_get_child_by_name_and_ns(
+                            displayed_elem, "stanza-id", "urn:xmpp:sid:0");
+                        const char *last_id = sid_elem
+                            ? xmpp_stanza_get_id(sid_elem) : nullptr;
+
+                        // Only act on events from other devices of our own account
+                        const char *event_from = from ? from : account.jid().data();
+                        const char *own_bare = xmpp_jid_bare(account.context, account.jid().data());
+                        const char *event_bare = xmpp_jid_bare(account.context, event_from);
+                        bool is_own = own_bare && event_bare &&
+                            (weechat_strcasecmp(own_bare, event_bare) == 0);
+                        xmpp_free(account.context, (void*)own_bare);
+                        xmpp_free(account.context, (void*)event_bare);
+
+                        if (!is_own)
+                            continue;
+
+                        // Find the channel for this peer and clear its unreads
+                        // up to and including last_id (or all if id unknown)
+                        weechat::channel *ch = account.channels.contains(peer_jid)
+                            ? &account.channels.find(peer_jid)->second : nullptr;
+                        if (!ch)
+                            continue;
+
+                        if (last_id)
+                        {
+                            // Remove all unreads up to and including the given stanza-id
+                            auto &u = ch->unreads;
+                            auto it = std::begin(u);
+                            while (it != std::end(u))
+                            {
+                                bool match = (it->id == last_id);
+                                it = u.erase(it);
+                                if (match)
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            ch->unreads.clear();
+                        }
+
+                        weechat_printf_date_tags(ch->buffer, 0,
+                                                 "xmpp_mds,notify_none",
+                                                 "%s%sRead sync from another device (id: %.8s…)",
+                                                 weechat_prefix("network"),
+                                                 weechat_color("darkgray"),
+                                                 last_id ? last_id : "all");
+                    }
+                }
+            }
+        }
+
+        // XEP-0184: Message Delivery Receipts — handle incoming <received> from others
+        {
+            xmpp_stanza_t *receipt_received = xmpp_stanza_get_child_by_name_and_ns(
+                stanza, "received", "urn:xmpp:receipts");
+            if (receipt_received)
+            {
+                const char *receipt_from = xmpp_stanza_get_from(stanza);
+                const char *acked_id = xmpp_stanza_get_id(receipt_received);
+                if (receipt_from && acked_id)
+                {
+                    const char *bare = xmpp_jid_bare(account.context, receipt_from);
+                    weechat::channel *ch = account.channels.contains(bare)
+                        ? &account.channels.find(bare)->second : nullptr;
+                    if (ch)
+                        weechat_printf_date_tags(ch->buffer, 0, "xmpp_receipt,notify_none",
+                                                "%s%sDelivered (id: %.8s…)",
+                                                weechat_prefix("network"),
+                                                weechat_color("darkgray"),
+                                                acked_id);
+                    xmpp_free(account.context, (void*)bare);
+                }
+                return 1;
+            }
+        }
+
+        // XEP-0333: Chat Markers — handle <displayed> and <read> from others
+        {
+            xmpp_stanza_t *marker_displayed = xmpp_stanza_get_child_by_name_and_ns(
+                stanza, "displayed", "urn:xmpp:chat-markers:0");
+            xmpp_stanza_t *marker_read = xmpp_stanza_get_child_by_name_and_ns(
+                stanza, "read", "urn:xmpp:chat-markers:0");
+            xmpp_stanza_t *marker = marker_displayed ? marker_displayed : marker_read;
+            if (marker)
+            {
+                const char *marker_from = xmpp_stanza_get_from(stanza);
+                const char *acked_id = xmpp_stanza_get_id(marker);
+                if (marker_from && acked_id)
+                {
+                    const char *bare = xmpp_jid_bare(account.context, marker_from);
+                    const char *nick = xmpp_jid_resource(account.context, marker_from);
+                    weechat::channel *ch = account.channels.contains(bare)
+                        ? &account.channels.find(bare)->second : nullptr;
+                    if (ch)
+                    {
+                        const char *display_name = (ch->type == weechat::channel::chat_type::MUC && nick)
+                            ? nick : bare;
+                        weechat_printf_date_tags(ch->buffer, 0, "xmpp_marker,notify_none",
+                                                "%s%s%s %s (id: %.8s…)",
+                                                weechat_prefix("network"),
+                                                weechat_color("darkgray"),
+                                                display_name,
+                                                marker_displayed ? "displayed" : "read",
+                                                acked_id);
+                    }
+                    xmpp_free(account.context, (void*)bare);
+                }
+                return 1;
+            }
+        }
+
+        // XEP-0224: Attention — handle incoming <attention> from others
+        {
+            xmpp_stanza_t *attention = xmpp_stanza_get_child_by_name_and_ns(
+                stanza, "attention", "urn:xmpp:attention:0");
+            if (attention)
+            {
+                const char *attn_from = xmpp_stanza_get_from(stanza);
+                if (attn_from)
+                {
+                    const char *bare = xmpp_jid_bare(account.context, attn_from);
+                    weechat::channel *ch = account.channels.contains(bare)
+                        ? &account.channels.find(bare)->second : nullptr;
+                    if (!ch)
+                    {
+                        // Create PM channel for the buzz
+                        ch = &account.channels.emplace(
+                            std::make_pair(bare, weechat::channel {
+                                    account, weechat::channel::chat_type::PM, bare, bare
+                                })).first->second;
+                    }
+                    weechat_printf_date_tags(ch->buffer, 0, "xmpp_attention,notify_highlight",
+                                            "%s%s is requesting your attention! (/buzz)",
+                                            weechat_prefix("network"),
+                                            bare);
+                    xmpp_free(account.context, (void*)bare);
+                }
+                return 1;
             }
         }
 
@@ -962,9 +1587,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
 
     if (id && (markable || request))
     {
-        auto unread = new weechat::channel::unread();
-        unread->id = strdup(id);
-        unread->thread = thread ? strdup(thread) : NULL;
+        weechat::channel::unread unread_val;
+        unread_val.id = id;
+        unread_val.thread = thread ? std::optional<std::string>(thread) : std::nullopt;
+        auto unread = &unread_val;
 
         xmpp_stanza_t *message = xmpp_message_new(account.context, NULL,
                                                   channel->id.data(), NULL);
@@ -974,7 +1600,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
             xmpp_stanza_t *message__received = xmpp_stanza_new(account.context);
             xmpp_stanza_set_name(message__received, "received");
             xmpp_stanza_set_ns(message__received, "urn:xmpp:receipts");
-            xmpp_stanza_set_id(message__received, unread->id);
+            xmpp_stanza_set_id(message__received, unread->id.c_str());
 
             xmpp_stanza_add_child(message, message__received);
             xmpp_stanza_release(message__received);
@@ -985,19 +1611,19 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
             xmpp_stanza_t *message__received = xmpp_stanza_new(account.context);
             xmpp_stanza_set_name(message__received, "received");
             xmpp_stanza_set_ns(message__received, "urn:xmpp:chat-markers:0");
-            xmpp_stanza_set_id(message__received, unread->id);
+            xmpp_stanza_set_id(message__received, unread->id.c_str());
 
             xmpp_stanza_add_child(message, message__received);
             xmpp_stanza_release(message__received);
         }
 
-        if (unread->thread)
+        if (unread->thread.has_value())
         {
             xmpp_stanza_t *message__thread = xmpp_stanza_new(account.context);
             xmpp_stanza_set_name(message__thread, "thread");
 
             xmpp_stanza_t *message__thread__text = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_text(message__thread__text, unread->thread);
+            xmpp_stanza_set_text(message__thread__text, unread->thread->c_str());
             xmpp_stanza_add_child(message__thread, message__thread__text);
             xmpp_stanza_release(message__thread__text);
 
@@ -1055,6 +1681,38 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
     const char *eme_name = eme ? xmpp_stanza_get_attribute(eme, "name") : NULL;
     
     intext = xmpp_stanza_get_text(body);
+
+    // XEP-0071: XHTML-IM — prefer <html><body> rich rendering over plain <body>.
+    // We apply it whenever XHTML is present AND the message is not encrypted
+    // (encrypted messages have no usable XHTML anyway).
+    // If plain <body> is also absent we use the XHTML as the sole text source.
+    std::string xhtml_fallback;
+    if (!encrypted && !x)
+    {
+        xmpp_stanza_t *html_elem = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "html", "http://jabber.org/protocol/xhtml-im");
+        if (html_elem)
+        {
+            xmpp_stanza_t *html_body = xmpp_stanza_get_child_by_name(html_elem, "body");
+            if (html_body)
+            {
+                xhtml_fallback = xhtml_to_weechat(html_body);
+                // Trim leading/trailing whitespace
+                auto trim_pos = xhtml_fallback.find_first_not_of(" \t\n\r");
+                if (trim_pos != std::string::npos)
+                    xhtml_fallback = xhtml_fallback.substr(trim_pos);
+                trim_pos = xhtml_fallback.find_last_not_of(" \t\n\r");
+                if (trim_pos != std::string::npos)
+                    xhtml_fallback = xhtml_fallback.substr(0, trim_pos + 1);
+                if (!xhtml_fallback.empty())
+                {
+                    // Free original intext (if any) and replace with rich version
+                    if (intext) xmpp_free(account.context, intext);
+                    intext = xmpp_strdup(account.context, xhtml_fallback.c_str());
+                }
+            }
+        }
+    }
     
     // Auto-enable OMEMO for PM channels when receiving encrypted messages
     if (encrypted && channel && channel->type == weechat::channel::chat_type::PM && !channel->omemo.enabled)
@@ -1076,7 +1734,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
     
     if (encrypted && account.omemo)
     {
-        cleartext = account.omemo.decode(&account, from_bare, encrypted);
+        cleartext = account.omemo.decode(&account, channel->buffer, from_bare, encrypted);
         if (!cleartext)
         {
             weechat_printf_date_tags(channel->buffer, 0, "notify_none", "%s%s (%s)",
@@ -1097,6 +1755,31 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
         xmpp_free(account.context, ciphertext);
     }
     text = cleartext ? cleartext : intext;
+
+    // XEP-0428: Fallback Indication — if <fallback> is present the <body> is
+    // just a compatibility string; suppress it so we don't double-print.
+    // (The actual content was already rendered by reactions/retract/reply code.)
+    xmpp_stanza_t *fallback_elem = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "fallback", "urn:xmpp:fallback:0");
+    if (fallback_elem && text && !replace)
+    {
+        // Only suppress if there's a meaningful stanza type alongside the body
+        // (reactions, retract, reply, etc. already set their own display)
+        xmpp_stanza_t *reactions = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "reactions", "urn:xmpp:reactions:0");
+        xmpp_stanza_t *retract = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "retract", "urn:xmpp:message-retract:1");
+        if (!retract)
+            retract = xmpp_stanza_get_child_by_name_and_ns(
+                stanza, "retract", "urn:xmpp:message-retract:0");
+        if (reactions || retract)
+            text = nullptr;  // suppress fallback body; the handler above will print
+    }
+
+    // XEP-0382: Spoiler Messages — display hint before the body
+    xmpp_stanza_t *spoiler_elem = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "spoiler", "urn:xmpp:spoiler:0");
+    const char *spoiler_hint = spoiler_elem ? xmpp_stanza_get_text(spoiler_elem) : nullptr;
 
     if (replace)
     {
@@ -1352,11 +2035,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
             
             if (moderate_reason)
                 xmpp_free(account.context, (void*)moderate_reason);
-            xmpp_free(account.context, (void*)from_bare);
-            if (to_bare) xmpp_free(account.context, (void*)to_bare);
-            if (cleartext) free(cleartext);
-            if (intext) xmpp_free(account.context, intext);
-            return 1;
+                                 xmpp_free(account.context, (void*)from_bare);
+                                 if (to_bare) xmpp_free(account.context, (void*)to_bare);
+                                 return 1;
         }
     }
 
@@ -1421,8 +2102,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                             
                             xmpp_free(account.context, (void*)from_bare);
                             if (to_bare) xmpp_free(account.context, (void*)to_bare);
-                            if (cleartext) free(cleartext);
-                            if (intext) xmpp_free(account.context, intext);
                             return 1;
                         }
                     }
@@ -1441,8 +2120,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
         
         xmpp_free(account.context, (void*)from_bare);
         if (to_bare) xmpp_free(account.context, (void*)to_bare);
-        if (cleartext) free(cleartext);
-        if (intext) xmpp_free(account.context, intext);
         return 1;
     }
 
@@ -1525,8 +2202,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                 weechat_string_dyn_free(dyn_emojis, 1);
                                 xmpp_free(account.context, (void*)from_bare);
                                 if (to_bare) xmpp_free(account.context, (void*)to_bare);
-                                if (cleartext) free(cleartext);
-                                if (intext) xmpp_free(account.context, intext);
                                 return 1;
                             }
                         }
@@ -1541,8 +2216,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
         weechat_string_dyn_free(dyn_emojis, 1);
         xmpp_free(account.context, (void*)from_bare);
         if (to_bare) xmpp_free(account.context, (void*)to_bare);
-        if (cleartext) free(cleartext);
-        if (intext) xmpp_free(account.context, intext);
         return 1;
     }
 
@@ -1569,6 +2242,15 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
     {
         strptime(timestamp, "%FT%T", &time);
         date = mktime(&time);
+    }
+
+    // XEP-0085: receiving a message implicitly clears the composing state
+    // Only do this for live (non-delayed) messages from others
+    if (!delay && from_bare && weechat_strcasecmp(from_bare, account.jid().data()) != 0)
+    {
+        auto *msg_user = user::search(&account, from);
+        if (msg_user)
+            channel->remove_typing(msg_user);
     }
 
     char **dyn_tags = weechat_string_dyn_alloc(1);
@@ -1644,7 +2326,41 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
              && from_bare != account.jid())
         weechat_string_dyn_concat(dyn_tags, ",notify_private", -1);
     else
+    {
         weechat_string_dyn_concat(dyn_tags, ",notify_message,log1", -1);
+
+        // XEP-0372: References — check for explicit @mention targeting local JID
+        // A <reference type="mention" uri="xmpp:user@server"> forces highlight.
+        bool xep0372_mentioned = false;
+        for (xmpp_stanza_t *ref = xmpp_stanza_get_children(stanza);
+             ref && !xep0372_mentioned; ref = xmpp_stanza_get_next(ref))
+        {
+            const char *ref_ns = xmpp_stanza_get_ns(ref);
+            const char *ref_name = xmpp_stanza_get_name(ref);
+            if (!ref_ns || !ref_name) continue;
+            if (strcmp(ref_name, "reference") != 0
+                || strcmp(ref_ns, "urn:xmpp:reference:0") != 0)
+                continue;
+            const char *ref_type = xmpp_stanza_get_attribute(ref, "type");
+            if (!ref_type || strcmp(ref_type, "mention") != 0) continue;
+            const char *ref_uri = xmpp_stanza_get_attribute(ref, "uri");
+            if (!ref_uri) continue;
+            // URI is "xmpp:user@server" or "xmpp:user@server/resource"
+            const char *colon = strchr(ref_uri, ':');
+            if (!colon) continue;
+            std::string mentioned_jid(colon + 1);
+            // Strip resource if present
+            auto slash = mentioned_jid.find('/');
+            if (slash != std::string::npos)
+                mentioned_jid = mentioned_jid.substr(0, slash);
+            char *local_bare = xmpp_jid_bare(account.context, account.jid().data());
+            if (local_bare && weechat_strcasecmp(mentioned_jid.c_str(), local_bare) == 0)
+                xep0372_mentioned = true;
+            xmpp_free(account.context, local_bare);
+        }
+        if (xep0372_mentioned)
+            weechat_string_dyn_concat(dyn_tags, ",notify_highlight", -1);
+    }
 
     const char *edit = replace ? "* " : ""; // Losing which message was edited, sadly
     if (x && text == cleartext && channel->transport != weechat::channel::transport::PGP)
@@ -1783,9 +2499,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
     }
     
     // Apply XEP-0393 Message Styling
+    // Skip if <unstyled xmlns='urn:xmpp:styling:0'/> hint is present
     const char *display_text = text;
     std::string styled_text;
-    if (text && !difftext)  // Don't style diffs (already styled)
+    bool has_unstyled = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "unstyled", "urn:xmpp:styling:0") != nullptr;
+    if (text && !difftext && !has_unstyled)  // Don't style diffs (already styled)
     {
         styled_text = apply_xep393_styling(text);
         display_text = styled_text.c_str();
@@ -1800,6 +2519,22 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
     if (!reply_prefix.empty())
     {
         final_text = reply_prefix + (display_text ? display_text : "");
+        display_text = final_text.c_str();
+    }
+
+    // XEP-0382: Spoiler Messages — prepend spoiler warning before the body
+    if (spoiler_hint)
+    {
+        std::string spoiler_prefix = std::string(weechat_color("yellow"))
+            + "[Spoiler"
+            + (spoiler_hint && strlen(spoiler_hint) > 0
+               ? std::string(": ") + spoiler_hint
+               : std::string(""))
+            + "] "
+            + weechat_color("resetcolor");
+        if (final_text.empty())
+            final_text = display_text ? display_text : "";
+        final_text = spoiler_prefix + final_text;
         display_text = final_text.c_str();
     }
     
@@ -1826,13 +2561,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                  display_text ? display_text : "");
 
     weechat_string_dyn_free(dyn_tags, 1);
-
-    if (intext)
-        xmpp_free(account.context, intext);
-    if (difftext)
-        free(difftext);
-    if (cleartext)
-        free(cleartext);
 
     return true;
 }
@@ -1919,6 +2647,14 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     FEATURE("urn:xmpp:ping");
     FEATURE("urn:xmpp:receipts");
     FEATURE("urn:xmpp:time");
+    FEATURE("urn:xmpp:attention:0");   // XEP-0224: Attention
+    FEATURE("urn:xmpp:spoiler:0");     // XEP-0382: Spoiler Messages
+    FEATURE("urn:xmpp:fallback:0");    // XEP-0428: Fallback Indication
+    FEATURE("vcard-temp:x:update");    // XEP-0153: vCard-Based Avatars
+    FEATURE("urn:xmpp:reference:0");   // XEP-0372: References (mentions)
+    FEATURE("http://jabber.org/protocol/commands");  // XEP-0050: Ad-Hoc Commands
+    FEATURE("urn:xmpp:mds:displayed:0");             // XEP-0490: Message Displayed Synchronization
+    FEATURE("urn:xmpp:mds:displayed:0+notify");      // Subscribe to MDS events
 #undef FEATURE
 
     xmpp_stanza_t *x = xmpp_stanza_new(account.context);
@@ -2019,6 +2755,214 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     return reply;
 }
 
+// XEP-0004: Data Forms — render a <x xmlns='jabber:x:data'> form to a buffer
+static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
+                              const char *jid, const char *node, const char *session_id)
+{
+    if (!x_form || !buf) return;
+
+    xmpp_stanza_t *title_elem = xmpp_stanza_get_child_by_name(x_form, "title");
+    const char *title = title_elem ? xmpp_stanza_get_text_ptr(title_elem) : NULL;
+    xmpp_stanza_t *instr_elem = xmpp_stanza_get_child_by_name(x_form, "instructions");
+    const char *instr = instr_elem ? xmpp_stanza_get_text_ptr(instr_elem) : NULL;
+
+    weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+                             "%s%s── Ad-Hoc Form%s%s%s ──%s",
+                             weechat_prefix("network"),
+                             weechat_color("bold"),
+                             title ? ": " : "",
+                             title ? title : "",
+                             title ? "" : "",
+                             weechat_color("-bold"));
+    if (instr)
+        weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+                                 "%s  %s%s%s",
+                                 weechat_prefix("network"),
+                                 weechat_color("italic"),
+                                 instr,
+                                 weechat_color("-italic"));
+
+    int field_index = 0;
+
+    // Print each field
+    for (xmpp_stanza_t *field = xmpp_stanza_get_children(x_form);
+         field; field = xmpp_stanza_get_next(field))
+    {
+        const char *fname = xmpp_stanza_get_name(field);
+        if (!fname || strcmp(fname, "field") != 0) continue;
+        const char *var   = xmpp_stanza_get_attribute(field, "var");
+        const char *label = xmpp_stanza_get_attribute(field, "label");
+        const char *ftype = xmpp_stanza_get_attribute(field, "type");
+
+        // Skip hidden fields — not user-visible
+        if (ftype && strcmp(ftype, "hidden") == 0) continue;
+
+        field_index++;
+
+        // Collect all <value> children (text-multi and list-multi can have several)
+        std::vector<std::string> values;
+        for (xmpp_stanza_t *v = xmpp_stanza_get_children(field);
+             v; v = xmpp_stanza_get_next(v))
+        {
+            const char *vname = xmpp_stanza_get_name(v);
+            if (!vname || strcmp(vname, "value") != 0) continue;
+            const char *vtext = xmpp_stanza_get_text_ptr(v);
+            if (vtext) values.push_back(vtext);
+        }
+
+        // Check if field is required
+        bool required = (xmpp_stanza_get_child_by_name(field, "required") != nullptr);
+
+        // Determine display value string
+        bool is_password = ftype && strcmp(ftype, "text-private") == 0;
+        bool is_boolean  = ftype && strcmp(ftype, "boolean") == 0;
+        bool is_fixed    = ftype && strcmp(ftype, "fixed") == 0;
+        bool is_list     = ftype && (strcmp(ftype, "list-single") == 0
+                                  || strcmp(ftype, "list-multi") == 0);
+
+        // Fixed fields are just informational text — print them differently
+        if (is_fixed)
+        {
+            for (auto &v : values)
+                weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+                                         "%s  %s%s%s",
+                                         weechat_prefix("network"),
+                                         weechat_color("darkgray"),
+                                         v.c_str(),
+                                         weechat_color("resetcolor"));
+            continue;
+        }
+
+        // Build current-value display
+        std::string val_display;
+        if (is_password)
+        {
+            val_display = values.empty() ? "(empty)" : "********";
+        }
+        else if (is_boolean)
+        {
+            if (values.empty())
+                val_display = "false";
+            else
+            {
+                const auto &v = values[0];
+                bool on = (v == "1" || v == "true");
+                val_display  = std::string(weechat_color(on ? "green" : "red"));
+                val_display += on ? "true" : "false";
+                val_display += weechat_color("resetcolor");
+            }
+        }
+        else if (values.empty())
+        {
+            val_display = std::string(weechat_color("darkgray")) + "(empty)"
+                        + weechat_color("resetcolor");
+        }
+        else if (values.size() == 1)
+        {
+            val_display = values[0];
+        }
+        else
+        {
+            // text-multi / list-multi: join with " | "
+            for (size_t i = 0; i < values.size(); ++i)
+            {
+                if (i) val_display += std::string(weechat_color("darkgray"))
+                                    + " | " + weechat_color("resetcolor");
+                val_display += values[i];
+            }
+        }
+
+        // Collect available options for list-single/list-multi
+        // For the selected value(s), highlight them
+        std::string options_str;
+        if (is_list)
+        {
+            for (xmpp_stanza_t *opt = xmpp_stanza_get_children(field);
+                 opt; opt = xmpp_stanza_get_next(opt))
+            {
+                const char *oname = xmpp_stanza_get_name(opt);
+                if (!oname || strcmp(oname, "option") != 0) continue;
+
+                xmpp_stanza_t *oval_elem = xmpp_stanza_get_child_by_name(opt, "value");
+                const char *oval  = oval_elem ? xmpp_stanza_get_text_ptr(oval_elem) : nullptr;
+                const char *olabel = xmpp_stanza_get_attribute(opt, "label");
+
+                if (!options_str.empty()) options_str += "  ";
+
+                // Is this option currently selected?
+                bool selected = false;
+                for (auto &v : values)
+                    if (oval && v == oval) { selected = true; break; }
+
+                if (selected)
+                    options_str += weechat_color("green");
+                else
+                    options_str += weechat_color("darkgray");
+
+                options_str += oval ? oval : "?";
+                if (olabel && oval && strcmp(olabel, oval) != 0)
+                {
+                    options_str += '(';
+                    options_str += olabel;
+                    options_str += ')';
+                }
+                if (selected)
+                    options_str += weechat_color("resetcolor");
+                else
+                    options_str += weechat_color("resetcolor");
+            }
+        }
+
+        // Field type badge color
+        const char *type_color = "gray";
+        if (ftype)
+        {
+            if (strcmp(ftype, "text-single") == 0 || strcmp(ftype, "text-multi") == 0)
+                type_color = "cyan";
+            else if (is_boolean)
+                type_color = "yellow";
+            else if (is_list)
+                type_color = "214"; // orange
+            else if (is_password)
+                type_color = "red";
+        }
+
+        // Print: "  N. Label [var/type] = value"
+        weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+                                 "%s  %s%d.%s %s%s%s%s %s[%s%s%s%s%s]%s = %s%s",
+                                 weechat_prefix("network"),
+                                 // index
+                                 weechat_color("darkgray"), field_index, weechat_color("resetcolor"),
+                                 // label (bold), required marker
+                                 weechat_color("bold"),
+                                 label ? label : (var ? var : "?"),
+                                 required ? "*" : "",
+                                 weechat_color("-bold"),
+                                 // [var/type]
+                                 weechat_color("darkgray"),
+                                 weechat_color(type_color),
+                                 var ? var : "?",
+                                 ftype ? "/" : "",
+                                 ftype ? ftype : "",
+                                 weechat_color("darkgray"),
+                                 weechat_color("resetcolor"),
+                                 // value
+                                 val_display.c_str(),
+                                 // options on same line for lists
+                                 options_str.empty() ? "" : (std::string("  ") + options_str).c_str());
+    }
+
+    // Show how to submit
+    if (session_id && node && jid)
+        weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+                                 "%s  %sSubmit:%s /adhoc %s %s %s %svar%s=%svalue%s ...",
+                                 weechat_prefix("network"),
+                                 weechat_color("gray"), weechat_color("resetcolor"),
+                                 jid, node, session_id,
+                                 weechat_color("cyan"), weechat_color("resetcolor"),
+                                 weechat_color("yellow"), weechat_color("resetcolor"));
+}
+
 bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */)
 {
     // SM counter incremented in libstrophe wrapper, not here
@@ -2117,8 +3061,39 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                                   weechat_prefix("error"), from_jid, error_type);
                 }
             }
-            return true;
+    // XEP-0283: Moved — detect JID migration notice
+    {
+        xmpp_stanza_t *moved_elem = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "moved", "urn:xmpp:moved:1");
+        if (moved_elem)
+        {
+            const char *new_jid = xmpp_stanza_get_attribute(moved_elem, "new-jid");
+            if (!new_jid)
+            {
+                // Some implementations put the new JID as text content
+                new_jid = xmpp_stanza_get_text(moved_elem);
+            }
+            const char *old_jid_full = binding.from ? binding.from->full.data() : "unknown";
+            char *old_jid_bare = binding.from
+                ? xmpp_jid_bare(account.context, binding.from->full.data()) : nullptr;
+            if (new_jid)
+                weechat_printf_date_tags(account.buffer, 0, "xmpp_presence,notify_highlight",
+                                         "%s%sContact %s%s%s has moved to %s%s%s — update your roster",
+                                         weechat_prefix("network"),
+                                         weechat_color("yellow"),
+                                         weechat_color("bold"),
+                                         old_jid_bare ? old_jid_bare : old_jid_full,
+                                         weechat_color("reset"),
+                                         weechat_color("bold"),
+                                         new_jid,
+                                         weechat_color("reset"));
+            if (old_jid_bare)
+                xmpp_free(account.context, old_jid_bare);
         }
+    }
+
+    return true;
+}
     }
     
     // Handle vCard responses (XEP-0054)
@@ -2549,8 +3524,127 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
             }
             item = xmpp_stanza_get_next(item);
         }
+
+        // XEP-0050: Ad-Hoc Commands — handle list and execute/form results
+        const char *items_node = xmpp_stanza_get_attribute(items_query, "node");
+        bool is_commands_node = items_node
+            && strcmp(items_node, "http://jabber.org/protocol/commands") == 0;
+        const char *iq_id = xmpp_stanza_get_id(stanza);
+        bool is_adhoc_query = iq_id && account.adhoc_queries.count(iq_id);
+
+        if (is_commands_node && is_adhoc_query)
+        {
+            auto &adhoc_info = account.adhoc_queries[iq_id];
+            struct t_gui_buffer *adhoc_buf = adhoc_info.buffer
+                ? adhoc_info.buffer : account.buffer;
+
+            weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
+                                     "%s%sCommands available on %s%s:",
+                                     weechat_prefix("network"),
+                                     weechat_color("bold"),
+                                     adhoc_info.target_jid.c_str(),
+                                     weechat_color("reset"));
+
+            xmpp_stanza_t *cmd_item = xmpp_stanza_get_child_by_name(items_query, "item");
+            int count = 0;
+            while (cmd_item)
+            {
+                const char *cmd_jid = xmpp_stanza_get_attribute(cmd_item, "jid");
+                const char *cmd_node = xmpp_stanza_get_attribute(cmd_item, "node");
+                const char *cmd_name = xmpp_stanza_get_attribute(cmd_item, "name");
+                weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
+                                         "%s  %s%-40s%s  %s%s",
+                                         weechat_prefix("network"),
+                                         weechat_color("bold"),
+                                         cmd_name ? cmd_name : "(unnamed)",
+                                         weechat_color("reset"),
+                                         cmd_node ? cmd_node : "",
+                                         cmd_jid && cmd_jid != adhoc_info.target_jid
+                                             ? (std::string(" [") + cmd_jid + "]").c_str() : "");
+                count++;
+                cmd_item = xmpp_stanza_get_next(cmd_item);
+            }
+            if (count == 0)
+                weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
+                                         "%s  (no commands available)",
+                                         weechat_prefix("network"));
+            else
+                weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
+                                         "%s  Use /adhoc %s <node> to execute a command",
+                                         weechat_prefix("network"),
+                                         adhoc_info.target_jid.c_str());
+            account.adhoc_queries.erase(iq_id);
+        }
     }
-    
+
+    // XEP-0050: Ad-Hoc Commands — handle command execute/form result (type=result/error)
+    xmpp_stanza_t *adhoc_command = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "command", "http://jabber.org/protocol/commands");
+    if (adhoc_command && type)
+    {
+        const char *iq_id = xmpp_stanza_get_id(stanza);
+        bool is_adhoc_query = iq_id && account.adhoc_queries.count(iq_id);
+        struct t_gui_buffer *adhoc_buf = is_adhoc_query
+            ? (account.adhoc_queries[iq_id].buffer
+               ? account.adhoc_queries[iq_id].buffer : account.buffer)
+            : account.buffer;
+        const char *cmd_node = xmpp_stanza_get_attribute(adhoc_command, "node");
+        const char *cmd_status = xmpp_stanza_get_attribute(adhoc_command, "status");
+        const char *session_id = xmpp_stanza_get_attribute(adhoc_command, "sessionid");
+        const char *from_jid = xmpp_stanza_get_from(stanza);
+
+        if (weechat_strcasecmp(type, "error") == 0)
+        {
+            weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
+                                     "%s[adhoc] Error executing command %s",
+                                     weechat_prefix("error"),
+                                     cmd_node ? cmd_node : "(unknown)");
+        }
+        else if (weechat_strcasecmp(type, "result") == 0)
+        {
+            // Check for a data form to display
+            xmpp_stanza_t *x_form = xmpp_stanza_get_child_by_name_and_ns(
+                adhoc_command, "x", "jabber:x:data");
+
+            if (x_form)
+            {
+                const char *form_type = xmpp_stanza_get_attribute(x_form, "type");
+                if (form_type && strcmp(form_type, "result") == 0)
+                {
+                    // Display result form (read-only)
+                    render_data_form(adhoc_buf, x_form, from_jid, cmd_node, NULL);
+                }
+                else
+                {
+                    // Input form — render and prompt for submission
+                    render_data_form(adhoc_buf, x_form, from_jid, cmd_node, session_id);
+                }
+            }
+            else if (cmd_status && strcmp(cmd_status, "completed") == 0)
+            {
+                // Command completed with no form — check for <note>
+                xmpp_stanza_t *note = xmpp_stanza_get_child_by_name(adhoc_command, "note");
+                const char *note_text = note ? xmpp_stanza_get_text_ptr(note) : NULL;
+                weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
+                                         "%s[adhoc] Command %s completed%s%s",
+                                         weechat_prefix("network"),
+                                         cmd_node ? cmd_node : "",
+                                         note_text ? ": " : "",
+                                         note_text ? note_text : "");
+            }
+            else if (cmd_status && strcmp(cmd_status, "executing") == 0 && !x_form)
+            {
+                weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
+                                         "%s[adhoc] Command %s in progress (no form)",
+                                         weechat_prefix("network"),
+                                         cmd_node ? cmd_node : "");
+            }
+        }
+
+        if (is_adhoc_query)
+            account.adhoc_queries.erase(iq_id);
+    }
+
     query = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "query", "http://jabber.org/protocol/disco#info");
     if (query && type)
@@ -2703,12 +3797,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                 {
                     xmpp_stanza_t *children[2] = {NULL};
                     children[0] = stanza__iq_pubsub_items(account.context, NULL,
-                            const_cast<char*>("eu.siacs.conversations.axolotl.devicelist"));
+                            "eu.siacs.conversations.axolotl.devicelist");
                     children[0] = stanza__iq_pubsub(account.context, NULL,
                             children, with_noop("http://jabber.org/protocol/pubsub"));
                     children[0] = stanza__iq(account.context, NULL, children, NULL,
-                            strdup("fetch2"), to ? strdup(to) : NULL,
-                            binding.from ? strdup(binding.from->bare.data()) : NULL, strdup("get"));
+                            "fetch2", to, binding.from ? binding.from->bare.data() : NULL, "get");
                     account.connection.send(children[0]);
                     xmpp_stanza_release(children[0]);
                 }
@@ -2917,15 +4010,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                             children[1] = NULL;
                             children[0] =
                             stanza__iq_pubsub_items(account.context, NULL,
-                                                    strdup(bundle_node));
+                                                    bundle_node);
                             children[0] =
                             stanza__iq_pubsub(account.context, NULL, children,
                                                 with_noop("http://jabber.org/protocol/pubsub"));
                             char *uuid = xmpp_uuid_gen(account.context);
                             children[0] =
                             stanza__iq(account.context, NULL, children, NULL, uuid,
-                                to ? strdup(to) : NULL, from ? strdup(from) : NULL,
-                                strdup("get"));
+                                to, from, "get");
                             xmpp_free(account.context, uuid);
 
                             account.connection.send(children[0]);
@@ -3437,15 +4529,15 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         children[1] = NULL;
         children[0] =
         stanza__iq_pubsub_items(account.context, NULL,
-                                strdup("eu.siacs.conversations.axolotl.devicelist"));
+                                "eu.siacs.conversations.axolotl.devicelist");
         children[0] =
         stanza__iq_pubsub(account.context, NULL, children.get(),
                           with_noop("http://jabber.org/protocol/pubsub"));
         char *uuid = xmpp_uuid_gen(account.context);
         children[0] =
         stanza__iq(account.context, NULL, children.get(), NULL, uuid,
-                   strdup(account.jid().data()), strdup(account.jid().data()),
-                   strdup("get"));
+                   account.jid().data(), account.jid().data(),
+                   "get");
         xmpp_free(account.context, uuid);
 
         this->send(children[0]);
@@ -3703,18 +4795,17 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
     return true;
 }
 
-char* rand_string(int length)
+std::string rand_string(int length)
 {
-    char *string = new char[length];
+    std::string s(length, '\0');
     for(int i = 0; i < length; ++i){
-        string[i] = '0' + rand()%72; // starting on '0', ending on '}'
-        if (!((string[i] >= '0' && string[i] <= '9') ||
-              (string[i] >= 'A' && string[i] <= 'Z') ||
-              (string[i] >= 'a' && string[i] <= 'z')))
+        s[i] = '0' + rand()%72; // starting on '0', ending on '}'
+        if (!((s[i] >= '0' && s[i] <= '9') ||
+              (s[i] >= 'A' && s[i] <= 'Z') ||
+              (s[i] >= 'a' && s[i] <= 'z')))
             i--; // reroll
     }
-    string[length] = 0;
-    return string;
+    return s;
 }
 
 int weechat::connection::connect(std::string jid, std::string password, weechat::tls_policy tls)
@@ -3727,10 +4818,9 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
     const char *resource = account.resource().data();
     if (!(resource && strlen(resource)))
     {
-        char *const rand = rand_string(8);
+        const std::string rand = rand_string(8);
         char ident[64] = {0};
-        snprintf(ident, sizeof(ident), "weechat.%s", rand);
-        delete[] rand;
+        snprintf(ident, sizeof(ident), "weechat.%s", rand.c_str());
 
         account.resource(ident);
         resource = account.resource().data();

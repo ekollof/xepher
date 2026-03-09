@@ -60,30 +60,30 @@ namespace weechat
 
         struct member
         {
-            char *id;
+            std::string id;
 
-            char *role;
-            char *affiliation;
+            std::optional<std::string> role;
+            std::optional<std::string> affiliation;
         };
 
         struct topic
         {
-            char *value = nullptr;
-            char *creator = nullptr;
+            std::optional<std::string> value;
+            std::optional<std::string> creator;
             time_t last_set = 0;
         };
 
         struct unread
         {
-            char *id;
-            char *thread;
+            std::string id;
+            std::optional<std::string> thread;
         };
 
     private:
         topic topic;
 
         /* mpim */
-        char *creator = nullptr;
+        std::optional<std::string> creator;
         double last_read = 0.0;
         int unread_count = 0;
         int unread_count_display = 0;

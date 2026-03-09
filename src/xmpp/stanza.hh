@@ -70,17 +70,17 @@ static inline void stanza__set_text(xmpp_ctx_t *context, xmpp_stanza_t *parent,
 }
 
 xmpp_stanza_t *stanza__presence(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                xmpp_stanza_t **children, char *ns,
-                                char *from, char *to, char *type);
+                                xmpp_stanza_t **children, const char *ns,
+                                const char *from, const char *to, const char *type);
 
 xmpp_stanza_t *stanza__iq(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                          xmpp_stanza_t **children, char *ns, char *id,
-                          char *from, char *to, char *type);
+                          xmpp_stanza_t **children, const char *ns, const char *id,
+                          const char *from, const char *to, const char *type);
 
 xmpp_stanza_t *stanza__iq_pubsub(xmpp_ctx_t *context, xmpp_stanza_t *base,
                                  xmpp_stanza_t **children, struct t_string *ns);
 
-xmpp_stanza_t *stanza__iq_pubsub_items(xmpp_ctx_t *context, xmpp_stanza_t *base, char *node);
+xmpp_stanza_t *stanza__iq_pubsub_items(xmpp_ctx_t *context, xmpp_stanza_t *base, const char *node);
 
 xmpp_stanza_t *stanza__iq_pubsub_subscribe(xmpp_ctx_t *context, xmpp_stanza_t *base,
                                            struct t_string *node, struct t_string *jid);

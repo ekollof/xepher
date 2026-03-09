@@ -196,10 +196,10 @@ void weechat::avatar::request_data(account& acc, const char *jid,
 void weechat::avatar::load_for_user(account& acc, user& user)
 {
     // If user has an avatar hash, try to load it from cache
-    if (!user.profile.avatar_hash)
+    if (user.profile.avatar_hash.empty())
         return;
     
-    std::string hash(user.profile.avatar_hash);
+    const std::string& hash = user.profile.avatar_hash;
     auto cached = load_from_cache(acc, hash);
     
     if (cached)
@@ -214,7 +214,7 @@ void weechat::avatar::load_for_user(account& acc, user& user)
         weechat_printf_date_tags(acc.buffer, 0, "xmpp_avatar",
                                 "%sLoaded cached avatar for %s (hash: %.8s...)",
                                 weechat_prefix("network"),
-                                user.id,
+                                user.id.c_str(),
                                 hash.c_str());
     }
 }

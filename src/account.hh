@@ -138,6 +138,16 @@ namespace weechat
         std::unordered_map<std::string, time_t> user_ping_queries;  // ping_id -> start_time
         std::unordered_map<std::string, std::string> caps_disco_queries;  // disco_id -> verification_hash
         std::unordered_map<std::string, std::string> upload_disco_queries;  // disco_id -> service_jid
+
+        // XEP-0050: Ad-Hoc Commands query tracking
+        struct adhoc_query_info {
+            std::string target_jid;   // JID we queried
+            struct t_gui_buffer *buffer; // buffer to print results into
+            bool is_list;             // true = listing commands, false = executing one
+            std::string node;         // command node being executed (for execute queries)
+            std::string session_id;   // session id (for multi-step forms)
+        };
+        std::unordered_map<std::string, adhoc_query_info> adhoc_queries;  // iq_id -> info
         
         // Capability cache (XEP-0115)
         std::unordered_map<std::string, std::vector<std::string>> caps_cache;  // verification_hash -> features

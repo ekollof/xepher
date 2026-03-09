@@ -2,9 +2,7 @@
 // License, version 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
 #include <stdio.h>
 #include <time.h>
 #include <regex>
@@ -23,6 +21,7 @@
 #include "pgp.hh"
 #include "util.hh"
 #include "xmpp/node.hh"
+#include "xmpp/stanza.hh"
 
 void weechat::channel::set_transport(enum weechat::channel::transport transport, int force)
 {
@@ -303,7 +302,9 @@ weechat::channel::channel(weechat::account& account,
         }
         
         time_t end = now;
-        fetch_mam(xmpp_uuid_gen(account.context), &start, &end, nullptr);
+        char *mam_uuid = xmpp_uuid_gen(account.context);
+        fetch_mam(mam_uuid, &start, &end, nullptr);
+        xmpp_free(account.context, mam_uuid);
     }
 }
 
@@ -414,14 +415,15 @@ int weechat::channel::typing_cb(const void *pointer, void *data, int remaining_c
     for (auto ptr_typing = channel->typings.begin();
          ptr_typing != channel->typings.end();)
     {
-        if (now - ptr_typing->ts > 5)
+        if (now - ptr_typing->ts > 30)
         {
             ptr_typing = channel->typings.erase(ptr_typing);
         }
         else
+        {
             ptr_typing++;
-
-        typecount++;
+            typecount++;
+        }
     }
 
     localvar = weechat_buffer_get_string(channel->buffer, "localvar_typing");
@@ -476,18 +478,18 @@ int weechat::channel::add_typing(weechat::user *user)
         weechat::channel::typing& new_typing = typings.emplace_back();
         new_typing.user = user;
         // For MUC, show nickname (resource); for PM, show bare JID
-        if (user->id)
+        if (!user->id.empty())
         {
             if (type == chat_type::MUC)
             {
-                char *nick = xmpp_jid_resource(account.context, user->id);
+                char *nick = xmpp_jid_resource(account.context, user->id.c_str());
                 new_typing.name = nick ? nick : user->id;
                 if (nick)
                     xmpp_free(account.context, nick);
             }
             else
             {
-                char *bare_jid = xmpp_jid_bare(account.context, user->id);
+                char *bare_jid = xmpp_jid_bare(account.context, user->id.c_str());
                 new_typing.name = bare_jid ? bare_jid : user->id;
                 if (bare_jid)
                     xmpp_free(account.context, bare_jid);
@@ -563,9 +565,9 @@ int weechat::channel::add_self_typing(weechat::user *user)
         weechat::channel::typing& new_typing = self_typings.emplace_back();
         new_typing.user = user;
         // Extract bare JID (without resource) for display
-        if (user && user->id)
+        if (user && !user->id.empty())
         {
-            char *bare_jid = xmpp_jid_bare(account.context, user->id);
+            char *bare_jid = xmpp_jid_bare(account.context, user->id.c_str());
             new_typing.name = bare_jid ? bare_jid : user->id;
             if (bare_jid)
                 xmpp_free(account.context, bare_jid);
@@ -614,64 +616,21 @@ weechat::channel::~channel()
         account.mam_cache_set_last_timestamp(id, -1);  // -1 = deliberately closed
     }
     
-    // NOTE: Other cleanup disabled - weechat frees these when closing buffers
-    // Attempting to free them here causes memory corruption:
-    // - "Unaligned fastbin chunk detected" from freeing members_speaking lists
-    // - Double-free from freeing omemo hashtables
-    
-    /*
+    // Free members_speaking lists (created via weechat_list_new, must be freed)
     if (members_speaking[0])
         weechat_list_free(members_speaking[0]);
     if (members_speaking[1])
         weechat_list_free(members_speaking[1]);
-    */
-    
-    /*
-    // Free topic
-    if (topic.value)
-        ::free(topic.value);
-    if (topic.creator)
-        ::free(topic.creator);
-
-    // Free creator
-    if (creator)
-        ::free(creator);
-
-    // Free unreads
-    for (auto& unread : unreads)
-    {
-        if (unread.id)
-            ::free(unread.id);
-        if (unread.thread)
-            ::free(unread.thread);
-    }
-
-    // Free members
-    for (auto& member_pair : members)
-    {
-        auto& member = member_pair.second;
-        if (member.id)
-            ::free(member.id);
-        if (member.role)
-            ::free(member.role);
-        if (member.affiliation)
-            ::free(member.affiliation);
-    }
-    */
 }
 
 void weechat::channel::update_topic(const char* topic, const char* creator, int last_set)
 {
-    if (this->topic.value)
-        ::free(this->topic.value);
-    if (this->topic.creator)
-        ::free(this->topic.creator);
-    this->topic.value = (topic) ? strdup(topic) : NULL;
-    this->topic.creator = (creator) ? strdup(creator) : NULL;
+    this->topic.value = topic ? std::optional<std::string>(topic) : std::nullopt;
+    this->topic.creator = creator ? std::optional<std::string>(creator) : std::nullopt;
     this->topic.last_set = last_set;
 
-    if (this->topic.value)
-        weechat_buffer_set(buffer, "title", topic);
+    if (this->topic.value.has_value())
+        weechat_buffer_set(buffer, "title", this->topic.value->c_str());
     else
         weechat_buffer_set(buffer, "title", "");
 }
@@ -701,11 +660,9 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     auto member_opt = member_search(id);
     if (!member_opt)
     {
-        member = new weechat::channel::member();
-        member->id = strdup(id);
-
-        member->role = NULL;
-        member->affiliation = NULL;
+        auto& new_member = members[std::string(id)];
+        new_member.id = id;
+        member = &new_member;
     }
     else
     {
@@ -718,8 +675,8 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
         user->nicklist_add(&account, this);
     else return member; // TODO: !!
 
-    char *jid_bare = xmpp_jid_bare(account.context, user->id);
-    char *jid_resource = xmpp_jid_resource(account.context, user->id);
+    char *jid_bare = xmpp_jid_bare(account.context, user->id.c_str());
+    char *jid_resource = xmpp_jid_resource(account.context, user->id.c_str());
     if (weechat_strcasecmp(jid_bare, id) == 0
              && type == weechat::channel::chat_type::MUC)
         weechat_printf_date_tags(buffer, 0, "xmpp_presence,enter,log4", "%s%s%s%s%s %s%s%s%s %s%s%s%s%s%s%s%s%s%s%s%s%s%s",
@@ -728,43 +685,45 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
                                  client ? " (" : "",
                                  client ? client : "",
                                  client ? ")" : "",
-                                 user->profile.status ? "is " : "",
+                                 user->profile.status.has_value() ? "is " : "",
                                  weechat_color("irc.color.message_join"),
-                                 user->profile.status ? user->profile.status : (user->profile.idle ? "idle" : "entered"),
+                                 user->profile.status.has_value() ? user->profile.status->c_str() : (user->profile.idle.has_value() ? "idle" : "entered"),
                                  weechat_color("reset"),
                                  id,
-                                 user->profile.status_text ? " [" : "",
-                                 user->profile.status_text ? user->profile.status_text : "",
-                                 user->profile.status_text ? "]" : "",
+                                 user->profile.status_text.has_value() ? " [" : "",
+                                 user->profile.status_text.has_value() ? user->profile.status_text->c_str() : "",
+                                 user->profile.status_text.has_value() ? "]" : "",
                                  weechat_color("yellow"), " as ", weechat_color("reset"),
-                                 user->profile.affiliation ? user->profile.affiliation : "",
-                                 user->profile.affiliation ? " " : "",
-                                 user->profile.role,
-                                 user->profile.pgp_id ? weechat_color("gray") : "",
-                                 user->profile.pgp_id ? " with PGP:" : "",
-                                 user->profile.pgp_id ? user->profile.pgp_id : "",
-                                 user->profile.pgp_id ? weechat_color("reset") : "");
+                                 user->profile.affiliation.has_value() ? user->profile.affiliation->c_str() : "",
+                                 user->profile.affiliation.has_value() ? " " : "",
+                                 user->profile.role.has_value() ? user->profile.role->c_str() : "",
+                                 user->profile.pgp_id.has_value() ? weechat_color("gray") : "",
+                                 user->profile.pgp_id.has_value() ? " with PGP:" : "",
+                                 user->profile.pgp_id.has_value() ? user->profile.pgp_id->c_str() : "",
+                                 user->profile.pgp_id.has_value() ? weechat_color("reset") : "");
     else
         weechat_printf_date_tags(buffer, 0, "xmpp_presence,enter,log4", "%s%s (%s) %s%s%s%s %s%s%s%s%s%s%s%s%s",
                                  weechat_prefix("join"),
                                  jid_resource ? user->as_prefix_raw().data() : "You",
                                  jid_resource ? jid_resource : user->as_prefix_raw().data(),
-                                 user->profile.status ? "is " : "",
+                                 user->profile.status.has_value() ? "is " : "",
                                  weechat_color("irc.color.message_join"),
-                                 user->profile.status ? user->profile.status : (user->profile.idle ? "idle" : "entered"),
+                                 user->profile.status.has_value() ? user->profile.status->c_str() : (user->profile.idle.has_value() ? "idle" : "entered"),
                                  weechat_color("reset"),
-                                 user->profile.idle ? "since " : "",
-                                 user->profile.idle ? user->profile.idle->data() : "",
-                                 user->profile.status_text ? " [" : "",
-                                 user->profile.status_text ? user->profile.status_text : "",
-                                 user->profile.status_text ? "]" : "",
-                                 user->profile.pgp_id || user->profile.omemo ? weechat_color("gray") : "",
-                                 user->profile.pgp_id || user->profile.omemo ? " with " : "",
-                                 user->profile.pgp_id ? "PGP:" : "",
-                                 user->profile.pgp_id ? user->profile.pgp_id : "",
-                                 user->profile.omemo && user->profile.pgp_id ? " and " : "",
+                                 user->profile.idle.has_value() ? "since " : "",
+                                 user->profile.idle.has_value() ? user->profile.idle->data() : "",
+                                 user->profile.status_text.has_value() ? " [" : "",
+                                 user->profile.status_text.has_value() ? user->profile.status_text->c_str() : "",
+                                 user->profile.status_text.has_value() ? "]" : "",
+                                 (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat_color("gray") : "",
+                                 (user->profile.pgp_id.has_value() || user->profile.omemo) ? " with " : "",
+                                 user->profile.pgp_id.has_value() ? "PGP:" : "",
+                                 user->profile.pgp_id.has_value() ? user->profile.pgp_id->c_str() : "",
+                                 (user->profile.omemo && user->profile.pgp_id.has_value()) ? " and " : "",
                                  user->profile.omemo ? "OMEMO" : "",
-                                 user->profile.pgp_id || user->profile.omemo ? weechat_color("reset") : "");
+                                 (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat_color("reset") : "");
+    xmpp_free(account.context, jid_bare);
+    xmpp_free(account.context, jid_resource);
 
     return member;
 }
@@ -776,7 +735,7 @@ std::optional<weechat::channel::member*> weechat::channel::member_search(const c
 
     for (auto& ptr_member : members)
     {
-        if (weechat_strcasecmp(ptr_member.second.id, id) == 0)
+        if (weechat_strcasecmp(ptr_member.second.id.c_str(), id) == 0)
             return &ptr_member.second;
     }
 
@@ -794,8 +753,8 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
 
     auto member_opt = member_search(id);
 
-    char *jid_bare = xmpp_jid_bare(account.context, user->id);
-    char *jid_resource = xmpp_jid_resource(account.context, user->id);
+    char *jid_bare = xmpp_jid_bare(account.context, user->id.c_str());
+    char *jid_resource = xmpp_jid_resource(account.context, user->id.c_str());
     if (weechat_strcasecmp(jid_bare, id) == 0
         && type == weechat::channel::chat_type::MUC)
         weechat_printf_date_tags(buffer, 0, "xmpp_presence,leave,log4",
@@ -812,14 +771,16 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
         weechat_printf_date_tags(buffer, 0, "xmpp_presence,leave,log4",
                                  "%s%s (%s) %sleft%s %s %s%s%s",
                                  weechat_prefix("quit"),
-                                 xmpp_jid_bare(account.context, user->id),
-                                 xmpp_jid_resource(account.context, user->id),
+                                 jid_bare,
+                                 jid_resource,
                                  weechat_color("irc.color.message_quit"),
                                  weechat_color("reset"),
                                  id,
                                  reason ? "[" : "",
                                  reason ? reason : "",
                                  reason ? "]" : "");
+    xmpp_free(account.context, jid_bare);
+    xmpp_free(account.context, jid_resource);
 
     return member_opt;
 }
@@ -1021,7 +982,7 @@ int weechat::channel::send_message(const char *to, const char *body)
 
     if (account.omemo && omemo.enabled)
     {
-        xmpp_stanza_t *encrypted = account.omemo.encode(&account, to, body);
+        xmpp_stanza_t *encrypted = account.omemo.encode(&account, buffer, to, body);
         if (!encrypted)
         {
             weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
@@ -1209,6 +1170,11 @@ void weechat::channel::send_reads()
 {
     auto i = std::begin(unreads);
 
+    // Capture the last unread id for XEP-0490 MDS PEP publish below
+    std::string last_unread_id;
+    if (!unreads.empty())
+        last_unread_id = unreads.back().id;
+
     while (i != std::end(unreads))
     {
         auto* unread = &*i;
@@ -1219,14 +1185,14 @@ void weechat::channel::send_reads()
         xmpp_stanza_t *message__displayed = xmpp_stanza_new(account.context);
         xmpp_stanza_set_name(message__displayed, "displayed");
         xmpp_stanza_set_ns(message__displayed, "urn:xmpp:chat-markers:0");
-        xmpp_stanza_set_id(message__displayed, unread->id);
-        if (unread->thread)
+        xmpp_stanza_set_id(message__displayed, unread->id.c_str());
+        if (unread->thread.has_value())
         {
             xmpp_stanza_t *message__thread = xmpp_stanza_new(account.context);
             xmpp_stanza_set_name(message__thread, "thread");
 
             xmpp_stanza_t *message__thread__text = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_text(message__thread__text, unread->thread);
+            xmpp_stanza_set_text(message__thread__text, unread->thread->c_str());
             xmpp_stanza_add_child(message__thread, message__thread__text);
             xmpp_stanza_release(message__thread__text);
 
@@ -1241,6 +1207,63 @@ void weechat::channel::send_reads()
         xmpp_stanza_release(message);
 
         i = unreads.erase(i);
+    }
+
+    // XEP-0490: Message Displayed Synchronization
+    // Publish to own PEP node so other devices know we've displayed up to
+    // last_unread_id in this channel.  The item id is the peer's bare JID.
+    //
+    // <iq type='set'>
+    //   <pubsub xmlns='http://jabber.org/protocol/pubsub'>
+    //     <publish node='urn:xmpp:mds:displayed:0'>
+    //       <item id='peer@example.org'>
+    //         <displayed xmlns='urn:xmpp:mds:displayed:0'>
+    //           <stanza-id xmlns='urn:xmpp:sid:0' by='peer@example.org'
+    //                      id='last-stanza-id'/>
+    //         </displayed>
+    //       </item>
+    //     </publish>
+    //   </pubsub>
+    // </iq>
+    if (!last_unread_id.empty())
+    {
+        // Build <stanza-id xmlns='urn:xmpp:sid:0' by='...' id='...'/>
+        xmpp_stanza_t *sid = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(sid, "stanza-id");
+        xmpp_stanza_set_ns(sid, "urn:xmpp:sid:0");
+        xmpp_stanza_set_attribute(sid, "by", id.c_str());
+        xmpp_stanza_set_id(sid, last_unread_id.c_str());
+
+        // Build <displayed xmlns='urn:xmpp:mds:displayed:0'>…</displayed>
+        xmpp_stanza_t *mds_displayed = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(mds_displayed, "displayed");
+        xmpp_stanza_set_ns(mds_displayed, "urn:xmpp:mds:displayed:0");
+        xmpp_stanza_add_child(mds_displayed, sid);
+        xmpp_stanza_release(sid);
+
+        // Wrap: publish > item > displayed
+        xmpp_stanza_t *children[3] = { mds_displayed, nullptr, nullptr };
+        children[0] = stanza__iq_pubsub_publish_item(
+            account.context, nullptr, children,
+            with_noop(id.c_str()));                  // item id = peer bare JID
+        children[1] = nullptr;
+        children[0] = stanza__iq_pubsub_publish(
+            account.context, nullptr, children,
+            with_noop("urn:xmpp:mds:displayed:0"));  // node
+        children[1] = nullptr;
+        children[0] = stanza__iq_pubsub(
+            account.context, nullptr, children,
+            with_noop("http://jabber.org/protocol/pubsub"));
+        children[1] = nullptr;
+
+        char *uuid = xmpp_uuid_gen(account.context);
+        xmpp_stanza_t *iq = stanza__iq(
+            account.context, nullptr, children,
+            nullptr, uuid, nullptr, nullptr, "set");
+        xmpp_free(account.context, uuid);
+
+        account.connection.send(iq);
+        xmpp_stanza_release(iq);
     }
 }
 
@@ -1349,8 +1372,13 @@ void weechat::channel::send_gone(weechat::user *user)
 
 void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, const char* after)
 {
-    xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", "juliet1");
-    xmpp_stanza_set_id(iq, id ? id : xmpp_uuid_gen(account.context));
+    char *gen_id = id ? nullptr : xmpp_uuid_gen(account.context);
+    std::string mam_id_str = id ? id : gen_id;
+    if (gen_id) { xmpp_free(account.context, gen_id); gen_id = nullptr; }
+    const char *mam_id = mam_id_str.c_str();
+    xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", mam_id);
+    // XEP-0313 MUC MAM: must be addressed to the MUC room's bare JID
+    xmpp_stanza_set_to(iq, this->id.data());
 
     xmpp_stanza_t *query = xmpp_stanza_new(account.context);
     xmpp_stanza_set_name(query, "query");
@@ -1479,8 +1507,8 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
     }
     else
     {
-        weechat_printf(buffer, "Storing MAM query: id=%s, with=%s", id, this->id.data());
-        account.add_mam_query(id, this->id,
+        weechat_printf(buffer, "Storing MAM query: id=%s, with=%s", mam_id, this->id.data());
+        account.add_mam_query(mam_id, this->id,
                 start ? std::optional(*start) : std::optional<time_t>(),
                 end ? std::optional(*end) : std::optional<time_t>());
     }

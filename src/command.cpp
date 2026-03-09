@@ -153,7 +153,7 @@ void command__add_account(const char *name, const char *jid, const char *passwor
         return;
     }
 
-    account->name = strdup(name);
+    account->name = name;
     if (jid)
         account->jid(jid);
     if (password)
@@ -526,7 +526,7 @@ int command__enter(const void *pointer, void *data,
 
         if (!ptr_account->channels.contains(buffer_jid))
             ptr_channel = &ptr_account->channels.emplace(
-                std::make_pair(jid, weechat::channel {
+                std::make_pair(std::string(jid), weechat::channel {
                         *ptr_account, weechat::channel::chat_type::MUC, buffer_jid, buffer_jid
                     })).first->second;
 
@@ -603,7 +603,7 @@ int command__open(const void *pointer, void *data,
                 ptr_account->mam_cache_set_last_timestamp(jid, 0);
                 
                 channel = ptr_account->channels.emplace(
-                    std::make_pair(jid, weechat::channel {
+                    std::make_pair(std::string(jid), weechat::channel {
                             *ptr_account, weechat::channel::chat_type::PM, jid, jid
                         })).first;
             }
@@ -860,7 +860,9 @@ int command__mam(const void *pointer, void *data,
     end = time(NULL);
     start = end - (days * 24 * 60 * 60);
     
-    ptr_channel->fetch_mam(xmpp_uuid_gen(ptr_account->context), &start, &end, NULL);
+    char *mam_uuid = xmpp_uuid_gen(ptr_account->context);
+    ptr_channel->fetch_mam(mam_uuid, &start, &end, NULL);
+    xmpp_free(ptr_account->context, mam_uuid);
 
     return WEECHAT_RC_OK;
 }
@@ -879,7 +881,12 @@ int command__omemo(const void *pointer, void *data,
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 
     if (!ptr_account)
-        return WEECHAT_RC_ERROR;
+    {
+        weechat_printf(buffer,
+                       _("%s%s: this command must be run in an XMPP account or channel buffer"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
 
     // Handle subcommands
     if (argc > 1)
@@ -888,57 +895,23 @@ int command__omemo(const void *pointer, void *data,
         {
             if (!ptr_account->omemo)
             {
-                weechat_printf(ptr_account->buffer,
+                weechat_printf(buffer,
                                _("%s%s: OMEMO not initialized for this account"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
                 return WEECHAT_RC_OK;
             }
 
-            weechat_printf(ptr_account->buffer,
-                           _("%sQuerying server for OMEMO devicelist and bundle..."),
-                           weechat_prefix("network"));
-            weechat_printf(ptr_account->buffer,
-                           _("%sYour device ID: %u"),
-                           weechat_prefix("network"), ptr_account->omemo.device_id);
+            // Show local state immediately (no async needed)
+            ptr_account->omemo.show_status(
+                buffer,
+                ptr_account->name.data(),
+                ptr_channel ? ptr_channel->name.data() : nullptr,
+                ptr_channel ? ptr_channel->omemo.enabled : 0);
 
-            // Query devicelist from server
-            auto children = std::make_unique<xmpp_stanza_t*[]>(2);
-            children[0] = stanza__iq_pubsub_items(ptr_account->context, NULL,
-                                            strdup("eu.siacs.conversations.axolotl.devicelist"));
-            children[0] = stanza__iq_pubsub(ptr_account->context, NULL, children.get(),
-                                      with_noop("http://jabber.org/protocol/pubsub"));
-            char *uuid = xmpp_uuid_gen(ptr_account->context);
-            children[0] = stanza__iq(ptr_account->context, NULL, children.get(), NULL, uuid,
-                               strdup(ptr_account->jid().data()), strdup(ptr_account->jid().data()),
-                               strdup("get"));
-            xmpp_free(ptr_account->context, uuid);
-
-            ptr_account->connection.send(children[0]);
-            xmpp_stanza_release(children[0]);
-
-            // Query bundle from server
-            char bundle_node[128] = {0};
-            snprintf(bundle_node, sizeof(bundle_node),
-                        "eu.siacs.conversations.axolotl.bundles:%u",
-                        ptr_account->omemo.device_id);
-
-            children[1] = NULL;
-            children[0] = stanza__iq_pubsub_items(ptr_account->context, NULL,
-                                            strdup(bundle_node));
-            children[0] = stanza__iq_pubsub(ptr_account->context, NULL, children.get(),
-                                      with_noop("http://jabber.org/protocol/pubsub"));
-            uuid = xmpp_uuid_gen(ptr_account->context);
-            children[0] = stanza__iq(ptr_account->context, NULL, children.get(), NULL, uuid,
-                               strdup(ptr_account->jid().data()), strdup(ptr_account->jid().data()),
-                               strdup("get"));
-            xmpp_free(ptr_account->context, uuid);
-
-            ptr_account->connection.send(children[0]);
-            xmpp_stanza_release(children[0]);
-
-            weechat_printf(ptr_account->buffer,
-                           _("%sCheck the account buffer for results (devicelist and bundle responses)"),
-                           weechat_prefix("network"));
+            // Also show own devices and peer device list if in a channel
+            ptr_account->omemo.show_devices(buffer, ptr_account->jid().data());
+            if (ptr_channel)
+                ptr_account->omemo.show_devices(buffer, ptr_channel->name.data());
 
             return WEECHAT_RC_OK;
         }
@@ -947,13 +920,13 @@ int command__omemo(const void *pointer, void *data,
         {
             if (!ptr_account->omemo)
             {
-                weechat_printf(ptr_account->buffer,
+                weechat_printf(buffer,
                                _("%s%s: OMEMO not initialized for this account"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
                 return WEECHAT_RC_OK;
             }
 
-            weechat_printf(ptr_account->buffer,
+            weechat_printf(buffer,
                            _("%sRepublishing OMEMO devicelist and bundle..."),
                            weechat_prefix("network"));
 
@@ -963,7 +936,7 @@ int command__omemo(const void *pointer, void *data,
             {
                 ptr_account->connection.send(devicelist_stanza);
                 xmpp_stanza_release(devicelist_stanza);
-                weechat_printf(ptr_account->buffer,
+                weechat_printf(buffer,
                                _("%sDevicelist published (device ID: %u)"),
                                weechat_prefix("network"), ptr_account->omemo.device_id);
             }
@@ -972,13 +945,20 @@ int command__omemo(const void *pointer, void *data,
             char *from = strdup(ptr_account->jid().data());
             xmpp_stanza_t *bundle_stanza = ptr_account->omemo.get_bundle(
                 ptr_account->context, from, NULL);
+            free(from);
             if (bundle_stanza)
             {
                 ptr_account->connection.send(bundle_stanza);
                 xmpp_stanza_release(bundle_stanza);
-                weechat_printf(ptr_account->buffer,
+                weechat_printf(buffer,
                                _("%sBundle published for device %u"),
                                weechat_prefix("network"), ptr_account->omemo.device_id);
+            }
+            else
+            {
+                weechat_printf(buffer,
+                               _("%s%s: failed to generate OMEMO bundle"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
             }
 
             return WEECHAT_RC_OK;
@@ -988,13 +968,13 @@ int command__omemo(const void *pointer, void *data,
         {
             if (!ptr_account->omemo)
             {
-                weechat_printf(ptr_account->buffer,
+                weechat_printf(buffer,
                                _("%s%s: OMEMO not initialized for this account"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
                 return WEECHAT_RC_OK;
             }
 
-            weechat_printf(ptr_account->buffer,
+            weechat_printf(buffer,
                            _("%s%s: Resetting OMEMO key database to force renegotiation"),
                            weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME);
 
@@ -1005,12 +985,12 @@ int command__omemo(const void *pointer, void *data,
                     lmdb::txn txn = lmdb::txn::begin(ptr_account->omemo.db_env);
                     mdb_drop(txn.handle(), ptr_account->omemo.dbi.omemo, 0);
                     txn.commit();
-                    weechat_printf(ptr_account->buffer,
+                    weechat_printf(buffer,
                                    _("%s%s: OMEMO key database cleared. Session keys will be renegotiated."),
                                    weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME);
                 }
             } catch (const lmdb::error& ex) {
-                weechat_printf(ptr_account->buffer,
+                weechat_printf(buffer,
                                _("%s%s: Failed to reset OMEMO keys: %s"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, ex.what());
             }
@@ -1022,31 +1002,80 @@ int command__omemo(const void *pointer, void *data,
         {
             if (!ptr_account->omemo)
             {
-                weechat_printf(ptr_account->buffer,
+                weechat_printf(buffer,
                                _("%s%s: OMEMO not initialized for this account"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
                 return WEECHAT_RC_OK;
             }
 
-            weechat_printf(ptr_account->buffer,
-                           _("%sOMEMO Status for account %s:"),
-                           weechat_prefix("info"), ptr_account->name.data());
-            weechat_printf(ptr_account->buffer,
-                           _("%s  Device ID: %u"),
-                           weechat_prefix("info"), ptr_account->omemo.device_id);
-            weechat_printf(ptr_account->buffer,
-                           _("%s  Identity Key: %s"),
-                           weechat_prefix("info"), 
-                           ptr_account->omemo.identity ? "Initialized" : "Not initialized");
+            ptr_account->omemo.show_status(
+                buffer,
+                ptr_account->name.data(),
+                ptr_channel ? ptr_channel->name.data() : nullptr,
+                ptr_channel ? ptr_channel->omemo.enabled : 0);
 
-            if (ptr_channel)
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "fingerprint") == 0)
+        {
+            if (!ptr_account->omemo)
             {
-                weechat_printf(ptr_account->buffer,
-                               _("%s  Channel '%s' encryption: %s"),
-                               weechat_prefix("info"), ptr_channel->name.data(),
-                               ptr_channel->omemo.enabled ? "ENABLED" : "disabled");
+                weechat_printf(buffer,
+                               _("%s%s: OMEMO not initialized for this account"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
             }
+            // Optional argument: jid to look up peer fingerprint; no argument = own key
+            const char *jid = (argc > 2) ? argv[2] : nullptr;
+            ptr_account->omemo.show_fingerprint(buffer, jid);
+            return WEECHAT_RC_OK;
+        }
 
+        if (weechat_strcasecmp(argv[1], "trust") == 0)
+        {
+            if (!ptr_account->omemo)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: OMEMO not initialized for this account"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+            if (argc < 3)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: usage: /omemo trust <jid>"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+            // Remove stored identity keys → next message triggers TOFU re-store
+            ptr_account->omemo.distrust_jid(buffer, argv[2]);
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "devices") == 0)
+        {
+            if (!ptr_account->omemo)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: OMEMO not initialized for this account"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+            // Optional argument: jid; default to channel JID or peer JID
+            const char *jid = nullptr;
+            if (argc > 2)
+                jid = argv[2];
+            else if (ptr_channel)
+                jid = ptr_channel->name.data();
+            if (!jid)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: usage: /omemo devices <jid>  (or run in a channel buffer)"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+            ptr_account->omemo.show_devices(buffer, jid);
             return WEECHAT_RC_OK;
         }
 
@@ -1057,7 +1086,7 @@ int command__omemo(const void *pointer, void *data,
     if (!ptr_channel)
     {
         weechat_printf(
-            ptr_account->buffer,
+            buffer,
             _("%s%s: \"%s\" command requires a channel buffer or use /omemo republish on account buffer"),
             weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "omemo");
         return WEECHAT_RC_OK;
@@ -3660,6 +3689,351 @@ int command__upload(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+// XEP-0224: Attention — send <attention> to get a contact's attention
+int command__buzz(const void *pointer, void *data,
+                  struct t_gui_buffer *buffer, int argc,
+                  char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argc;
+    (void) argv;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel)
+    {
+        weechat_printf(buffer, "%sxmpp: you must be in a channel to buzz someone",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (ptr_channel->type == weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer, "%sxmpp: /buzz can only be used in PM channels",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // Send <message> with <attention> element (XEP-0224)
+    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, "chat",
+                                               ptr_channel->id.data(), NULL);
+
+    char *id = xmpp_uuid_gen(ptr_account->context);
+    xmpp_stanza_set_id(message, id);
+    xmpp_free(ptr_account->context, id);
+
+    xmpp_stanza_t *attention = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(attention, "attention");
+    xmpp_stanza_set_ns(attention, "urn:xmpp:attention:0");
+    xmpp_stanza_add_child(message, attention);
+    xmpp_stanza_release(attention);
+
+    ptr_account->connection.send(message);
+    xmpp_stanza_release(message);
+
+    weechat_printf(buffer, "%sxmpp: buzz sent to %s",
+                  weechat_prefix("network"), ptr_channel->id.data());
+
+    return WEECHAT_RC_OK;
+}
+
+// XEP-0382: Spoiler Messages — send a message with a spoiler warning
+int command__spoiler(const void *pointer, void *data,
+                     struct t_gui_buffer *buffer, int argc,
+                     char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argv;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel)
+    {
+        weechat_printf(buffer, "%sxmpp: you must be in a channel to send spoiler messages",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    // Usage: /spoiler [hint:] <message>
+    // If first arg ends with ':', treat it as a hint
+    if (argc < 2)
+    {
+        weechat_printf(buffer, "%sxmpp: missing message text",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    const char *hint = "";
+    const char *text = argv_eol[1];
+
+    // Check if "hint: message" form is used
+    if (argc >= 3 && argv[1][strlen(argv[1])-1] == ':')
+    {
+        hint = argv[1];
+        // Strip trailing colon
+        std::string hint_str(hint, strlen(hint)-1);
+        text = argv_eol[2];
+
+        xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
+                        ptr_channel->type == weechat::channel::chat_type::MUC
+                        ? "groupchat" : "chat",
+                        ptr_channel->id.data(), NULL);
+
+        char *id = xmpp_uuid_gen(ptr_account->context);
+        xmpp_stanza_set_id(message, id);
+        xmpp_free(ptr_account->context, id);
+
+        xmpp_message_set_body(message, text);
+
+        xmpp_stanza_t *spoiler = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(spoiler, "spoiler");
+        xmpp_stanza_set_ns(spoiler, "urn:xmpp:spoiler:0");
+        // Set hint text as text node child
+        xmpp_stanza_t *hint_node = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_text(hint_node, hint_str.c_str());
+        xmpp_stanza_add_child(spoiler, hint_node);
+        xmpp_stanza_release(hint_node);
+        xmpp_stanza_add_child(message, spoiler);
+        xmpp_stanza_release(spoiler);
+
+        // Add store hint
+        xmpp_stanza_t *store = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(store, "store");
+        xmpp_stanza_set_ns(store, "urn:xmpp:hints");
+        xmpp_stanza_add_child(message, store);
+        xmpp_stanza_release(store);
+
+        ptr_account->connection.send(message);
+        xmpp_stanza_release(message);
+    }
+    else
+    {
+        xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
+                        ptr_channel->type == weechat::channel::chat_type::MUC
+                        ? "groupchat" : "chat",
+                        ptr_channel->id.data(), NULL);
+
+        char *id = xmpp_uuid_gen(ptr_account->context);
+        xmpp_stanza_set_id(message, id);
+        xmpp_free(ptr_account->context, id);
+
+        xmpp_message_set_body(message, text);
+
+        // <spoiler/> with no hint
+        xmpp_stanza_t *spoiler = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(spoiler, "spoiler");
+        xmpp_stanza_set_ns(spoiler, "urn:xmpp:spoiler:0");
+        xmpp_stanza_add_child(message, spoiler);
+        xmpp_stanza_release(spoiler);
+
+        // Add store hint
+        xmpp_stanza_t *store = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(store, "store");
+        xmpp_stanza_set_ns(store, "urn:xmpp:hints");
+        xmpp_stanza_add_child(message, store);
+        xmpp_stanza_release(store);
+
+        ptr_account->connection.send(message);
+        xmpp_stanza_release(message);
+    }
+
+    weechat_printf(buffer, "%sxmpp: spoiler message sent",
+                  weechat_prefix("network"));
+
+    return WEECHAT_RC_OK;
+}
+
+// XEP-0050: Ad-Hoc Commands — list and execute server/component commands
+// Usage:
+//   /adhoc <jid>                         — list available commands
+//   /adhoc <jid> <node>                  — execute a command
+//   /adhoc <jid> <node> <sessionid> [field=value ...]  — submit a form step
+int command__adhoc(const void *pointer, void *data,
+                   struct t_gui_buffer *buffer, int argc,
+                   char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2)
+    {
+        weechat_printf(buffer, "%sxmpp: /adhoc <jid> [<node> [<sessionid> [field=value ...]]]",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    const char *target_jid = argv[1];
+
+    if (argc == 2)
+    {
+        // List available commands via disco#items with commands node
+        char *query_id = xmpp_uuid_gen(ptr_account->context);
+
+        weechat::account::adhoc_query_info info;
+        info.target_jid = target_jid;
+        info.buffer = buffer;
+        info.is_list = true;
+        ptr_account->adhoc_queries[query_id] = info;
+
+        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", query_id);
+        xmpp_stanza_set_to(iq, target_jid);
+        xmpp_stanza_t *query_stanza = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(query_stanza, "query");
+        xmpp_stanza_set_ns(query_stanza, "http://jabber.org/protocol/disco#items");
+        xmpp_stanza_set_attribute(query_stanza, "node",
+                                  "http://jabber.org/protocol/commands");
+        xmpp_stanza_add_child(iq, query_stanza);
+        xmpp_stanza_release(query_stanza);
+        ptr_account->connection.send(iq);
+        xmpp_stanza_release(iq);
+        xmpp_free(ptr_account->context, query_id);
+
+        weechat_printf(buffer, "%sxmpp: querying commands on %s…",
+                      weechat_prefix("network"), target_jid);
+        return WEECHAT_RC_OK;
+    }
+
+    const char *node = argv[2];
+
+    if (argc == 3)
+    {
+        // Execute a command (first step)
+        char *exec_id = xmpp_uuid_gen(ptr_account->context);
+
+        weechat::account::adhoc_query_info info;
+        info.target_jid = target_jid;
+        info.buffer = buffer;
+        info.is_list = false;
+        info.node = node;
+        ptr_account->adhoc_queries[exec_id] = info;
+
+        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", exec_id);
+        xmpp_stanza_set_to(iq, target_jid);
+        xmpp_stanza_t *command = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(command, "command");
+        xmpp_stanza_set_ns(command, "http://jabber.org/protocol/commands");
+        xmpp_stanza_set_attribute(command, "node", node);
+        xmpp_stanza_set_attribute(command, "action", "execute");
+        xmpp_stanza_add_child(iq, command);
+        xmpp_stanza_release(command);
+        ptr_account->connection.send(iq);
+        xmpp_stanza_release(iq);
+        xmpp_free(ptr_account->context, exec_id);
+
+        weechat_printf(buffer, "%sxmpp: executing command %s on %s…",
+                      weechat_prefix("network"), node, target_jid);
+        return WEECHAT_RC_OK;
+    }
+
+    // argc >= 4: submit a form step
+    // argv[3] = sessionid, argv[4..] = field=value pairs
+    const char *session_id = argv[3];
+    char *submit_id = xmpp_uuid_gen(ptr_account->context);
+
+    weechat::account::adhoc_query_info info;
+    info.target_jid = target_jid;
+    info.buffer = buffer;
+    info.is_list = false;
+    info.node = node;
+    info.session_id = session_id;
+    ptr_account->adhoc_queries[submit_id] = info;
+
+    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", submit_id);
+    xmpp_stanza_set_to(iq, target_jid);
+    xmpp_stanza_t *command = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(command, "command");
+    xmpp_stanza_set_ns(command, "http://jabber.org/protocol/commands");
+    xmpp_stanza_set_attribute(command, "node", node);
+    xmpp_stanza_set_attribute(command, "sessionid", session_id);
+    xmpp_stanza_set_attribute(command, "action", "execute");
+
+    // Build x data form with provided field=value pairs
+    xmpp_stanza_t *x_form = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(x_form, "x");
+    xmpp_stanza_set_ns(x_form, "jabber:x:data");
+    xmpp_stanza_set_attribute(x_form, "type", "submit");
+
+    for (int i = 4; i < argc; i++)
+    {
+        // Parse "field=value" pairs
+        const char *eq = strchr(argv[i], '=');
+        if (!eq) continue;
+        std::string field_var(argv[i], eq - argv[i]);
+        const char *field_val = eq + 1;
+
+        xmpp_stanza_t *field = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(field, "field");
+        xmpp_stanza_set_attribute(field, "var", field_var.c_str());
+        xmpp_stanza_t *value = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_name(value, "value");
+        xmpp_stanza_t *value_text = xmpp_stanza_new(ptr_account->context);
+        xmpp_stanza_set_text(value_text, field_val);
+        xmpp_stanza_add_child(value, value_text);
+        xmpp_stanza_release(value_text);
+        xmpp_stanza_add_child(field, value);
+        xmpp_stanza_release(value);
+        xmpp_stanza_add_child(x_form, field);
+        xmpp_stanza_release(field);
+    }
+
+    xmpp_stanza_add_child(command, x_form);
+    xmpp_stanza_release(x_form);
+    xmpp_stanza_add_child(iq, command);
+    xmpp_stanza_release(command);
+    ptr_account->connection.send(iq);
+    xmpp_stanza_release(iq);
+    xmpp_free(ptr_account->context, submit_id);
+
+    weechat_printf(buffer, "%sxmpp: submitting form for command %s (session %s)…",
+                  weechat_prefix("network"), node, session_id);
+    return WEECHAT_RC_OK;
+}
+
 void command__init()
 {
     auto *hook = weechat_hook_command(
@@ -3773,23 +4147,34 @@ void command__init()
     hook = weechat_hook_command(
         "omemo",
         N_("manage omemo encryption for current buffer or account"),
-        N_("[check|republish]"),
-        N_("    check: query server for published OMEMO devicelist and bundle\n"
-           "republish: republish OMEMO devicelist and bundle to server\n"
+        N_("[check|republish|status|reset-keys|fingerprint [<jid>]|trust <jid>|devices [<jid>]]"),
+        N_("       check: query server for published OMEMO devicelist and bundle\n"
+           "   republish: republish OMEMO devicelist and bundle to server\n"
+           "      status: show OMEMO status and device ID\n"
+           "  reset-keys: reset OMEMO key database to force renegotiation\n"
+           " fingerprint: show hex fingerprint of own identity key, or of a peer JID\n"
+           "       trust: remove stored identity key for <jid> to re-accept on next contact\n"
+           "     devices: show known device IDs for <jid>\n"
            "\n"
            "Without arguments on a channel buffer: enable OMEMO encryption\n"
-           "Use subcommands on account buffer to manage OMEMO keys\n"
            "\n"
            "Examples:\n"
-           "  /omemo            : enable OMEMO for current channel\n"
-           "  /omemo check      : verify bundle is published on server\n"
-           "  /omemo republish  : republish bundle (fixes missing device keys)\n"
-           "  /omemo status     : show OMEMO status and device ID\n"
-           "  /omemo reset-keys : reset OMEMO key database to force renegotiation"),
+           "  /omemo                   : enable OMEMO for current channel\n"
+           "  /omemo check             : verify bundle is published on server\n"
+           "  /omemo republish         : republish bundle (fixes missing device keys)\n"
+           "  /omemo status            : show OMEMO status and device ID\n"
+           "  /omemo reset-keys        : reset OMEMO key database\n"
+           "  /omemo fingerprint       : show own identity key fingerprint\n"
+           "  /omemo fingerprint alice@example.com : show peer fingerprints\n"
+           "  /omemo trust alice@example.com       : re-accept changed keys from alice\n"
+           "  /omemo devices alice@example.com     : show alice's known devices"),
         "check"
         " || republish"
         " || status"
-        " || reset-keys", &command__omemo, NULL, NULL);
+        " || reset-keys"
+        " || fingerprint %(jabber_jids)"
+        " || trust %(jabber_jids)"
+        " || devices %(jabber_jids)", &command__omemo, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /omemo");
 
@@ -4058,4 +4443,53 @@ void command__init()
         NULL, &command__whois, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /whois");
+
+    hook = weechat_hook_command(
+        "buzz",
+        N_("request a contact's attention (XEP-0224)"),
+        N_(""),
+        N_("Sends an attention request to the contact in the current PM channel.\n"
+           "This is the XMPP equivalent of a 'buzz' or 'nudge'.\n"
+           "Note: can only be used in PM channels, not MUC rooms."),
+        NULL, &command__buzz, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /buzz");
+
+    hook = weechat_hook_command(
+        "spoiler",
+        N_("send a spoiler message (XEP-0382)"),
+        N_("[<hint:>] <message>"),
+        N_("hint   : optional spoiler warning hint (end with ':')\n"
+           "message: the spoiler message text\n\n"
+           "Sends a message marked as a spoiler. Supporting clients will hide\n"
+           "the message body behind a warning.\n\n"
+           "Examples:\n"
+           "  /spoiler The butler did it.\n"
+           "  /spoiler Movie ending: The hero sacrifices himself.\n"
+           "  /spoiler TW: violence: The scene is quite graphic."),
+        NULL, &command__spoiler, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /spoiler");
+
+    hook = weechat_hook_command(
+        "adhoc",
+        N_("list and execute XMPP ad-hoc commands (XEP-0050)"),
+        N_("<jid>"
+           " || <jid> <node>"
+           " || <jid> <node> <sessionid> [<field>=<value> ...]"),
+        N_("      jid: target JID (server, component, or user)\n"
+           "     node: command node URI to execute\n"
+           "sessionid: session ID returned by a previous command step\n"
+           "field=val: form field values to submit\n\n"
+           "Without a node, lists available commands on the target JID.\n"
+           "With a node, executes that command (first step).\n"
+           "With a sessionid and field=value pairs, submits a form step.\n\n"
+           "Examples:\n"
+           "  /adhoc conference.example.com\n"
+           "  /adhoc example.com http://jabber.org/protocol/admin#get-active-users\n"
+           "  /adhoc example.com http://jabber.org/protocol/admin#change-user-password"
+           " abc123 username=bob password=newpass"),
+        NULL, &command__adhoc, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /adhoc");
 }

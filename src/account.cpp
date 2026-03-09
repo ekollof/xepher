@@ -121,7 +121,8 @@ xmpp_stanza_t *weechat::account::get_devicelist()
     device.name = fmt::format("%u", device.id);
     device.label = "weechat";
 
-    auto children = new xmpp_stanza_t*[128];
+    std::vector<xmpp_stanza_t*> children_vec(devices.size() + 4, nullptr);
+    xmpp_stanza_t **children = children_vec.data();
     children[i++] = stanza__iq_pubsub_publish_item_list_device(
         context, NULL, with_noop(device.name.data()), NULL);
 
@@ -144,9 +145,8 @@ xmpp_stanza_t *weechat::account::get_devicelist()
     const char *ns = "http://jabber.org/protocol/pubsub";
     children[0] = stanza__iq_pubsub(context, NULL, children, with_noop(ns));
     xmpp_stanza_t * parent = stanza__iq(context, NULL,
-                                        children, NULL, strdup("announce1"),
-                                        NULL, NULL, strdup("set"));
-    delete[] children;
+                                        children, NULL, "announce1",
+                                        NULL, NULL, "set");
 
     return parent;
 }
@@ -562,11 +562,14 @@ void weechat::account::load_pgp_keys()
 void weechat::account::mam_cache_init()
 {
     try {
-        mam_db_path = std::shared_ptr<char>(
-            weechat_string_eval_expression(
-                fmt::format("${{weechat_data_dir}}/xmpp/mam_{}.db", name.data()).data(),
-                NULL, NULL, NULL),
-            &free).get();
+        {
+            std::shared_ptr<char> eval_path(
+                weechat_string_eval_expression(
+                    fmt::format("${{weechat_data_dir}}/xmpp/mam_{}.db", name.data()).data(),
+                    NULL, NULL, NULL),
+                &free);
+            mam_db_path = eval_path.get();
+        }
         
         std::filesystem::create_directories(
             std::filesystem::path(mam_db_path.data()).parent_path());

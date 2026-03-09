@@ -8,7 +8,32 @@
 #include <memory>
 #include <functional>
 #include <type_traits>
+#include <string>
 #include <strophe.h>
+
+// RAII guard for strings allocated by libstrophe (xmpp_jid_bare, xmpp_jid_resource,
+// xmpp_uuid_gen, xmpp_stanza_get_text, etc.).  Freed via xmpp_free() on scope exit.
+//
+// Usage:
+//   xmpp_string_guard bare(ctx, xmpp_jid_bare(ctx, jid));
+//   if (bare) weechat_printf(..., bare.c_str(), ...);
+struct xmpp_string_guard {
+    xmpp_ctx_t *ctx;
+    char *ptr;
+
+    xmpp_string_guard(xmpp_ctx_t *c, char *p) : ctx(c), ptr(p) {}
+    ~xmpp_string_guard() { if (ptr) xmpp_free(ctx, ptr); }
+
+    // Non-copyable, movable
+    xmpp_string_guard(const xmpp_string_guard&) = delete;
+    xmpp_string_guard& operator=(const xmpp_string_guard&) = delete;
+    xmpp_string_guard(xmpp_string_guard&& o) noexcept : ctx(o.ctx), ptr(o.ptr) { o.ptr = nullptr; }
+
+    explicit operator bool() const { return ptr != nullptr; }
+    const char *c_str() const { return ptr; }
+    operator const char*() const { return ptr; }
+    std::string str() const { return ptr ? std::string(ptr) : std::string(); }
+};
 
 namespace libstrophe {
 

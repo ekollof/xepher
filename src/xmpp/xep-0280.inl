@@ -25,7 +25,7 @@ namespace stanza {
         struct iq : virtual public spec {
             iq() : spec("iq") {}
 
-            iq& xep0280() { xmlns<jabber::client>(); return *this; }
+            iq& xep0280() { return *this; }  // No-op: XEP-0280 enable is just a child element
 
             iq& enable(enable e = xep0280::enable()) { child(e); return *this; }
         };

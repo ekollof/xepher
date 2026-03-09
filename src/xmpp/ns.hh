@@ -244,8 +244,12 @@ struct urn {
         struct media_element : public xmlns { media_element() : xmlns("urn:xmpp:media-element") {} };
         struct message_attaching { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:message-attaching:1") {} }; };
         struct message_correct { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:message-correct:0") {} }; };
-        struct message_moderate { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:message-moderate:0") {} }; };
-        struct message_retract { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:message-retract:0") {} }; };
+        struct message_moderate { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:message-moderate:0") {} };
+                                  struct _1 : public xmlns { _1() : xmlns("urn:xmpp:message-moderate:1") {} }; };
+        struct message_retract { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:message-retract:0") {} };
+                                 struct _1 : public xmlns { _1() : xmlns("urn:xmpp:message-retract:1") {} }; };
+        struct mds { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:mds:displayed:0") {} }; };
+        struct moved { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:moved:1") {} }; };
         struct muc {
             struct conditions { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:muc:conditions:1") {} }; };
         };
@@ -256,6 +260,7 @@ struct urn {
         struct privilege { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:privilege:1") {} }; };
         struct reach { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:reach:0") {} }; };
         struct receipts : public xmlns { receipts() : xmlns("urn:xmpp:receipts") {} };
+        struct reference { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:reference:0") {} }; };
         struct reputation { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:reputation:0") {} }; };
         struct sec_label { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:sec-label:0") {} };
             struct catalog { struct _2 : public xmlns { _2() : xmlns("urn:xmpp:sec-label:catalog:2") {} }; };

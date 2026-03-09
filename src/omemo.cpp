@@ -690,47 +690,75 @@ int iks_is_trusted_identity(const struct signal_protocol_address *address, uint8
 {
     auto omemo = reinterpret_cast<t_omemo*>(user_data);
     MDB_txn *transaction = NULL;
-    MDB_val k_identity_key = {
-        .mv_size = strlen("identity_key_") + address->name_len
-            + 1 + 10,
-        .mv_data = NULL,
-    };
-    MDB_val v_identity_key = {.mv_size = key_len, .mv_data = key_data};
-    int trusted = 1;
+    size_t k_size = strlen("identity_key_") + address->name_len + 1 + 10;
+    MDB_val k_identity_key = { .mv_size = k_size, .mv_data = NULL };
+    MDB_val v_stored = { .mv_size = 0, .mv_data = NULL };
 
-    k_identity_key.mv_data = malloc(sizeof(char) * (
-                                           k_identity_key.mv_size + 1));
+    k_identity_key.mv_data = malloc(sizeof(char) * (k_size + 1));
     k_identity_key.mv_size =
-    snprintf((char*)k_identity_key.mv_data, k_identity_key.mv_size + 1,
+    snprintf((char*)k_identity_key.mv_data, k_size + 1,
              "identity_key_%s_%u", address->name, address->device_id);
 
+    // Read-only pass: check if we already have a key stored
     if (mdb_txn_begin(omemo->db_env, NULL, MDB_RDONLY, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
                        weechat_prefix("error"));
+        free(k_identity_key.mv_data);
         return -1;
     }
 
-    if (mdb_get(transaction, omemo->dbi.omemo, &k_identity_key,
-                &v_identity_key)) {
-      weechat_printf(NULL, "%sxmpp: failed to read lmdb value",
-                     weechat_prefix("error"));
-      goto cleanup;
-    };
-
-    if (v_identity_key.mv_size != key_len ||
-        memcmp(v_identity_key.mv_data, key_data, key_len) != 0)
-        trusted = 0;
-
-    if (mdb_txn_commit(transaction)) {
-      weechat_printf(NULL, "%sxmpp: failed to write lmdb transaction",
-                     weechat_prefix("error"));
-      goto cleanup;
-    };
-
-    return 1 | trusted;
-cleanup:
+    int rc = mdb_get(transaction, omemo->dbi.omemo, &k_identity_key, &v_stored);
     mdb_txn_abort(transaction);
-    return -1;
+    transaction = NULL;
+
+    if (rc == MDB_NOTFOUND) {
+        // TOFU: no key stored yet — store this one and trust it
+        MDB_val v_new = { .mv_size = key_len, .mv_data = key_data };
+        if (mdb_txn_begin(omemo->db_env, NULL, 0, &transaction)) {
+            weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
+                           weechat_prefix("error"));
+            free(k_identity_key.mv_data);
+            return -1;
+        }
+        if (mdb_put(transaction, omemo->dbi.omemo, &k_identity_key, &v_new, MDB_NOOVERWRITE)) {
+            weechat_printf(NULL, "%sxmpp: failed to write lmdb value",
+                           weechat_prefix("error"));
+            mdb_txn_abort(transaction);
+            free(k_identity_key.mv_data);
+            return -1;
+        }
+        if (mdb_txn_commit(transaction)) {
+            weechat_printf(NULL, "%sxmpp: failed to commit lmdb transaction",
+                           weechat_prefix("error"));
+            free(k_identity_key.mv_data);
+            return -1;
+        }
+        free(k_identity_key.mv_data);
+        return 1; // trusted (first-use)
+    }
+
+    if (rc != 0) {
+        // Unexpected LMDB error
+        weechat_printf(NULL, "%sxmpp: failed to read lmdb value (rc=%d)",
+                       weechat_prefix("error"), rc);
+        free(k_identity_key.mv_data);
+        return -1;
+    }
+
+    // Key found — check if it matches
+    if (v_stored.mv_size == key_len &&
+        memcmp(v_stored.mv_data, key_data, key_len) == 0) {
+        free(k_identity_key.mv_data);
+        return 1; // trusted
+    }
+
+    // Key mismatch — possible key change / MITM attack
+    weechat_printf(NULL,
+        "%somemo: identity key CHANGED for %s device %u — possible key rotation or attack! "
+        "Use /omemo trust %s to accept the new key.",
+        weechat_prefix("error"), address->name, address->device_id, address->name);
+    free(k_identity_key.mv_data);
+    return 0; // untrusted
 }
 
 void iks_destroy_func(void *user_data)
@@ -953,6 +981,17 @@ int pks_remove_pre_key(uint32_t pre_key_id, void *user_data)
                        weechat_prefix("error"));
         goto cleanup;
     };
+
+    // Flag that the bundle should be re-published since a pre-key was consumed
+    {
+        MDB_txn *flag_txn = NULL;
+        if (mdb_txn_begin(omemo->db_env, NULL, 0, &flag_txn) == 0) {
+            MDB_val k_flag = mdb_val_str("pre_key_repub_needed");
+            MDB_val v_flag = mdb_val_str("1");
+            mdb_put(flag_txn, omemo->dbi.omemo, &k_flag, &v_flag, 0);
+            mdb_txn_commit(flag_txn);
+        }
+    }
 
     return 0;
 cleanup:
@@ -1575,9 +1614,9 @@ int sks_load_sender_key(struct signal_buffer **record, signal_buffer **user_reco
         return -1;
     }
 
-    if (mdb_get(transaction, omemo->dbi.omemo,
+    if (!mdb_get(transaction, omemo->dbi.omemo,
                 &k_sender_key, &v_sender_key)/* &&
-        mdb_get(transaction, omemo->dbi.omemo,
+        !mdb_get(transaction, omemo->dbi.omemo,
                 &k_user, &v_user)*/)
     {
         *record = signal_buffer_create((const uint8_t*)v_sender_key.mv_data, v_sender_key.mv_size);
@@ -1669,18 +1708,20 @@ int bks_store_bundle(struct signal_protocol_address *address,
 {
     size_t n_pre_keys = -1;
     while (pre_keys[++n_pre_keys] != NULL);
-    auto pre_key_buffers = std::vector<std::string>(n_pre_keys);
+    auto pre_key_buffers = std::vector<std::string>();
+    pre_key_buffers.reserve(n_pre_keys);
     for (auto pre_key : std::vector<struct t_pre_key*>(pre_keys, pre_keys + n_pre_keys))
     {
-        pre_key_buffers.push_back(fmt::format("{}.{}", pre_key->id, pre_key->public_key));
+        pre_key_buffers.push_back(fmt::format("{},{}", pre_key->id, pre_key->public_key));
     }
 
     n_pre_keys = -1;
     while (signed_pre_keys[++n_pre_keys] != NULL);
-    auto signed_pre_key_buffers = std::vector<std::string>(n_pre_keys);
+    auto signed_pre_key_buffers = std::vector<std::string>();
+    signed_pre_key_buffers.reserve(n_pre_keys);
     for (auto signed_pre_key : std::vector<struct t_pre_key*>(signed_pre_keys, signed_pre_keys + n_pre_keys))
     {
-        signed_pre_key_buffers.push_back(fmt::format("{}.{}", signed_pre_key->id, signed_pre_key->public_key));
+        signed_pre_key_buffers.push_back(fmt::format("{},{}", signed_pre_key->id, signed_pre_key->public_key));
 
         uint8_t *signing_key_buf;
         size_t signing_key_len = base64_decode(identity_key,
@@ -1708,8 +1749,10 @@ int bks_store_bundle(struct signal_protocol_address *address,
     std::string k_bundle_sg = fmt::format("bundle_sg_{}_{}", address->name, address->device_id);
     std::string k_bundle_ik = fmt::format("bundle_ik_{}_{}", address->name, address->device_id);
 
-    std::string v_bundle_pk = std::accumulate(pre_key_buffers.begin(), pre_key_buffers.end(), std::string(";"));
-    std::string v_bundle_sk = std::accumulate(signed_pre_key_buffers.begin(), signed_pre_key_buffers.end(), std::string(";"));
+    std::string v_bundle_pk = std::accumulate(pre_key_buffers.begin(), pre_key_buffers.end(), std::string(""),
+        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + ";" + b; });
+    std::string v_bundle_sk = std::accumulate(signed_pre_key_buffers.begin(), signed_pre_key_buffers.end(), std::string(""),
+        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + ";" + b; });
     std::string_view v_bundle_sg = signature;
     std::string_view v_bundle_ik = identity_key;
 
@@ -1755,7 +1798,7 @@ std::optional<libsignal::pre_key_bundle> bks_load_bundle(struct signal_protocol_
         | std::ranges::views::transform([](auto&& str) {
             return std::string_view(&*str.begin(), std::ranges::distance(str));
         });
-    auto bundle_pks = std::vector<std::string>{r_bundle_pks.begin(), r_bundle_pks.begin()};
+    auto bundle_pks = std::vector<std::string>{r_bundle_pks.begin(), r_bundle_pks.end()};
     if (bundle_pks.size() > 0)
     {
         std::istringstream iss(bundle_pks[rand() % bundle_pks.size()]);
@@ -1776,7 +1819,7 @@ std::optional<libsignal::pre_key_bundle> bks_load_bundle(struct signal_protocol_
         | std::ranges::views::transform([](auto&& str) {
             return std::string_view(&*str.begin(), std::ranges::distance(str));
         });
-    auto bundle_sks = std::vector<std::string>{r_bundle_sks.begin(), r_bundle_sks.begin()};
+    auto bundle_sks = std::vector<std::string>{r_bundle_sks.begin(), r_bundle_sks.end()};
     if (bundle_sks.size() > 0)
     {
         std::istringstream iss(bundle_sks[rand() % bundle_sks.size()]);
@@ -1842,7 +1885,12 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
         session_pre_key *pre_key = NULL;
         session_pre_key_deserialize(&pre_key, signal_buffer_data(record),
                 signal_buffer_len(record), omemo->context);
-        if (pre_key == 0) (*((int*)0))++;
+        if (pre_key == 0) {
+            weechat_printf(NULL, "%somemo: failed to deserialize pre_key %u in get_bundle, skipping",
+                           weechat_prefix("error"), id);
+            signal_buffer_free(record);
+            continue;
+        }
         signal_buffer_free(record);
         keypair = session_pre_key_get_key_pair(pre_key);
         public_key = ec_key_pair_get_public(keypair);
@@ -1865,7 +1913,78 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
             context, NULL, children);
     children[4] = NULL;
 
-    spks_load_signed_pre_key(&record, 1, omemo);
+    // Signed pre-key rotation: check if current SPK is older than 7 days.
+    // We store the current SPK ID in "signed_pre_key_current_id" and its creation
+    // timestamp in "signed_pre_key_ts_<id>".
+    static constexpr time_t SPK_MAX_AGE_SECS = 7 * 24 * 60 * 60;
+
+    uint32_t current_spk_id = 1; // default: ID 1 (initial key)
+    {
+        auto txn = lmdb::txn::begin(omemo->db_env);
+        std::string_view v_id;
+        if (omemo->dbi.omemo.get(txn, std::string_view("signed_pre_key_current_id"), v_id) && !v_id.empty())
+            current_spk_id = (uint32_t)std::stoul(std::string(v_id));
+        txn.abort();
+    }
+
+    // Read creation timestamp for current SPK
+    time_t spk_ts = 0;
+    {
+        auto txn = lmdb::txn::begin(omemo->db_env);
+        std::string_view v_ts;
+        std::string k_ts = fmt::format("signed_pre_key_ts_{}", current_spk_id);
+        if (omemo->dbi.omemo.get(txn, k_ts, v_ts) && !v_ts.empty())
+            spk_ts = (time_t)std::stoll(std::string(v_ts));
+        txn.abort();
+    }
+
+    time_t now = time(NULL);
+    if (spk_ts == 0 || (now - spk_ts) > SPK_MAX_AGE_SECS)
+    {
+        // Generate a new signed pre-key with the next ID
+        uint32_t new_spk_id = current_spk_id + 1;
+        session_signed_pre_key *new_spk = NULL;
+        int rc = signal_protocol_key_helper_generate_signed_pre_key(
+                &new_spk, omemo->identity, new_spk_id, now, omemo->context);
+        if (rc == 0 && new_spk)
+        {
+            struct signal_buffer *serialized = NULL;
+            session_signed_pre_key_serialize(&serialized, new_spk);
+            spks_store_signed_pre_key(new_spk_id,
+                    signal_buffer_data(serialized), signal_buffer_len(serialized), omemo);
+            signal_buffer_free(serialized);
+            session_pre_key_destroy((signal_type_base*)new_spk);
+
+            // Update current ID and timestamp in LMDB
+            auto txn = lmdb::txn::begin(omemo->db_env);
+            std::string v_new_id = std::to_string(new_spk_id);
+            std::string v_new_ts = std::to_string((long long)now);
+            std::string k_ts = fmt::format("signed_pre_key_ts_{}", new_spk_id);
+            omemo->dbi.omemo.put(txn, std::string_view("signed_pre_key_current_id"), v_new_id);
+            omemo->dbi.omemo.put(txn, k_ts, v_new_ts);
+            txn.commit();
+
+            current_spk_id = new_spk_id;
+            weechat_printf(NULL, "%somemo: rotated signed pre-key to ID %u",
+                           weechat_prefix("network"), new_spk_id);
+        }
+        else
+        {
+            // If timestamp was just missing (first run), record it now
+            auto txn = lmdb::txn::begin(omemo->db_env);
+            std::string v_ts_str = std::to_string((long long)now);
+            std::string k_ts = fmt::format("signed_pre_key_ts_{}", current_spk_id);
+            omemo->dbi.omemo.put(txn, k_ts, v_ts_str);
+            omemo->dbi.omemo.put(txn, std::string_view("signed_pre_key_current_id"),
+                                  std::to_string(current_spk_id));
+            txn.commit();
+            if (rc != 0)
+                weechat_printf(NULL, "%somemo: failed to generate new signed pre-key (rc=%d), keeping ID %u",
+                               weechat_prefix("error"), rc, current_spk_id);
+        }
+    }
+
+    spks_load_signed_pre_key(&record, current_spk_id, omemo);
     session_signed_pre_key *signed_pre_key;
     session_signed_pre_key_deserialize(&signed_pre_key,
             signal_buffer_data(record), signal_buffer_len(record),
@@ -1923,7 +2042,7 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
             context, NULL, children, with_noop("http://jabber.org/protocol/pubsub"));
 
     parent = stanza__iq(
-        context, NULL, children, NULL, (char*)"announce2", from, to, (char*)"set");
+        context, NULL, children, NULL, "announce2", from, to, "set");
     free(children);
 
     return parent;
@@ -2162,8 +2281,9 @@ void omemo::handle_bundle(const char *jid, uint32_t device_id,
         key_signature, identity_key, omemo);
 }
 
-char *omemo::decode(weechat::account *account, const char *jid,
-                    xmpp_stanza_t *encrypted)
+char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
+                    const char *jid,
+                     xmpp_stanza_t *encrypted)
 {
     auto omemo = &account->omemo;
     uint8_t *key_data = NULL, *tag_data = NULL, *iv_data = NULL, *payload_data = NULL;
@@ -2183,6 +2303,7 @@ char *omemo::decode(weechat::account *account, const char *jid,
     char **format = weechat_string_dyn_alloc(256);
     weechat_string_dyn_concat(format, "omemo msg %s:\n%s..IV: %s", -1);
     int keys_found = 0, keys_for_this_device = 0;
+    bool decrypted_ok = false;
     
     for (xmpp_stanza_t *key = xmpp_stanza_get_children(header);
          key; key = xmpp_stanza_get_next(key))
@@ -2222,17 +2343,13 @@ char *omemo::decode(weechat::account *account, const char *jid,
         signal_message *key_message = NULL;
         struct signal_buffer *aes_key = NULL;
         
-        weechat_printf(NULL, "%somemo decode: processing key for device %s, prekey=%s, source_id=%s",
-                       weechat_prefix("network"), key_id, key_prekey ? "true" : "false", source_id);
-        
         if (key_prekey) {
-            weechat_printf(NULL, "%somemo decode: using PRE-KEY message path",
-                           weechat_prefix("network"));
             pre_key_signal_message *pre_key_message = NULL;
             if ((ret = pre_key_signal_message_deserialize(&pre_key_message,
                 key_data, key_len, omemo->context))) {
-                weechat_printf(NULL, "%somemo decode: pre_key_signal_message_deserialize failed (ret=%d)",
-                               weechat_prefix("error"), ret);
+                weechat_printf(buffer, "%somemo: failed to deserialize pre-key message from %s device %s (ret=%d)",
+                               weechat_prefix("error"), jid, source_id, ret);
+                weechat_string_dyn_free(format, 1);
                 return NULL;
             }
             ec_public_key *identity_key = pre_key_signal_message_get_identity_key(pre_key_message);
@@ -2243,58 +2360,62 @@ char *omemo::decode(weechat::account *account, const char *jid,
             key_message = pre_key_signal_message_get_signal_message(pre_key_message);
             struct signal_buffer *identity_buf;
             if ((ret = ec_public_key_serialize(&identity_buf, identity_key))) {
-                weechat_printf(NULL, "%somemo decode: ec_public_key_serialize failed (ret=%d)",
-                               weechat_prefix("error"), ret);
+                weechat_printf(buffer, "%somemo: failed to serialize identity key from %s device %s (ret=%d)",
+                               weechat_prefix("error"), jid, source_id, ret);
+                weechat_string_dyn_free(format, 1);
                 return NULL;
             }
             if ((ret = iks_save_identity(&address, signal_buffer_data(identity_buf),
                                     signal_buffer_len(identity_buf), omemo))) {
-                weechat_printf(NULL, "%somemo decode: iks_save_identity failed (ret=%d)",
-                               weechat_prefix("error"), ret);
+                weechat_printf(buffer, "%somemo: failed to save identity from %s device %s (ret=%d)",
+                               weechat_prefix("error"), jid, source_id, ret);
+                weechat_string_dyn_free(format, 1);
                 return NULL;
             }
 
             struct session_cipher *cipher;
             if ((ret = session_cipher_create(&cipher, omemo->store_context,
                                         &address, omemo->context))) {
-                weechat_printf(NULL, "%somemo decode: session_cipher_create failed (ret=%d)",
-                               weechat_prefix("error"), ret);
+                weechat_printf(buffer, "%somemo: failed to create cipher for %s device %s (ret=%d)",
+                               weechat_prefix("error"), jid, source_id, ret);
+                weechat_string_dyn_free(format, 1);
                 return NULL;
             }
             if ((ret = session_cipher_decrypt_pre_key_signal_message(cipher,
                                                                 pre_key_message,
                                                                 0, &aes_key))) {
-                weechat_printf(NULL, "%somemo decode: session_cipher_decrypt_pre_key_signal_message failed (ret=%d)",
-                               weechat_prefix("error"), ret);
+                weechat_printf(buffer, "%somemo: pre-key decryption failed from %s device %s (ret=%d)",
+                               weechat_prefix("error"), jid, source_id, ret);
+                weechat_string_dyn_free(format, 1);
                 return NULL;
             }
-            weechat_printf(NULL, "%somemo decode: pre-key decryption succeeded",
-                           weechat_prefix("network"));
+            weechat_printf(buffer, "%somemo: new session established with %s device %s",
+                           weechat_prefix("network"), jid, source_id);
         } else {
-            weechat_printf(NULL, "%somemo decode: using REGULAR message path (existing session)",
-                           weechat_prefix("network"));
             if ((ret = signal_message_deserialize(&key_message,
                 key_data, key_len, omemo->context))) {
-                weechat_printf(NULL, "%somemo decode: signal_message_deserialize failed (ret=%d)",
-                               weechat_prefix("error"), ret);
+                weechat_printf(buffer, "%somemo: failed to deserialize message from %s device %s (ret=%d)",
+                               weechat_prefix("error"), jid, source_id, ret);
+                weechat_string_dyn_free(format, 1);
                 return NULL;
             }
             struct session_cipher *cipher;
             if ((ret = session_cipher_create(&cipher, omemo->store_context,
                                         &address, omemo->context))) {
-                weechat_printf(NULL, "%somemo decode: session_cipher_create failed (ret=%d)",
-                               weechat_prefix("error"), ret);
+                weechat_printf(buffer, "%somemo: failed to create cipher for %s device %s (ret=%d)",
+                               weechat_prefix("error"), jid, source_id, ret);
+                weechat_string_dyn_free(format, 1);
                 return NULL;
             }
             if ((ret = session_cipher_decrypt_signal_message(cipher, key_message,
                                                         0, &aes_key))) {
-                weechat_printf(NULL, "%somemo decode: session_cipher_decrypt_signal_message failed (ret=%d)",
-                               weechat_prefix("error"), ret);
+                weechat_printf(buffer, "%somemo: decryption failed from %s device %s (ret=%d)",
+                               weechat_prefix("error"), jid, source_id, ret);
+                weechat_string_dyn_free(format, 1);
                 return NULL;
             }
-            weechat_printf(NULL, "%somemo decode: regular message decryption succeeded",
-                           weechat_prefix("network"));
         }
+        decrypted_ok = true;
 
         if (!aes_key) return NULL;
         key_data = signal_buffer_data(aes_key);
@@ -2329,31 +2450,40 @@ char *omemo::decode(weechat::account *account, const char *jid,
             weechat_string_dyn_concat(format, ")", -1);
         }
     }
-    
-    weechat_printf(NULL, "%somemo decode: found %d keys total, %d for our device %u",
-                   weechat_prefix("network"), keys_found, keys_for_this_device, omemo->device_id);
+
+    if (!decrypted_ok) {
+        if (keys_for_this_device == 0)
+            weechat_printf(buffer, "%somemo: message from %s not encrypted for our device %u (%d keys total)",
+                           weechat_prefix("error"), jid, omemo->device_id, keys_found);
+        weechat_string_dyn_free(format, 1);
+        return NULL;
+    }
 
     xmpp_stanza_t *payload = xmpp_stanza_get_child_by_name(encrypted, "payload");
     if (payload && (payload = xmpp_stanza_get_children(payload)))
     {
         const char *payload_text = xmpp_stanza_get_text(payload);
-        if (!payload_text) return NULL;
+        if (!payload_text) {
+            weechat_string_dyn_free(format, 1);
+            return NULL;
+        }
         payload_len = base64_decode(payload_text, strlen(payload_text), &payload_data);
         weechat_string_dyn_concat(format, "\n%2$s..PL: ", -1);
         weechat_string_dyn_concat(format, payload_text, -1);
     }
-    weechat_printf(NULL, "%somemo decode: iv_len=%zu key_len=%zu payload_len=%zu device_id=%u",
-                   weechat_prefix("network"), iv_len, key_len, payload_len, omemo->device_id);
     
     if (!(payload_data && iv_data && key_data)) {
-        weechat_printf(NULL, "%somemo decode failed: missing data (payload=%p iv=%p key=%p)",
-                       weechat_prefix("error"), payload_data, iv_data, key_data);
+        weechat_printf(buffer, "%somemo: incomplete encrypted message from %s (missing %s%s%s)",
+                       weechat_prefix("error"), jid,
+                       payload_data ? "" : "payload ",
+                       iv_data ? "" : "iv ",
+                       key_data ? "" : "key");
         weechat_string_dyn_free(format, 1);
         return NULL;
     }
     if (iv_len != AES_IV_SIZE || key_len != AES_KEY_SIZE) {
-        weechat_printf(NULL, "%somemo decode failed: wrong size (iv_len=%zu expected=%d, key_len=%zu expected=%d)",
-                       weechat_prefix("error"), iv_len, AES_IV_SIZE, key_len, AES_KEY_SIZE);
+        weechat_printf(buffer, "%somemo: bad key/iv size from %s (iv=%zu want %d, key=%zu want %d)",
+                       weechat_prefix("error"), jid, iv_len, AES_IV_SIZE, key_len, AES_KEY_SIZE);
         weechat_string_dyn_free(format, 1);
         return NULL;
     }
@@ -2361,20 +2491,47 @@ char *omemo::decode(weechat::account *account, const char *jid,
     if (aes_decrypt(payload_data, payload_len, key_data, iv_data, tag_data, tag_len,
                     (uint8_t**)&plaintext, &plaintext_len))
     {
-        weechat_printf(NULL, "%somemo decode: success (plaintext_len=%zu)",
-                       weechat_prefix("network"), plaintext_len);
         plaintext[plaintext_len] = '\0';
+
+        // After successful decryption: check if a pre-key was consumed and the
+        // bundle needs re-publication.
+        {
+            auto txn = lmdb::txn::begin(omemo->db_env);
+            std::string_view v_flag;
+            bool needs_repub = omemo->dbi.omemo.get(txn, std::string_view("pre_key_repub_needed"), v_flag)
+                               && v_flag == "1";
+            txn.abort();
+
+            if (needs_repub)
+            {
+                char *from_dup = strdup(account->jid().data());
+                xmpp_stanza_t *bundle_stanza = omemo->get_bundle(account->context, from_dup, NULL);
+                free(from_dup);
+                if (bundle_stanza)
+                {
+                    account->connection.send(bundle_stanza);
+                    xmpp_stanza_release(bundle_stanza);
+                    weechat_printf(buffer, "%somemo: re-published bundle after pre-key consumption",
+                                   weechat_prefix("network"));
+                }
+                // Clear the flag
+                auto wtxn = lmdb::txn::begin(omemo->db_env);
+                omemo->dbi.omemo.del(wtxn, std::string_view("pre_key_repub_needed"));
+                wtxn.commit();
+            }
+        }
+
         weechat_string_dyn_free(format, 1);
         return plaintext;
     }
-    weechat_printf(NULL, "%somemo decode failed: aes_decrypt failed (auth tag check or decrypt error)",
-                   weechat_prefix("error"));
+    weechat_printf(buffer, "%somemo: AES-GCM decryption failed for message from %s (auth tag mismatch?)",
+                   weechat_prefix("error"), jid);
     weechat_string_dyn_free(format, 1);
     return NULL;
 }
 
-xmpp_stanza_t *omemo::encode(weechat::account *account, const char *jid,
-                             const char *unencrypted)
+xmpp_stanza_t *omemo::encode(weechat::account *account, struct t_gui_buffer *buffer,
+                             const char *jid, const char *unencrypted)
 {
     auto omemo = &account->omemo;
     uint8_t *key = NULL; uint8_t *iv = NULL;
@@ -2430,12 +2587,17 @@ xmpp_stanza_t *omemo::encode(weechat::account *account, const char *jid,
             {
                 try {
                     auto bundle = bks_load_bundle(&address, omemo);
-                    if (!bundle) throw std::runtime_error(fmt::format("No bundle for {}", target));
+                    if (!bundle) throw std::runtime_error(fmt::format("No bundle for {} device {}", target, device_id));
 
                     libsignal::session_builder builder(omemo->store_context, &address, omemo->context);
                     builder.process_pre_key_bundle(*bundle);
+                    weechat_printf(buffer, "%somemo: new session established with %s device %u",
+                                   weechat_prefix("network"), target, device_id);
                 }
                 catch (const std::exception& ex) {
+                    weechat_printf(buffer, "%somemo: cannot establish session with %s device %u: %s",
+                                   weechat_prefix("error"), target, device_id, ex.what());
+                    xmpp_stanza_release(header__key);
                     continue;
                 }
             }
@@ -2494,6 +2656,315 @@ xmpp_stanza_t *omemo::encode(weechat::account *account, const char *jid,
     free(key64);
     free(ciphertext64);
     return encrypted;
+}
+
+// ---------------------------------------------------------------------------
+// Key management helpers
+// ---------------------------------------------------------------------------
+
+void omemo::show_fingerprint(struct t_gui_buffer *buffer, const char *jid)
+{
+    auto *self = static_cast<t_omemo*>(this);
+
+    if (!jid)
+    {
+        // Show own public identity key fingerprint
+        MDB_txn *txn = NULL;
+        if (mdb_txn_begin(self->db_env, NULL, MDB_RDONLY, &txn)) {
+            weechat_printf(buffer, "%sOMEMO: failed to open LMDB transaction",
+                           weechat_prefix("error"));
+            return;
+        }
+        MDB_val k_pub = mdb_val_str("local_public_key");
+        MDB_val v_pub;
+        if (mdb_get(txn, self->dbi.omemo, &k_pub, &v_pub) != 0) {
+            mdb_txn_abort(txn);
+            weechat_printf(buffer, "%sOMEMO: own identity key not found (not initialized?)",
+                           weechat_prefix("error"));
+            return;
+        }
+        // Format as colon-separated hex groups of 4 bytes (Conversations style)
+        const uint8_t *data = static_cast<const uint8_t*>(v_pub.mv_data);
+        size_t len = v_pub.mv_size;
+        std::string hex;
+        for (size_t i = 0; i < len; i++) {
+            char buf[3];
+            snprintf(buf, sizeof(buf), "%02x", data[i]);
+            if (i > 0 && i % 4 == 0) hex += ' ';
+            hex += buf;
+        }
+        mdb_txn_abort(txn);
+        weechat_printf(buffer, "%sOMEMO own fingerprint (device %u):\n%s  %s",
+                       weechat_prefix("network"), self->device_id, weechat_prefix("network"), hex.c_str());
+        return;
+    }
+
+    // Show stored identity keys for a peer JID (all device IDs we have)
+    // Scan for keys matching "identity_key_<jid>_*"
+    MDB_txn *txn = NULL;
+    if (mdb_txn_begin(self->db_env, NULL, MDB_RDONLY, &txn)) {
+        weechat_printf(buffer, "%sOMEMO: failed to open LMDB transaction",
+                       weechat_prefix("error"));
+        return;
+    }
+
+    MDB_cursor *cursor = NULL;
+    if (mdb_cursor_open(txn, self->dbi.omemo, &cursor)) {
+        mdb_txn_abort(txn);
+        weechat_printf(buffer, "%sOMEMO: failed to open LMDB cursor",
+                       weechat_prefix("error"));
+        return;
+    }
+
+    std::string prefix = fmt::format("identity_key_{}_", jid);
+    MDB_val k_seek = { .mv_size = prefix.size(), .mv_data = (void*)prefix.c_str() };
+    MDB_val v_iter;
+    bool found_any = false;
+
+    int rc = mdb_cursor_get(cursor, &k_seek, &v_iter, MDB_SET_RANGE);
+    while (rc == 0) {
+        std::string_view key(static_cast<const char*>(k_seek.mv_data), k_seek.mv_size);
+        if (key.substr(0, prefix.size()) != prefix) break;
+
+        std::string_view device_part = key.substr(prefix.size());
+        const uint8_t *data = static_cast<const uint8_t*>(v_iter.mv_data);
+        size_t len = v_iter.mv_size;
+        std::string hex;
+        for (size_t i = 0; i < len; i++) {
+            char buf[3];
+            snprintf(buf, sizeof(buf), "%02x", data[i]);
+            if (i > 0 && i % 4 == 0) hex += ' ';
+            hex += buf;
+        }
+        weechat_printf(buffer, "%sOMEMO fingerprint for %s (device %.*s):\n%s  %s",
+                       weechat_prefix("network"), jid,
+                       static_cast<int>(device_part.size()), device_part.data(),
+                       weechat_prefix("network"), hex.c_str());
+        found_any = true;
+        rc = mdb_cursor_get(cursor, &k_seek, &v_iter, MDB_NEXT);
+    }
+
+    mdb_cursor_close(cursor);
+    mdb_txn_abort(txn);
+
+    if (!found_any)
+        weechat_printf(buffer, "%sOMEMO: no stored identity keys for %s",
+                       weechat_prefix("network"), jid);
+}
+
+void omemo::distrust_jid(struct t_gui_buffer *buffer, const char *jid)
+{
+    auto *self = static_cast<t_omemo*>(this);
+
+    MDB_txn *txn = NULL;
+    if (mdb_txn_begin(self->db_env, NULL, 0, &txn)) {
+        weechat_printf(buffer, "%sOMEMO: failed to open LMDB transaction",
+                       weechat_prefix("error"));
+        return;
+    }
+
+    MDB_cursor *cursor = NULL;
+    if (mdb_cursor_open(txn, self->dbi.omemo, &cursor)) {
+        mdb_txn_abort(txn);
+        weechat_printf(buffer, "%sOMEMO: failed to open LMDB cursor",
+                       weechat_prefix("error"));
+        return;
+    }
+
+    std::string prefix = fmt::format("identity_key_{}_", jid);
+    MDB_val k_seek = { .mv_size = prefix.size(), .mv_data = (void*)prefix.c_str() };
+    MDB_val v_iter;
+    int deleted = 0;
+
+    int rc = mdb_cursor_get(cursor, &k_seek, &v_iter, MDB_SET_RANGE);
+    while (rc == 0) {
+        std::string_view key(static_cast<const char*>(k_seek.mv_data), k_seek.mv_size);
+        if (key.substr(0, prefix.size()) != prefix) break;
+
+        rc = mdb_cursor_del(cursor, 0);
+        if (rc != 0) {
+            weechat_printf(buffer, "%sOMEMO: failed to delete key: %s",
+                           weechat_prefix("error"), mdb_strerror(rc));
+            break;
+        }
+        deleted++;
+        rc = mdb_cursor_get(cursor, &k_seek, &v_iter, MDB_SET_RANGE);
+    }
+
+    mdb_cursor_close(cursor);
+    if (mdb_txn_commit(txn)) {
+        weechat_printf(buffer, "%sOMEMO: failed to commit LMDB transaction",
+                       weechat_prefix("error"));
+        return;
+    }
+
+    if (deleted > 0)
+        weechat_printf(buffer, "%sOMEMO: removed %d stored identity key(s) for %s — "
+                       "next contact will trigger TOFU re-verification",
+                       weechat_prefix("network"), deleted, jid);
+    else
+        weechat_printf(buffer, "%sOMEMO: no stored identity keys found for %s",
+                       weechat_prefix("network"), jid);
+}
+
+void omemo::show_devices(struct t_gui_buffer *buffer, const char *jid)
+{
+    auto *self = static_cast<t_omemo*>(this);
+
+    try {
+        auto txn = lmdb::txn::begin(self->db_env, nullptr, MDB_RDONLY);
+        std::string k_devicelist = fmt::format("devicelist_{}", jid);
+        std::string_view v_devicelist;
+
+        if (!self->dbi.omemo.get(txn, k_devicelist, v_devicelist) || v_devicelist.empty()) {
+            txn.abort();
+            weechat_printf(buffer, "%sOMEMO: no known devices for %s",
+                           weechat_prefix("network"), jid);
+            return;
+        }
+
+        auto devices = v_devicelist
+            | std::ranges::views::split(';')
+            | std::ranges::views::transform([](auto&& r) {
+                return std::string(r.begin(), r.end());
+            });
+
+        weechat_printf(buffer, "%sOMEMO devices for %s:",
+                       weechat_prefix("network"), jid);
+        for (auto&& dev_str : devices) {
+            if (dev_str.empty()) continue;
+            weechat_printf(buffer, "%s  device %s",
+                           weechat_prefix("network"), dev_str.c_str());
+        }
+        txn.abort();
+    } catch (const lmdb::error& ex) {
+        weechat_printf(buffer, "%sOMEMO: LMDB error: %s",
+                       weechat_prefix("error"), ex.what());
+    }
+}
+
+void omemo::show_status(struct t_gui_buffer *buffer, const char *account_name,
+                        const char *channel_name, int channel_omemo_enabled)
+{
+    auto *self = static_cast<t_omemo*>(this);
+
+    weechat_printf(buffer, "%sOMEMO status for account %s:",
+                   weechat_prefix("network"), account_name ? account_name : "?");
+
+    // Device ID
+    weechat_printf(buffer, "%s  Device ID: %u",
+                   weechat_prefix("network"), self->device_id);
+
+    // Own fingerprint
+    {
+        MDB_txn *txn = NULL;
+        if (mdb_txn_begin(self->db_env, NULL, MDB_RDONLY, &txn) == 0) {
+            MDB_val k_pub = mdb_val_str("local_public_key");
+            MDB_val v_pub;
+            if (mdb_get(txn, self->dbi.omemo, &k_pub, &v_pub) == 0) {
+                const uint8_t *data = static_cast<const uint8_t*>(v_pub.mv_data);
+                size_t len = v_pub.mv_size;
+                std::string hex;
+                for (size_t i = 0; i < len; i++) {
+                    char buf[3];
+                    snprintf(buf, sizeof(buf), "%02x", data[i]);
+                    if (i > 0 && i % 4 == 0) hex += ' ';
+                    hex += buf;
+                }
+                weechat_printf(buffer, "%s  Own fingerprint: %s",
+                               weechat_prefix("network"), hex.c_str());
+            } else {
+                weechat_printf(buffer, "%s  Own fingerprint: (not found in LMDB)",
+                               weechat_prefix("network"));
+            }
+            mdb_txn_abort(txn);
+        } else {
+            weechat_printf(buffer, "%s  Own fingerprint: (LMDB error)",
+                           weechat_prefix("network"));
+        }
+    }
+
+    // Pre-key count — cursor scan for "pre_key_" prefix
+    {
+        MDB_txn *txn = NULL;
+        if (mdb_txn_begin(self->db_env, NULL, MDB_RDONLY, &txn) == 0) {
+            MDB_cursor *cursor = NULL;
+            int prekey_count = 0;
+            if (mdb_cursor_open(txn, self->dbi.omemo, &cursor) == 0) {
+                std::string_view prefix = "pre_key_";
+                MDB_val k_seek = { .mv_size = prefix.size(),
+                                   .mv_data = (void*)prefix.data() };
+                MDB_val v_iter;
+                int rc = mdb_cursor_get(cursor, &k_seek, &v_iter, MDB_SET_RANGE);
+                while (rc == 0) {
+                    std::string_view key(static_cast<const char*>(k_seek.mv_data),
+                                        k_seek.mv_size);
+                    if (key.substr(0, prefix.size()) != prefix) break;
+                    // Exclude "pre_key_repub_needed" — only count numeric IDs
+                    std::string_view suffix = key.substr(prefix.size());
+                    if (!suffix.empty() && suffix[0] >= '0' && suffix[0] <= '9')
+                        prekey_count++;
+                    rc = mdb_cursor_get(cursor, &k_seek, &v_iter, MDB_NEXT);
+                }
+                mdb_cursor_close(cursor);
+            }
+            mdb_txn_abort(txn);
+            weechat_printf(buffer, "%s  Pre-keys remaining: %d",
+                           weechat_prefix("network"), prekey_count);
+        }
+    }
+
+    // Signed pre-key current ID and age
+    {
+        MDB_txn *txn = NULL;
+        if (mdb_txn_begin(self->db_env, NULL, MDB_RDONLY, &txn) == 0) {
+            MDB_val k_id = mdb_val_str("signed_pre_key_current_id");
+            MDB_val v_id;
+            if (mdb_get(txn, self->dbi.omemo, &k_id, &v_id) == 0 && v_id.mv_size > 0) {
+                std::string spk_id_str(static_cast<const char*>(v_id.mv_data), v_id.mv_size);
+                // Strip trailing null if present
+                while (!spk_id_str.empty() && spk_id_str.back() == '\0')
+                    spk_id_str.pop_back();
+
+                std::string ts_key = fmt::format("signed_pre_key_ts_{}", spk_id_str);
+                MDB_val k_ts = { .mv_size = ts_key.size(), .mv_data = (void*)ts_key.c_str() };
+                MDB_val v_ts;
+                if (mdb_get(txn, self->dbi.omemo, &k_ts, &v_ts) == 0 && v_ts.mv_size > 0) {
+                    std::string ts_str(static_cast<const char*>(v_ts.mv_data), v_ts.mv_size);
+                    while (!ts_str.empty() && ts_str.back() == '\0')
+                        ts_str.pop_back();
+                    try {
+                        long long ts = std::stoll(ts_str);
+                        long long now = static_cast<long long>(std::time(nullptr));
+                        long long age_days = (now - ts) / 86400;
+                        weechat_printf(buffer,
+                                       "%s  Signed pre-key ID: %s (age: %lld day%s)",
+                                       weechat_prefix("network"),
+                                       spk_id_str.c_str(), age_days,
+                                       age_days == 1 ? "" : "s");
+                    } catch (...) {
+                        weechat_printf(buffer,
+                                       "%s  Signed pre-key ID: %s (age: unknown)",
+                                       weechat_prefix("network"), spk_id_str.c_str());
+                    }
+                } else {
+                    weechat_printf(buffer, "%s  Signed pre-key ID: %s (no timestamp)",
+                                   weechat_prefix("network"), spk_id_str.c_str());
+                }
+            } else {
+                weechat_printf(buffer, "%s  Signed pre-key ID: (not found)",
+                               weechat_prefix("network"));
+            }
+            mdb_txn_abort(txn);
+        }
+    }
+
+    // Channel encryption state
+    if (channel_name) {
+        weechat_printf(buffer, "%s  Channel '%s' OMEMO: %s",
+                       weechat_prefix("network"), channel_name,
+                       channel_omemo_enabled ? "ENABLED" : "disabled");
+    }
 }
 
 omemo::~omemo()

@@ -2,9 +2,7 @@
 // License, version 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
 #include <stdio.h>
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>
@@ -18,7 +16,7 @@
 
 std::string weechat::user::get_colour()
 {
-    return weechat::user::get_colour(this->profile.display_name);
+    return weechat::user::get_colour(this->profile.display_name.c_str());
 }
 
 std::string weechat::user::get_colour(const char *name)
@@ -34,7 +32,7 @@ std::string weechat::user::get_colour(const char *name)
 
 std::string weechat::user::get_colour_for_nicklist()
 {
-    return weechat::user::get_colour_for_nicklist(this->profile.display_name);
+    return weechat::user::get_colour_for_nicklist(this->profile.display_name.c_str());
 }
 
 std::string weechat::user::get_colour_for_nicklist(const char *name)
@@ -58,7 +56,7 @@ std::string weechat::user::as_prefix_raw()
         avatar_prefix = this->profile.avatar_rendered + " ";
     }
     
-    return avatar_prefix + weechat::user::as_prefix_raw(this->profile.display_name);
+    return avatar_prefix + weechat::user::as_prefix_raw(this->profile.display_name.c_str());
 }
 
 std::string weechat::user::as_prefix_raw(const char *name)
@@ -82,7 +80,7 @@ std::string weechat::user::as_prefix()
         avatar_prefix = this->profile.avatar_rendered + " ";
     }
     
-    return avatar_prefix + weechat::user::as_prefix(this->profile.display_name);
+    return avatar_prefix + weechat::user::as_prefix(this->profile.display_name.c_str());
 }
 
 std::string weechat::user::as_prefix(const char *name)
@@ -103,8 +101,8 @@ weechat::user *weechat::user::bot_search(weechat::account *account,
 
     for (auto& ptr_user : account->users)
     {
-        if (ptr_user.second.profile.pgp_id &&
-            ptr_user.second.profile.pgp_id == pgp_id)
+        if (ptr_user.second.profile.pgp_id.has_value() &&
+            ptr_user.second.profile.pgp_id.value() == pgp_id)
             return &ptr_user.second;
     }
 
@@ -128,14 +126,14 @@ void weechat::user::nicklist_add(weechat::account *account,
 {
     struct t_gui_nick_group *ptr_group;
     struct t_gui_buffer *ptr_buffer;
-    char *name = channel ? this->profile.display_name : this->id;
+    const char *name = channel ? this->profile.display_name.c_str() : this->id.c_str();
     
     // For roster contacts (account buffer), strip resource from JID
     if (!channel)
     {
-        const char *bare = xmpp_jid_bare(account->context, this->id);
+        const char *bare = xmpp_jid_bare(account->context, this->id.c_str());
         if (bare)
-            name = (char*)bare;
+            name = bare;
     }
     
     if (channel && weechat_strcasecmp(xmpp_jid_bare(account->context, name),
@@ -144,21 +142,21 @@ void weechat::user::nicklist_add(weechat::account *account,
 
     ptr_buffer = channel ? channel->buffer : account->buffer;
 
-    char *group = (char*)"...";
-    if (this->profile.affiliation ? this->profile.affiliation == std::string("outcast") : false)
-        group = (char*)"!";
-    if (this->profile.role ? this->profile.role == std::string("visitor") : false)
-        group = (char*)"?";
-    if (this->profile.role ? this->profile.role == std::string("participant") : false)
-        group = (char*)"+";
-    if (this->profile.affiliation ? this->profile.affiliation == std::string("member") : false)
-        group = (char*)"%";
-    if (this->profile.role ? this->profile.role == std::string("moderator") : false)
-        group = (char*)"@";
-    if (this->profile.affiliation ? this->profile.affiliation == std::string("admin") : false)
-        group = (char*)"&";
-    if (this->profile.affiliation ? this->profile.affiliation == std::string("owner") : false)
-        group = (char*)"~";
+    const char *group = "...";
+    if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "outcast")
+        group = "!";
+    if (this->profile.role.has_value() && this->profile.role.value() == "visitor")
+        group = "?";
+    if (this->profile.role.has_value() && this->profile.role.value() == "participant")
+        group = "+";
+    if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "member")
+        group = "%";
+    if (this->profile.role.has_value() && this->profile.role.value() == "moderator")
+        group = "@";
+    if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "admin")
+        group = "&";
+    if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "owner")
+        group = "~";
     ptr_group = weechat_nicklist_search_group(ptr_buffer, nullptr, group);
     weechat_nicklist_add_nick(ptr_buffer, ptr_group,
                               name,
@@ -175,7 +173,7 @@ void weechat::user::nicklist_remove(weechat::account *account,
 {
     struct t_gui_nick *ptr_nick;
     struct t_gui_buffer *ptr_buffer;
-    char *name = this->profile.display_name;
+    const char *name = this->profile.display_name.c_str();
     if (channel && weechat_strcasecmp(xmpp_jid_bare(account->context, name),
                                       channel->id.data()) == 0)
         name = xmpp_jid_resource(account->context, name);
@@ -203,10 +201,9 @@ weechat::user::user(weechat::account *account, weechat::channel *channel,
         throw nullptr;
     }
 
-    this->id = strdup(id);
+    this->id = id;
 
-    this->profile.display_name = display_name ?
-        strdup(display_name) : strdup("");
+    this->profile.display_name = display_name ? display_name : "";
 
     // Try to load cached avatar if available
     weechat::avatar::load_for_user(*account, *this);

@@ -38,7 +38,7 @@ void completion__channel_nicks_add_speakers(struct t_gui_completion *completion,
                 user = weechat::user::search(account, member);
                 if (user)
                     weechat_hook_completion_list_add(completion,
-                                                     user->profile.display_name,
+                                                     user->profile.display_name.c_str(),
                                                      1, WEECHAT_LIST_POS_BEGINNING);
             }
         }
@@ -71,10 +71,10 @@ int completion__channel_nicks_cb(const void *pointer, void *data,
         case weechat::channel::chat_type::PM:
             for (auto& ptr_member : ptr_channel->members)
             {
-                ptr_user = weechat::user::search(ptr_account, ptr_member.second.id);
+                ptr_user = weechat::user::search(ptr_account, ptr_member.second.id.c_str());
                 if (ptr_user)
                     weechat_hook_completion_list_add(completion,
-                                                     ptr_user->profile.display_name,
+                                                     ptr_user->profile.display_name.c_str(),
                                                      1, WEECHAT_LIST_POS_SORT);
             }
             /* add recent speakers on channel */

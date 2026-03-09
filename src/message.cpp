@@ -67,7 +67,7 @@ char *message__translate_code(weechat::account *account,
                 if (user)
                 {
                     prefix = (char*)"@";
-                    symbol = strdup(user->profile.display_name);
+                    symbol = strdup(user->profile.display_name.c_str());
                 }
                 else
                 {

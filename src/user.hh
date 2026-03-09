@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <optional>
@@ -19,27 +20,27 @@ namespace weechat
     private:
         struct profile
         {
-            char *avatar_hash = nullptr;
+            std::string avatar_hash;
             std::vector<uint8_t> avatar_data;  // Cached avatar image data
             std::string avatar_rendered;        // Cached Unicode rendering
-            char *status_text = nullptr;
-            char *status = nullptr;
+            std::optional<std::string> status_text;
+            std::optional<std::string> status;
             std::optional<std::string> idle;
-            char *display_name = nullptr;
-            char *email = nullptr;
-            char *role = nullptr;
-            char *affiliation = nullptr;
-            char *pgp_id = nullptr;
+            std::string display_name;
+            std::optional<std::string> email;
+            std::optional<std::string> role;
+            std::optional<std::string> affiliation;
+            std::optional<std::string> pgp_id;
             int omemo = 0;
         };
 
     private:
-        char *name = nullptr;
+        std::string name;
 
         bool updated = false;
 
     public:
-        char *id = nullptr;
+        std::string id;
         bool is_away = false;
         struct profile profile;
 
