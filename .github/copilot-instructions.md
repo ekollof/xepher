@@ -53,10 +53,70 @@ This is a WeeChat plugin for XMPP/Jabber written in C++. It uses libstrophe for 
 
 ### Memory Management
 
-- Use smart pointers where appropriate
-- Clean up strophe allocations promptly
-- Be careful with string lifetimes from strophe (may be temporary)
-- LMDB transactions: always commit or abort
+**Raw `malloc`/`free`/`new`/`delete` are forbidden.** Use RAII exclusively.
+
+#### Byte buffers from `malloc`/`calloc` (e.g. `base64_decode` output)
+
+Use `heap_buf` / `make_heap_buf` from `src/omemo.hh`:
+
+```cpp
+// heap_buf = std::unique_ptr<uint8_t[], decltype(&free)>
+uint8_t *raw = nullptr;
+size_t len = base64_decode(text, strlen(text), &raw);
+heap_buf buf = make_heap_buf(raw);   // auto-freed on scope exit
+```
+
+#### LMDB key buffers
+
+Use `std::string` + `fmt::format` — never `malloc`/`snprintf`:
+
+```cpp
+std::string k_foo = fmt::format("prefix_{}_{}",  name, id);
+MDB_val mdb_key = { .mv_size = k_foo.size(), .mv_data = k_foo.data() };
+```
+
+#### gcrypt allocations
+
+- `gcry_random_bytes()` — allocate once, **free with `gcry_free()`** (not `free()`).
+- `gcry_md_read()` — returns an **internal pointer** into gcrypt's handle; **never call `free()` on it**.
+
+#### Strophe stanza ownership helpers (`src/xmpp/stanza.hh`)
+
+- `with_free(ptr)` — transfers heap ownership to the stanza; the stanza will call `free()`.
+  Do **not** also wrap `ptr` in a smart pointer.
+- `with_noop(ptr)` — stanza **does not** take ownership; caller must keep the value alive
+  until the stanza is consumed, then free it via RAII (smart pointer or `std::string`).
+
+#### `weechat_string_dyn_free` flag
+
+- `weechat_string_dyn_free(ptr, 0)` — frees the `char**` container **and** `*ptr`; `*ptr` is dangling afterwards.
+- `weechat_string_dyn_free(ptr, 1)` — frees only the container; `*ptr` is a caller-owned heap string.
+  Assign `*ptr` to a `std::unique_ptr<char, decltype(&free)>` or call `free()` when done.
+
+#### Null-terminated pointer arrays
+
+Use `std::vector<T>` for storage and `std::vector<T*>` for the pointer array (push `nullptr` as terminator):
+
+```cpp
+std::vector<t_pre_key> storage;
+std::vector<t_pre_key *> ptrs;
+// ... populate storage, push &storage.back() into ptrs ...
+ptrs.push_back(nullptr);                  // null terminator
+func(ptrs.data());                        // pass raw array
+```
+
+#### Exception-safe fixed-size arrays
+
+Use `std::make_unique<T[]>(N)` instead of `malloc`:
+
+```cpp
+auto buf = std::make_unique<xmpp_stanza_t*[]>(101);
+xmpp_stanza_t **children = buf.get();     // auto-freed on scope exit
+```
+
+#### LMDB transactions
+
+Always commit **or** abort every transaction — never let one go out of scope uncommitted.
 
 ## Architecture
 
