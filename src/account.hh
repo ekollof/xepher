@@ -6,6 +6,7 @@
 
 #include <ctime>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -122,6 +123,9 @@ namespace weechat
         uint32_t sm_h_outbound = 0;     // stanzas we've sent
         uint32_t sm_last_ack = 0;       // last h value acknowledged by server
         struct t_hook *sm_ack_timer_hook = nullptr;
+        // Unacknowledged outbound stanzas: (outbound_seq, stanza_copy)
+        // seq is 1-based (matches sm_h_outbound at time of send)
+        std::deque<std::pair<uint32_t, std::shared_ptr<xmpp_stanza_t>>> sm_outqueue;
 
         std::string name;
         weechat::xmpp::pgp pgp;

@@ -58,6 +58,11 @@ void weechat::connection::send(xmpp_stanza_t *stanza)
         if (stanza_name == "message" || stanza_name == "presence" || stanza_name == "iq")
         {
             account.sm_h_outbound++;
+            // Keep a copy in the retransmit queue (XEP-0198 §5)
+            xmpp_stanza_t *copy = xmpp_stanza_copy(stanza);
+            account.sm_outqueue.emplace_back(
+                account.sm_h_outbound,
+                std::shared_ptr<xmpp_stanza_t>(copy, xmpp_stanza_release));
         }
     }
     m_conn.send(stanza);
@@ -4995,6 +5000,7 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         account.sm_h_inbound = 0;
         account.sm_h_outbound = 0;
         account.sm_last_ack = 0;
+        account.sm_outqueue.clear();
 
         const char *id = xmpp_stanza_get_attribute(stanza, "id");
         if (id)
@@ -5017,16 +5023,36 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
     {
         // Stream resumed successfully
         const char *h = xmpp_stanza_get_attribute(stanza, "h");
+        uint32_t ack_h = 0;
         if (h)
         {
-            account.sm_last_ack = std::stoul(h);
+            ack_h = std::stoul(h);
+            account.sm_last_ack = ack_h;
             weechat_printf(account.buffer, "%sStream resumed (h=%u)",
-                          weechat_prefix("network"), account.sm_last_ack);
+                          weechat_prefix("network"), ack_h);
         }
         else
         {
             weechat_printf(account.buffer, "%sStream resumed",
                           weechat_prefix("network"));
+        }
+
+        // Prune stanzas the server already acknowledged
+        while (!account.sm_outqueue.empty() &&
+               account.sm_outqueue.front().first <= ack_h)
+        {
+            account.sm_outqueue.pop_front();
+        }
+
+        // Retransmit all remaining unacknowledged stanzas
+        if (!account.sm_outqueue.empty())
+        {
+            weechat_printf(account.buffer, "%sRetransmitting %zu unacknowledged stanza(s)…",
+                          weechat_prefix("network"), account.sm_outqueue.size());
+            for (auto& [seq, stanza_copy] : account.sm_outqueue)
+            {
+                m_conn.send(stanza_copy.get());
+            }
         }
     }
     else if (element_name == "failed")
@@ -5056,6 +5082,7 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         account.sm_h_inbound = 0;
         account.sm_h_outbound = 0;
         account.sm_last_ack = 0;
+        account.sm_outqueue.clear();
         
         // Mark SM as unavailable to prevent retry loops
         // (Will be reset when user manually reconnects)
@@ -5072,6 +5099,13 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         {
             uint32_t ack_count = std::stoul(h);
             account.sm_last_ack = ack_count;
+
+            // Prune all stanzas the server has confirmed receiving
+            while (!account.sm_outqueue.empty() &&
+                   account.sm_outqueue.front().first <= ack_count)
+            {
+                account.sm_outqueue.pop_front();
+            }
             
             // Guard against underflow
             int32_t unacked = (int32_t)account.sm_h_outbound - (int32_t)ack_count;
