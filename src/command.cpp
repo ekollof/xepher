@@ -629,15 +629,29 @@ int command__open(const void *pointer, void *data,
         char **jids = weechat_string_split(argv[1], ",", NULL, 0, 0, &n_jid);
         for (int i = 0; i < n_jid; i++)
         {
-            jid = xmpp_jid_bare(ptr_account->context, jids[i]);
-            if (ptr_channel && !strchr(jid, '@'))
-            {
-                jid = xmpp_jid_new(
-                    ptr_account->context,
-                    xmpp_jid_node(ptr_account->context, ptr_channel->name.data()),
-                    xmpp_jid_domain(ptr_account->context, ptr_channel->name.data()),
-                    jid);
-            }
+            xmpp_string_guard bare_g(ptr_account->context,
+                                     xmpp_jid_bare(ptr_account->context, jids[i]));
+            const char *effective_jid = bare_g.c_str();
+
+            // When in a MUC and given a bare nick (no '@'), build the full JID.
+            // All three guards outlive the if-block via the enclosing for-body scope.
+            xmpp_string_guard node_g(ptr_account->context,
+                ptr_channel && !strchr(effective_jid, '@')
+                    ? xmpp_jid_node(ptr_account->context, ptr_channel->name.data())
+                    : nullptr);
+            xmpp_string_guard domain_g(ptr_account->context,
+                ptr_channel && !strchr(effective_jid, '@')
+                    ? xmpp_jid_domain(ptr_account->context, ptr_channel->name.data())
+                    : nullptr);
+            xmpp_string_guard full_g(ptr_account->context,
+                (node_g && domain_g)
+                    ? xmpp_jid_new(ptr_account->context,
+                                   node_g.c_str(), domain_g.c_str(), effective_jid)
+                    : nullptr);
+            if (full_g)
+                effective_jid = full_g.c_str();
+
+            jid = const_cast<char*>(effective_jid);
 
             pres = xmpp_presence_new(ptr_account->context);
             xmpp_stanza_set_to(pres, jid);

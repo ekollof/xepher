@@ -1966,8 +1966,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                         if (strlen(tag) > strlen("id_") &&
                             weechat_strcasecmp(tag+strlen("id_"), replace_id) == 0)
                         {
-                            struct t_arraylist *orig_lines = weechat_arraylist_new(
-                                0, 0, 0, NULL, NULL, NULL, NULL);
+                            auto arraylist_deleter = [](struct t_arraylist *al) {
+                                weechat_arraylist_free(al);
+                            };
+                            std::unique_ptr<struct t_arraylist, decltype(arraylist_deleter)>
+                                orig_lines_ptr(weechat_arraylist_new(0, 0, 0, NULL, NULL, NULL, NULL),
+                                               arraylist_deleter);
+                            struct t_arraylist *orig_lines = orig_lines_ptr.get();
                             char *msg = (char*)weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                     line_data, "message");
                             weechat_arraylist_insert(orig_lines, 0, msg);
@@ -5821,8 +5826,11 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
         xmpp_free(account.context, jid_domain);
         xmpp_free(account.context, jid_node);
     }
-    m_conn.set_pass(weechat_string_eval_expression(password.data(),
-                    NULL, NULL, NULL));
+    {
+        std::unique_ptr<char, decltype(&free)> evaled_pass(
+            weechat_string_eval_expression(password.data(), NULL, NULL, NULL), free);
+        m_conn.set_pass(evaled_pass.get());
+    }
 
     int flags = m_conn.get_flags();
     switch (tls)
