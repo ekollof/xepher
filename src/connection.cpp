@@ -4503,6 +4503,68 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
             }
         }
     }
+
+    // RFC 6121 §2.1.6 — roster push: server sends IQ type="set" with a single item
+    if (query && type && weechat_strcasecmp(type, "set") == 0)
+    {
+        xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(query, "item");
+        if (item)
+        {
+            const char *jid          = xmpp_stanza_get_attribute(item, "jid");
+            const char *roster_name  = xmpp_stanza_get_attribute(item, "name");
+            const char *subscription = xmpp_stanza_get_attribute(item, "subscription");
+
+            if (jid)
+            {
+                if (subscription && weechat_strcasecmp(subscription, "remove") == 0)
+                {
+                    account.roster.erase(jid);
+                    weechat_printf(account.buffer, "%sRoster: %s removed",
+                                   weechat_prefix("network"), jid);
+                }
+                else
+                {
+                    bool is_new = (account.roster.find(jid) == account.roster.end());
+                    account.roster[jid].jid = jid;
+                    account.roster[jid].name = roster_name ? roster_name : "";
+                    account.roster[jid].subscription = subscription ? subscription : "none";
+                    account.roster[jid].groups.clear();
+
+                    xmpp_stanza_t *group;
+                    for (group = xmpp_stanza_get_children(item);
+                         group; group = xmpp_stanza_get_next(group))
+                    {
+                        const char *gname = xmpp_stanza_get_name(group);
+                        if (weechat_strcasecmp(gname, "group") != 0) continue;
+                        xmpp_stanza_t *gtxt = xmpp_stanza_get_children(group);
+                        if (gtxt) {
+                            char *text = xmpp_stanza_get_text(gtxt);
+                            if (text) {
+                                account.roster[jid].groups.push_back(text);
+                                xmpp_free(account.context, text);
+                            }
+                        }
+                    }
+
+                    if (is_new)
+                        weechat_printf(account.buffer, "%sRoster: %s added (%s)",
+                                       weechat_prefix("network"), jid,
+                                       subscription ? subscription : "none");
+                    else
+                        weechat_printf(account.buffer, "%sRoster: %s updated (subscription: %s)",
+                                       weechat_prefix("network"), jid,
+                                       subscription ? subscription : "none");
+                }
+            }
+        }
+        // Acknowledge the roster push
+        xmpp_stanza_t *ack = xmpp_iq_new(account.context, "result", id);
+        if (from) xmpp_stanza_set_to(ack, from);
+        if (to)   xmpp_stanza_set_from(ack, to);
+        account.connection.send(ack);
+        xmpp_stanza_release(ack);
+        return true;
+    }
     
     query = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "query", "jabber:iq:private");
