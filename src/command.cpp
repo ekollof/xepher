@@ -161,8 +161,10 @@ void command__add_account(const char *name, const char *jid, const char *passwor
         account->jid(jid);
     if (password)
         account->password(password);
-    if (jid)
-        account->nickname(xmpp_jid_node(account->context, jid));
+    if (jid) {
+        xmpp_string_guard jid_node_g(account->context, xmpp_jid_node(account->context, jid));
+        account->nickname(jid_node_g.c_str());
+    }
 
     weechat_printf(
         NULL,
@@ -438,7 +440,7 @@ int command__enter(const void *pointer, void *data,
     weechat::account *ptr_account = NULL;
     weechat::channel *ptr_channel = NULL;
     xmpp_stanza_t *pres;
-    char *jid, *pres_jid, *text;
+    const char *jid, *pres_jid, *text;
 
     (void) pointer;
     (void) data;
@@ -463,45 +465,85 @@ int command__enter(const void *pointer, void *data,
         char **jids = weechat_string_split(argv[1], ",", NULL, 0, 0, &n_jid);
         for (int i = 0; i < n_jid; i++)
         {
-            jid = xmpp_jid_bare(ptr_account->context, jids[i]);
+            xmpp_string_guard jid_bare_g(ptr_account->context,
+                xmpp_jid_bare(ptr_account->context, jids[i]));
+            jid = jid_bare_g.c_str();
             pres_jid = jids[i];
 
             if(!xmpp_jid_resource(ptr_account->context, pres_jid))
-                pres_jid = xmpp_jid_new(
-                    ptr_account->context,
-                    xmpp_jid_node(ptr_account->context, jid),
-                    xmpp_jid_domain(ptr_account->context, jid),
-                    ptr_account->nickname().data()
+            {
+                xmpp_string_guard pres_node_g(ptr_account->context,
+                    xmpp_jid_node(ptr_account->context, jid));
+                xmpp_string_guard pres_domain_g(ptr_account->context,
+                    xmpp_jid_domain(ptr_account->context, jid));
+                const char *nick = ptr_account->nickname().data()
                     && strlen(ptr_account->nickname().data())
                     ? ptr_account->nickname().data()
-                    : xmpp_jid_node(ptr_account->context,
-                                    ptr_account->jid().data()));
+                    : nullptr;
+                xmpp_string_guard fallback_nick_g(ptr_account->context,
+                    nick ? nullptr : xmpp_jid_node(ptr_account->context,
+                                                   ptr_account->jid().data()));
+                xmpp_string_guard pres_jid_g(ptr_account->context,
+                    xmpp_jid_new(ptr_account->context,
+                        pres_node_g.c_str(),
+                        pres_domain_g.c_str(),
+                        nick ? nick : fallback_nick_g.c_str()));
+                pres_jid = pres_jid_g.c_str();
 
-            if (!ptr_account->channels.contains(jid))
-            {
-                ptr_channel = &ptr_account->channels.emplace(
-                    std::make_pair(jid, weechat::channel {
-                            *ptr_account, weechat::channel::chat_type::MUC, jid, jid
-                        })).first->second;
-                ptr_account->load_pgp_keys();
+                if (!ptr_account->channels.contains(jid))
+                {
+                    ptr_channel = &ptr_account->channels.emplace(
+                        std::make_pair(jid, weechat::channel {
+                                *ptr_account, weechat::channel::chat_type::MUC, jid, jid
+                            })).first->second;
+                    ptr_account->load_pgp_keys();
+                }
+                if (!ptr_channel) {
+                    weechat_string_free_split(jids);
+                    return WEECHAT_RC_ERROR;
+                }
+
+                pres = xmpp_presence_new(ptr_account->context);
+                xmpp_stanza_set_to(pres, pres_jid);
+                xmpp_stanza_set_from(pres, ptr_account->jid().data());
+
+                xmpp_stanza_t *pres__x = xmpp_stanza_new(ptr_account->context);
+                xmpp_stanza_set_name(pres__x, "x");
+                xmpp_stanza_set_ns(pres__x, "http://jabber.org/protocol/muc");
+                xmpp_stanza_add_child(pres, pres__x);
+                xmpp_stanza_release(pres__x);
+
+                ptr_account->connection.send( pres);
+                xmpp_stanza_release(pres);
             }
-	    if (!ptr_channel) {
-		weechat_string_free_split(jids); // raii unique_ptr?
-		return WEECHAT_RC_ERROR;
-	    }
+            else
+            {
+                if (!ptr_account->channels.contains(jid))
+                {
+                    ptr_channel = &ptr_account->channels.emplace(
+                        std::make_pair(jid, weechat::channel {
+                                *ptr_account, weechat::channel::chat_type::MUC, jid, jid
+                            })).first->second;
+                    ptr_account->load_pgp_keys();
+                }
+                if (!ptr_channel) {
+                    weechat_string_free_split(jids);
+                    return WEECHAT_RC_ERROR;
+                }
 
-            pres = xmpp_presence_new(ptr_account->context);
-            xmpp_stanza_set_to(pres, pres_jid);
-            xmpp_stanza_set_from(pres, ptr_account->jid().data());
+                pres = xmpp_presence_new(ptr_account->context);
+                xmpp_stanza_set_to(pres, pres_jid);
+                xmpp_stanza_set_from(pres, ptr_account->jid().data());
 
-            xmpp_stanza_t *pres__x = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(pres__x, "x");
-            xmpp_stanza_set_ns(pres__x, "http://jabber.org/protocol/muc");
-            xmpp_stanza_add_child(pres, pres__x);
-            xmpp_stanza_release(pres__x);
+                xmpp_stanza_t *pres__x = xmpp_stanza_new(ptr_account->context);
+                xmpp_stanza_set_name(pres__x, "x");
+                xmpp_stanza_set_ns(pres__x, "http://jabber.org/protocol/muc");
+                xmpp_stanza_add_child(pres, pres__x);
+                xmpp_stanza_release(pres__x);
 
-            ptr_account->connection.send( pres);
-            xmpp_stanza_release(pres);
+                ptr_account->connection.send( pres);
+                xmpp_stanza_release(pres);
+            }
 
             if (argc > 2)
             {
@@ -521,30 +563,35 @@ int command__enter(const void *pointer, void *data,
     {
         const char *buffer_jid = weechat_buffer_get_string(buffer, "localvar_remote_jid");
 
-        pres_jid = xmpp_jid_new(
-            ptr_account->context,
-            xmpp_jid_node(ptr_account->context, buffer_jid),
-            xmpp_jid_domain(ptr_account->context, buffer_jid),
-            weechat_buffer_get_string(buffer, "localvar_nick"));
+        {
+            xmpp_string_guard node_g(ptr_account->context,
+                xmpp_jid_node(ptr_account->context, buffer_jid));
+            xmpp_string_guard domain_g(ptr_account->context,
+                xmpp_jid_domain(ptr_account->context, buffer_jid));
+            xmpp_string_guard pres_jid_g(ptr_account->context,
+                xmpp_jid_new(ptr_account->context, node_g.c_str(), domain_g.c_str(),
+                    weechat_buffer_get_string(buffer, "localvar_nick")));
+            pres_jid = pres_jid_g.c_str();
 
-        if (!ptr_account->channels.contains(buffer_jid))
-            ptr_channel = &ptr_account->channels.emplace(
-                std::make_pair(std::string(jid), weechat::channel {
-                        *ptr_account, weechat::channel::chat_type::MUC, buffer_jid, buffer_jid
-                    })).first->second;
+            if (!ptr_account->channels.contains(buffer_jid))
+                ptr_channel = &ptr_account->channels.emplace(
+                    std::make_pair(std::string(buffer_jid), weechat::channel {
+                            *ptr_account, weechat::channel::chat_type::MUC, buffer_jid, buffer_jid
+                        })).first->second;
 
-        pres = xmpp_presence_new(ptr_account->context);
-        xmpp_stanza_set_to(pres, pres_jid);
-        xmpp_stanza_set_from(pres, ptr_account->jid().data());
+            pres = xmpp_presence_new(ptr_account->context);
+            xmpp_stanza_set_to(pres, pres_jid);
+            xmpp_stanza_set_from(pres, ptr_account->jid().data());
 
-        xmpp_stanza_t *pres__x = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(pres__x, "x");
-        xmpp_stanza_set_ns(pres__x, "http://jabber.org/protocol/muc");
-        xmpp_stanza_add_child(pres, pres__x);
-        xmpp_stanza_release(pres__x);
+            xmpp_stanza_t *pres__x = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(pres__x, "x");
+            xmpp_stanza_set_ns(pres__x, "http://jabber.org/protocol/muc");
+            xmpp_stanza_add_child(pres, pres__x);
+            xmpp_stanza_release(pres__x);
 
-        ptr_account->connection.send( pres);
-        xmpp_stanza_release(pres);
+            ptr_account->connection.send( pres);
+            xmpp_stanza_release(pres);
+        }
     }
 
     return WEECHAT_RC_OK;
