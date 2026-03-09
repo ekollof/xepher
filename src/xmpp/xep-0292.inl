@@ -9,6 +9,7 @@
 // vCard4 is published via PubSub (node urn:xmpp:vcard4) or requested via IQ.
 
 #include <strophe.h>
+#include "../strophe.hh"
 
 #define NS_VCARD4 "urn:ietf:params:xml:ns:vcard-4.0"
 #define NS_VCARD4_PUBSUB "urn:xmpp:vcard4"
@@ -18,7 +19,8 @@ namespace xmpp { namespace xep0292 {
     // Build an IQ get to retrieve a contact's vCard4 via PubSub items request.
     inline xmpp_stanza_t *vcard4_request(xmpp_ctx_t *context, const char *to)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", xmpp_uuid_gen(context));
+        xmpp_string_guard id(context, xmpp_uuid_gen(context));
+        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", id.c_str());
         if (to) xmpp_stanza_set_to(iq, to);
 
         xmpp_stanza_t *pubsub = xmpp_stanza_new(context);

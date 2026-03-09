@@ -5,6 +5,7 @@
 #pragma once
 
 #include <strophe.h>
+#include "../strophe.hh"
 
 namespace xmpp { namespace xep0410 {
 
@@ -14,7 +15,8 @@ namespace xmpp { namespace xep0410 {
     // to: full MUC JID (room@server/nickname)
     inline xmpp_stanza_t *muc_self_ping(xmpp_ctx_t *context, const char *muc_jid)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", xmpp_uuid_gen(context));
+        xmpp_string_guard id(context, xmpp_uuid_gen(context));
+        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", id.c_str());
         xmpp_stanza_set_to(iq, muc_jid);
         
         xmpp_stanza_t *ping = xmpp_stanza_new(context);

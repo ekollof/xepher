@@ -7,13 +7,15 @@
 #include <optional>
 #include <string>
 #include <strophe.h>
+#include "../strophe.hh"
 
 namespace xmpp { namespace xep0054 {
 
     // XEP-0054: vcard-temp — build a vCard IQ get request
     inline xmpp_stanza_t *vcard_request(xmpp_ctx_t *context, const char *to)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", xmpp_uuid_gen(context));
+        xmpp_string_guard id(context, xmpp_uuid_gen(context));
+        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", id.c_str());
         if (to)
             xmpp_stanza_set_to(iq, to);
 
@@ -59,7 +61,8 @@ namespace xmpp { namespace xep0054 {
 
     inline xmpp_stanza_t *vcard_set(xmpp_ctx_t *context, const vcard_fields &f)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", xmpp_uuid_gen(context));
+        xmpp_string_guard id(context, xmpp_uuid_gen(context));
+        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id.c_str());
 
         xmpp_stanza_t *vcard = xmpp_stanza_new(context);
         xmpp_stanza_set_name(vcard, "vCard");

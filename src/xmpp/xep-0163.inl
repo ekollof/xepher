@@ -5,6 +5,7 @@
 #pragma once
 
 #include <strophe.h>
+#include "../strophe.hh"
 
 namespace xmpp { namespace xep0163 {
 
@@ -16,7 +17,8 @@ namespace xmpp { namespace xep0163 {
     inline xmpp_stanza_t *publish_pep(xmpp_ctx_t *context, const char *node, 
                                       xmpp_stanza_t *payload, const char *item_id = nullptr)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", xmpp_uuid_gen(context));
+        xmpp_string_guard id(context, xmpp_uuid_gen(context));
+        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id.c_str());
         
         xmpp_stanza_t *pubsub = xmpp_stanza_new(context);
         xmpp_stanza_set_name(pubsub, "pubsub");
@@ -52,7 +54,8 @@ namespace xmpp { namespace xep0163 {
     inline xmpp_stanza_t *subscribe_pep(xmpp_ctx_t *context, const char *node, 
                                          const char *jid)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", xmpp_uuid_gen(context));
+        xmpp_string_guard id(context, xmpp_uuid_gen(context));
+        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id.c_str());
         xmpp_stanza_set_to(iq, jid);
         
         xmpp_stanza_t *pubsub = xmpp_stanza_new(context);

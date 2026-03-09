@@ -5,6 +5,7 @@
 #pragma once
 
 #include <strophe.h>
+#include "../strophe.hh"
 
 namespace xmpp { namespace xep0191 {
 
@@ -13,7 +14,8 @@ namespace xmpp { namespace xep0191 {
     // Request block list
     inline xmpp_stanza_t *blocklist_request(xmpp_ctx_t *context)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", xmpp_uuid_gen(context));
+        xmpp_string_guard id(context, xmpp_uuid_gen(context));
+        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", id.c_str());
         
         xmpp_stanza_t *blocklist = xmpp_stanza_new(context);
         xmpp_stanza_set_name(blocklist, "blocklist");
@@ -28,7 +30,8 @@ namespace xmpp { namespace xep0191 {
     // Block one or more JIDs
     inline xmpp_stanza_t *block_jid(xmpp_ctx_t *context, const char **jids, int count)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", xmpp_uuid_gen(context));
+        xmpp_string_guard id(context, xmpp_uuid_gen(context));
+        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id.c_str());
         
         xmpp_stanza_t *block = xmpp_stanza_new(context);
         xmpp_stanza_set_name(block, "block");
@@ -52,7 +55,8 @@ namespace xmpp { namespace xep0191 {
     // Unblock one or more JIDs (or all if count == 0)
     inline xmpp_stanza_t *unblock_jid(xmpp_ctx_t *context, const char **jids, int count)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", xmpp_uuid_gen(context));
+        xmpp_string_guard id(context, xmpp_uuid_gen(context));
+        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id.c_str());
         
         xmpp_stanza_t *unblock = xmpp_stanza_new(context);
         xmpp_stanza_set_name(unblock, "unblock");
