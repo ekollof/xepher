@@ -13,6 +13,7 @@
 
 #include "plugin.hh"
 #include "account.hh"
+#include "config.hh"
 #include "omemo.hh"
 #include "user.hh"
 #include "channel.hh"
@@ -1128,6 +1129,22 @@ int weechat::channel::send_message(const char *to, const char *body)
 
     account.connection.send( message);
     xmpp_stanza_release(message);
+
+    // XEP-0511: Send outgoing link previews for URLs in the message body
+    if (transport == weechat::channel::transport::PLAIN
+            && weechat::config::instance
+            && weechat::config::instance->look.outgoing_link_preview.boolean())
+    {
+        static const std::regex url_pattern("https?://[^ ]+");
+        std::cregex_iterator it(body, body + std::strlen(body), url_pattern);
+        std::cregex_iterator end;
+        for (; it != end; ++it)
+        {
+            std::string url = (*it)[0].str();
+            send_link_preview(to, url);
+        }
+    }
+
     if (type != weechat::channel::chat_type::MUC)
     {
         auto *self_user = user::search(&account, account.jid().data());
@@ -1141,6 +1158,151 @@ int weechat::channel::send_message(const char *to, const char *body)
     }
 
     return WEECHAT_RC_OK;
+}
+
+void weechat::channel::send_link_preview(const std::string& to, const std::string& url)
+{
+    struct t_hashtable *options = weechat_hashtable_new(8,
+            WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING,
+            NULL, NULL);
+    if (!options) return;
+    weechat_hashtable_set(options, "header", "1");
+    // Full GET so we receive the HTML body for OpenGraph parsing
+    const int timeout = 30000;
+
+    struct link_preview_task {
+        weechat::channel& channel;
+        std::string to;
+        std::string url;
+    };
+    auto *task = new link_preview_task { *this, to, url };
+
+    auto callback = [](const void *pointer, void *,
+            const char *, int ret, const char *out, const char * /*err*/) {
+        auto *task = static_cast<const link_preview_task*>(pointer);
+        if (!task) return WEECHAT_RC_ERROR;
+
+        if (ret == 0 && out && *out)
+        {
+            // Parse OpenGraph meta tags from HTML response.
+            // We extract <meta property="og:PROP" content="VALUE"> from <head>.
+            std::string html(out);
+            std::string head_html;
+            {
+                auto head_end = html.find("</head>");
+                if (head_end == std::string::npos)
+                    head_end = std::min(html.size(), (size_t)8192);
+                head_html = html.substr(0, head_end);
+                std::transform(head_html.begin(), head_html.end(), head_html.begin(),
+                        [](unsigned char c) { return std::tolower(c); });
+            }
+
+            // Extract content= value for a given og: property (from lowercased head).
+            auto extract_og = [&](const std::string& prop) -> std::string {
+                // Try property="og:PROP" and property='og:PROP'
+                const char quotes[2] = {'"', '\''};
+                for (int qi = 0; qi < 2; ++qi) {
+                    char q = quotes[qi];
+                    std::string needle = std::string("property=") + q + "og:" + prop + q;
+                    auto pos = head_html.find(needle);
+                    if (pos == std::string::npos) continue;
+                    auto tag_start = head_html.rfind('<', pos);
+                    if (tag_start == std::string::npos) continue;
+                    auto tag_end = head_html.find('>', pos);
+                    if (tag_end == std::string::npos) continue;
+                    std::string tag_lower = head_html.substr(tag_start, tag_end - tag_start + 1);
+                    std::string tag_orig  = html.substr(tag_start, tag_end - tag_start + 1);
+                    // Find content= in the tag (double- or single-quoted value)
+                    for (int cqi = 0; cqi < 2; ++cqi) {
+                        char cq = quotes[cqi];
+                        std::string cpfx = std::string("content=") + cq;
+                        auto cpos = tag_lower.find(cpfx);
+                        if (cpos == std::string::npos) continue;
+                        cpos += cpfx.size();
+                        auto cend = tag_orig.find(cq, cpos);
+                        if (cend == std::string::npos) continue;
+                        return tag_orig.substr(cpos, cend - cpos);
+                    }
+                }
+                return {};
+            };
+
+            std::string og_title       = extract_og("title");
+            std::string og_description = extract_og("description");
+            std::string og_url         = extract_og("url");
+            std::string og_image       = extract_og("image");
+
+            // Only send a preview stanza if we got at least a title or og:url
+            if (og_title.empty() && og_url.empty()) {
+                delete task;
+                return WEECHAT_RC_OK;
+            }
+
+            // Build follow-up <message> stanza with <rdf:Description> (XEP-0511)
+            xmpp_ctx_t *ctx = task->channel.account.context;
+            xmpp_stanza_t *msg = xmpp_message_new(ctx,
+                    task->channel.type == weechat::channel::chat_type::MUC
+                    ? "groupchat" : "chat",
+                    task->to.data(), NULL);
+
+            char *preview_id = xmpp_uuid_gen(ctx);
+            xmpp_stanza_set_id(msg, preview_id);
+            xmpp_free(ctx, preview_id);
+
+            // <rdf:Description xmlns:rdf="..." xmlns:og="..." rdf:about="URL">
+            xmpp_stanza_t *rdf = xmpp_stanza_new(ctx);
+            xmpp_stanza_set_name(rdf, "rdf:Description");
+            xmpp_stanza_set_ns(rdf, "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+            xmpp_stanza_set_attribute(rdf, "xmlns:og", "https://ogp.me/ns#");
+            xmpp_stanza_set_attribute(rdf, "rdf:about", task->url.data());
+
+            auto add_og_child = [&](const char *elem_name, const std::string& text) {
+                if (text.empty()) return;
+                xmpp_stanza_t *child = xmpp_stanza_new(ctx);
+                xmpp_stanza_set_name(child, elem_name);
+                xmpp_stanza_t *tnode = xmpp_stanza_new(ctx);
+                xmpp_stanza_set_text(tnode, text.data());
+                xmpp_stanza_add_child(child, tnode);
+                xmpp_stanza_release(tnode);
+                xmpp_stanza_add_child(rdf, child);
+                xmpp_stanza_release(child);
+            };
+
+            add_og_child("og:title",       og_title);
+            add_og_child("og:description", og_description);
+            add_og_child("og:url",         og_url);
+            add_og_child("og:image",       og_image);
+
+            xmpp_stanza_add_child(msg, rdf);
+            xmpp_stanza_release(rdf);
+
+            // XEP-0334: no-store + no-copy — metadata-only stanza, don't archive
+            xmpp_stanza_t *no_store = xmpp_stanza_new(ctx);
+            xmpp_stanza_set_name(no_store, "no-store");
+            xmpp_stanza_set_ns(no_store, "urn:xmpp:hints");
+            xmpp_stanza_add_child(msg, no_store);
+            xmpp_stanza_release(no_store);
+
+            xmpp_stanza_t *no_copy = xmpp_stanza_new(ctx);
+            xmpp_stanza_set_name(no_copy, "no-copy");
+            xmpp_stanza_set_ns(no_copy, "urn:xmpp:hints");
+            xmpp_stanza_add_child(msg, no_copy);
+            xmpp_stanza_release(no_copy);
+
+            task->channel.account.connection.send(msg);
+            xmpp_stanza_release(msg);
+        }
+
+        delete task;
+        return WEECHAT_RC_OK;
+    };
+
+    auto command = "url:" + url;
+    struct t_hook *process_hook =
+        weechat_hook_process_hashtable(command.data(), options, timeout,
+                callback, task, nullptr);
+    weechat_hashtable_free(options);
+    (void) process_hook;
 }
 
 void weechat::channel::send_reads()

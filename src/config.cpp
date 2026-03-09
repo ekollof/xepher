@@ -143,6 +143,11 @@ weechat::config::config()
                  "speakers_highlights = only speakers with highlight"),
                 "off|speakers|speakers_highlights", 0, 0,
                 "speakers", nullptr, false,
+                {}, {}, {}},
+            .outgoing_link_preview{file, section_look, "outgoing_link_preview", "boolean",
+                "fetch and send OpenGraph link preview metadata for URLs in outgoing messages (XEP-0511)",
+                nullptr, 0, 0,
+                "on", nullptr, false,
                 {}, {}, {}}}
 {
 }

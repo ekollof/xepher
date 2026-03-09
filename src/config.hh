@@ -44,6 +44,7 @@ namespace weechat
         config_account account_default;
         struct {
             config_option nick_completion_smart;
+            config_option outgoing_link_preview;
         } look;
 
     public:

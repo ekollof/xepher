@@ -168,6 +168,8 @@ namespace weechat
                          std::optional<file_metadata> file_meta = {});
         int send_message(const char *to, const char *body);
 
+        void send_link_preview(const std::string& to, const std::string& url);
+
         void send_reads();
         void send_typing(weechat::user *user);
         void send_paused(weechat::user *user);

@@ -95,7 +95,7 @@
     - Message Displayed Synchronization (XEP-0490 / XEP-0283) - syncs read state across devices
     - References (XEP-0372) - renders @mentions and URI references inline
     - Message status glyphs - sent messages show ⌛ (pending), ✓ (delivered), ✓✓ (read) inline
-    - Link Metadata (XEP-0511) - renders inline link previews (title, description, URL) from OpenGraph metadata injected into messages
+    - Link Metadata (XEP-0511) - renders inline link previews (title, description, URL) from OpenGraph metadata in received messages; automatically fetches and sends OpenGraph previews for URLs in outgoing messages
 
   See the *XMPP Compliance* section below for a comprehensive list of implemented XEPs.
 
@@ -278,6 +278,8 @@
 
 ** Link Metadata / Link Previews (XEP-0511)
 
+*** Incoming previews
+
    When a message contains an =<rdf:Description>= element (XEP-0511) carrying
    OpenGraph metadata, the plugin renders a compact preview block below the
    message body. This can be injected by the sender's client or by the server.
@@ -304,8 +306,26 @@
    - =cid:=, =ni:=, and =data:= image URIs are ignored; only HTTP(S) images are noted.
    - Multiple =<rdf:Description>= blocks in one message are each rendered as a
      separate preview.
-   - No configuration required; previews appear automatically when the sender
-     or server injects XEP-0511 metadata.
+
+*** Outgoing previews
+
+   When you send a message containing a URL, the plugin automatically fetches
+   the page in the background and sends a follow-up metadata stanza (no =<body>=)
+   containing the OpenGraph tags it finds, so the recipient's client can render a
+   preview even if their server does not inject one.
+
+   - The original message is sent immediately; the preview stanza follows
+     asynchronously once the fetch completes (up to 30 s timeout).
+   - All URLs matching =https?://= in the message body are processed.
+   - The preview stanza includes =<no-store>= and =<no-copy>= hints (XEP-0334) so
+     it is not archived or forwarded.
+   - Only plain-text (unencrypted) messages generate outgoing previews.
+
+   To disable outgoing link previews:
+
+   #+begin_src
+   /set xmpp.look.outgoing_link_preview off
+   #+end_src
 
 ** Ad-Hoc Commands and Data Forms (XEP-0050 / XEP-0004)
 
