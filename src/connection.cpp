@@ -2848,8 +2848,10 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     FEATURE("http://jabber.org/protocol/mood+notify");  // Subscribe to mood updates
     FEATURE("http://jabber.org/protocol/activity");  // XEP-0108: User Activity
     FEATURE("http://jabber.org/protocol/activity+notify");  // Subscribe to activity updates
+    FEATURE("urn:xmpp:blocking");      // XEP-0191: Blocking Command
     FEATURE("urn:xmpp:bookmarks:1");  // XEP-0402: PEP Native Bookmarks
     FEATURE("urn:xmpp:bookmarks:1+notify");  // Subscribe to bookmark updates
+    FEATURE("urn:xmpp:carbons:2");     // XEP-0280: Message Carbons
     FEATURE("urn:xmpp:ping");
     FEATURE("urn:xmpp:receipts");
     FEATURE("urn:xmpp:time");
@@ -2859,6 +2861,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     FEATURE("vcard-temp:x:update");    // XEP-0153: vCard-Based Avatars
     FEATURE("urn:xmpp:reference:0");   // XEP-0372: References (mentions)
     FEATURE("http://jabber.org/protocol/commands");  // XEP-0050: Ad-Hoc Commands
+    FEATURE("urn:xmpp:mam:2");                               // XEP-0313: Message Archive Management
     FEATURE("urn:xmpp:mds:displayed:0");             // XEP-0490: Message Displayed Synchronization
     FEATURE("urn:xmpp:mds:displayed:0+notify");      // Subscribe to MDS events
     FEATURE("urn:xmpp:channel-search:0:search");     // XEP-0433: Extended Channel Search (searcher)
