@@ -295,3 +295,4 @@ struct vcard_temp {
         struct update : public xmlns { update() : xmlns("vcard-temp:x:update") {} };
     };
 };
+struct vcard4 : public xmlns { vcard4() : xmlns("urn:ietf:params:xml:ns:vcard-4.0") {} };

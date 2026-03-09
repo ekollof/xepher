@@ -34,7 +34,9 @@
 #include "pgp.hh"
 #include "util.hh"
 #include "avatar.hh"
+#include "xmpp/xep-0054.inl"
 #include "xmpp/xep-0084.inl"
+#include "xmpp/xep-0292.inl"
 
 extern "C" {
 #include "diff/diff.h"
@@ -504,6 +506,28 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool /* top_le
                     if (user->profile.avatar_hash.empty())
                     {
                         user->profile.avatar_hash = photo_hash;
+                    }
+                    // Auto-fetch vCard to retrieve the photo and profile info if
+                    // we haven't fetched it yet, or if the hash changed.
+                    bool hash_changed = (user->profile.avatar_hash != photo_hash);
+                    if (!user->profile.vcard_fetched || hash_changed)
+                    {
+                        // Use the bare JID for the vCard request
+                        const char *from_full = xmpp_stanza_get_from(stanza);
+                        if (from_full)
+                        {
+                            char *bare = xmpp_jid_bare(account.context, from_full);
+                            if (bare)
+                            {
+                                xmpp_stanza_t *iq = ::xmpp::xep0054::vcard_request(account.context, bare);
+                                const char *req_id = xmpp_stanza_get_id(iq);
+                                if (req_id)
+                                    account.whois_queries[req_id] = { account.buffer, std::string(bare) };
+                                send(iq);
+                                xmpp_stanza_release(iq);
+                                xmpp_free(account.context, bare);
+                            }
+                        }
                     }
                     xmpp_free(account.context, photo_hash);
                 }
@@ -2865,6 +2889,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash)
     FEATURE("urn:xmpp:mds:displayed:0");             // XEP-0490: Message Displayed Synchronization
     FEATURE("urn:xmpp:mds:displayed:0+notify");      // Subscribe to MDS events
     FEATURE("urn:xmpp:channel-search:0:search");     // XEP-0433: Extended Channel Search (searcher)
+    FEATURE("urn:ietf:params:xml:ns:vcard-4.0");     // XEP-0292: vCard4 Over XMPP
 #undef FEATURE
 
     xmpp_stanza_t *x = xmpp_stanza_new(account.context);
@@ -3312,73 +3337,214 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
     if (vcard && type && weechat_strcasecmp(type, "result") == 0)
     {
         const char *from_jid = from ? from : account.jid().data();
-        
-        weechat_printf(account.buffer, "%svCard for %s:",
-                      weechat_prefix("network"), from_jid);
-        
-        // Extract and display vCard fields
-        xmpp_stanza_t *fn = xmpp_stanza_get_child_by_name(vcard, "FN");
-        if (fn)
+
+        // Determine which buffer to print into: the one that issued /whois, or
+        // the account buffer for auto-fetched vCards (XEP-0153 trigger).
+        struct t_gui_buffer *target_buf = account.buffer;
+        if (id)
         {
-            char *fn_text = xmpp_stanza_get_text(fn);
-            if (fn_text)
+            auto it = account.whois_queries.find(id);
+            if (it != account.whois_queries.end())
             {
-                weechat_printf(account.buffer, "  Name: %s", fn_text);
-                xmpp_free(account.context, fn_text);
+                target_buf = it->second.buffer;
+                account.whois_queries.erase(it);
             }
         }
-        
-        xmpp_stanza_t *nickname = xmpp_stanza_get_child_by_name(vcard, "NICKNAME");
-        if (nickname)
+
+        // Helper: get direct text content of a child element
+        auto child_text = [&](xmpp_stanza_t *parent, const char *name) -> std::string {
+            xmpp_stanza_t *child = xmpp_stanza_get_child_by_name(parent, name);
+            if (!child) return {};
+            char *txt = xmpp_stanza_get_text(child);
+            if (!txt) return {};
+            std::string s(txt);
+            xmpp_free(account.context, txt);
+            return s;
+        };
+
+        // Helper: print a labelled line only if value is non-empty
+        auto print_field = [&](const char *label, const std::string &val) {
+            if (!val.empty())
+                weechat_printf(target_buf, "  %s%s%s %s",
+                               weechat_color("bold"), label,
+                               weechat_color("reset"), val.c_str());
+        };
+
+        weechat_printf(target_buf, "%svCard for %s:",
+                       weechat_prefix("network"), from_jid);
+
+        std::string fn       = child_text(vcard, "FN");
+        std::string nickname = child_text(vcard, "NICKNAME");
+        std::string url      = child_text(vcard, "URL");
+        std::string desc     = child_text(vcard, "DESC");
+        std::string bday     = child_text(vcard, "BDAY");
+        std::string note     = child_text(vcard, "NOTE");
+        std::string jabbid   = child_text(vcard, "JABBERID");
+        std::string title    = child_text(vcard, "TITLE");
+        std::string role_vc  = child_text(vcard, "ROLE");
+
+        // ORG: <ORG><ORGNAME>…</ORGNAME></ORG>
+        std::string org;
+        xmpp_stanza_t *org_el = xmpp_stanza_get_child_by_name(vcard, "ORG");
+        if (org_el) org = child_text(org_el, "ORGNAME");
+
+        // EMAIL: <EMAIL><USERID>…</USERID></EMAIL>  (first occurrence)
+        std::string email_val;
+        xmpp_stanza_t *email_el = xmpp_stanza_get_child_by_name(vcard, "EMAIL");
+        if (email_el) email_val = child_text(email_el, "USERID");
+
+        // TEL: <TEL><NUMBER>…</NUMBER></TEL>  (first occurrence)
+        std::string tel;
+        xmpp_stanza_t *tel_el = xmpp_stanza_get_child_by_name(vcard, "TEL");
+        if (tel_el) tel = child_text(tel_el, "NUMBER");
+
+        // ADR: <ADR><STREET>…</STREET><LOCALITY>…</LOCALITY><CTRY>…</CTRY></ADR>
+        std::string adr;
+        xmpp_stanza_t *adr_el = xmpp_stanza_get_child_by_name(vcard, "ADR");
+        if (adr_el)
         {
-            char *nick_text = xmpp_stanza_get_text(nickname);
-            if (nick_text)
+            for (const char *part : {"STREET", "LOCALITY", "REGION", "PCODE", "CTRY"})
             {
-                weechat_printf(account.buffer, "  Nickname: %s", nick_text);
-                xmpp_free(account.context, nick_text);
-            }
-        }
-        
-        xmpp_stanza_t *email = xmpp_stanza_get_child_by_name(vcard, "EMAIL");
-        if (email)
-        {
-            xmpp_stanza_t *userid = xmpp_stanza_get_child_by_name(email, "USERID");
-            if (userid)
-            {
-                char *email_text = xmpp_stanza_get_text(userid);
-                if (email_text)
+                std::string p = child_text(adr_el, part);
+                if (!p.empty())
                 {
-                    weechat_printf(account.buffer, "  Email: %s", email_text);
-                    xmpp_free(account.context, email_text);
+                    if (!adr.empty()) adr += ", ";
+                    adr += p;
                 }
             }
         }
-        
-        xmpp_stanza_t *url = xmpp_stanza_get_child_by_name(vcard, "URL");
-        if (url)
+
+        print_field("Full name:",    fn);
+        print_field("Nickname:",     nickname);
+        print_field("Birthday:",     bday);
+        print_field("Organisation:", org);
+        print_field("Title:",        title);
+        print_field("Role:",         role_vc);
+        print_field("Email:",        email_val);
+        print_field("Phone:",        tel);
+        print_field("Address:",      adr);
+        print_field("URL:",          url);
+        print_field("JID:",          jabbid);
+        print_field("Note:",         note);
+        print_field("Description:",  desc);
+
+        // Store into user profile for future reference
+        weechat::user *u = weechat::user::search(&account, from_jid);
+        if (u)
         {
-            char *url_text = xmpp_stanza_get_text(url);
-            if (url_text)
-            {
-                weechat_printf(account.buffer, "  URL: %s", url_text);
-                xmpp_free(account.context, url_text);
-            }
+            if (!fn.empty())       u->profile.fn        = fn;
+            if (!nickname.empty()) u->profile.nickname  = nickname;
+            if (!email_val.empty()) u->profile.email    = email_val;
+            if (!url.empty())      u->profile.url       = url;
+            if (!desc.empty())     u->profile.description = desc;
+            if (!org.empty())      u->profile.org       = org;
+            if (!title.empty())    u->profile.title     = title;
+            if (!tel.empty())      u->profile.tel       = tel;
+            if (!bday.empty())     u->profile.bday      = bday;
+            if (!note.empty())     u->profile.note      = note;
+            if (!jabbid.empty())   u->profile.jabberid  = jabbid;
+            u->profile.vcard_fetched = true;
         }
-        
-        xmpp_stanza_t *desc = xmpp_stanza_get_child_by_name(vcard, "DESC");
-        if (desc)
-        {
-            char *desc_text = xmpp_stanza_get_text(desc);
-            if (desc_text)
-            {
-                weechat_printf(account.buffer, "  Description: %s", desc_text);
-                xmpp_free(account.context, desc_text);
-            }
-        }
-        
+
         return true;
     }
-    
+
+    // Handle vCard4 PubSub responses (XEP-0292)
+    // Arrives as: <iq type='result'><pubsub xmlns='..pubsub'><items node='urn:xmpp:vcard4'>
+    //               <item id='current'><vcard xmlns='urn:ietf:params:xml:ns:vcard-4.0'>…</vcard>
+    {
+        xmpp_stanza_t *pubsub_vc4 = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "pubsub", "http://jabber.org/protocol/pubsub");
+        if (pubsub_vc4 && type && weechat_strcasecmp(type, "result") == 0)
+        {
+            xmpp_stanza_t *items = xmpp_stanza_get_child_by_name(pubsub_vc4, "items");
+            if (items)
+            {
+                const char *node = xmpp_stanza_get_attribute(items, "node");
+                if (node && strcmp(node, NS_VCARD4_PUBSUB) == 0)
+                {
+                    const char *from_jid = from ? from : account.jid().data();
+
+                    struct t_gui_buffer *target_buf = account.buffer;
+                    if (id)
+                    {
+                        auto it = account.whois_queries.find(id);
+                        if (it != account.whois_queries.end())
+                        {
+                            target_buf = it->second.buffer;
+                            account.whois_queries.erase(it);
+                        }
+                    }
+
+                    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items, "item");
+                    if (item)
+                    {
+                        xmpp_stanza_t *vcard4 = xmpp_stanza_get_child_by_name_and_ns(
+                            item, "vcard", NS_VCARD4);
+                        if (vcard4)
+                        {
+                            weechat_printf(target_buf, "%svCard4 for %s:",
+                                           weechat_prefix("network"), from_jid);
+
+                            // Helper: get text of first child matching name inside parent
+                            auto vc4_text = [&](xmpp_stanza_t *p, const char *name) -> std::string {
+                                xmpp_stanza_t *el = xmpp_stanza_get_child_by_name(p, name);
+                                if (!el) return {};
+                                // vCard4 wraps values: <text>…</text> or <uri>…</uri>
+                                xmpp_stanza_t *val = xmpp_stanza_get_child_by_name(el, "text");
+                                if (!val) val = xmpp_stanza_get_child_by_name(el, "uri");
+                                if (!val) return {};
+                                char *t = xmpp_stanza_get_text(val);
+                                if (!t) return {};
+                                std::string s(t);
+                                xmpp_free(account.context, t);
+                                return s;
+                            };
+
+                            auto print_vc4 = [&](const char *label, const std::string &val) {
+                                if (!val.empty())
+                                    weechat_printf(target_buf, "  %s%s%s %s",
+                                                   weechat_color("bold"), label,
+                                                   weechat_color("reset"), val.c_str());
+                            };
+
+                            // vCard4 uses lowercase element names
+                            std::string fn       = vc4_text(vcard4, "fn");
+                            std::string nickname = vc4_text(vcard4, "nickname");
+                            std::string url      = vc4_text(vcard4, "url");
+                            std::string note     = vc4_text(vcard4, "note");
+                            std::string bday     = vc4_text(vcard4, "bday");
+                            std::string title    = vc4_text(vcard4, "title");
+                            std::string role_vc4 = vc4_text(vcard4, "role");
+
+                            // email: <email><text>…</text></email>
+                            std::string email_v4 = vc4_text(vcard4, "email");
+
+                            // tel: <tel><uri>tel:…</uri></tel>
+                            std::string tel_v4 = vc4_text(vcard4, "tel");
+
+                            // org: <org><text>…</text></org>
+                            std::string org_v4 = vc4_text(vcard4, "org");
+
+                            print_vc4("Full name:",    fn);
+                            print_vc4("Nickname:",     nickname);
+                            print_vc4("Birthday:",     bday);
+                            print_vc4("Organisation:", org_v4);
+                            print_vc4("Title:",        title);
+                            print_vc4("Role:",         role_vc4);
+                            print_vc4("Email:",        email_v4);
+                            print_vc4("Phone:",        tel_v4);
+                            print_vc4("URL:",          url);
+                            print_vc4("Note:",         note);
+
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // XEP-0363: HTTP File Upload - handle upload slot response
     xmpp_stanza_t *slot = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "slot", "urn:xmpp:http:upload:0");

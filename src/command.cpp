@@ -16,6 +16,8 @@
 
 #include "plugin.hh"
 #include "xmpp/stanza.hh"
+#include "xmpp/xep-0054.inl"
+#include "xmpp/xep-0292.inl"
 #include "account.hh"
 #include "user.hh"
 #include "channel.hh"
@@ -2612,7 +2614,6 @@ int command__whois(const void *pointer, void *data,
 {
     weechat::account *ptr_account = NULL;
     weechat::channel *ptr_channel = NULL;
-    xmpp_stanza_t *iq;
     const char *target = NULL;
 
     (void) pointer;
@@ -2644,24 +2645,93 @@ int command__whois(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    // Request vCard using XEP-0054
-    char *id = xmpp_uuid_gen(ptr_account->context);
-    iq = xmpp_iq_new(ptr_account->context, "get", id);
-    xmpp_stanza_set_to(iq, target);
-    
-    xmpp_stanza_t *vcard = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(vcard, "vCard");
-    xmpp_stanza_set_ns(vcard, "vcard-temp");
-    
-    xmpp_stanza_add_child(iq, vcard);
-    xmpp_stanza_release(vcard);
-    
+    // Request vCard using XEP-0054 (legacy)
+    xmpp_stanza_t *iq = xmpp::xep0054::vcard_request(ptr_account->context, target);
+    const char *req_id = xmpp_stanza_get_id(iq);
+    if (req_id)
+        ptr_account->whois_queries[req_id] = { buffer, std::string(target) };
+
+    // Also request vCard4 via PubSub (XEP-0292) — servers that support it will
+    // respond; others will return an error which we silently ignore.
+    xmpp_stanza_t *iq4 = xmpp::xep0292::vcard4_request(ptr_account->context, target);
+    const char *req_id4 = xmpp_stanza_get_id(iq4);
+    if (req_id4)
+        ptr_account->whois_queries[req_id4] = { buffer, std::string(target) };
+
     weechat_printf(buffer, "%sRequesting vCard for %s...",
                    weechat_prefix("network"), target);
-    
+
     ptr_account->connection.send(iq);
     xmpp_stanza_release(iq);
-    xmpp_free(ptr_account->context, id);
+    ptr_account->connection.send(iq4);
+    xmpp_stanza_release(iq4);
+
+    return WEECHAT_RC_OK;
+}
+
+// /setvcard field value
+// Sets a single field of your own vCard (XEP-0054 IQ set).
+// Usage: /setvcard <field> <value>
+// Fields: fn, nickname, email, url, desc, org, title, tel, bday, note
+int command__setvcard(const void *pointer, void *data,
+                      struct t_gui_buffer *buffer, int argc,
+                      char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                       weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 3)
+    {
+        weechat_printf(buffer,
+                       "%s%s: usage: /setvcard <field> <value>\n"
+                       "  fields: fn, nickname, email, url, desc, org, title, tel, bday, note",
+                       weechat_prefix("error"), argv[0]);
+        return WEECHAT_RC_OK;
+    }
+
+    std::string field(argv[1]);
+    std::string value(argv_eol[2]);
+
+    xmpp::xep0054::vcard_fields f;
+    if      (field == "fn")       f.fn       = value;
+    else if (field == "nickname") f.nickname = value;
+    else if (field == "email")    f.email    = value;
+    else if (field == "url")      f.url      = value;
+    else if (field == "desc")     f.desc     = value;
+    else if (field == "org")      f.org      = value;
+    else if (field == "title")    f.title    = value;
+    else if (field == "tel")      f.tel      = value;
+    else if (field == "bday")     f.bday     = value;
+    else if (field == "note")     f.note     = value;
+    else
+    {
+        weechat_printf(buffer,
+                       "%s%s: unknown vCard field '%s'\n"
+                       "  valid fields: fn, nickname, email, url, desc, org, title, tel, bday, note",
+                       weechat_prefix("error"), argv[0], argv[1]);
+        return WEECHAT_RC_OK;
+    }
+
+    xmpp_stanza_t *iq = xmpp::xep0054::vcard_set(ptr_account->context, f);
+    weechat_printf(buffer, "%sPublishing vCard field %s...",
+                   weechat_prefix("network"), field.c_str());
+    ptr_account->connection.send(iq);
+    xmpp_stanza_release(iq);
 
     return WEECHAT_RC_OK;
 }
@@ -4396,6 +4466,22 @@ void command__init()
         NULL, &command__whois, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /whois");
+
+    hook = weechat_hook_command(
+        "setvcard",
+        N_("publish a field of your own vCard (XEP-0054)"),
+        N_("<field> <value>"),
+        N_("field: vCard field to set (fn, nickname, email, url, desc, org, title, tel, bday, note)\n"
+           "value: the value to set for the field\n\n"
+           "Publishes a single field of your own vCard via IQ set (XEP-0054).\n"
+           "Example: /setvcard fn Alice Smith\n"
+           "         /setvcard email alice@example.com\n"
+           "Note: only the specified field is sent; other fields are unaffected on\n"
+           "      the server only if the server merges — most servers replace the\n"
+           "      entire vCard, so run /whois on yourself first to see current values."),
+        "fn|nickname|email|url|desc|org|title|tel|bday|note", &command__setvcard, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /setvcard");
 
     hook = weechat_hook_command(
         "buzz",

@@ -106,11 +106,22 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0054.html' />
-        <xmpp:status>partial</xmpp:status>
+        <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.2</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >vcard-temp (requesting vCards only, not publishing)</xmpp:note>
+                >vcard-temp — fetch (all standard fields) and publish own vCard via /whois and /setvcard; auto-fetch triggered by XEP-0153 presence hash</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0292.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.12.0</xmpp:version>
+        <xmpp:note
+                    xml:lang='en'
+                >vCard4 Over XMPP — fetch via /whois (PubSub IQ get + display); no publish support yet</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

@@ -157,7 +157,14 @@ namespace weechat
             bool form_requested;            // true = waiting for form, false = waiting for results
         };
         std::unordered_map<std::string, channel_search_query_info> channel_search_queries;  // iq_id -> info
-        
+
+        // XEP-0054 / XEP-0292 vCard query tracking
+        struct whois_query_info {
+            struct t_gui_buffer *buffer;  // buffer to print vCard results into
+            std::string target_jid;       // JID we queried
+        };
+        std::unordered_map<std::string, whois_query_info> whois_queries;  // iq_id -> info
+
         // Capability cache (XEP-0115)
         std::unordered_map<std::string, std::vector<std::string>> caps_cache;  // verification_hash -> features
         

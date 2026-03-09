@@ -32,6 +32,18 @@ namespace weechat
             std::optional<std::string> affiliation;
             std::optional<std::string> pgp_id;
             int omemo = 0;
+            // XEP-0054 vcard-temp fields
+            std::optional<std::string> fn;          // Full name
+            std::optional<std::string> nickname;    // Nickname
+            std::optional<std::string> url;         // URL / homepage
+            std::optional<std::string> description; // Free-text description / bio
+            std::optional<std::string> org;         // Organisation name
+            std::optional<std::string> title;       // Job title
+            std::optional<std::string> tel;         // Phone number
+            std::optional<std::string> bday;        // Birthday (ISO 8601)
+            std::optional<std::string> note;        // Note
+            std::optional<std::string> jabberid;    // JID declared in vCard
+            bool vcard_fetched = false;             // true once a vcard response has been processed
         };
 
     private:
