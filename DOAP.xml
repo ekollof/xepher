@@ -81,7 +81,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0045.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.35.1</xmpp:version>
-        <xmpp:note xml:lang='en'>Multi-User Chat (MUC)</xmpp:note>
+        <xmpp:note xml:lang='en'>Multi-User Chat (MUC) - join/leave, send/receive, /kick, /ban, /topic, /nick commands; no full room configuration</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -216,11 +216,11 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0172.html' />
-        <xmpp:status>partial</xmpp:status>
+        <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.1</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >User Nickname - subscribes to nickname updates via PEP</xmpp:note>
+                >User Nickname - publishes own nickname via PEP on connect; subscribes to nickname updates from contacts via PEP</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -435,11 +435,11 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0385.html' />
-        <xmpp:status>complete</xmpp:status>
+        <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.2.1</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >Stateless Inline Media Sharing (SIMS) - wraps HTTP uploads with file metadata, hashes, and sources for rich media display</xmpp:note>
+                >Stateless Inline Media Sharing (SIMS) - wraps HTTP uploads with file metadata, hashes, and sources for rich media display (send only; receive-side parsing not yet implemented)</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -680,7 +680,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0490.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.3.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Message Displayed Synchronization - subscribes to MDS PubSub node; syncs read state across devices</xmpp:note>
+        <xmpp:note xml:lang='en'>Message Displayed Synchronization - publishes MDS PEP item when messages are read (on send, type, and buffer switch); consumes MDS events from other own devices to sync read state</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -708,7 +708,7 @@
         <created>2026-03-09</created>
         <xmpp:note
                     xml:lang='en'
-                >Outgoing link previews (XEP-0511 send), Ad-Hoc Commands (XEP-0050), Data Forms (XEP-0004), XHTML-IM (XEP-0071), References (XEP-0372), Message Displayed Synchronization (XEP-0490), Message Fastening (XEP-0422), Fallback Indication (XEP-0428), Spoiler Messages (XEP-0382), Attention (XEP-0224), Moved (XEP-0283), Consistent Color Generation (XEP-0392), Extended Channel Search (XEP-0433), and further bug fixes</xmpp:note>
+                >Outgoing link previews (XEP-0511 send), Ad-Hoc Commands (XEP-0050), Data Forms (XEP-0004), XHTML-IM (XEP-0071), References (XEP-0372), Message Displayed Synchronization (XEP-0490), Message Fastening (XEP-0422), Fallback Indication (XEP-0428), Spoiler Messages (XEP-0382), Attention (XEP-0224), Moved (XEP-0283), Consistent Color Generation (XEP-0392), Extended Channel Search (XEP-0433), MUC /kick /ban /topic /nick commands (XEP-0045), XEP-0198 stanza retransmit queue, non-blocking HTTP upload (XEP-0363), own nickname publishing (XEP-0172), MDS read flush on buffer switch (XEP-0490), and further bug fixes</xmpp:note>
       </Version>
     </release>
   </Project>
