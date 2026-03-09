@@ -3928,28 +3928,39 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                         ::write(c.pipe_write_fd, "x", 1);
                         return;
                     }
-                    if (fseek(upload_file, 0, SEEK_SET) != 0)
-                    {
-                        c.success    = false;
-                        c.curl_error = "failed to rewind file";
-                        ::write(c.pipe_write_fd, "x", 1);
-                        return;
-                    }
                     c.file_size = static_cast<size_t>(file_size);
 
-                    // Calculate SHA-256 hash for SIMS using EVP API (RAII ctx)
+                    // Close and reopen to get a fresh FILE* at position 0 for hashing.
+                    // This avoids seeks on the upload handle and keeps stream state clean.
+                    upload_file_guard.reset();
+                    upload_file = nullptr;
+
+                    // Calculate SHA-256 hash for SIMS — use a dedicated read handle.
                     unsigned char hash[EVP_MAX_MD_SIZE];
                     unsigned int  hash_len = 0;
                     {
+                        std::unique_ptr<FILE, decltype(file_deleter)>
+                            hash_file_guard(fopen(filepath_copy.c_str(), "rb"), file_deleter);
+                        FILE *hash_file = hash_file_guard.get();
+                        if (!hash_file)
+                        {
+                            c.success    = false;
+                            c.curl_error = "failed to reopen file for hashing";
+                            ::write(c.pipe_write_fd, "x", 1);
+                            return;
+                        }
                         std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>
                             sha256_ctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
                         EVP_DigestInit_ex(sha256_ctx.get(), EVP_sha256(), nullptr);
                         unsigned char buf[8192];
                         size_t bytes_read;
-                        while ((bytes_read = fread(buf, 1, sizeof(buf), upload_file)) > 0)
-                            EVP_DigestUpdate(sha256_ctx.get(), buf, bytes_read);
+                        do {
+                            bytes_read = fread(buf, 1, sizeof(buf), hash_file);
+                            if (bytes_read > 0)
+                                EVP_DigestUpdate(sha256_ctx.get(), buf, bytes_read);
+                        } while (!feof(hash_file) && !ferror(hash_file));
                         EVP_DigestFinal_ex(sha256_ctx.get(), hash, &hash_len);
-                    } // sha256_ctx freed here
+                    } // hash_file and sha256_ctx freed here
 
                     // Base64-encode the hash (RAII BIO chain)
                     {
@@ -3965,8 +3976,16 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                         c.sha256_hash = std::string(bptr->data, bptr->length);
                     } // bio_chain freed here
 
-                    // Reset file position for upload
-                    fseek(upload_file, 0, SEEK_SET);
+                    // Open a fresh handle for upload (avoids any seek/EOF state issues).
+                    upload_file_guard.reset(fopen(filepath_copy.c_str(), "rb"));
+                    upload_file = upload_file_guard.get();
+                    if (!upload_file)
+                    {
+                        c.success    = false;
+                        c.curl_error = "failed to reopen file for upload";
+                        ::write(c.pipe_write_fd, "x", 1);
+                        return;
+                    }
 
                     // Initialize curl
                     CURL *curl = curl_easy_init();
@@ -4000,7 +4019,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
 
                     curl_slist_free_all(headers);
                     curl_easy_cleanup(curl);
-                    fclose(upload_file);
+                    // upload_file_guard closes the file on scope exit; no manual fclose needed
 
                     c.http_code = http_code;
                     c.get_url   = get_url_copy;

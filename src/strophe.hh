@@ -224,31 +224,58 @@ namespace libstrophe {
                    xmpp_stanza_get_ns>(args...);
         }
 
-        inline stanza add_child(auto &&...args) {
+        // Lvalue ref-qualified: mutate in place and return reference (safe for named variables)
+        inline stanza& add_child(auto &&...args) & {
+            call<decltype(xmpp_stanza_add_child),
+                xmpp_stanza_add_child>(args...);
+            return *this;
+        }
+        // Rvalue ref-qualified: move out of temporary for builder chains
+        inline stanza add_child(auto &&...args) && {
             call<decltype(xmpp_stanza_add_child),
                 xmpp_stanza_add_child>(args...);
             return std::move(*this);
         }
 
-        inline stanza set_name(auto &&...args) {
+        inline stanza& set_name(auto &&...args) & {
+            call<decltype(xmpp_stanza_set_name),
+                xmpp_stanza_set_name>(args...);
+            return *this;
+        }
+        inline stanza set_name(auto &&...args) && {
             call<decltype(xmpp_stanza_set_name),
                 xmpp_stanza_set_name>(args...);
             return std::move(*this);
         }
 
-        inline stanza set_ns(auto &&...args) {
+        inline stanza& set_ns(auto &&...args) & {
+            call<decltype(xmpp_stanza_set_ns),
+                xmpp_stanza_set_ns>(args...);
+            return *this;
+        }
+        inline stanza set_ns(auto &&...args) && {
             call<decltype(xmpp_stanza_set_ns),
                 xmpp_stanza_set_ns>(args...);
             return std::move(*this);
         }
 
-        inline stanza set_text(auto &&...args) {
+        inline stanza& set_text(auto &&...args) & {
+            call<decltype(xmpp_stanza_set_text),
+                xmpp_stanza_set_text>(args...);
+            return *this;
+        }
+        inline stanza set_text(auto &&...args) && {
             call<decltype(xmpp_stanza_set_text),
                 xmpp_stanza_set_text>(args...);
             return std::move(*this);
         }
 
-        inline stanza set_type(auto &&...args) {
+        inline stanza& set_type(auto &&...args) & {
+            call<decltype(xmpp_stanza_set_type),
+                xmpp_stanza_set_type>(args...);
+            return *this;
+        }
+        inline stanza set_type(auto &&...args) && {
             call<decltype(xmpp_stanza_set_type),
                 xmpp_stanza_set_type>(args...);
             return std::move(*this);

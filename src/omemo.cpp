@@ -2463,12 +2463,12 @@ xmpp_stanza_t *omemo::encode(weechat::account *account, struct t_gui_buffer *buf
     snprintf(device_id_str, 10+1, "%u", omemo->device_id);
     xmpp_stanza_set_attribute(header, "sid", device_id_str);
 
-    int ret, keycount = 0;
+    int keycount = 0;
     signal_int_list *devicelist;
     const char *target = jid;
     for (int self = 0; self <= 1; self++)
     {
-        if ((ret = dls_load_devicelist(&devicelist, target, omemo))) return NULL;
+        if (dls_load_devicelist(&devicelist, target, omemo)) return NULL;
         for (size_t i = 0; i < signal_int_list_size(devicelist); i++)
         {
             uint32_t device_id = signal_int_list_at(devicelist, i);
@@ -2482,7 +2482,7 @@ xmpp_stanza_t *omemo::encode(weechat::account *account, struct t_gui_buffer *buf
             snprintf(device_id_str, 10+1, "%u", device_id);
             xmpp_stanza_set_attribute(header__key, "rid", device_id_str);
 
-            if (((ret = ss_contains_session_func(&address, omemo))) <= 0)
+            if (ss_contains_session_func(&address, omemo) <= 0)
             {
                 try {
                     auto bundle = bks_load_bundle(&address, omemo);
@@ -2502,10 +2502,10 @@ xmpp_stanza_t *omemo::encode(weechat::account *account, struct t_gui_buffer *buf
             }
 
             struct session_cipher *cipher;
-            if ((ret = session_cipher_create(&cipher, omemo->store_context, &address, omemo->context))) continue;
+            if (session_cipher_create(&cipher, omemo->store_context, &address, omemo->context)) continue;
 
             struct ciphertext_message *signal_message;
-            if ((ret = session_cipher_encrypt(cipher, key_and_tag, AES_KEY_SIZE+tag_len, &signal_message))) continue;
+            if (session_cipher_encrypt(cipher, key_and_tag, AES_KEY_SIZE+tag_len, &signal_message)) continue;
             struct signal_buffer *record = ciphertext_message_get_serialized(signal_message);
             int prekey = ciphertext_message_get_type(signal_message) == CIPHERTEXT_PREKEY_TYPE
                 ? 1 : 0;
