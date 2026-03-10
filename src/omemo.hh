@@ -57,6 +57,12 @@ namespace weechat {
             // drained in handle_bundle() after bks_store_bundle().
             std::set<std::pair<std::string, std::uint32_t>> pending_key_transport;
 
+            // Devices for which a bundle fetch IQ is currently in-flight.
+            // Prevents duplicate fetches when repeated PEP devicelist events
+            // arrive before the first IQ result returns.
+            // Populated before sending the bundle IQ; cleared in handle_bundle().
+            std::set<std::pair<std::string, std::uint32_t>> pending_bundle_fetch;
+
             // Maps outgoing IQ id → target JID for bundle/devicelist PubSub
             // fetches directed at a contact. Used in the IQ result handler to
             // recover the correct JID even when `from` is the server domain.
@@ -93,6 +99,9 @@ namespace weechat {
                                struct t_gui_buffer *buffer,
                                const char *jid, std::uint32_t device_id,
                                xmpp_stanza_t *items);
+
+            // Returns true if a Signal session already exists for (jid, device_id).
+            bool has_session(const char *jid, std::uint32_t device_id);
 
             char *decode(weechat::account *account, struct t_gui_buffer *buffer,
                          const char *jid, xmpp_stanza_t *encrypted);

@@ -1172,6 +1172,19 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                     continue;
 
                                 const char *device_id = xmpp_stanza_get_id(device);
+                                if (!device_id) continue;
+
+                                const char *bundle_target = from ? from : account.jid().data();
+                                uint32_t dev_id = (uint32_t)strtol(device_id, NULL, 10);
+                                auto fetch_key = std::make_pair(std::string(bundle_target), dev_id);
+
+                                // Skip if we already have a session with this device.
+                                if (account.omemo && account.omemo.has_session(bundle_target, dev_id))
+                                    continue;
+
+                                // Skip if a bundle fetch for this device is already in-flight.
+                                if (account.omemo && account.omemo.pending_bundle_fetch.count(fetch_key))
+                                    continue;
 
                                 char bundle_node[128] = {0};
                                 snprintf(bundle_node, sizeof(bundle_node),
@@ -1189,14 +1202,15 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                 const char *uuid = uuid_g.ptr;
                                 // PEP event: from=contact_jid, to=our_jid.
                                 // Bundle IQ must go to the contact (from), not ourselves.
-                                const char *bundle_target = from ? from : account.jid().data();
                                 children[0] =
                                 stanza__iq(account.context, NULL, children.get(), NULL, uuid,
                                             bundle_target, account.jid().data(), "get");
                                 // Register IQ id → target JID so the result handler
                                 // can recover the correct JID even if `from` is server domain.
-                                if (uuid && account.omemo)
+                                if (uuid && account.omemo) {
                                     account.omemo.pending_iq_jid[uuid] = bundle_target;
+                                    account.omemo.pending_bundle_fetch.insert(fetch_key);
+                                }
                                 // freed by uuid_g
 
                                 account.connection.send(children[0]);

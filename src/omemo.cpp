@@ -2209,6 +2209,13 @@ void omemo::handle_devicelist(const char *jid, xmpp_stanza_t *items)
     signal_int_list_free(devicelist);
 }
 
+bool omemo::has_session(const char *jid, std::uint32_t device_id)
+{
+    struct signal_protocol_address address = {
+        .name = jid, .name_len = strlen(jid), .device_id = (int32_t)device_id };
+    return ss_contains_session_func(&address, this) > 0;
+}
+
 // Forward declaration — defined after handle_bundle.
 static void send_key_transport(weechat::account *account, struct t_gui_buffer *buffer,
                                 std::string_view to_jid, uint32_t to_device_id);
@@ -2305,16 +2312,24 @@ static void send_key_transport(weechat::account *account, struct t_gui_buffer *b
     bks_store_bundle(&address, pre_keys, signed_pre_keys,
         key_signature, identity_key, omemo);
 
-    // Drain any pending KeyTransport requests for this jid+device_id.
-    // These were enqueued in decode() when we received a message not encrypted
-    // for our device — now that we have their bundle we can build a session
-    // and send the KeyTransportElement.
     if (account) {
         auto key = std::make_pair(std::string(jid), device_id);
-        if (omemo->pending_key_transport.erase(key) > 0)
+
+        // Always clear the in-flight fetch guard.
+        omemo->pending_bundle_fetch.erase(key);
+
+        // Drain any pending KeyTransport requests enqueued in decode()
+        // (message received but not encrypted for our device).
+        omemo->pending_key_transport.erase(key);
+
+        // Proactively send a KeyTransportElement for any non-self contact
+        // device — this establishes the Signal session so Conversations
+        // will include our device in subsequent encrypted messages.
+        std::string_view own_jid = account->jid();
+        if (std::string_view(jid) != own_jid)
             send_key_transport(account, buffer, jid, device_id);
     }
- }
+}
 
 // Build and send a KeyTransportElement to `to_jid` targeting device `to_device_id`.
 // Per XEP-0384 §5 Business Rules: sent in response to a broken/invalid PreKey session
