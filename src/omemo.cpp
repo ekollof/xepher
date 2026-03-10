@@ -1478,7 +1478,7 @@ int dls_store_devicelist(const char *jid, signal_int_list *devicelist, t_omemo *
         v_devicelist += device_id;
     }
 
-    omemo->dbi.omemo.put(transaction, k_devicelist, v_devicelist);
+    omemo->dbi.omemo.put(transaction, lmdb::val{k_devicelist}, lmdb::val{v_devicelist});
   //omemo->dbi.omemo.put(wtxn, "fullname", std::string_view("J. Random Hacker"));
   //{
   //    auto cursor = lmdb::cursor::open(rtxn, dbi);
@@ -1499,10 +1499,12 @@ int dls_load_devicelist(signal_int_list **devicelist, const char *jid, t_omemo *
 {
     auto transaction = lmdb::txn::begin(omemo->db_env);
     std::string k_devicelist = fmt::format("devicelist_{}", jid);
-    std::string_view v_devicelist;
-    omemo->dbi.omemo.get(transaction, k_devicelist, v_devicelist);
+    lmdb::val k{k_devicelist}, v{};
+    std::string v_devicelist;
+    if (omemo->dbi.omemo.get(transaction, k, v))
+        v_devicelist.assign(v.data(), v.size());
 
-    auto devices = v_devicelist
+    auto devices = std::string_view{v_devicelist}
         | std::ranges::views::split(';')
         | std::ranges::views::transform([](auto&& str) {
             return std::stoul(std::string(&*str.begin(), std::ranges::distance(str)));
@@ -1573,15 +1575,18 @@ int bks_store_bundle(struct signal_protocol_address *address,
         [](const std::string& a, const std::string& b) { return a.empty() ? b : a + ";" + b; });
     std::string v_bundle_sk = std::accumulate(signed_pre_key_buffers.begin(), signed_pre_key_buffers.end(), std::string(""),
         [](const std::string& a, const std::string& b) { return a.empty() ? b : a + ";" + b; });
-    std::string_view v_bundle_sg = signature;
-    std::string_view v_bundle_ik = identity_key;
-
     auto transaction = lmdb::txn::begin(omemo->db_env);
 
-    omemo->dbi.omemo.put(transaction, k_bundle_pk, v_bundle_pk);
-    omemo->dbi.omemo.put(transaction, k_bundle_sk, v_bundle_sk);
-    omemo->dbi.omemo.put(transaction, k_bundle_sg, v_bundle_sg);
-    omemo->dbi.omemo.put(transaction, k_bundle_ik, v_bundle_ik);
+    omemo->dbi.omemo.put(transaction, lmdb::val{k_bundle_pk}, lmdb::val{v_bundle_pk});
+    omemo->dbi.omemo.put(transaction, lmdb::val{k_bundle_sk}, lmdb::val{v_bundle_sk});
+    {
+        lmdb::val k{k_bundle_sg}, v{signature, std::strlen(signature)};
+        omemo->dbi.omemo.put(transaction, k, v);
+    }
+    {
+        lmdb::val k{k_bundle_ik}, v{identity_key, std::strlen(identity_key)};
+        omemo->dbi.omemo.put(transaction, k, v);
+    }
 
     transaction.commit();
 
@@ -1595,10 +1600,10 @@ std::optional<libsignal::pre_key_bundle> bks_load_bundle(struct signal_protocol_
     std::string k_bundle_sg = fmt::format("bundle_sg_{}_{}", address->name, address->device_id);
     std::string k_bundle_ik = fmt::format("bundle_ik_{}_{}", address->name, address->device_id);
 
-    std::string_view v_bundle_pk;
-    std::string_view v_bundle_sk;
-    std::string_view v_bundle_sg;
-    std::string_view v_bundle_ik;
+    std::string v_bundle_pk;
+    std::string v_bundle_sk;
+    std::string v_bundle_sg;
+    std::string v_bundle_ik;
 
     auto transaction = lmdb::txn::begin(omemo->db_env);
 
@@ -1608,10 +1613,22 @@ std::optional<libsignal::pre_key_bundle> bks_load_bundle(struct signal_protocol_
     struct signal_buffer *signature;
     uint8_t *key_raw = nullptr; size_t key_len;
 
-    omemo->dbi.omemo.get(transaction, k_bundle_pk, v_bundle_pk);
-    omemo->dbi.omemo.get(transaction, k_bundle_sk, v_bundle_sk);
-    omemo->dbi.omemo.get(transaction, k_bundle_sg, v_bundle_sg);
-    omemo->dbi.omemo.get(transaction, k_bundle_ik, v_bundle_ik);
+    {
+        lmdb::val k{k_bundle_pk}, v{};
+        if (omemo->dbi.omemo.get(transaction, k, v)) v_bundle_pk.assign(v.data(), v.size());
+    }
+    {
+        lmdb::val k{k_bundle_sk}, v{};
+        if (omemo->dbi.omemo.get(transaction, k, v)) v_bundle_sk.assign(v.data(), v.size());
+    }
+    {
+        lmdb::val k{k_bundle_sg}, v{};
+        if (omemo->dbi.omemo.get(transaction, k, v)) v_bundle_sg.assign(v.data(), v.size());
+    }
+    {
+        lmdb::val k{k_bundle_ik}, v{};
+        if (omemo->dbi.omemo.get(transaction, k, v)) v_bundle_ik.assign(v.data(), v.size());
+    }
 
     auto r_bundle_pks = v_bundle_pk
         | std::ranges::views::split(';')
@@ -1751,9 +1768,9 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
     uint32_t current_spk_id = 1; // default: ID 1 (initial key)
     {
         auto txn = lmdb::txn::begin(omemo->db_env);
-        std::string_view v_id;
-        if (omemo->dbi.omemo.get(txn, std::string_view("signed_pre_key_current_id"), v_id) && !v_id.empty())
-            current_spk_id = (uint32_t)std::stoul(std::string(v_id));
+        lmdb::val k{"signed_pre_key_current_id"}, v{};
+        if (omemo->dbi.omemo.get(txn, k, v) && v.size() > 0)
+            current_spk_id = (uint32_t)std::stoul(std::string(v.data(), v.size()));
         txn.abort();
     }
 
@@ -1761,10 +1778,10 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
     time_t spk_ts = 0;
     {
         auto txn = lmdb::txn::begin(omemo->db_env);
-        std::string_view v_ts;
         std::string k_ts = fmt::format("signed_pre_key_ts_{}", current_spk_id);
-        if (omemo->dbi.omemo.get(txn, k_ts, v_ts) && !v_ts.empty())
-            spk_ts = (time_t)std::stoll(std::string(v_ts));
+        lmdb::val k{k_ts}, v{};
+        if (omemo->dbi.omemo.get(txn, k, v) && v.size() > 0)
+            spk_ts = (time_t)std::stoll(std::string(v.data(), v.size()));
         txn.abort();
     }
 
@@ -1790,8 +1807,8 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
             std::string v_new_id = std::to_string(new_spk_id);
             std::string v_new_ts = std::to_string((long long)now);
             std::string k_ts = fmt::format("signed_pre_key_ts_{}", new_spk_id);
-            omemo->dbi.omemo.put(txn, std::string_view("signed_pre_key_current_id"), v_new_id);
-            omemo->dbi.omemo.put(txn, k_ts, v_new_ts);
+            omemo->dbi.omemo.put(txn, lmdb::val{"signed_pre_key_current_id"}, lmdb::val{v_new_id});
+            omemo->dbi.omemo.put(txn, lmdb::val{k_ts}, lmdb::val{v_new_ts});
             txn.commit();
 
             current_spk_id = new_spk_id;
@@ -1804,9 +1821,9 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
             auto txn = lmdb::txn::begin(omemo->db_env);
             std::string v_ts_str = std::to_string((long long)now);
             std::string k_ts = fmt::format("signed_pre_key_ts_{}", current_spk_id);
-            omemo->dbi.omemo.put(txn, k_ts, v_ts_str);
-            omemo->dbi.omemo.put(txn, std::string_view("signed_pre_key_current_id"),
-                                  std::to_string(current_spk_id));
+            std::string v_spk_id_str = std::to_string(current_spk_id);
+            omemo->dbi.omemo.put(txn, lmdb::val{k_ts}, lmdb::val{v_ts_str});
+            omemo->dbi.omemo.put(txn, lmdb::val{"signed_pre_key_current_id"}, lmdb::val{v_spk_id_str});
             txn.commit();
             if (rc != 0)
                 weechat_printf(NULL, "%somemo: failed to generate new signed pre-key (rc=%d), keeping ID %u",
@@ -2440,9 +2457,9 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
         // bundle needs re-publication.
         {
             auto txn = lmdb::txn::begin(omemo->db_env);
-            std::string_view v_flag;
-            bool needs_repub = omemo->dbi.omemo.get(txn, std::string_view("pre_key_repub_needed"), v_flag)
-                               && v_flag == "1";
+            lmdb::val k{"pre_key_repub_needed"}, v{};
+            bool needs_repub = omemo->dbi.omemo.get(txn, k, v)
+                               && v.size() == 1 && v.data()[0] == '1';
             txn.abort();
 
             if (needs_repub)
@@ -2458,7 +2475,7 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
                 }
                 // Clear the flag
                 auto wtxn = lmdb::txn::begin(omemo->db_env);
-                omemo->dbi.omemo.del(wtxn, std::string_view("pre_key_repub_needed"));
+                omemo->dbi.omemo.del(wtxn, lmdb::val{"pre_key_repub_needed"});
                 wtxn.commit();
             }
         }
@@ -2760,16 +2777,19 @@ void omemo::show_devices(struct t_gui_buffer *buffer, const char *jid)
     try {
         auto txn = lmdb::txn::begin(self->db_env, nullptr, MDB_RDONLY);
         std::string k_devicelist = fmt::format("devicelist_{}", jid);
-        std::string_view v_devicelist;
+        lmdb::val k{k_devicelist}, v{};
+        std::string v_devicelist;
 
-        if (!self->dbi.omemo.get(txn, k_devicelist, v_devicelist) || v_devicelist.empty()) {
+        if (!self->dbi.omemo.get(txn, k, v) || v.size() == 0) {
             txn.abort();
             weechat_printf(buffer, "%sOMEMO: no known devices for %s",
                            weechat_prefix("network"), jid);
             return;
         }
+        v_devicelist.assign(v.data(), v.size());
+        txn.abort();
 
-        auto devices = v_devicelist
+        auto devices = std::string_view{v_devicelist}
             | std::ranges::views::split(';')
             | std::ranges::views::transform([](auto&& r) {
                 return std::string(r.begin(), r.end());
@@ -2782,7 +2802,6 @@ void omemo::show_devices(struct t_gui_buffer *buffer, const char *jid)
             weechat_printf(buffer, "%s  device %s",
                            weechat_prefix("network"), dev_str.c_str());
         }
-        txn.abort();
     } catch (const lmdb::error& ex) {
         weechat_printf(buffer, "%sOMEMO: LMDB error: %s",
                        weechat_prefix("error"), ex.what());
