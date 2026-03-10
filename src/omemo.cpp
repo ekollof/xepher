@@ -2309,8 +2309,15 @@ static void send_key_transport(weechat::account *account, struct t_gui_buffer *b
         signal_protocol_identity_save_identity(omemo->store_context,
                 &address, key);
     }
-    bks_store_bundle(&address, pre_keys, signed_pre_keys,
+    weechat_printf(buffer, "%somemo: [dbg] handle_bundle %s/%u — prekeys=%zu",
+                   weechat_prefix("network"), jid, device_id,
+                   pre_key_storage.size());
+
+    int store_rc = bks_store_bundle(&address, pre_keys, signed_pre_keys,
         key_signature, identity_key, omemo);
+
+    weechat_printf(buffer, "%somemo: [dbg] handle_bundle %s/%u — bks_store_bundle rc=%d",
+                   weechat_prefix("network"), jid, device_id, store_rc);
 
     if (account) {
         auto key = std::make_pair(std::string(jid), device_id);
@@ -2342,26 +2349,38 @@ static void send_key_transport(weechat::account *account, struct t_gui_buffer *b
     if (to_jid.empty() || !to_device_id) return;
     auto *omemo = &account->omemo;
 
+    weechat_printf(buffer, "%somemo: [dbg] send_key_transport → %.*s/%u",
+                   weechat_prefix("network"), (int)to_jid.size(), to_jid.data(), to_device_id);
+
     struct signal_protocol_address address = {
         .name = to_jid.data(), .name_len = to_jid.size(),
         .device_id = (int32_t)to_device_id };
 
     // Ensure we have a session — build one from the stored bundle if needed.
     if (ss_contains_session_func(&address, omemo) <= 0) {
+        weechat_printf(buffer, "%somemo: [dbg] send_key_transport %.*s/%u — no session, loading bundle",
+                       weechat_prefix("network"), (int)to_jid.size(), to_jid.data(), to_device_id);
         auto bundle = bks_load_bundle(&address, omemo);
         if (!bundle) {
             weechat_printf(buffer, "%somemo: no bundle for %.*s device %u, cannot send KeyTransport",
                            weechat_prefix("error"), (int)to_jid.size(), to_jid.data(), to_device_id);
             return;
         }
+        weechat_printf(buffer, "%somemo: [dbg] send_key_transport %.*s/%u — bundle loaded, calling process_pre_key_bundle",
+                       weechat_prefix("network"), (int)to_jid.size(), to_jid.data(), to_device_id);
         try {
             libsignal::session_builder builder(omemo->store_context, &address, omemo->context);
             builder.process_pre_key_bundle(*bundle);
+            weechat_printf(buffer, "%somemo: [dbg] send_key_transport %.*s/%u — process_pre_key_bundle OK",
+                           weechat_prefix("network"), (int)to_jid.size(), to_jid.data(), to_device_id);
         } catch (const std::exception& ex) {
             weechat_printf(buffer, "%somemo: cannot build session with %.*s device %u for KeyTransport: %s",
                            weechat_prefix("error"), (int)to_jid.size(), to_jid.data(), to_device_id, ex.what());
             return;
         }
+    } else {
+        weechat_printf(buffer, "%somemo: [dbg] send_key_transport %.*s/%u — session already exists",
+                       weechat_prefix("network"), (int)to_jid.size(), to_jid.data(), to_device_id);
     }
 
     // Encrypt 32 zero-bytes for the target device.

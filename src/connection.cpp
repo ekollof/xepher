@@ -1182,6 +1182,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
 
                                 const char *bundle_target = from ? from : account.jid().data();
                                 uint32_t dev_id = (uint32_t)strtol(device_id, NULL, 10);
+                                if (dev_id == 0) continue; // device ID 0 is invalid per Signal protocol
                                 auto fetch_key = std::make_pair(std::string(bundle_target), dev_id);
 
                                 bool already_session = account.omemo && account.omemo.has_session(bundle_target, dev_id);
