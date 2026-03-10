@@ -515,7 +515,7 @@ int iks_get_identity_key_pair(struct signal_buffer **public_data, signal_buffer 
     MDB_txn *transaction = NULL;
     MDB_val k_local_private_key = mdb_val_str("local_private_key");
     MDB_val k_local_public_key = mdb_val_str("local_public_key");
-    MDB_val v_local_private_key, v_local_public_key;
+    MDB_val v_local_private_key = {}, v_local_public_key = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, MDB_RDONLY, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -854,7 +854,7 @@ int pks_contains_pre_key(uint32_t pre_key_id, void *user_data)
     MDB_txn *transaction = NULL;
     std::string k_str = fmt::format("pre_key_{:<10}", pre_key_id);
     MDB_val k_pre_key = { .mv_size = k_str.size(), .mv_data = k_str.data() };
-    MDB_val v_pre_key;
+    MDB_val v_pre_key = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, MDB_RDONLY, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -924,7 +924,7 @@ int pks_load_pre_key(struct signal_buffer **record, uint32_t pre_key_id, void *u
     MDB_txn *transaction = NULL;
     std::string k_str = fmt::format("pre_key_{:<10}", pre_key_id);
     MDB_val k_pre_key = { .mv_size = k_str.size(), .mv_data = k_str.data() };
-    MDB_val v_pre_key;
+    MDB_val v_pre_key = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, 0, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -976,7 +976,7 @@ int pks_remove_pre_key(uint32_t pre_key_id, void *user_data)
     MDB_txn *transaction = NULL;
     std::string k_str = fmt::format("pre_key_{:<10}", pre_key_id);
     MDB_val k_pre_key = { .mv_size = k_str.size(), .mv_data = k_str.data() };
-    MDB_val v_pre_key;
+    MDB_val v_pre_key = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, 0, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -1027,7 +1027,7 @@ int spks_load_signed_pre_key(struct signal_buffer **record, uint32_t signed_pre_
     MDB_txn *transaction = NULL;
     std::string k_str = fmt::format("signed_pre_key_{:<10}", signed_pre_key_id);
     MDB_val k_signed_pre_key = { .mv_size = k_str.size(), .mv_data = k_str.data() };
-    MDB_val v_signed_pre_key;
+    MDB_val v_signed_pre_key = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, 0, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -1082,10 +1082,11 @@ int spks_load_signed_pre_key(struct signal_buffer **record, uint32_t signed_pre_
                 std::string v_id_str = std::to_string(signed_pre_key_id);
                 std::string v_ts_str = std::to_string((long long)time(NULL));
                 std::string k_ts_str = fmt::format("signed_pre_key_ts_{}", signed_pre_key_id);
-                omemo->dbi.omemo.put(meta_txn,
-                    lmdb::val{"signed_pre_key_current_id"}, lmdb::val{v_id_str});
-                omemo->dbi.omemo.put(meta_txn,
-                    lmdb::val{k_ts_str}, lmdb::val{v_ts_str});
+                std::string k_cur_id_str = "signed_pre_key_current_id";
+                lmdb::val lk_cur_id{k_cur_id_str}, lv_id_str{v_id_str};
+                lmdb::val lk_ts_str{k_ts_str}, lv_ts_str_put{v_ts_str};
+                omemo->dbi.omemo.put(meta_txn, lk_cur_id, lv_id_str);
+                omemo->dbi.omemo.put(meta_txn, lk_ts_str, lv_ts_str_put);
             }
             meta_txn.commit();
         }
@@ -1138,7 +1139,7 @@ int spks_contains_signed_pre_key(uint32_t signed_pre_key_id, void *user_data)
     MDB_txn *transaction = NULL;
     std::string k_str = fmt::format("signed_pre_key_{:<10}", signed_pre_key_id);
     MDB_val k_signed_pre_key = { .mv_size = k_str.size(), .mv_data = k_str.data() };
-    MDB_val v_signed_pre_key;
+    MDB_val v_signed_pre_key = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, MDB_RDONLY, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -1166,7 +1167,7 @@ int spks_remove_signed_pre_key(uint32_t signed_pre_key_id, void *user_data)
     MDB_txn *transaction = NULL;
     std::string k_str = fmt::format("signed_pre_key_{:<10}", signed_pre_key_id);
     MDB_val k_signed_pre_key = { .mv_size = k_str.size(), .mv_data = k_str.data() };
-    MDB_val v_signed_pre_key;
+    MDB_val v_signed_pre_key = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, 0, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -1207,7 +1208,7 @@ int ss_load_session_func(struct signal_buffer **record, signal_buffer **user_rec
     (void) user_record;
     std::string k_session_str = fmt::format("session_{}_{}", address->device_id, address->name);
     MDB_val k_session = { .mv_size = k_session_str.size(), .mv_data = k_session_str.data() };
-    MDB_val v_session;
+    MDB_val v_session = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, MDB_RDONLY, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -1246,7 +1247,7 @@ int ss_get_sub_device_sessions_func(signal_int_list **sessions, const char *name
     MDB_txn *transaction = NULL;
     std::string k_device_ids_str = fmt::format("device_ids_{}", name);
     MDB_val k_device_ids = { .mv_size = k_device_ids_str.size(), .mv_data = k_device_ids_str.data() };
-    MDB_val v_device_ids;
+    MDB_val v_device_ids = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, MDB_RDONLY, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -1336,7 +1337,7 @@ int ss_contains_session_func(const struct signal_protocol_address *address, void
     MDB_txn *transaction = NULL;
     std::string k_session_str = fmt::format("session_{}_{}", address->device_id, address->name);
     MDB_val k_session = { .mv_size = k_session_str.size(), .mv_data = k_session_str.data() };
-    MDB_val v_session;
+    MDB_val v_session = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, MDB_RDONLY, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -1359,7 +1360,7 @@ int ss_delete_session_func(const struct signal_protocol_address *address, void *
     MDB_txn *transaction = NULL;
     std::string k_session_str = fmt::format("session_{}_{}", address->device_id, address->name);
     MDB_val k_session = { .mv_size = k_session_str.size(), .mv_data = k_session_str.data() };
-    MDB_val v_session;
+    MDB_val v_session = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, 0, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -1421,7 +1422,7 @@ int sks_store_sender_key(const signal_protocol_sender_key_name *sender_key_name,
     (void) user_record; (void) user_record_len;
     std::string k_device_ids_str = fmt::format("device_ids_{}", sender_key_name->sender.name);
     MDB_val k_device_ids = { .mv_size = k_device_ids_str.size(), .mv_data = k_device_ids_str.data() };
-    MDB_val v_device_ids;
+    MDB_val v_device_ids = {};
 
     if (mdb_txn_begin(omemo->db_env, NULL, 0, &transaction)) {
         weechat_printf(NULL, "%sxmpp: failed to open lmdb transaction",
@@ -1495,7 +1496,7 @@ int sks_load_sender_key(struct signal_buffer **record, signal_buffer **user_reco
                                                sender_key_name->sender.device_id,
                                                sender_key_name->sender.name);
     MDB_val k_sender_key = { .mv_size = k_sender_key_str.size(), .mv_data = k_sender_key_str.data() };
-    MDB_val v_sender_key;
+    MDB_val v_sender_key = {};
     (void) user_record;
 
     if (mdb_txn_begin(omemo->db_env, NULL, 0, &transaction)) {
@@ -1551,7 +1552,8 @@ int dls_store_devicelist(const char *jid, signal_int_list *devicelist, t_omemo *
         v_devicelist += device_id;
     }
 
-    omemo->dbi.omemo.put(transaction, lmdb::val{k_devicelist}, lmdb::val{v_devicelist});
+    lmdb::val lk_devicelist{k_devicelist}, lv_devicelist{v_devicelist};
+    omemo->dbi.omemo.put(transaction, lk_devicelist, lv_devicelist);
   //omemo->dbi.omemo.put(wtxn, "fullname", std::string_view("J. Random Hacker"));
   //{
   //    auto cursor = lmdb::cursor::open(rtxn, dbi);
@@ -1886,8 +1888,11 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
             std::string v_new_id = std::to_string(new_spk_id);
             std::string v_new_ts = std::to_string((long long)now);
             std::string k_ts = fmt::format("signed_pre_key_ts_{}", new_spk_id);
-            omemo->dbi.omemo.put(txn, lmdb::val{"signed_pre_key_current_id"}, lmdb::val{v_new_id});
-            omemo->dbi.omemo.put(txn, lmdb::val{k_ts}, lmdb::val{v_new_ts});
+            std::string k_spk_current_id = "signed_pre_key_current_id";
+            lmdb::val lk_spk_id{k_spk_current_id}, lv_new_id{v_new_id};
+            lmdb::val lk_ts{k_ts}, lv_new_ts{v_new_ts};
+            omemo->dbi.omemo.put(txn, lk_spk_id, lv_new_id);
+            omemo->dbi.omemo.put(txn, lk_ts, lv_new_ts);
             txn.commit();
 
             current_spk_id = new_spk_id;
@@ -1901,8 +1906,11 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
             std::string v_ts_str = std::to_string((long long)now);
             std::string k_ts = fmt::format("signed_pre_key_ts_{}", current_spk_id);
             std::string v_spk_id_str = std::to_string(current_spk_id);
-            omemo->dbi.omemo.put(txn, lmdb::val{k_ts}, lmdb::val{v_ts_str});
-            omemo->dbi.omemo.put(txn, lmdb::val{"signed_pre_key_current_id"}, lmdb::val{v_spk_id_str});
+            std::string k_spk_current_id = "signed_pre_key_current_id";
+            lmdb::val lk_ts{k_ts}, lv_ts_str{v_ts_str};
+            lmdb::val lk_spk_id{k_spk_current_id}, lv_spk_id_str{v_spk_id_str};
+            omemo->dbi.omemo.put(txn, lk_ts, lv_ts_str);
+            omemo->dbi.omemo.put(txn, lk_spk_id, lv_spk_id_str);
             txn.commit();
             if (rc != 0)
                 weechat_printf(NULL, "%somemo: failed to generate new signed pre-key (rc=%d), keeping ID %u",
@@ -2927,7 +2935,7 @@ void omemo::show_fingerprint(struct t_gui_buffer *buffer, const char *jid)
             return;
         }
         MDB_val k_pub = mdb_val_str("local_public_key");
-        MDB_val v_pub;
+        MDB_val v_pub = {};
         if (mdb_get(txn, self->dbi.omemo, &k_pub, &v_pub) != 0) {
             mdb_txn_abort(txn);
             weechat_printf(buffer, "%sOMEMO: own identity key not found (not initialized?)",
@@ -2969,7 +2977,7 @@ void omemo::show_fingerprint(struct t_gui_buffer *buffer, const char *jid)
 
     std::string prefix = fmt::format("identity_key_{}_", jid);
     MDB_val k_seek = { .mv_size = prefix.size(), .mv_data = (void*)prefix.c_str() };
-    MDB_val v_iter;
+    MDB_val v_iter = {};
     bool found_any = false;
 
     int rc = mdb_cursor_get(cursor, &k_seek, &v_iter, MDB_SET_RANGE);
@@ -3024,7 +3032,7 @@ void omemo::distrust_jid(struct t_gui_buffer *buffer, const char *jid)
 
     std::string prefix = fmt::format("identity_key_{}_", jid);
     MDB_val k_seek = { .mv_size = prefix.size(), .mv_data = (void*)prefix.c_str() };
-    MDB_val v_iter;
+    MDB_val v_iter = {};
     int deleted = 0;
 
     int rc = mdb_cursor_get(cursor, &k_seek, &v_iter, MDB_SET_RANGE);
@@ -3113,7 +3121,7 @@ void omemo::show_status(struct t_gui_buffer *buffer, const char *account_name,
         MDB_txn *txn = NULL;
         if (mdb_txn_begin(self->db_env, NULL, MDB_RDONLY, &txn) == 0) {
             MDB_val k_pub = mdb_val_str("local_public_key");
-            MDB_val v_pub;
+            MDB_val v_pub = {};
             if (mdb_get(txn, self->dbi.omemo, &k_pub, &v_pub) == 0) {
                 const uint8_t *data = static_cast<const uint8_t*>(v_pub.mv_data);
                 size_t len = v_pub.mv_size;
@@ -3147,7 +3155,7 @@ void omemo::show_status(struct t_gui_buffer *buffer, const char *account_name,
                 std::string_view prefix = "pre_key_";
                 MDB_val k_seek = { .mv_size = prefix.size(),
                                    .mv_data = (void*)prefix.data() };
-                MDB_val v_iter;
+                MDB_val v_iter = {};
                 int rc = mdb_cursor_get(cursor, &k_seek, &v_iter, MDB_SET_RANGE);
                 while (rc == 0) {
                     std::string_view key(static_cast<const char*>(k_seek.mv_data),
@@ -3172,7 +3180,7 @@ void omemo::show_status(struct t_gui_buffer *buffer, const char *account_name,
         MDB_txn *txn = NULL;
         if (mdb_txn_begin(self->db_env, NULL, MDB_RDONLY, &txn) == 0) {
             MDB_val k_id = mdb_val_str("signed_pre_key_current_id");
-            MDB_val v_id;
+            MDB_val v_id = {};
             if (mdb_get(txn, self->dbi.omemo, &k_id, &v_id) == 0 && v_id.mv_size > 0) {
                 std::string spk_id_str(static_cast<const char*>(v_id.mv_data), v_id.mv_size);
                 // Strip trailing null if present
@@ -3181,7 +3189,7 @@ void omemo::show_status(struct t_gui_buffer *buffer, const char *account_name,
 
                 std::string ts_key = fmt::format("signed_pre_key_ts_{}", spk_id_str);
                 MDB_val k_ts = { .mv_size = ts_key.size(), .mv_data = (void*)ts_key.c_str() };
-                MDB_val v_ts;
+                MDB_val v_ts = {};
                 if (mdb_get(txn, self->dbi.omemo, &k_ts, &v_ts) == 0 && v_ts.mv_size > 0) {
                     std::string ts_str(static_cast<const char*>(v_ts.mv_data), v_ts.mv_size);
                     while (!ts_str.empty() && ts_str.back() == '\0')
