@@ -8,12 +8,6 @@ void buffer__get_account_and_channel(struct t_gui_buffer *buffer,
                                      weechat::account **account,
                                      weechat::channel **channel);
 
-char *buffer__typing_bar_cb(const void *pointer, void *data,
-                            struct t_gui_bar_item *item,
-                            struct t_gui_window *window,
-                            struct t_gui_buffer *buffer,
-                            struct t_hashtable *extra_info);
-
 char *buffer__encryption_bar_cb(const void *pointer, void *data,
                                 struct t_gui_bar_item *item,
                                 struct t_gui_window *window,

@@ -88,7 +88,6 @@ namespace weechat
         int unread_count = 0;
         int unread_count_display = 0;
 
-        struct t_hook *typing_hook_timer = nullptr;
         struct t_hook *self_typing_hook_timer = nullptr;
 
     public:
@@ -113,7 +112,6 @@ namespace weechat
        } otr;
         struct t_weelist *members_speaking[2] = { nullptr };
         std::vector<typing> self_typings;
-        std::vector<typing> typings;
         std::unordered_map<std::string, member> members;
         
         time_t last_mam_fetch = 0;
@@ -150,8 +148,6 @@ namespace weechat
         void member_speaking_rename(const char *old_nick, const char *new_nick);
         void member_speaking_rename_if_present(const char *nick);
 
-        static int typing_cb(const void *pointer, void *data, int remaining_calls);
-        std::optional<typing*> typing_search(weechat::user *user);
         int add_typing(weechat::user *user);
         int remove_typing(weechat::user *user);
 

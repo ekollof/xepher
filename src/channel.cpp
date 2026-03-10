@@ -232,10 +232,6 @@ weechat::channel::channel(weechat::account& account,
         }
     }
 
-    typing_hook_timer = weechat_hook_timer(1 * 1000, 0, 0,
-                                           &weechat::channel::typing_cb,
-                                           this, nullptr);
-
     self_typing_hook_timer = weechat_hook_timer(1 * 1000, 0, 0,
                                                 &weechat::channel::self_typing_cb,
                                                 this, nullptr);
@@ -377,129 +373,75 @@ void weechat::channel::member_speaking_rename_if_present(const char *nick)
     }
 }
 
-int weechat::channel::typing_cb(const void *pointer, void *data, int remaining_calls)
-{
-    weechat::channel *channel;
-    const char *localvar;
-    unsigned typecount;
-    time_t now;
+// typing_cb removed: the native WeeChat typing plugin manages expiry via its own timer.
+// We drive it via typing_set_nick / typing_reset_buffer signals instead.
 
-    (void) data;
-    (void) remaining_calls;
-
-    if (!pointer)
-        return WEECHAT_RC_ERROR;
-
-    channel = (weechat::channel *)pointer;
-    
-    // Safety check: don't access channel if hook was already cleared
-    if (!channel->typing_hook_timer)
-        return WEECHAT_RC_OK;
-
-    now = time(NULL);
-
-    typecount = 0;
-
-    for (auto ptr_typing = channel->typings.begin();
-         ptr_typing != channel->typings.end();)
-    {
-        if (now - ptr_typing->ts > 30)
-        {
-            ptr_typing = channel->typings.erase(ptr_typing);
-        }
-        else
-        {
-            ptr_typing++;
-            typecount++;
-        }
-    }
-
-    localvar = weechat_buffer_get_string(channel->buffer, "localvar_typing");
-    if (!localvar || strncmp(localvar, typecount > 0 ? "1" : "0", 1) != 0)
-        weechat_buffer_set(channel->buffer, "localvar_set_typing",
-                           typecount > 0 ? "1" : "0");
-    weechat_bar_item_update("typing");
-
-    return WEECHAT_RC_OK;
-}
-
-std::optional<weechat::channel::typing*> weechat::channel::typing_search(weechat::user *user)
-{
-    if (!user)
-        return std::nullopt;
-
-    for (auto& ptr_typing : typings)
-    {
-        if (user == ptr_typing.user)
-            return &ptr_typing;
-    }
-
-    return std::nullopt;
-}
+// typing_search is unused now that we delegate to the native typing plugin.
 
 int weechat::channel::remove_typing(weechat::user *user)
 {
-    if (!user)
+    if (!user || user->id.empty() || !buffer)
         return 0;
-    
-    for (auto ptr_typing = typings.begin(); ptr_typing != typings.end(); ptr_typing++)
+
+    // Build nick string (resource for MUC, bare JID for PM)
+    std::string nick;
+    if (type == chat_type::MUC)
     {
-        if (user == ptr_typing->user)
-        {
-            typings.erase(ptr_typing);
-            typing_cb(this, nullptr, 0);  // Update bar
-            return 1;
-        }
+        char *res = xmpp_jid_resource(account.context, user->id.c_str());
+        nick = res ? res : user->id;
+        if (res) xmpp_free(account.context, res);
     }
-    
-    return 0;
+    else
+    {
+        char *bare = xmpp_jid_bare(account.context, user->id.c_str());
+        nick = bare ? bare : user->id;
+        if (bare) xmpp_free(account.context, bare);
+    }
+
+    if (nick.empty())
+        return 0;
+
+    // Signal format: "<buf_ptr_hex>;off;<nick>"
+    char signal_data[512];
+    snprintf(signal_data, sizeof(signal_data), "%lx;off;%s",
+             (unsigned long)(void *)buffer, nick.c_str());
+    weechat_hook_signal_send("typing_set_nick",
+                             WEECHAT_HOOK_SIGNAL_STRING,
+                             signal_data);
+    return 1;
 }
 
 int weechat::channel::add_typing(weechat::user *user)
 {
-    weechat::channel::typing *the_typing = nullptr;
-    int ret = 0;
+    if (!user || user->id.empty() || !buffer)
+        return 0;
 
-    auto typing_opt = weechat::channel::typing_search(user);
-    if (!typing_opt)
+    // Build nick string (resource for MUC, bare JID for PM)
+    std::string nick;
+    if (type == chat_type::MUC)
     {
-        weechat::channel::typing& new_typing = typings.emplace_back();
-        new_typing.user = user;
-        // For MUC, show nickname (resource); for PM, show bare JID
-        if (!user->id.empty())
-        {
-            if (type == chat_type::MUC)
-            {
-                char *nick = xmpp_jid_resource(account.context, user->id.c_str());
-                new_typing.name = nick ? nick : user->id;
-                if (nick)
-                    xmpp_free(account.context, nick);
-            }
-            else
-            {
-                char *bare_jid = xmpp_jid_bare(account.context, user->id.c_str());
-                new_typing.name = bare_jid ? bare_jid : user->id;
-                if (bare_jid)
-                    xmpp_free(account.context, bare_jid);
-            }
-        }
-        else
-        {
-            new_typing.name = "";
-        }
-
-        the_typing = &new_typing;
-        ret = 1;
+        char *res = xmpp_jid_resource(account.context, user->id.c_str());
+        nick = res ? res : user->id;
+        if (res) xmpp_free(account.context, res);
     }
     else
     {
-        the_typing = *typing_opt;
+        char *bare = xmpp_jid_bare(account.context, user->id.c_str());
+        nick = bare ? bare : user->id;
+        if (bare) xmpp_free(account.context, bare);
     }
-    the_typing->ts = time(nullptr);
 
-    weechat::channel::typing_cb(this, nullptr, 0);
+    if (nick.empty())
+        return 0;
 
-    return ret;
+    // Signal format: "<buf_ptr_hex>;typing;<nick>"
+    char signal_data[512];
+    snprintf(signal_data, sizeof(signal_data), "%lx;typing;%s",
+             (unsigned long)(void *)buffer, nick.c_str());
+    weechat_hook_signal_send("typing_set_nick",
+                             WEECHAT_HOOK_SIGNAL_STRING,
+                             signal_data);
+    return 1;
 }
 
 int weechat::channel::self_typing_cb(const void *pointer, void *data, int remaining_calls)
@@ -571,6 +513,7 @@ int weechat::channel::add_self_typing(weechat::user *user)
     else
     {
         the_typing = *typing_opt;
+        the_typing->ts = time(nullptr);
     }
 
     (void)the_typing;  // Used for side effects, suppress warning
@@ -586,16 +529,17 @@ weechat::channel::~channel()
         return;
         
     // Unhook timers to prevent callbacks firing after channel is destroyed
-    if (typing_hook_timer)
-    {
-        weechat_unhook(typing_hook_timer);
-        typing_hook_timer = nullptr;
-    }
     if (self_typing_hook_timer)
     {
         weechat_unhook(self_typing_hook_timer);
         self_typing_hook_timer = nullptr;
     }
+
+    // Tell the native typing plugin to forget all typists for this buffer
+    if (buffer)
+        weechat_hook_signal_send("typing_reset_buffer",
+                                 WEECHAT_HOOK_SIGNAL_POINTER,
+                                 buffer);
     
     // Clear MAM cache for PM channels to prevent auto-recreation on reconnect
     if (type == chat_type::PM)

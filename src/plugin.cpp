@@ -84,7 +84,6 @@ std::unique_ptr<weechat::plugin> weechat::plugin::instance;
 weechat::plugin::plugin(struct t_weechat_plugin *plugin)
     : m_plugin_ptr(plugin)
     , m_process_timer(nullptr)
-    , m_typing_bar_item(nullptr)
     , m_encryption_bar_item(nullptr)
     , m_buffer_switch_hook(nullptr)
     , m_input_text_changed_hook(nullptr)
@@ -116,18 +115,6 @@ void weechat::plugin::init(int argc, char *argv[])
     m_process_timer = weechat_hook_timer(WEECHAT_TIMER_SECONDS(1000), 0, 0,
                                          &weechat::account::timer_cb,
                                          nullptr, nullptr);
-
-    if (!weechat_bar_search(typing_bar_name.data()))
-    {
-        weechat_bar_new(typing_bar_name.data(), "off", "400", "window", "${typing}",
-                        "bottom", "horizontal", "vertical",
-                        "1", "1", "default", "default", "default", "default",
-                        "off", typing_bar_item_name.data());
-    }
-
-    m_typing_bar_item = weechat_bar_item_new(typing_bar_item_name.data(),
-                                             &buffer__typing_bar_cb, // TODO: port
-                                             nullptr, nullptr);
 
     m_encryption_bar_item = weechat_bar_item_new(encryption_bar_item_name.data(),
                                                   &buffer__encryption_bar_cb,
@@ -171,9 +158,6 @@ void weechat::plugin::end() {
         m_input_text_changed_hook = nullptr;
     }
     
-    if (m_typing_bar_item)
-        weechat_bar_item_remove(m_typing_bar_item);
-
     if (m_encryption_bar_item)
         weechat_bar_item_remove(m_encryption_bar_item);
 

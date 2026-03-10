@@ -41,12 +41,9 @@ namespace weechat {
         inline operator struct t_weechat_plugin *() { return m_plugin_ptr; };
 
     private:
-        static constexpr std::string_view typing_bar_name = "typing";
-        static constexpr std::string_view typing_bar_item_name = "xmpp_typing";
         static constexpr std::string_view encryption_bar_item_name = "xmpp_encryption";
 
         struct t_hook *m_process_timer;
-        struct t_gui_bar_item *m_typing_bar_item;
         struct t_gui_bar_item *m_encryption_bar_item;
         struct t_hook *m_buffer_switch_hook;
         struct t_hook *m_input_text_changed_hook;

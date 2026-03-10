@@ -46,64 +46,6 @@ void buffer__get_account_and_channel(struct t_gui_buffer *buffer,
     }
 }
 
-char *buffer__typing_bar_cb(const void *pointer, void *data,
-                            struct t_gui_bar_item *item,
-                            struct t_gui_window *window,
-                            struct t_gui_buffer *buffer,
-                            struct t_hashtable *extra_info)
-{
-    weechat::account *account;
-    weechat::channel *channel;
-    char notification[256];
-    unsigned typecount;
-
-    (void) pointer;
-    (void) data;
-    (void) item;
-    (void) window;
-    (void) extra_info;
-
-    account = NULL;
-    channel = NULL;
-
-    buffer__get_account_and_channel(buffer, &account, &channel);
-
-    if (!channel)
-        return strdup("");
-
-    typecount = 0;
-
-    for (auto& ptr_typing : channel->typings)
-    {
-        switch (++typecount)
-        {
-            case 1:
-                strcpy(notification, ptr_typing.name.data());
-                break;
-            case 2:
-                strcat(notification, ", ");
-                strcat(notification, ptr_typing.name.data());
-                break;
-            case 3:
-            default:
-                strcpy(notification, "Several people");
-                break;
-        }
-    }
-
-    if (typecount)
-    {
-        strcat(notification, NG_(" is typing...",
-                                 " are typing...",
-                                 typecount));
-        return strdup(notification);
-    }
-    else
-    {
-        return strdup("");
-    }
-}
-
 char *buffer__encryption_bar_cb(const void *pointer, void *data,
                                 struct t_gui_bar_item *item,
                                 struct t_gui_window *window,
