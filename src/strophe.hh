@@ -198,6 +198,11 @@ namespace libstrophe {
             return call<decltype(xmpp_connect_client), xmpp_connect_client>(args...);
         }
 
+        inline auto set_certfail_handler(auto &&...args) {
+            return call<decltype(xmpp_conn_set_certfail_handler),
+                        xmpp_conn_set_certfail_handler>(args...);
+        }
+
         inline auto handler_add(auto &&...args) {
             return call<decltype(xmpp_handler_add), xmpp_handler_add>(args...);
         }
