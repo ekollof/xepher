@@ -4883,44 +4883,39 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                         item, "list", "eu.siacs.conversations.axolotl");
                     if (list && account.omemo)
                     {
-                        account.omemo.handle_devicelist(
-                            from ? from : account.jid().data(), items);
+                        // For PubSub IQ results, `from` is the server domain,
+                        // not the node owner.  Determine the node owner from `to`
+                        // (the bare JID the original request was sent from).
+                        xmpp_string_guard to_bare_g(account.context,
+                            to ? xmpp_jid_bare(account.context, to) : nullptr);
+                        const char *node_owner = (to_bare_g.ptr && *to_bare_g.ptr)
+                            ? to_bare_g.ptr : (from ? from : account.jid().data());
+                        bool is_own_devicelist = (account.jid() == node_owner);
 
-                        xmpp_stanza_t *children[2] = {NULL};
-                        for (device = xmpp_stanza_get_children(list);
-                             device; device = xmpp_stanza_get_next(device))
+                        account.omemo.handle_devicelist(node_owner, items);
+
+                        // If this is our own devicelist and our device_id is
+                        // absent, add it now and re-publish.
+                        if (is_own_devicelist)
                         {
-                            const char *name = xmpp_stanza_get_name(device);
-                            if (weechat_strcasecmp(name, "device") != 0)
-                                continue;
-
-                            const char *device_id = xmpp_stanza_get_id(device);
-
-                            char bundle_node[128] = {0};
-                            snprintf(bundle_node, sizeof(bundle_node),
-                                        "eu.siacs.conversations.axolotl.bundles:%s",
-                                        device_id);
-
-                            children[1] = NULL;
-                            children[0] =
-                            stanza__iq_pubsub_items(account.context, NULL,
-                                                    bundle_node);
-                            children[0] =
-                            stanza__iq_pubsub(account.context, NULL, children,
-                                                with_noop("http://jabber.org/protocol/pubsub"));
-                            xmpp_string_guard uuid_g(account.context, xmpp_uuid_gen(account.context));
-                            const char *uuid = uuid_g.ptr;
-                            children[0] =
-                            stanza__iq(account.context, NULL, children, NULL, uuid,
-                                to, from, "get");
-                            // freed by uuid_g
-
-                            account.connection.send(children[0]);
-                            xmpp_stanza_release(children[0]);
-                        }
-
-                        if (from && account.jid() == from)
-                        {
+                            bool found_self = false;
+                            for (device = xmpp_stanza_get_children(list);
+                                 device; device = xmpp_stanza_get_next(device))
+                            {
+                                const char *dname = xmpp_stanza_get_name(device);
+                                if (weechat_strcasecmp(dname, "device") != 0) continue;
+                                const char *did = xmpp_stanza_get_id(device);
+                                if (did && (uint32_t)atoi(did) == account.omemo.device_id)
+                                { found_self = true; break; }
+                            }
+                            if (!found_self)
+                            {
+                                weechat_printf(account.buffer,
+                                    "%somemo: our device %u missing from server devicelist — re-publishing",
+                                    weechat_prefix("network"), account.omemo.device_id);
+                            }
+                            // Always publish: ensures our device ID stays in the list
+                            // and re-adds it if the server dropped it.
                             weechat::account::device dev;
                             char id[64] = {0};
 
@@ -4932,9 +4927,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                             dev.label = "weechat";
                             account.devices.emplace(dev.id, dev);
 
-                            weechat_printf(account.buffer, 
+                            weechat_printf(account.buffer,
                                            "%sServer devicelist for %s:",
-                                           weechat_prefix("network"), from);
+                                           weechat_prefix("network"), node_owner);
                             weechat_printf(account.buffer,
                                            "%s  Device %u (weechat - this device)",
                                            weechat_prefix("network"), dev.id);
@@ -4953,7 +4948,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                                 dev.name = device_id;
                                 dev.label = "";
                                 account.devices.emplace(dev.id, dev);
-                                
+
                                 if (dev.id != account.omemo.device_id)
                                 {
                                     weechat_printf(account.buffer,
@@ -4972,10 +4967,44 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                             const char *uuid = uuid_g.ptr;
                             xmpp_stanza_set_id(reply, uuid);
                             // freed by uuid_g
-                            xmpp_stanza_set_attribute(reply, "to", from);
-                            xmpp_stanza_set_attribute(reply, "from", to);
                             account.connection.send(reply);
                             xmpp_stanza_release(reply);
+                        }
+                        else
+                        {
+                            // Fetch bundles for all devices in the received list
+                            xmpp_stanza_t *children[2] = {NULL};
+                            for (device = xmpp_stanza_get_children(list);
+                                 device; device = xmpp_stanza_get_next(device))
+                            {
+                                const char *name = xmpp_stanza_get_name(device);
+                                if (weechat_strcasecmp(name, "device") != 0)
+                                    continue;
+
+                                const char *device_id = xmpp_stanza_get_id(device);
+
+                                char bundle_node[128] = {0};
+                                snprintf(bundle_node, sizeof(bundle_node),
+                                            "eu.siacs.conversations.axolotl.bundles:%s",
+                                            device_id);
+
+                                children[1] = NULL;
+                                children[0] =
+                                stanza__iq_pubsub_items(account.context, NULL,
+                                                        bundle_node);
+                                children[0] =
+                                stanza__iq_pubsub(account.context, NULL, children,
+                                                    with_noop("http://jabber.org/protocol/pubsub"));
+                                xmpp_string_guard uuid_g(account.context, xmpp_uuid_gen(account.context));
+                                const char *uuid = uuid_g.ptr;
+                                children[0] =
+                                stanza__iq(account.context, NULL, children, NULL, uuid,
+                                    to, from, "get");
+                                // freed by uuid_g
+
+                                account.connection.send(children[0]);
+                                xmpp_stanza_release(children[0]);
+                            }
                         }
                     }
                 }
@@ -5582,10 +5611,26 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         if (account.omemo)
         {
             std::string jid_str(account.jid());
+
+            // Publish our bundle unconditionally on connect so remote clients
+            // always have fresh pre-keys for our device.
             children[0] =
             account.omemo.get_bundle(account.context, jid_str.data(), NULL);
             this->send(children[0]);
             xmpp_stanza_release(children[0]);
+
+            // Publish our devicelist with our device_id included.  This runs
+            // before we receive the server's existing list, so account.devices
+            // is empty and get_devicelist() will publish just our own device.
+            // When the server responds with the full list we merge and re-publish
+            // (see the IQ result handler above).
+            {
+                xmpp_stanza_t *dl_stanza = account.get_devicelist();
+                xmpp_string_guard dl_uuid_g(account.context, xmpp_uuid_gen(account.context));
+                xmpp_stanza_set_id(dl_stanza, dl_uuid_g.ptr);
+                this->send(dl_stanza);
+                xmpp_stanza_release(dl_stanza);
+            }
         }
 
         // Discover HTTP File Upload service (XEP-0363)
