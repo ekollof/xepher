@@ -260,4 +260,13 @@ namespace libsignal {
         }
     };
 
+    // session_cipher is not ref-counted; it uses session_cipher_free().
+    struct session_cipher_deleter {
+        void operator()(session_cipher *p) const noexcept { session_cipher_free(p); }
+    };
+    using unique_session_cipher = std::unique_ptr<session_cipher, session_cipher_deleter>;
+
+    // ciphertext_message is ref-counted via SIGNAL_UNREF.
+    using unique_ciphertext_message = object<ciphertext_message>;
+
 }
