@@ -2312,11 +2312,18 @@ static void send_key_transport(weechat::account *account, struct t_gui_buffer *b
                    weechat_prefix("network"), jid, device_id,
                    pre_key_storage.size());
 
+    // Snapshot whether a session already existed BEFORE we store the bundle.
+    // We only send a KeyTransportElement when the session is freshly created —
+    // sending it unconditionally caused a PEP storm (KTE → Conversations fires
+    // a PEP devicelist update → handle_bundle fires again → KTE again …).
+    bool had_session = omemo->has_session(jid, device_id);
+
     int store_rc = bks_store_bundle(&address, pre_keys, signed_pre_keys,
         key_signature, identity_key, omemo);
 
-    weechat_printf(buffer, "%somemo: [dbg] handle_bundle %s/%u — bks_store_bundle rc=%d",
-                   weechat_prefix("network"), jid, device_id, store_rc);
+    weechat_printf(buffer, "%somemo: [dbg] handle_bundle %s/%u — bks_store_bundle rc=%d had_session=%s",
+                   weechat_prefix("network"), jid, device_id, store_rc,
+                   had_session ? "yes" : "no");
 
     if (account) {
         auto key = std::make_pair(std::string(jid), device_id);
@@ -2328,16 +2335,17 @@ static void send_key_transport(weechat::account *account, struct t_gui_buffer *b
         // (message received but not encrypted for our device).
         omemo->pending_key_transport.erase(key);
 
-        // Proactively send a KeyTransportElement for any non-self contact
-        // device — this establishes the Signal session so Conversations
-        // will include our device in subsequent encrypted messages.
-        // Skip only our exact own device (same JID + same device_id).
-        // We DO send to other devices sharing our JID (e.g. Conversations
-        // running on the same account) so they can establish a session.
+        // Only send a KeyTransportElement if the session is NEWLY established.
+        // Sending it when had_session==true would re-trigger Conversations'
+        // PEP devicelist update, which re-fires handle_bundle, creating a storm.
+        // Skip our exact own device (same JID + same device_id).
         std::string_view own_jid = account->jid();
         bool is_own_device = (std::string_view(jid) == own_jid && device_id == omemo->device_id);
-        if (!is_own_device)
+        if (!is_own_device && !had_session)
             send_key_transport(account, buffer, jid, device_id);
+        else if (!is_own_device && had_session)
+            weechat_printf(buffer, "%somemo: [dbg] handle_bundle %s/%u — session already existed, skipping KeyTransport",
+                           weechat_prefix("network"), jid, device_id);
     }
 }
 
@@ -2834,9 +2842,8 @@ xmpp_stanza_t *omemo::encode(weechat::account *account, struct t_gui_buffer *buf
     xmpp_stanza_set_ns(encrypted, "eu.siacs.conversations.axolotl");
     xmpp_stanza_t *header = xmpp_stanza_new(account->context);
     xmpp_stanza_set_name(header, "header");
-    char device_id_str[10+1] = {0};
-    snprintf(device_id_str, 10+1, "%u", omemo->device_id);
-    xmpp_stanza_set_attribute(header, "sid", device_id_str);
+    std::string device_id_str = fmt::format("{}", omemo->device_id);
+    xmpp_stanza_set_attribute(header, "sid", device_id_str.c_str());
 
     int keycount = 0;
     signal_int_list *devicelist;
@@ -2878,9 +2885,8 @@ xmpp_stanza_t *omemo::encode(weechat::account *account, struct t_gui_buffer *buf
 
             xmpp_stanza_t *header__key = xmpp_stanza_new(account->context);
             xmpp_stanza_set_name(header__key, "key");
-            char device_id_str[10+1] = {0};
-            snprintf(device_id_str, 10+1, "%u", device_id);
-            xmpp_stanza_set_attribute(header__key, "rid", device_id_str);
+            std::string rid_str = fmt::format("{}", device_id);
+            xmpp_stanza_set_attribute(header__key, "rid", rid_str.c_str());
 
             if (ss_contains_session_func(&address, omemo) <= 0)
             {
@@ -2901,31 +2907,39 @@ xmpp_stanza_t *omemo::encode(weechat::account *account, struct t_gui_buffer *buf
                 }
             }
 
-            struct session_cipher *cipher;
-            if (session_cipher_create(&cipher, omemo->store_context, &address, omemo->context)) continue;
+            {
+                session_cipher *raw_cipher = nullptr;
+                if (session_cipher_create(&raw_cipher, omemo->store_context, &address, omemo->context)) {
+                    xmpp_stanza_release(header__key);
+                    continue;
+                }
+                libsignal::unique_session_cipher cipher(raw_cipher);
 
-            struct ciphertext_message *signal_message;
-            if (session_cipher_encrypt(cipher, key_and_tag, AES_KEY_SIZE+tag_len, &signal_message)) continue;
-            struct signal_buffer *record = ciphertext_message_get_serialized(signal_message);
-            int prekey = ciphertext_message_get_type(signal_message) == CIPHERTEXT_PREKEY_TYPE
-                ? 1 : 0;
+                ciphertext_message *raw_message = nullptr;
+                if (session_cipher_encrypt(cipher.get(), key_and_tag, AES_KEY_SIZE+tag_len, &raw_message)) {
+                    xmpp_stanza_release(header__key);
+                    continue;
+                }
+                libsignal::unique_ciphertext_message signal_message(raw_message);
 
-            char *payload = NULL;
-            base64_encode(signal_buffer_data(record), signal_buffer_len(record),
-                    &payload);
+                struct signal_buffer *record = ciphertext_message_get_serialized(signal_message.get());
+                int prekey = ciphertext_message_get_type(signal_message.get()) == CIPHERTEXT_PREKEY_TYPE
+                    ? 1 : 0;
 
-            if (prekey)
-                xmpp_stanza_set_attribute(header__key, "prekey",
-                        prekey ? "true" : "false");
-            stanza__set_text(account->context, header__key, with_free(payload));
-            xmpp_stanza_add_child(header, header__key);
-            xmpp_stanza_release(header__key);
+                char *payload = NULL;
+                base64_encode(signal_buffer_data(record), signal_buffer_len(record),
+                        &payload);
 
-            if (target == jid)
-                keycount++;
+                if (prekey)
+                    xmpp_stanza_set_attribute(header__key, "prekey",
+                            prekey ? "true" : "false");
+                stanza__set_text(account->context, header__key, with_free(payload));
+                xmpp_stanza_add_child(header, header__key);
+                xmpp_stanza_release(header__key);
 
-            SIGNAL_UNREF(signal_message);
-            session_cipher_free(cipher);
+                if (target == jid)
+                    keycount++;
+            } // cipher and signal_message freed here
         }
         signal_int_list_free(devicelist);
         target = account->jid().data();
