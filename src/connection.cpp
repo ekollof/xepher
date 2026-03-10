@@ -5947,12 +5947,22 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
     m_conn.set_certfail_handler([](const xmpp_tlscert_t *cert,
                                    const char *const errormsg) -> int {
         xmpp_conn_t *conn = xmpp_tlscert_get_conn(cert);
-        const char *jid = conn ? xmpp_conn_get_jid(conn) : "(unknown)";
+        // JID is not yet known at TLS handshake time; use the cert subject
+        // (contains the server CN/hostname) and expiry for context instead.
+        const char *subject  = cert ? xmpp_tlscert_get_string(cert, XMPP_CERT_SUBJECT)  : nullptr;
+        const char *notafter = cert ? xmpp_tlscert_get_string(cert, XMPP_CERT_NOTAFTER) : nullptr;
+        const char *dnsname  = cert ? xmpp_tlscert_get_dnsname(cert, 0)                 : nullptr;
+        // Prefer SAN dnsname > subject > remote host from conn
+        const char *host = dnsname ? dnsname
+                         : subject ? subject
+                         : (conn ? xmpp_conn_get_bound_jid(conn) : nullptr);
         weechat_printf(
             nullptr,
-            _("%s%s: TLS certificate warning for %s: %s — connecting anyway"),
+            _("%s%s: TLS certificate warning for %s (expires %s): %s — connecting anyway"),
             weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-            jid ? jid : "(unknown)", errormsg ? errormsg : "(no details)");
+            host     ? host     : "(unknown host)",
+            notafter ? notafter : "?",
+            errormsg ? errormsg : "(no details)");
         return 1; // accept cert, keep conn->tls valid, avoid NULL-deref crash
     });
 
