@@ -1727,11 +1727,14 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
                 signal_buffer_len(record), &data);
         signal_buffer_free(record);
         if (pre_key) session_pre_key_destroy((signal_type_base*)pre_key);
-      //SIGNAL_UNREF(pre_key);
-        char *id_str = (char *)malloc(sizeof(char) * (10 + 1));
-        snprintf(id_str, 10+1, "%u", id);
+        if (!data) {
+            weechat_printf(NULL, "%somemo: base64_encode failed for pre_key %u, skipping",
+                           weechat_prefix("error"), id);
+            continue;
+        }
+        std::string id_str_s = fmt::format("{}", id);
         children[num_keys-1] = stanza__iq_pubsub_publish_item_bundle_prekeys_preKeyPublic(
-                context, NULL, NULL, with_free(id_str));
+                context, NULL, NULL, with_noop(id_str_s.c_str()));
         stanza__set_text(context, children[num_keys-1], with_free(data));
     }
     children[100] = NULL;
