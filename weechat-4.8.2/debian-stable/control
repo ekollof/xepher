@@ -1,0 +1,260 @@
+Source: weechat
+Section: net
+Priority: optional
+Maintainer: Emmanuel Bouthenot <kolter@debian.org>
+Build-Depends:
+    asciidoctor (>= 1.5.4),
+    ruby-pygments.rb,
+    debhelper (>= 12),
+    cmake,
+    pkgconf,
+    libncurses-dev,
+    gem2deb,
+    libperl-dev,
+    python3-dev,
+    libaspell-dev,
+    liblua5.3-dev,
+    tcl8.6-dev,
+    guile-3.0-dev,
+    php-dev, libphp-embed, libargon2-dev, libsodium-dev,
+    libxml2-dev,
+    libcurl4-gnutls-dev,
+    libgcrypt20-dev,
+    libgnutls28-dev,
+    libzstd-dev,
+    zlib1g-dev,
+    libcjson-dev
+Standards-Version: 4.7.2
+Homepage: https://weechat.org/
+Vcs-Git: https://salsa.debian.org/kolter/weechat.git
+Vcs-Browser: https://salsa.debian.org/kolter/weechat
+
+Package: weechat
+Architecture: all
+Depends:
+    ${misc:Depends},
+    weechat-curses (>= ${source:Version}) | weechat-headless (>= ${source:Version})
+Suggests: weechat-doc (= ${source:Version})
+Description: Fast, light and extensible chat client (metapackage)
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ It is customizable and extensible with plugins/scripts, and includes:
+  - support of IRC protocol (native)
+  - support of XMPP/Jabber protocol (with additional script)
+  - nicklist
+  - smart hotlist
+  - horizontal and vertical split
+  - double charset support (decode/encode)
+  - FIFO pipe for remote control
+  - 256 colors support
+  - incremental text search
+  - dynamic filtering of buffer content
+  - Perl, Python, Ruby, Lua, Tcl, Scheme and PHP scripting
+  - script manager
+  - spell checking
+  - highly customizable and extensible
+  - and much more!
+
+Package: weechat-curses
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-core (= ${binary:Version})
+Recommends:
+    weechat-plugins (= ${binary:Version})
+Suggests: weechat-doc (= ${source:Version})
+Description: Fast, light and extensible chat client - console client
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ It is customizable and extensible with plugins/scripts, and includes:
+  - support of IRC protocol (native)
+  - support of XMPP/Jabber protocol (with additional script)
+  - nicklist
+  - smart hotlist
+  - horizontal and vertical split
+  - double charset support (decode/encode)
+  - FIFO pipe for remote control
+  - 256 colors support
+  - incremental text search
+  - dynamic filtering of buffer content
+  - Perl, Python, Ruby, Lua, Tcl, Scheme and PHP scripting
+  - script manager
+  - spell checking
+  - highly customizable and extensible
+  - and much more!
+ .
+ This package provides the console client (ncurses).
+
+Package: weechat-headless
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-core (= ${binary:Version})
+Recommends: weechat-plugins (= ${binary:Version})
+Suggests: weechat-doc (= ${source:Version})
+Description: Fast, light and extensible chat client - headless client
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ It is customizable and extensible with plugins/scripts, and includes:
+  - support of IRC protocol (native)
+  - support of XMPP/Jabber protocol (with additional script)
+  - nicklist
+  - smart hotlist
+  - horizontal and vertical split
+  - double charset support (decode/encode)
+  - FIFO pipe for remote control
+  - 256 colors support
+  - incremental text search
+  - dynamic filtering of buffer content
+  - Perl, Python, Ruby, Lua, Tcl, Scheme and PHP scripting
+  - script manager
+  - spell checking
+  - highly customizable and extensible
+  - and much more!
+ .
+ This package provides the headless client.
+
+Package: weechat-core
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends}
+Suggests: weechat-doc (= ${source:Version})
+Description: Fast, light and extensible chat client - core files
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package provides core plugins and locales files for WeeChat. It
+ currently ships the following plugins: alias, buflist, charset, fset, irc,
+ logger and xfer. It is useless without weechat-curses or weechat-headless.
+
+Package: weechat-plugins
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-curses (= ${binary:Version}) | weechat-headless (= ${binary:Version})
+Recommends:
+    weechat-perl,
+    weechat-python,
+    weechat-ruby
+Suggests: weechat-scripts (>> 20090221-1)
+Description: Fast, light and extensible chat client - plugins
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package provides some plugins to enhance WeeChat. It currently
+ ships the following plugins:
+  - script manager
+  - Spell checking (thanks to aspell)
+  - FIFO pipe for remote control
+  - Relay (IRC proxy and WeeChat protocol)
+  - Trigger
+  - Typing
+
+Package: weechat-python
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-curses (= ${binary:Version}) | weechat-headless (= ${binary:Version})
+Description: Fast, light and extensible chat client - Python 3 plugin
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package provides the Python 3 scripting API plugin.
+
+Package: weechat-perl
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-curses (= ${binary:Version}) | weechat-headless (= ${binary:Version})
+Description: Fast, light and extensible chat client - Perl plugin
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package provides the Perl scripting API plugin.
+
+Package: weechat-ruby
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-curses (= ${binary:Version}) | weechat-headless (= ${binary:Version})
+Description: Fast, light and extensible chat client - Ruby plugin
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package provides the Ruby scripting API plugin.
+
+Package: weechat-lua
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-curses (= ${binary:Version}) | weechat-headless (= ${binary:Version})
+Description: Fast, light and extensible chat client - Lua plugin
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package provides the Lua scripting API plugin.
+
+Package: weechat-tcl
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-curses (= ${binary:Version}) | weechat-headless (= ${binary:Version})
+Description: Fast, light and extensible chat client - Tcl plugin
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package provides the Tcl scripting API plugin.
+
+Package: weechat-guile
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-curses (= ${binary:Version}) | weechat-headless (= ${binary:Version})
+Description: Fast, light and extensible chat client - Guile plugin
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package provides the Guile scripting API plugin.
+
+Package: weechat-php
+Architecture: any
+Depends:
+    ${misc:Depends},
+    ${shlibs:Depends},
+    weechat-curses (= ${binary:Version}) | weechat-headless (= ${binary:Version}),
+    libphp-embed
+Description: Fast, light and extensible chat client - PHP plugin
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package provides the PHP scripting API plugin.
+
+Package: weechat-doc
+Section: doc
+Architecture: all
+Depends: ${misc:Depends}
+Description: Fast, light and extensible chat client - documentation
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package contains the html documentation for WeeChat.
+
+Package: weechat-dev
+Section: devel
+Architecture: any
+Depends: ${misc:Depends}
+Description: Fast, light and extensible chat client - development headers
+ WeeChat (Wee Enhanced Environment for Chat) is a fast and light chat client
+ for many operating systems. Everything can be done with a keyboard.
+ .
+ This package contains the headers needed to build plugins.

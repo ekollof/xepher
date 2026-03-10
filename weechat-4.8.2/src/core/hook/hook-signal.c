@@ -1,0 +1,336 @@
+/*
+ * SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This file is part of WeeChat, the extensible chat client.
+ *
+ * WeeChat is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * WeeChat is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with WeeChat.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* WeeChat signal hook */
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <stdlib.h>
+#include <string.h>
+
+#include "../weechat.h"
+#include "../core-hook.h"
+#include "../core-hdata.h"
+#include "../core-infolist.h"
+#include "../core-log.h"
+#include "../core-string.h"
+#include "../../plugins/plugin.h"
+
+
+/*
+ * Returns description of hook.
+ *
+ * Note: result must be freed after use.
+ */
+
+char *
+hook_signal_get_description (struct t_hook *hook)
+{
+    return string_rebuild_split_string (
+        (const char **)(HOOK_SIGNAL(hook, signals)), ";", 0, -1);
+}
+
+/*
+ * Hooks a signal.
+ *
+ * Returns pointer to new hook, NULL if error.
+ */
+
+struct t_hook *
+hook_signal (struct t_weechat_plugin *plugin, const char *signal,
+             t_hook_callback_signal *callback,
+             const void *callback_pointer,
+             void *callback_data)
+{
+    struct t_hook *new_hook;
+    struct t_hook_signal *new_hook_signal;
+    int priority;
+    const char *ptr_signal;
+
+    if (!signal || !signal[0] || !callback)
+        return NULL;
+
+    new_hook = malloc (sizeof (*new_hook));
+    if (!new_hook)
+        return NULL;
+    new_hook_signal = malloc (sizeof (*new_hook_signal));
+    if (!new_hook_signal)
+    {
+        free (new_hook);
+        return NULL;
+    }
+
+    string_get_priority_and_name (signal, &priority, &ptr_signal,
+                                  HOOK_PRIORITY_DEFAULT);
+    hook_init_data (new_hook, plugin, HOOK_TYPE_SIGNAL, priority,
+                    callback_pointer, callback_data);
+
+    new_hook->hook_data = new_hook_signal;
+    new_hook_signal->callback = callback;
+    new_hook_signal->signals = string_split (
+        (ptr_signal) ? ptr_signal : signal,
+        ";",
+        NULL,
+        WEECHAT_STRING_SPLIT_STRIP_LEFT
+        | WEECHAT_STRING_SPLIT_STRIP_RIGHT
+        | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
+        0, &new_hook_signal->num_signals);
+
+    hook_add_to_list (new_hook);
+
+    return new_hook;
+}
+
+/*
+ * Checks if a hooked signal matches a signal sent: it matches if at least
+ * one of the signal masks are matching the signal sent.
+ *
+ * Returns:
+ *   1: hook matches signal sent
+ *   0: hook does not match signal sent
+ */
+
+int
+hook_signal_match (const char *signal, struct t_hook *hook)
+{
+    int i;
+
+    for (i = 0; i < HOOK_SIGNAL(hook, num_signals); i++)
+    {
+        if (string_match (signal, HOOK_SIGNAL(hook, signals)[i], 0))
+            return 1;
+    }
+
+    return 0;
+}
+
+/*
+ * Extracts flags from signal and returns flags and pointer to start of signal.
+ */
+
+void
+hook_signal_extract_flags (const char *signal, const char **ptr_signal,
+                           int *stop_on_error, int *ignore_eat)
+{
+    char *pos, *str_flags, **flags;
+    int i, num_flags;
+
+    if (!signal || !ptr_signal || !stop_on_error || !ignore_eat)
+        return;
+
+    *ptr_signal = signal;
+    *stop_on_error = 0;
+    *ignore_eat = 0;
+
+    if (strncmp (signal, "[flags:", 7) != 0)
+        return;
+
+    pos = strchr (signal + 7, ']');
+    if (!pos)
+        return;
+
+    str_flags = string_strndup (signal + 7, pos - signal - 7);
+    if (!str_flags)
+        return;
+
+    *ptr_signal = pos + 1;
+
+    flags = string_split (str_flags, ",", NULL,
+                          WEECHAT_STRING_SPLIT_STRIP_LEFT
+                          | WEECHAT_STRING_SPLIT_STRIP_RIGHT
+                          | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
+                          0, &num_flags);
+    if (flags)
+    {
+        for (i = 0; i < num_flags; i++)
+        {
+            if (string_strcmp (flags[i], "stop_on_error") == 0)
+                *stop_on_error = 1;
+            else if (string_strcmp (flags[i], "ignore_eat") == 0)
+                *ignore_eat = 1;
+        }
+    }
+
+    string_free_split (flags);
+    free (str_flags);
+}
+
+/*
+ * Sends a signal.
+ */
+
+int
+hook_signal_send (const char *signal, const char *type_data, void *signal_data)
+{
+    struct t_hook *ptr_hook, *next_hook;
+    struct t_hook_exec_cb hook_exec_cb;
+    const char *ptr_signal;
+    int rc, stop_on_error, ignore_eat;
+
+    rc = WEECHAT_RC_OK;
+
+    ptr_signal = signal;
+    stop_on_error = 0;
+    ignore_eat = 0;
+    hook_signal_extract_flags (signal, &ptr_signal,
+                               &stop_on_error, &ignore_eat);
+    if (!ptr_signal)
+        return rc;
+
+    hook_exec_start ();
+
+    ptr_hook = weechat_hooks[HOOK_TYPE_SIGNAL];
+    while (ptr_hook)
+    {
+        next_hook = ptr_hook->next_hook;
+
+        if (!ptr_hook->deleted
+            && !ptr_hook->running
+            && hook_signal_match (ptr_signal, ptr_hook))
+        {
+            hook_callback_start (ptr_hook, &hook_exec_cb);
+            rc = (HOOK_SIGNAL(ptr_hook, callback))
+                (ptr_hook->callback_pointer,
+                 ptr_hook->callback_data,
+                 ptr_signal,
+                 type_data,
+                 signal_data);
+            hook_callback_end (ptr_hook, &hook_exec_cb);
+
+            if (ignore_eat && (rc == WEECHAT_RC_OK_EAT))
+                rc = WEECHAT_RC_OK;
+
+            if ((rc == WEECHAT_RC_OK_EAT)
+                || (stop_on_error && (rc == WEECHAT_RC_ERROR)))
+            {
+                break;
+            }
+        }
+
+        ptr_hook = next_hook;
+    }
+
+    hook_exec_end ();
+
+    return rc;
+}
+
+/*
+ * Frees data in a signal hook.
+ */
+
+void
+hook_signal_free_data (struct t_hook *hook)
+{
+    if (!hook || !hook->hook_data)
+        return;
+
+    if (HOOK_SIGNAL(hook, signals))
+    {
+        string_free_split (HOOK_SIGNAL(hook, signals));
+        HOOK_SIGNAL(hook, signals) = NULL;
+    }
+    HOOK_SIGNAL(hook, num_signals) = 0;
+
+    free (hook->hook_data);
+    hook->hook_data = NULL;
+}
+
+/*
+ * Returns hdata for signal hook.
+ */
+
+struct t_hdata *
+hook_signal_hdata_hook_signal_cb (const void *pointer, void *data,
+                                  const char *hdata_name)
+{
+    struct t_hdata *hdata;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+
+    hdata = hdata_new (NULL, hdata_name, NULL, NULL, 0, 0, NULL, NULL);
+    if (hdata)
+    {
+        HDATA_VAR(struct t_hook_signal, callback, POINTER, 0, NULL, NULL);
+        HDATA_VAR(struct t_hook_signal, signals, STRING, 0, "*,num_signals", NULL);
+        HDATA_VAR(struct t_hook_signal, num_signals, INTEGER, 0, NULL, NULL);
+    }
+    return hdata;
+}
+
+/*
+ * Adds signal hook data in the infolist item.
+ *
+ * Returns:
+ *   1: OK
+ *   0: error
+ */
+
+int
+hook_signal_add_to_infolist (struct t_infolist_item *item,
+                              struct t_hook *hook)
+{
+    int i;
+    char option_name[64];
+
+    if (!item || !hook || !hook->hook_data)
+        return 0;
+
+    if (!infolist_new_var_pointer (item, "callback", HOOK_SIGNAL(hook, callback)))
+        return 0;
+    for (i = 0; i < HOOK_SIGNAL(hook, num_signals); i++)
+    {
+        snprintf (option_name, sizeof (option_name), "signal_%05d", i);
+        if (!infolist_new_var_string (item, option_name,
+                                      HOOK_SIGNAL(hook, signals)[i]))
+            return 0;
+    }
+    if (!infolist_new_var_integer (item, "num_signals",
+                                   HOOK_SIGNAL(hook, num_signals)))
+        return 0;
+
+    return 1;
+}
+
+/*
+ * Prints signal hook data in WeeChat log file (usually for crash dump).
+ */
+
+void
+hook_signal_print_log (struct t_hook *hook)
+{
+    int i;
+
+    if (!hook || !hook->hook_data)
+        return;
+
+    log_printf ("  signal data:");
+    log_printf ("    callback. . . . . . . : %p", HOOK_SIGNAL(hook, callback));
+    log_printf ("    signals:");
+    for (i = 0; i < HOOK_SIGNAL(hook, num_signals); i++)
+    {
+        log_printf ("      '%s'", HOOK_SIGNAL(hook, signals)[i]);
+    }
+}

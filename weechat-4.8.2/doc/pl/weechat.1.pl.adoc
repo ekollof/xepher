@@ -1,0 +1,67 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2024 Krzysztof Korościk <soltys1@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= weechat(1)
+:doctype: manpage
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: pl
+:man manual: WeeChat Manual
+:man source: WeeChat {revnumber}
+
+== NAZWA
+
+weechat - rozszerzalny klient rozmów
+
+== SKŁADNIA
+
+[verse]
+*weechat* [-a|--no-connect] [-d|--dir <ścieżka>] [-t|--temp-dir]  [-p|--no-plugin] [-P|--plugins <wtyczki>] [-r|--run-command <komenda>] [-s|--no-script] [--upgrade] [debug-option...] [wtyczka:opcja...]
+*weechat* [-c|--colors]
+*weechat* [-h|--help]
+*weechat* [-l|--license]
+*weechat* [-v|--version]
+
+== OPIS
+
+WeeChat (Wee Enhanced Environment for Chat) to darmowy klient rozmów, szybki
+i lekki, przeznaczony dla wielu systemów operacyjnych.
+Posiada dużo opcji konfiguracyjnych i dodatkowych wtyczek.
+
+== OPCJE
+
+include::includes/cmdline_options.pl.adoc[tag=standard]
+
+== OPCJE DEBUGUJĄCE
+
+*WARNING:* these options are for debug purposes only, *DO NOT USE IN PRODUCTION!*
+
+include::includes/cmdline_options.pl.adoc[tag=debug]
+
+== OPCJE WTYCZEK
+
+include::includes/man.pl.adoc[tag=plugin_options]
+
+== PLIKI
+
+include::includes/man.pl.adoc[tag=files]
+
+== Zobacz również
+
+*weechat-headless*(1)
+
+== AUTORZY
+
+Autorem tej strony pomocy {author}.
+
+Tłumaczenie Krzysztof Korościk.
+
+== PRAWA AUTORSKIE
+
+include::includes/man.pl.adoc[tag=copyright]
+
+== WSPARCIE / ZGŁASZANIE BŁĘDÓW
+
+W celu uzyskania pomocy, lub zgłoszenia błędu zajrzyj na: https://weechat.org/about/support/

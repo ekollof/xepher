@@ -1,0 +1,121 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2016 Krzysztof Koroscik <soltys1@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// tag::plugin_options[]
+Kompletna dokumentacja na temat opcji wtyczek dostępna jest
+w https://weechat.org/doc/[WeeChat user's guide].
+
+// TRANSLATION MISSING
+With irc plugin, you can connect to a server with an URL like:
+
+    irc[6][s]://[[nick][:hasło]@]serwer[:port][/#kanał1[,#kanał2...]]
+
+Aby wejść na kanał IRC poświęcony WeeChat pod nickiem "mójnick":
+
+    irc://mójnick@irc.libera.chat/#weechat
+
+Adresy IPv6 mogą być otoczone nawiasami kwadratowymi, aby możliwe było podanie
+numeru potyu po adresie, na przykład:
+
+    irc://mójnick@[2001:db8:0:85a3::ac1f:8001]:6668/#test
+// end::plugin_options[]
+
+// tag::files[]
+$HOME/.config/weechat/weechat.conf::
+    główny plik konfiguracyjny WeeChat
+
+$HOME/.config/weechat/plugins.conf::
+    plik konfiguracyjny wtyczek
+
+$HOME/.config/weechat/sec.conf::
+    plik konfiguracyjny z zabezpieczonymi danymi
+
+$HOME/.config/weechat/alias.conf::
+    plik konfiguracyjny wtyczki _alias_
+
+$HOME/.config/weechat/buflist.conf::
+    plik konfiguracyjny wtyczki _buflist_
+
+$HOME/.config/weechat/charset.conf::
+    plik konfiguracyjny wtyczki _charset_
+
+$HOME/.config/weechat/exec.conf::
+    plik konfiguracyjny wtyczki _exec_
+
+$HOME/.config/weechat/fifo.conf::
+    plik konfiguracyjny wtyczki _fifo_
+
+$HOME/.config/weechat/fset.conf::
+    plik konfiguracyjny wtyczki _fset_
+
+$HOME/.config/weechat/guile.conf::
+    plik konfiguracyjny wtyczki _guile_
+
+$HOME/.config/weechat/irc.conf::
+    plik konfiguracyjny wtyczki _irc_
+
+$HOME/.config/weechat/javascript.conf::
+    plik konfiguracyjny wtyczki _javascript_
+
+$HOME/.config/weechat/logger.conf::
+    plik konfiguracyjny wtyczki _logger_
+
+$HOME/.config/weechat/lua.conf::
+    plik konfiguracyjny wtyczki _lua_
+
+$HOME/.config/weechat/perl.conf::
+    plik konfiguracyjny wtyczki _perl_
+
+$HOME/.config/weechat/php.conf::
+    plik konfiguracyjny wtyczki _php_
+
+$HOME/.config/weechat/python.conf::
+    plik konfiguracyjny wtyczki _python_
+
+$HOME/.config/weechat/relay.conf::
+    plik konfiguracyjny wtyczki _relay_
+
+$HOME/.config/weechat/ruby.conf::
+    plik konfiguracyjny wtyczki _ruby_
+
+$HOME/.config/weechat/script.conf::
+    plik konfiguracyjny wtyczki _script_
+
+$HOME/.config/weechat/spell.conf::
+    plik konfiguracyjny wtyczki _spell_
+
+$HOME/.config/weechat/tcl.conf::
+    plik konfiguracyjny wtyczki _tcl_
+
+$HOME/.config/weechat/trigger.conf::
+    plik konfiguracyjny wtyczki _trigger_
+
+$HOME/.config/weechat/typing.conf::
+    plik konfiguracyjny wtyczki _typing_
+
+$HOME/.config/weechat/xfer.conf::
+    plik konfiguracyjny wtyczki _xfer_
+
+$HOME/.local/share/weechat/weechat.log::
+    plik z logami WeeChat
+// end::files[]
+
+// tag::copyright[]
+WeeChat jest tworzony przez Sébastien Helleu i społeczność (pełna lista dostępna
+jest w pliku AUTHORS.md).
+
+// REUSE-IgnoreStart
+Copyright (C) 2003-2025 {author}
+// REUSE-IgnoreEnd
+
+WeeChat is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+Pełna licencja znajduje się w pliku COPYING.
+
+Strona www: https://weechat.org/
+// end::copyright[]

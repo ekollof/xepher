@@ -1,0 +1,1216 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2012-2019 Ryuunosuke Ayanokouzi <i38w7i3@yahoo.co.jp>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= WeeChat スクリプト作成ガイド
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: ja-jp
+include::includes/attributes-ja.adoc[]
+
+このマニュアルは WeeChat チャットクライアントについて説明しており、WeeChat の一部です。
+
+// TRANSLATION MISSING
+Latest version of this document can be found on
+https://weechat.org/doc/[this page ^↗^^].
+
+[[introduction]]
+== イントロダクション
+
+WeeChat (Wee Enhanced Environment for Chat)
+はフリー、高速、軽量な多くのオペレーティングシステムで動くチャットクライアントです。
+
+このマニュアル文書は以下のスクリプト言語を利用して WeeChat
+用のスクリプトを製作する方法を解説しています:
+
+* Python
+* Perl
+* Ruby
+* Lua
+* Tcl
+* Guile (Scheme)
+* JavaScript
+* PHP
+
+[NOTE]
+この文書に含まれるほぼすべての例は Python
+で書かれていますが API は他の言語でも共通です。
+
+[[scripts_in_weechat]]
+== WeeChat のスクリプト
+
+[[weechat_architecture]]
+=== WeeChat のアーキテクチャ
+
+WeeChat はシングルスレッドで、この点はスクリプトも同じです。
+
+スクリプトのコードは以下の場合に実行されます:
+
+* スクリプトを読み込んだ時: 通常これは
+  <<register_function,register function>> 関数を呼び出すことを意味します。
+* WeeChat がフックコールバックを呼び出した時 (<<hooks,フック>>を参照してください)。
+
+スクリプトのコードが実行されると、WeeChat
+は一時停止し、実行の完了を待ってから再開します。このため、スクリプトは操作をブロックしては
+*絶対にいけません*。ネットワークを呼び出す等の場合には、`+hook_process+` 等の専用 API 関数を使ってください。
+
+[IMPORTANT]
+WeeChat がクラッシュするため、スクリプトで fork したりスレッドを作ることは *禁止*
+されています。これが必要な場合には専用 API 関数を使ってください。 +
+どうしてもバックグラウンド実行を避けられない場合には `+hook_process+`
+関数を使ってください。<<hook_process,バックグラウンドプロセスの実行>>の例および
+link:weechat_plugin_api.ja.html#_hook_process[WeeChat プラグイン API リファレンス ^↗^^]内の
+`+hook_process+` 関数の文書を参照してください。
+
+[[languages_specificities]]
+=== 言語仕様
+
+[[language_python]]
+==== Python
+
+// TRANSLATION MISSING
+[[python_module]]
+===== Module
+
+WeeChat defines a `weechat` module which must be imported with `import weechat`. +
+A Python stub for WeeChat API is available in the repository:
+https://raw.githubusercontent.com/weechat/weechat/main/src/plugins/python/weechat.pyi[weechat.pyi ^↗^^].
+
+// TRANSLATION MISSING
+[[python_functions]]
+===== Functions
+
+Functions are called with `+weechat.xxx(arg1, arg2, ...)+`.
+
+Functions `+print*+` are called `+prnt*+` in python (because `print` was a
+reserved keyword in Python 2).
+
+// TRANSLATION MISSING
+[[python_strings]]
+===== Strings received in callbacks
+
+In Python 3 and with WeeChat ≥ 2.7, the strings received in callbacks have type
+`str` if the string has valid UTF-8 data (which is the most common case),
+or `bytes` if the string is not UTF-8 valid. So the callback should take care
+about this type if some invalid UTF-8 content can be received.
+
+Some invalid UTF-8 data may be received in these cases, so the callback can
+receive a string of type `str` or `bytes` (this list is not exhaustive):
+
+[width="100%",cols="3m,3m,3m,8",options="header"]
+|===
+| API function | Arguments | Examples | Description
+
+| hook_modifier
+| irc_in_yyy
+| pass:[irc_in_privmsg] +
+  pass:[irc_in_notice]
+| A message received in IRC plugin, before it is decoded to UTF-8 (used
+  internally). +
+  +
+  It is recommended to use modifier `+irc_in2_yyy+` instead, the string received
+  is always UTF-8 valid. +
+  See function `+hook_modifier+` in the
+  link:weechat_plugin_api.ja.html#_hook_modifier[WeeChat plugin API reference ^↗^^].
+
+| hook_signal
+| xxx,irc_out_yyy +
+  xxx,irc_outtags_yyy
+| pass:[*,irc_out_privmsg] +
+  pass:[*,irc_out_notice] +
+  pass:[*,irc_outtags_privmsg] +
+  pass:[*,irc_outtags_notice]
+| A message sent by IRC plugin, after it is encoded to the `encode` charset
+  defined by the user (if different from the default `UTF-8`). +
+  +
+  It is recommended to use signal `+xxx,irc_out1_yyy+` instead, the string received
+  is always UTF-8 valid. +
+  See function `+hook_signal+` in the
+  link:weechat_plugin_api.ja.html#_hook_signal[WeeChat plugin API reference ^↗^^].
+
+| hook_process +
+  hook_process_hashtable
+| -
+| -
+| Output of the command, sent to the callback, can contain invalid UTF-8 data.
+
+|===
+
+[[language_perl]]
+==== Perl
+
+// TRANSLATION MISSING
+[[perl_functions]]
+===== Functions
+
+Functions are called with `+weechat::xxx(arg1, arg2, ...);+`.
+
+[[language_ruby]]
+==== Ruby
+
+// TRANSLATION MISSING
+[[ruby_init]]
+===== Initialization
+
+You have to define _weechat_init_ and call _register_ inside.
+
+// TRANSLATION MISSING
+[[ruby_functions]]
+===== Functions
+
+Functions are called with `+Weechat.xxx(arg1, arg2, ...)+`.
+
+Due to a limitation of Ruby (15 arguments max by function), the function
+`+Weechat.config_new_option+` receives the callbacks in an array of 6 strings
+(3 callbacks + 3 data strings), so a call to this function looks like:
+
+[source,ruby]
+----
+Weechat.config_new_option(config, section, "name", "string", "description of option", "", 0, 0,
+                          "value", "value", 0, ["check_cb", "", "change_cb", "", "delete_cb", ""])
+----
+
+// TRANSLATION MISSING
+And the function `+Weechat.bar_new+` receives the colors in an array of 4 strings
+(color_fg, color_delim, color_bg, color_bg_inactive), so a call to this function
+looks like:
+
+[source,ruby]
+----
+Weechat.bar_new("name", "off", "0", "window", "", "left", "vertical", "vertical", "0", "0",
+                ["default", "default", "default", "default"], "0", "items")
+----
+
+[[language_lua]]
+==== Lua
+
+// TRANSLATION MISSING
+[[lua_functions]]
+===== Functions
+
+Functions are called with `+weechat.xxx(arg1, arg2, ...)+`.
+
+[[language_tcl]]
+==== Tcl
+
+// TRANSLATION MISSING
+[[tcl_functions]]
+===== Functions
+
+Functions are called with `+weechat::xxx arg1 arg2 ...+`.
+
+// TRANSLATION MISSING
+[[tcl_null]]
+===== Null values
+
+Since Tcl only has string types, there's no null type to pass as an argument
+when a function accepts null values or to get as an argument in a callback
+function. To overcome this the WeeChat API defines the constant
+`$::weechat::WEECHAT_NULL` which acts as a null value. This constant is defined
+as `\uFFFF\uFFFF\uFFFFWEECHAT_NULL\uFFFF\uFFFF\uFFFF`, so it's very unlikely to
+appear unintentionally.
+
+You can pass this constant when a function accepts null as an argument and you
+will get it as the value of an argument in a callback function if the argument
+value is null. To see which functions accept null values and passes null values
+to callbacks, look at the Python prototypes in the
+link:weechat_plugin_api.en.html[WeeChat plugin API reference ^↗^^].
+
+[[language_guile]]
+==== Guile (Scheme)
+
+// TRANSLATION MISSING
+[[guile_functions]]
+===== Functions
+
+Functions are called with `+(weechat:xxx arg1 arg2 ...)+`.
+
+The following functions take one list of arguments (instead of many arguments
+for other functions), because number of arguments exceed number of allowed
+arguments in Guile:
+
+* config_new_section
+* config_new_option
+* bar_new
+
+[[language_javascript]]
+==== JavaScript
+
+// TRANSLATION MISSING
+[[javascript_functions]]
+===== Functions
+
+Functions are called with `+weechat.xxx(arg1, arg2, ...);+`.
+
+[[language_php]]
+==== PHP
+
+// TRANSLATION MISSING
+[[php_functions]]
+===== Functions
+
+Functions are called with `+weechat_xxx(arg1, arg2, ...);+`.
+
+[[register_function]]
+=== 関数の登録
+
+全ての WeeChat スクリプトは WeeChat
+に自分自身を「登録」し、登録はスクリプトの最初で行われなければいけません。
+
+プロトタイプ (Python):
+
+[source,python]
+----
+def register(name: str, author: str, version: str, license: str, description: str, shutdown_function: str, charset: str) -> int: ...
+----
+
+引数:
+
+* _name_: 文字列型、スクリプトの内部名
+* _author_: 文字列型、作者名
+* _version_: 文字列型、スクリプトのバージョン
+* _license_: 文字列型、スクリプトのライセンス
+* _description_: 文字列型、スクリプトの短い説明
+* _shutdown_function_: 文字列型、スクリプトがアンロードされた際に呼び出される関数の名前
+  (空文字列でも可)
+* _charset_: 文字列型、スクリプトの文字コード (UTF-8
+  はデフォルトの文字コードなので、スクリプトが UTF-8 で書かれている場合、空文字列を指定してください)
+
+各言語で書かれたスクリプトの例:
+
+* Python:
+
+[source,python]
+----
+import weechat
+
+weechat.register("test_python", "FlashCode", "1.0", "GPL3", "Test script", "", "")
+weechat.prnt("", "Hello, from python script!")
+----
+
+* Perl:
+
+[source,perl]
+----
+weechat::register("test_perl", "FlashCode", "1.0", "GPL3", "Test script", "", "");
+weechat::print("", "Hello, from perl script!");
+----
+
+* Ruby:
+
+[source,ruby]
+----
+def weechat_init
+  Weechat.register("test_ruby", "FlashCode", "1.0", "GPL3", "Test script", "", "")
+  Weechat.print("", "Hello, from ruby script!")
+  return Weechat::WEECHAT_RC_OK
+end
+----
+
+* Lua:
+
+[source,lua]
+----
+weechat.register("test_lua", "FlashCode", "1.0", "GPL3", "Test script", "", "")
+weechat.print("", "Hello, from lua script!")
+----
+
+* Tcl:
+
+[source,tcl]
+----
+weechat::register "test_tcl" "FlashCode" "1.0" "GPL3" "Test script" "" ""
+weechat::print "" "Hello, from tcl script!"
+----
+
+* Guile (Scheme):
+
+[source,lisp]
+----
+(weechat:register "test_scheme" "FlashCode" "1.0" "GPL3" "Test script" "" "")
+(weechat:print "" "Hello, from scheme script!")
+----
+
+* JavaScript:
+
+[source,javascript]
+----
+weechat.register("test_js", "FlashCode", "1.0", "GPL3", "Test script", "", "");
+weechat.print("", "Hello, from javascript script!");
+----
+
+* PHP:
+
+[source,php]
+----
+weechat_register('test_php', 'FlashCode', '1.0', 'GPL3', 'Test script', '', '');
+weechat_print('', 'Hello, from PHP script!');
+----
+
+[[load_script]]
+=== スクリプトのロード
+
+スクリプトをロードするには "script" プラグインを使うことを推奨します。例:
+
+----
+/script load script.py
+/script load script.pl
+/script load script.rb
+/script load script.lua
+/script load script.tcl
+/script load script.scm
+/script load script.js
+/script load script.php
+----
+
+プログラミング言語ごとの固有コマンドを利用することもできます:
+
+----
+/python load script.py
+/perl load script.pl
+/ruby load script.rb
+/lua load script.lua
+/tcl load script.tcl
+/guile load script.scm
+/javascript load script.js
+/php load script.php
+----
+
+WeeChat の開始時にスクリプトを自動ロードするには
+_language/autoload_ ディレクトリ内にリンクを作ってください。
+
+例えば Python の場合:
+
+[source,shell]
+----
+cd ~/.local/share/weechat/python/autoload
+ln -s ../script.py
+----
+
+[NOTE]
+`/script install` コマンドでスクリプトをインストールした場合、_autoload_
+ディレクトリ内にリンクが自動的に作成されます。
+
+[[differences_with_c_api]]
+== C API との違い
+
+スクリプト API は C 言語プラグイン API とほぼ同じです。API
+に含まれる各関数の詳細 (プロトタイプ、引数、戻り値、例) については
+link:weechat_plugin_api.ja.html[WeeChat プラグイン API リファレンス ^↗^^]を参照してください。
+
+_プラグイン_ と _スクリプト_ の違いを理解することは重要です:
+_プラグイン_ とはコンパイル済みバイナリファイルで `/plugin` コマンドを使ってロードします、これに対して
+_スクリプト_ とはテキストファイルで例えば _python_ プラグインであれば `/python`
+コマンドを使ってロードします。
+
+例えば _test.py_ スクリプトが WeeChat API 関数を呼び出す場合、以下の順に呼び出されます:
+
+// PLEASE DO NOT TRANSLATE
+....
+               ┌──────────────────────┐        ╔══════════════════╗
+               │     python plugin    │        ║  WeeChat "core"  ║
+               ├────────────┬─────────┤        ╟─────────┐        ║
+test.py ─────► │ script API │  C API  │ ─────► ║  C API  │        ║
+               └────────────┴─────────┘        ╚═════════╧════════╝
+....
+
+WeeChat が _test.py_
+スクリプトで定義されたコールバックを呼び出す場合、順番は逆になります:
+
+// PLEASE DO NOT TRANSLATE
+....
+╔══════════════════╗        ┌──────────────────────┐
+║  WeeChat "core"  ║        │     python plugin    │
+║        ┌─────────╢        ├─────────┬────────────┤
+║        │  C API  ║ ─────► │  C API  │ script API │ ─────► test.py
+╚════════╧═════════╝        └─────────┴────────────┘
+....
+
+[[pointers]]
+=== ポインタ
+
+ご存知かもしれませんが、スクリプトには本当の意味での「ポインタ」はありません。このため
+API 関数がポインタを返す場合、スクリプトでは文字列に変換されます。
+
+例えば、関数がポインタ 0x1234ab56 を返した場合、スクリプトは
+"0x1234ab56" という文字列を受け取ることになります。
+
+API 関数の引数にポインタを与える場合、スクリプトではポインタを文字列型として渡さなければいけません。C
+言語 API 関数を呼び出す前に C
+言語プラグインがこれを本来のポインタ型に変換します。
+
+空文字列や "0x0" を使うことも許されています。これらは C 言語で言うところの NULL
+と解釈されます。例えば、データをコアバッファ (WeeChat メインバッファ) に表示する場合、以下のようになります:
+
+[source,python]
+----
+weechat.prnt("", "hi!")
+----
+
+[WARNING]
+WeeChat の多くのスクリプト API
+関数は計算量を減らすために、ポインタの値が正当なものか否かの確認を行いません。ポインタの正当性を確認することはプログラマが行わなければいけません。不正なポインタを利用した場合、細かなクラッシュレポートを目にすることになるでしょう
+;)
+
+[[callbacks]]
+=== コールバック
+
+ほとんど全ての WeeChat コールバックは WEECHAT_RC_OK または WEECHAT_RC_ERROR
+を返さなければいけません (modifier コールバックは例外で、これは文字列を返します)。
+
+// TRANSLATION MISSING
+C callbacks are using "callback_pointer" and "callback_data" arguments, which
+are pointers. In script API, there is only "callback_data" (or "data"), and it
+is a string instead of a pointer.
+
+各プログラミング言語でコールバックを利用する例:
+
+* Python:
+
+[source,python]
+----
+def timer_cb(data, remaining_calls):
+    weechat.prnt("", "timer! data=%s" % data)
+    return weechat.WEECHAT_RC_OK
+
+weechat.hook_timer(1000, 0, 1, "timer_cb", "test")
+----
+
+* Perl:
+
+[source,perl]
+----
+sub timer_cb {
+    my ($data, $remaining_calls) = @_;
+    weechat::print("", "timer! data=$data");
+    return weechat::WEECHAT_RC_OK;
+}
+
+weechat::hook_timer(1000, 0, 1, "timer_cb", "test");
+----
+
+* Ruby:
+
+[source,ruby]
+----
+def timer_cb(data, remaining_calls)
+  Weechat.print("", "timer! data=#{data}");
+  return Weechat::WEECHAT_RC_OK
+end
+
+Weechat.hook_timer(1000, 0, 1, "timer_cb", "test");
+----
+
+* Lua:
+
+[source,lua]
+----
+function timer_cb(data, remaining_calls)
+    weechat.print("", "timer! data="..data)
+    return weechat.WEECHAT_RC_OK
+end
+
+weechat.hook_timer(1000, 0, 1, "timer_cb", "test")
+----
+
+* Tcl:
+
+[source,tcl]
+----
+proc timer_cb { data remaining_calls } {
+    weechat::print {} "timer! data=$data"
+    return $::weechat::WEECHAT_RC_OK
+}
+
+weechat::hook_timer 1000 0 1 timer_cb test
+----
+
+* Guile (Scheme):
+
+[source,lisp]
+----
+(define (timer_cb data remaining_calls)
+  (weechat:print "" (string-append "timer! data=" data))
+  weechat:WEECHAT_RC_OK
+)
+
+(weechat:hook_timer 1000 0 1 "timer_cb" "test")
+----
+
+* JavaScript:
+
+[source,javascript]
+----
+function timer_cb(data, remaining_calls) {
+    weechat.print("", "timer! data=" + data);
+    return weechat.WEECHAT_RC_OK;
+}
+
+weechat.hook_timer(1000, 0, 1, "timer_cb", "test");
+----
+
+* PHP:
+
+[source,php]
+----
+$timer_cb = function ($data, $remaining_calls) {
+    weechat_print('', 'timer! data=' . $data);
+    return WEECHAT_RC_OK;
+};
+
+weechat_hook_timer(1000, 0, 1, $timer_cb, 'test');
+----
+
+[[script_api]]
+== スクリプト API
+
+API に含まれる関数の詳しい情報は
+link:weechat_plugin_api.ja.html[WeeChat プラグイン API リファレンス ^↗^^]を参照してください。
+
+[[script_api_functions]]
+=== 関数
+
+スクリプト API に含まれる関数のリスト:
+
+include::{autogendir}/autogen_scripting_functions.ja.adoc[tag=functions]
+
+[[script_api_constants]]
+=== 定数
+
+スクリプト API に含まれる定数のリスト:
+
+include::{autogendir}/autogen_scripting_constants.ja.adoc[tag=constants]
+
+[[common_tasks]]
+== 良くあるタスク
+
+この章ではいくつかの良くあるタスクを例を交えて紹介します。ここでは
+API の一部の機能を使っています。完全なリファレンスは
+link:weechat_plugin_api.ja.html[WeeChat プラグイン API リファレンス ^↗^^]を参照してください。
+
+[[buffers]]
+=== バッファ
+
+[[buffers_display_messages]]
+==== メッセージの表示
+
+WeeChat コアバッファに対して操作する場合、空文字列を使うことが多いです。他のバッファに対して操作する場合には、ポインタ
+(文字列型、<<pointers,ポインタ>> を参照) を与える必要があります。
+
+例:
+
+[source,python]
+----
+# "hello" をコアバッファに表示
+weechat.prnt("", "hello")
+
+# "hello" をコアバッファに表示するが、ログファイルには書き込まない
+# (WeeChat バージョン 0.3.3 以上で利用可)
+weechat.prnt_date_tags("", 0, "no_log", "hello")
+
+# プレフィックス "==>" とメッセージ "hello" を現在のバッファに表示
+# (プレフックストメッセージはタブで区切ってください)
+weechat.prnt(weechat.current_buffer(), "==>\thello")
+
+# コアバッファにエラーメッセージを表示 (エラープレフィックスを利用)
+weechat.prnt("", "%swrong arguments" % weechat.prefix("error"))
+
+# コアバッファに色付きメッセージを表示
+weechat.prnt("", "text %syellow on blue" % weechat.color("yellow,blue"))
+
+# バッファを検索してメッセージを表示
+# (バッファの完全な名前は plugin.name のような形です、例えば: "irc.libera.#weechat")
+buffer = weechat.buffer_search("irc", "libera.#weechat")
+weechat.prnt(buffer, "message on #weechat channel")
+
+# ある IRC バッファを見つける他の方法 (推奨)
+# (サーバとチャンネルはコンマで区切ってください。)
+buffer = weechat.info_get("irc_buffer", "libera,#weechat")
+weechat.prnt(buffer, "message on #weechat channel")
+----
+
+[NOTE]
+Print 関数は Python では `prnt`、その他の言語では `print` と呼ばれます。
+
+[[buffers_send_text]]
+==== バッファにテキストを送信
+
+テキストやコマンドをバッファに送信できます。これはテキストやコマンドをタイプして
+[Enter] を押すことに対応します。
+
+例:
+
+[source,python]
+----
+# 現在のバッファでコマンド "/help" を実行 (結果は core バッファに出力されます)
+weechat.command("", "/help")
+
+# テキスト "hello" を #weechat IRC チャンネルに送信 (このチャンネルにいるユーザにはメッセージが見えます。)
+buffer = weechat.info_get("irc_buffer", "libera,#weechat")
+weechat.command(buffer, "hello")
+----
+
+[[buffers_new]]
+==== 新規バッファの作成
+
+スクリプトを使って新しいバッファを作成し、このバッファにメッセージを表示させることができます。
+
+2 つのコールバックを定義できます (任意): データの入力時に呼び出されるもの
+(バッファでテキストを入力して [Enter] を押した時) と、バッファが閉じられたときに呼び出されるもの
+(例えば `/buffer close` した時等) です。
+
+例:
+
+[source,python]
+----
+# データの入力時に呼び出されるコールバック
+def buffer_input_cb(data, buffer, input_data):
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+# バッファが閉じられた時に呼び出されるコールバック
+def buffer_close_cb(data, buffer):
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+# バッファの作成
+buffer = weechat.buffer_new("mybuffer", "buffer_input_cb", "", "buffer_close_cb", "")
+
+# タイトルの設定
+weechat.buffer_set(buffer, "title", "This is title for my buffer.")
+
+# ローカル変数 "no_log" に "1" を設定することでログ保存を無効化
+weechat.buffer_set(buffer, "localvar_set_no_log", "1")
+----
+
+[[buffers_properties]]
+==== バッファプロパティ
+
+文字列、整数、ポインタ型のバッファプロパティを読むことができます。
+
+例:
+
+[source,python]
+----
+buffer = weechat.current_buffer()
+
+number = weechat.buffer_get_integer(buffer, "number")
+name = weechat.buffer_get_string(buffer, "name")
+short_name = weechat.buffer_get_string(buffer, "short_name")
+----
+
+バッファに対するローカル変数を追加、ロード、削除することができます:
+
+[source,python]
+----
+# ローカル変数の追加
+weechat.buffer_set(buffer, "localvar_set_myvar", "my_value")
+
+# ローカル変数のロード
+myvar = weechat.buffer_get_string(buffer, "localvar_myvar")
+
+# ローカル変数の削除
+weechat.buffer_set(buffer, "localvar_del_myvar", "")
+----
+
+バッファに対するローカル変数を見るには、WeeChat で以下のコマンドを実行してください:
+
+----
+/buffer listvar
+----
+
+[[hooks]]
+=== フック
+
+[[hook_command]]
+==== 新しいコマンドの追加
+
+カスタムコマンドを追加するには `+hook_command+`
+を使ってください。追加したコマンドに対してカスタム補完テンプレートを定義できます。
+
+例:
+
+[source,python]
+----
+def my_command_cb(data, buffer, args):
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+hook = weechat.hook_command("myfilter", "description of myfilter",
+    "[list] | [enable|disable|toggle [name]] | [add name plugin.buffer tags regex] | [del name|-all]",
+    "description of arguments...",
+    "list"
+    " || enable %(filters_names)"
+    " || disable %(filters_names)"
+    " || toggle %(filters_names)"
+    " || add %(filters_names) %(buffers_plugins_names)|*"
+    " || del %(filters_names)|-all",
+    "my_command_cb", "")
+----
+
+上で定義したコマンドを WeeChat で以下のように使うことができます:
+
+----
+/help myfilter
+
+/myfilter arguments...
+----
+
+[[hook_timer]]
+==== タイマーの追加
+
+タイマーを追加するには `+hook_timer+` を使ってください。
+
+例:
+
+[source,python]
+----
+def timer_cb(data, remaining_calls):
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+# 1 分毎に (秒が 00 になった時に) 呼び出されるタイマー
+weechat.hook_timer(60 * 1000, 60, 0, "timer_cb", "")
+----
+
+[[hook_process]]
+==== バックグラウンドプロセスの実行
+
+バックグラウンドプロセスを実行するには `+hook_process+`
+を使います。コールバックはデータの準備が整った時点で呼び出されます。複数回呼び出されることもあります。
+
+コールバックの最後の呼び出しでは _return_code_ が 0
+か正の値に設定されています。これはコマンドのリターンコードになります。
+
+例:
+
+[source,python]
+----
+def my_process_cb(data, command, return_code, out, err):
+    if return_code == weechat.WEECHAT_HOOK_PROCESS_ERROR:
+        weechat.prnt("", "Error with command '%s'" % command)
+        return weechat.WEECHAT_RC_OK
+    if return_code >= 0:
+        weechat.prnt("", "return_code = %d" % return_code)
+    if out:
+        weechat.prnt("", "stdout: %s" % out)
+    if err:
+        weechat.prnt("", "stderr: %s" % err)
+    return weechat.WEECHAT_RC_OK
+
+weechat.hook_process("/bin/ls -l /etc", 10 * 1000, "my_process_cb", "")
+----
+
+// TRANSLATION MISSING
+You can also call directly a script function that does something blocking,
+instead of an external command:
+
+[source,python]
+----
+def get_status(data):
+    # do something blocking...
+    # ...
+    return "this is the result"
+
+def my_process_cb(data, command, return_code, out, err):
+    if return_code == weechat.WEECHAT_HOOK_PROCESS_ERROR:
+        weechat.prnt("", "Error with command '%s'" % command)
+        return weechat.WEECHAT_RC_OK
+    if return_code >= 0:
+        weechat.prnt("", "return_code = %d" % return_code)
+    if out:
+        weechat.prnt("", "stdout: %s" % out)
+    if err:
+        weechat.prnt("", "stderr: %s" % err)
+    return weechat.WEECHAT_RC_OK
+
+hook = weechat.hook_process("func:get_status", 5000, "my_process_cb", "")
+----
+
+[[url_transfer]]
+==== URL 転送
+
+_WeeChat バージョン 0.3.7 以上で利用可。_
+
+URL をダウンロードする (または URL にポストする) には、関数 `+hook_process+` または URL
+転送にオプションが必要な場合は `+hook_process_hashtable+` を使わなければいけません。
+
+オプション無しの URL 転送の例: HTML ページの内容はコールバックの
+"out" 引数 (プロセスの標準出力) を通して渡されます。
+
+// TRANSLATION MISSING
+[source,python]
+----
+# Display latest stable version of WeeChat.
+weechat_latest_version = ""
+
+def weechat_process_cb(data, command, return_code, out, err):
+    global weechat_latest_version
+    if out:
+        weechat_latest_version += out
+    if return_code >= 0:
+        weechat.prnt("", "Latest WeeChat version: %s" % weechat_latest_version)
+    return weechat.WEECHAT_RC_OK
+
+weechat.hook_process("url:https://weechat.org/dev/info/stable/",
+                     30 * 1000, "weechat_process_cb", "")
+----
+
+[TIP]
+// TRANSLATION MISSING
+All infos available about WeeChat are on
+https://weechat.org/dev/info/[this page ^↗^^].
+
+オプション有りの URL 転送の例: 最新の WeeChat 開発パッケージをファイル
+_/tmp/weechat-devel.tar.gz_ にダウンロード:
+
+[source,python]
+----
+def my_process_cb(data, command, return_code, out, err):
+    if return_code >= 0:
+        weechat.prnt("", "End of transfer (return code = %d)" % return_code)
+    return weechat.WEECHAT_RC_OK
+
+weechat.hook_process_hashtable("url:https://weechat.org/files/src/weechat-devel.tar.gz",
+                               {"file_out": "/tmp/weechat-devel.tar.gz"},
+                               30 * 1000, "my_process_cb", "")
+----
+
+URL 転送に関するより詳しい情報と利用可能なオプションは
+link:weechat_plugin_api.ja.html#_hook_process[WeeChat プラグイン API リファレンス ^↗^^]の
+`+hook_process+` と `+hook_process_hashtable+` を参照してください。
+
+[[config_options]]
+=== 設定 / オプション
+
+[[config_options_set_script]]
+==== スクリプトのオプションを設定
+
+オプションが設定されているかどうかを確認するには `+config_is_set_plugin+`
+関数、オプションを設定するには `+config_set_plugin+` 関数を使います。
+
+例:
+
+[source,python]
+----
+script_options = {
+    "option1": "value1",
+    "option2": "value2",
+    "option3": "value3",
+}
+for option, default_value in script_options.items():
+    if not weechat.config_is_set_plugin(option):
+        weechat.config_set_plugin(option, default_value)
+----
+
+[[config_options_detect_changes]]
+==== 変更の検出
+
+ユーザがスクリプトオプションを変更したことを検出するには `+hook_config+` を使わなければいけません。
+
+例:
+
+[source,python]
+----
+SCRIPT_NAME = "myscript"
+
+# ...
+
+def config_cb(data, option, value):
+    """スクリプトオプションが変更されたときに呼び出されるコールバック"""
+    # 例えば、スクリプト変数に対する全てのスクリプトオプションを読み込む等...
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+# ...
+
+weechat.hook_config("plugins.var.python." + SCRIPT_NAME + ".*", "config_cb", "")
+# 他のスクリプト言語の場合は "python" を適当なもの (perl/ruby/lua/tcl/guile/javascript) に変更してください
+----
+
+[[config_options_weechat]]
+==== WeeChat オプションのロード
+
+`+config_get+` 関数はオプションへのポインタを返します。オプションの型に従って
+`+config_string+`、`+config_boolean+`、`+config_integer+`、`+config_color+`
+を呼び出さなければいけません。
+
+[source,python]
+----
+# 文字列型の場合
+weechat.prnt("", "value of option weechat.look.item_time_format is: %s"
+                 % (weechat.config_string(weechat.config_get("weechat.look.item_time_format"))))
+
+# ブール型の場合
+weechat.prnt("", "value of option weechat.look.day_change is: %d"
+                 % (weechat.config_boolean(weechat.config_get("weechat.look.day_change"))))
+
+# 整数型の場合
+weechat.prnt("", "value of option weechat.look.scroll_page_percent is: %d"
+                 % (weechat.config_integer(weechat.config_get("weechat.look.scroll_page_percent"))))
+
+# 色型の場合
+weechat.prnt("", "value of option weechat.color.chat_delimiters is: %s"
+                 % (weechat.config_color(weechat.config_get("weechat.color.chat_delimiters"))))
+----
+
+[[irc]]
+=== IRC
+
+[[irc_catch_messages]]
+==== メッセージのキャッチ
+
+// TRANSLATION MISSING
+IRC plugin sends four signals for a message received (`xxx` is IRC internal
+server name, `yyy` is IRC command name like JOIN, QUIT, PRIVMSG, 301, ..):
+
+// TRANSLATION MISSING
+xxx,irc_in_yyy::
+    signal sent before processing message, only if message is *not* ignored
+
+// TRANSLATION MISSING
+xxx,irc_in2_yyy::
+    signal sent after processing message, only if message is *not* ignored
+
+// TRANSLATION MISSING
+xxx,irc_raw_in_yyy::
+    signal sent before processing message, even if message is ignored
+
+// TRANSLATION MISSING
+xxx,irc_raw_in2_yyy::
+    signal sent after processing message, even if message is ignored
+
+[source,python]
+----
+def join_cb(data, signal, signal_data):
+    # シグナル、例えば: "libera,irc_in2_join"
+    # signal_data は IRC メッセージ、例えば: ":nick!user@host JOIN :#channel"
+    server = signal.split(",")[0]
+    msg = weechat.info_get_hashtable("irc_message_parse", {"message": signal_data})
+    buffer = weechat.info_get("irc_buffer", "%s,%s" % (server, msg["channel"]))
+    if buffer:
+        weechat.prnt(buffer, "%s (%s) has joined this channel!" % (msg["nick"], msg["host"]))
+    return weechat.WEECHAT_RC_OK
+
+# 全ての IRC サーバに対する JOIN メッセージをキャッチするにはサーバの指定に
+# "*" を使うと便利です。
+weechat.hook_signal("*,irc_in2_join", "join_cb", "")
+----
+
+[[irc_modify_messages]]
+==== メッセージの修正
+
+// TRANSLATION MISSING
+IRC plugin sends two "modifiers" for a message received ("xxx" is IRC command),
+so that you can modify it:
+
+// TRANSLATION MISSING
+irc_in_xxx::
+    modifier sent before charset decoding: use with caution, the string may
+    contain invalid UTF-8 data; use only for raw operations on a message
+
+// TRANSLATION MISSING
+irc_in2_xxx::
+    modifier sent after charset decoding, so the string received is always
+    UTF-8 valid (*recommended*)
+
+[source,python]
+----
+def modifier_cb(data, modifier, modifier_data, string):
+    # 全てのメッセージにサーバ名を追加する
+    # (これは役に立ちませんが、例として!)
+    return "%s %s" % (string, modifier_data)
+
+weechat.hook_modifier("irc_in2_privmsg", "modifier_cb", "")
+----
+
+[WARNING]
+不正なメッセージは WeeChat をクラッシュさせ、深刻な問題を引き起こします!
+
+[[irc_message_parse]]
+==== メッセージの構文解析
+
+_WeeChat バージョン 0.3.4 以上で利用可。_
+
+"irc_message_parse" と呼ばれる info_hashtable を使って IRC メッセージを構文解析できます。
+
+結果は以下のキーを持つハッシュテーブルです
+(例の値は以下のメッセージから作られました:
+`+@time=2015-06-27T16:40:35.000Z :nick!user@host PRIVMSG #weechat :hello!+`):
+
+[width="100%",cols="3,^2,10,7",options="header"]
+|===
+// TRANSLATION MISSING
+| キー | Since WeeChat ^(1)^ | 説明 | 例
+
+| tags | 0.4.0
+| メッセージに付けられたタグ (空にすることも可)
+| `+time=2015-06-27T16:40:35.000Z+`
+
+// TRANSLATION MISSING
+| tag_xxx | 3.3
+| Unescaped value of tag "xxx" (one key per tag).
+| `+2015-06-27T16:40:35.000Z+`
+
+| message_without_tags | 0.4.0
+| タグを除いたメッセージ (タグが付けられていなければメッセージと同じ)
+| `+:nick!user@host PRIVMSG #weechat :hello!+`
+
+| nick | 0.3.4
+| 発信者のニックネーム
+| `+nick+`
+
+// TRANSLATION MISSING
+| user | 2.7
+| The origin user.
+| `+user+`
+
+| host | 0.3.4
+| 発信者のホスト (ニックネームを含む)
+| `+nick!user@host+`
+
+| command | 0.3.4
+| コマンド (_PRIVMSG_、_NOTICE_、...)
+| `+PRIVMSG+`
+
+| channel | 0.3.4
+| 送信先チャンネル
+| `+#weechat+`
+
+| arguments | 0.3.4
+| コマンド引数 (チャンネルを含む)
+| `+#weechat :hello!+`
+
+| text | 1.3
+| テキスト (ユーザメッセージなど)
+| `+hello!+`
+
+// TRANSLATION MISSING
+| paramN | 3.4
+| Command parameter (from 1 to N).
+| `+#weechat+`
+
+// TRANSLATION MISSING
+| num_params | 3.4
+| Number of command parameters.
+| `+2+`
+
+| pos_command | 1.3
+| メッセージ内における _command_ のインデックス (_command_ が見つからない場合 "-1")
+| `+47+`
+
+| pos_arguments | 1.3
+| メッセージ内における _arguments_ のインデックス (_arguments_ が見つからない場合 "-1")
+| `+55+`
+
+| pos_channel | 1.3
+| メッセージ内における _channel_ のインデックス (_channel_ が見つからない場合 "-1")
+| `+55+`
+
+| pos_text | 1.3
+| メッセージ内における _text_ のインデックス (_text_ が見つからない場合 "-1")
+| `+65+`
+|===
+
+// TRANSLATION MISSING
+[NOTE]
+^(1)^ The key has been introduced in this WeeChat version.
+
+[source,python]
+----
+dict = weechat.info_get_hashtable(
+    "irc_message_parse",
+    {"message": "@time=2015-06-27T16:40:35.000Z;tag2=value\\sspace :nick!user@host PRIVMSG #weechat :hello!"})
+
+# dict == {
+#     "tags": "time=2015-06-27T16:40:35.000Z;tag2=value\\sspace",
+#     "tag_time": "2015-06-27T16:40:35.000Z",
+#     "tag_tag2": "value space",
+#     "message_without_tags": ":nick!user@host PRIVMSG #weechat :hello!",
+#     "nick": "nick",
+#     "user": "user",
+#     "host": "nick!user@host",
+#     "command": "PRIVMSG",
+#     "channel": "#weechat",
+#     "arguments": "#weechat :hello!",
+#     "text": "hello!",
+#     "param1": "#weechat",
+#     "param2": "hello!",
+#     "num_params": "2",
+#     "pos_command": "65",
+#     "pos_arguments": "73",
+#     "pos_channel": "73",
+#     "pos_text": "83",
+# }
+----
+
+[[infos]]
+=== 情報
+
+[[infos_weechat_version]]
+==== WeeChat のバージョン
+
+バージョンを確認する最良の方法は "version_number"
+を参照し、16 進数のバージョン番号と整数値比較することです。
+
+例:
+
+[source,python]
+----
+version = weechat.info_get("version_number", "") or 0
+if int(version) >= 0x00030200:
+    weechat.prnt("", "This is WeeChat 0.3.2 or newer")
+else:
+    weechat.prnt("", "This is WeeChat 0.3.1 or older")
+----
+
+[NOTE]
+バージョン 0.3.1.1 以下の場合 _info_get("version_number")_
+は空文字列を返すため、値が空でないことを確認しなければいけません。
+
+文字列でバージョンを使うには:
+
+[source,python]
+----
+# 例えば "Version 0.3.2" のような出力が得られます。
+weechat.prnt("", "Version %s" % weechat.info_get("version", ""))
+----
+
+[[infos_other]]
+==== その他の情報
+
+// TRANSLATION MISSING
+[source,python]
+----
+# WeeChat config directory, for example: "/home/user/.config/weechat"
+weechat.prnt("", "WeeChat config dir: %s" % weechat.info_get("weechat_config_dir", ""))
+
+# キーボードの不使用時間
+weechat.prnt("", "Inactivity since %s seconds" % weechat.info_get("inactivity", ""))
+----
+
+[[infolists]]
+=== インフォリスト
+
+[[infolists_read]]
+==== インフォリストのロード
+
+WeeChat や他のプラグインによって作られたインフォリストを読み込むことができます。
+
+例:
+
+[source,python]
+----
+# バッファのリストを得るために "buffer" インフォリストを読み込む
+infolist = weechat.infolist_get("buffer", "", "")
+if infolist:
+    while weechat.infolist_next(infolist):
+        name = weechat.infolist_string(infolist, "name")
+        weechat.prnt("", "buffer: %s" % name)
+    weechat.infolist_free(infolist)
+----
+
+[IMPORTANT]
+WeeChat は自動的にメモリを解放しません、インフォリストによって使われたメモリを解放するには、`+infolist_free+`
+を呼び出すことを忘れないでください。

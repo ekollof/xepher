@@ -1,0 +1,69 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= weechat-headless(1)
+:doctype: manpage
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: fr
+:man manual: Manuel WeeChat
+:man source: WeeChat {revnumber}
+
+== NOM
+
+weechat-headless - le client de discussion extensible (version sans interface)
+
+== SYNOPSIS
+
+[verse]
+*weechat-headless* [-a|--no-connect] [--daemon] [--stdout] [-d|--dir <path>] [-t|--temp-dir] [-p|--no-plugin] [-P|--plugins <extensions>] [-r|--run-command <command>] [-s|--no-script] [--upgrade] [option-debug...] [plugin:option...]
+*weechat-headless* [-c|--colors]
+*weechat-headless* [-h|--help]
+*weechat-headless* [-l|--license]
+*weechat-headless* [-v|--version]
+
+== DESCRIPTION
+
+WeeChat (Wee Enhanced Environment for Chat) est un client de discussion libre,
+rapide et léger, conçu pour différents systèmes d'exploitation.
+Il est hautement paramétrable et extensible avec des scripts.
+
+La commande *weechat-headless* lance WeeChat en mode « headless » (sans interface).
+Elle peut être utilisée pour des tests ou lancer WeeChat en daemon
+avec l'option "--daemon".
+
+== OPTIONS
+
+include::includes/cmdline_options.fr.adoc[tag=standard]
+
+== OPTIONS DE DEBUG
+
+*ATTENTION :* ces options sont pour du debug seulement,
+*NE PAS UTILISER EN PRODUCTION !*
+
+include::includes/cmdline_options.fr.adoc[tag=debug]
+
+== OPTIONS D'EXTENSION
+
+include::includes/man.fr.adoc[tag=plugin_options]
+
+== FICHIERS
+
+include::includes/man.fr.adoc[tag=files]
+
+== VOIR AUSSI
+
+*weechat*(1)
+
+== AUTEURS
+
+Cette page de manuel a été écrite par {author}.
+
+== COPYRIGHT
+
+include::includes/man.fr.adoc[tag=copyright]
+
+== SUPPORT / SIGNALER DES BUGS
+
+Pour de l'aide ou signaler un bug : https://weechat.org/about/support/

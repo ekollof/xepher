@@ -1,0 +1,422 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2006 Stalwart <stlwrt@gmail.com>
+// SPDX-FileCopyrightText: 2009 Алексей Бортник <thebosha@gmail.com>
+// SPDX-FileCopyrightText: 2014-2015 Alexander Turenko <totktonada.ru@gmail.com>
+// SPDX-FileCopyrightText: 2016 Evgeny Shmarnev <eshmarnev@suse.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= Краткое введение в WeeChat
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: ru
+include::includes/attributes-ru.adoc[]
+
+[[start]]
+== Запуск WeeChat
+
+В качестве эмулятора терминала для X рекомендуется rxvt-unicode: в нём хорошая
+поддержка UTF-8 и нет проблем с сочетаниями клавиш.
+
+Запуск из шелла:
+
+[source,shell]
+----
+weechat
+----
+
+// TRANSLATION MISSING
+[[help]]
+== Online help
+
+В WeeChat есть справка по всем командам, просто наберите:
+
+----
+/help
+----
+
+Чтобы получить справку по определённой команде, наберите:
+
+----
+/help команда
+----
+
+// TRANSLATION MISSING
+Help is available for options as well:
+
+----
+/help config.section.option
+----
+
+(где `config` — название конфигурации (`weechat` для ядра или название плагина
+для плагина), `section` — группа параметров и `option` — название параметра).
+
+// TRANSLATION MISSING
+[[options]]
+== Set options
+
+Для задания параметров используйте:
+
+----
+/set config.section.option value
+----
+
+WeeChat немедленно применяет все изменения (вам *никогда* не потребуется
+перезапускать WeeChat после изменений в параметрах).
+
+Все параметры сохраняются при выходе из WeeChat (или путём принудительной
+записи с помощью команды `/save`).
+
+// TRANSLATION MISSING
+[IMPORTANT]
+It is *not recommended* to edit configuration files by hand because WeeChat
+may write them at any time (for example on `/quit`) and after any change
+you must run the command `/reload` (with the risk of losing other changes
+that were not yet saved with `/save`). +
+You can use the command `/set`, which checks the value and applies immediately
+the changes.
+
+// TRANSLATION MISSING
+The plugin _fset_ allows you to easily browse options and change them.
+
+// TRANSLATION MISSING
+For example to display WeeChat options:
+
+----
+/fset weechat.*
+----
+
+// TRANSLATION MISSING
+IRC options:
+
+----
+/fset irc.*
+----
+
+// TRANSLATION MISSING
+The `/fset` command has completion on part of option names, so for example if
+you type `/fset hot` and press kbd:[Tab] this is completed as `/fset hotlist`.
+If you press kbd:[Enter], options about the hotlist are displayed.
+
+// TRANSLATION MISSING
+For more information about `/fset` command and keys, see `/help fset`.
+
+[[core_vs_plugins]]
+== Ядро и плагины
+
+«Ядро» WeeChat используется только для вывода информации на экран и
+взаимодействия с пользователем, так что ядро без плагинов бесполезно.
+(преданные пользователи: IRC был частью ядра в версиях ⩽ 0.2.6).
+
+Все сетевые протоколы вроде IRC представлены отдельными плагинами.
+
+Используйте команду `/plugin`, чтобы увидеть все загруженные плагины. В этом
+списке должен быть IRC-плагин и другие.
+
+[[add_irc_server]]
+== Добавить IRC сервер
+
+Вы можете добавить IRC сервер с помощью команды `/server`, например:
+
+----
+/server add libera irc.libera.chat/6697 -tls
+----
+
+// TRANSLATION MISSING
+In this command, `libera` is the internal server name used by WeeChat:
+you'll be able to connect with `/connect libera` and the server options
+are _irc.server.libera.xxx_.
+
+Вы всегда можете обратиться к справке, набрав:
+
+----
+/help server
+----
+
+[[irc_server_options]]
+== Установка дополнительных параметров для сервера
+
+Для всех значений, которые не были установлены вручную, WeeChat использует
+общие для всех серверов значения по умолчанию ("fall backs"). Посмотреть эти
+значения можно, набрав "irc.server_default.*".
+
+Для каждого параметра в группе _server_ WeeChat использует установленное
+значение, если оно определено (не "null"). В противном случае используется
+значение по умолчанию ("irc.server_default.xxx").
+
+Например, есть список псевдонимов по умолчанию (основан на un*x-логине
+пользователя), и перекрыть его для сервера libera можно следующей командой:
+
+----
+/set irc.server.libera.nicks "mynick,mynick2,mynick3,mynick4,mynick5"
+----
+
+Так можно установить псевдоним и настоящее имя:
+
+----
+/set irc.server.libera.username "My user name"
+/set irc.server.libera.realname "My real name"
+----
+
+Включить автосоединение с сервером при старте программы:
+
+----
+/set irc.server.libera.autoconnect on
+----
+
+Если сервер предоставляет SASL, то можно использовать его для аутентификации
+(вы будете идентифицированы до того, как присоединиться к каналам):
+
+----
+/set irc.server.libera.sasl_username "mynick"
+/set irc.server.libera.sasl_password "xxxxxxx"
+----
+
+Для запуска команды после соединения с сервером, к примеру, аутентификации
+через nickserv (нужно только если не используется аутентификация SASL):
+
+----
+/set irc.server.libera.command "/msg nickserv identify xxxxxxx"
+----
+
+[NOTE]
+В параметре _command_ можно записать несколько команд через `;` (точку с
+запятой).
+
+Если вы хотите защитить ваш пароль в конфигурационном файле, вы можете
+воспользоваться функцией защиты данных
+
+Для начала, создайте ключевую фразу:
+
+----
+/secure passphrase this is my secret passphrase
+----
+
+Затем добавьте защищенные данные с помощью вашего libera пароля:
+
+----
+/secure set libera_password xxxxxxx
+----
+
+Вы также можете использоавть `+${sec.data.libera_password}+` вместо вашего
+пароля в опциях IRC, например:
+
+----
+/set irc.server.libera.sasl_password "${sec.data.libera_password}"
+----
+
+Для автовхода на определённые каналы при подключении к серверу используйте:
+
+----
+/set irc.server.libera.autojoin "#channel1,#channel2"
+----
+
+// TRANSLATION MISSING
+The `/autojoin` command lets you configure the _autojoin_ option easily
+(see `/help autojoin`).
+
+// TRANSLATION MISSING
+You can also configure WeeChat to automatically update the _autojoin_ option
+when you join or leave channels:
+
+----
+/set irc.server_default.autojoin_dynamic on
+----
+
+Для очистки параметра из группы _server_ и установки значения по умолчанию
+используется следующая конструкция, например, для возврата к псевдонимам по
+умолчанию (irc.server_default.nicks):
+
+----
+/unset irc.server.libera.nicks
+----
+
+Другие параметры можно установить, используя следующую команду ("xxx"
+соответствует названию параметра):
+
+----
+/set irc.server.libera.xxx value
+----
+
+// TRANSLATION MISSING
+[TIP]
+You can complete name and value of options with the kbd:[Tab] key
+and kbd:[Shift+Tab] for a partial completion (useful for long words like
+the name of option).
+
+// TRANSLATION MISSING
+[[connect_to_irc_server]]
+== Connect to IRC server
+
+----
+/connect libera
+----
+
+// TRANSLATION MISSING
+With this command, WeeChat connects to the libera server and auto-joins the
+channels configured in the "autojoin" server option.
+
+// TRANSLATION MISSING
+[NOTE]
+Эту команду можно использовать для добавления нового сервера и подключения к
+нему без команды `/server` (see `/help connect`).
+
+По умолчанию буфер сервера совмещён с _core_-буфером WeeChat. Для переключения
+между _core_-буфером и буферами сервера можно использовать kbd:[Ctrl+x].
+
+Автоматическое совмещение буферов сервера можно отключить, чтобы работать с
+ними независимо:
+
+----
+/set irc.look.server_buffer independent
+----
+
+[[join_part_irc_channels]]
+== Вход и выход с IRC-каналов
+
+Зайти на канал:
+
+----
+/join #channel
+----
+
+Покинуть канал (оставляет буфер открытым):
+
+----
+/part [quit message]
+----
+
+Закрыть соединение с сервером, каналом или частным буфером (`/close` -
+псевдоним для `/buffer close`):
+
+----
+/close
+----
+
+[CAUTION]
+Закрытие соединения с сервером закроет все каналы/частные буферы.
+
+Отключиться от сервера, на серверном буфере:
+
+----
+/disconnect
+----
+
+[[irc_private_messages]]
+== Персональные IRC-сообщения
+
+Открыть буфер и отправить сообщение другому пользователю (с псевдонимом
+_foo_):
+
+----
+/query foo сообщение
+----
+
+Закрыть буфер персонального разговора:
+
+----
+/close
+----
+
+[[buffer_window]]
+== Управление буферами и окнами
+
+Буфер — это относящийся к плагину компонент с номером, категорией и именем.
+Буфер содержит данные, отображаемые на экране.
+
+Окно — это то, на чём отображается содержимое буфера. По умолчанию создаётся
+одно окно, отображающее один буфер. Если разделить экран, то можно
+одновременно видеть несколько окон с несколькими буферами.
+
+Команды для управления буферами и окнами:
+
+----
+/buffer
+/window
+----
+
+Например, чтобы разделить экран по вертикали на малую (1/3 ширины) и большую
+(2/3) части, используйте команду:
+
+----
+/window splitv 33
+----
+
+Отменить разделение экрана:
+
+----
+/window merge
+----
+
+[[key_bindings]]
+== Сочетания клавиш
+
+// TRANSLATION MISSING
+WeeChat uses many keys by default. All these keys are in the documentation
+(link:weechat_user.en.html#key_bindings[User's guide / Key bindings ^↗^^]),
+but you should know at least some vital keys:
+
+- kbd:[Alt+←] / kbd:[Alt+→] или kbd:[F5] / kbd:[F6]: к следующему или предыдущему буферу
+// TRANSLATION MISSING
+- kbd:[F1] / kbd:[F2]: scroll bar with list of buffers ("buflist")
+- kbd:[F7] / kbd:[F8]: следующее или предыдущее окно (когда экран разделён)
+// TRANSLATION MISSING
+- kbd:[F9] / kbd:[F10]: прокрутка title bar
+- kbd:[F11] / kbd:[F12]: прокрутка списка псевдонимов
+- kbd:[Tab]: дополнить текст в строке ввода, как в шелле
+- kbd:[PgUp] / kbd:[PgDn]: прокрутка текста в текущем буфере
+- kbd:[Alt+a]: перейти к буферу с «активностью» (в hotlist’е)
+
+Вы можете переназначить любые сочетания в соответствии со своей клавиатурой и
+предпочтениями с помощью команды `/key`.
+Для получения кодов клавиш полезно использовать сочетание kbd:[Alt+k].
+
+Например, чтобы назначить на kbd:[Alt+!] команду `/buffer close`:
+
+----
+/key bind (press alt-k) (press alt-!) /buffer close
+----
+
+Команда будет выглядеть примерно так:
+
+----
+/key bind meta-! /buffer close
+----
+
+Удалить сочетание клавиш:
+
+----
+/key unbind meta-!
+----
+
+[[plugins_scripts]]
+== Плагины и скрипты
+
+В некоторых дистрибутивах, например в Debian, плагины доступны в виде
+отдельных пакетов (вроде weechat-plugins).
+Плагины загружаются автоматически, если найдены (можете посмотреть
+документацию о загрузке и выгрузке плагинов или скиптов).
+
+Множество внешних скриптов (написанных контрибьюторами) доступно для WeeChat,
+вы можете скачать и установить скрипты из репозитория с помощью команды `/script`,
+например:
+
+----
+/script install go.py
+----
+
+Для получения дополнительной информации введите команду `/help script`.
+
+// TRANSLATION MISSING
+A list of scripts is available in WeeChat with `/script` or on
+https://weechat.org/scripts/[this page ^↗^^].
+
+[[more_doc]]
+== Документация для дальнейшего чтения
+
+// TRANSLATION MISSING
+You can now use WeeChat and read
+https://weechat.org/doc/[FAQ/documentation ^↗^^]
+for any other questions.
+
+Приятной работы с WeeChat!

@@ -1,0 +1,405 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= Guide de démarrage rapide WeeChat
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: fr
+include::includes/attributes-fr.adoc[]
+
+[[start]]
+== Démarrer WeeChat
+
+Un émulateur de terminal recommandé pour X (mais pas obligatoire) est
+rxvt-unicode : il a un bon support UTF-8, et aucun problème avec les
+touches par défaut.
+
+Lancer depuis votre shell :
+
+[source,shell]
+----
+weechat
+----
+
+[[help]]
+== Aide en ligne
+
+WeeChat dispose d'aide pour toutes les commandes, tapez simplement :
+
+----
+/help
+----
+
+Pour avoir de l'aide sur une commande, tapez :
+
+----
+/help commande
+----
+
+L'aide est également disponible pour les options :
+
+----
+/help config.section.option
+----
+
+(où `config` est le nom de la configuration (`weechat` pour le cœur, ou
+un nom d'extension), `section` la section de cette configuration et
+`option` le nom de l'option).
+
+[[options]]
+== Modifier les options
+
+Pour modifier des options, tapez :
+
+----
+/set config.section.option valeur
+----
+
+WeeChat utilise immédiatement la nouvelle valeur (vous n'avez *jamais*
+besoin de redémarrer WeeChat après avoir changé la configuration).
+
+Toutes les options sont sauvées quand WeeChat quitte (ou avec la commande
+`/save` pour forcer une écriture des options).
+
+[IMPORTANT]
+Il n'est *pas recommandé* de modifier les fichiers de configuration à la main
+car WeeChat peut les écrire à tout moment (par exemple sur `/quit`) et après
+chaque changement vous devez lancer la commande `/reload` (avec le risque de
+perdre d'autres changements qui n'auraient pas été sauvés avec `/save`). +
+Vous pouvez utiliser la commande `/set`, qui vérifie la valeur et applique
+les changements immédiatement.
+
+L'extension _fset_ vous permet de parcourir les options facilement et de les
+modifier.
+
+Par exemple pour afficher les options WeeChat :
+
+----
+/fset weechat.*
+----
+
+Les options IRC :
+
+----
+/fset irc.*
+----
+
+La commande `/fset` a la complétion sur les bouts de noms d'options, donc par
+exemple si vous tapez `/fset hot` et appuyez sur kbd:[Tab] cela est complété en
+`/fset hotlist`. Si vous appuyez sur kbd:[Enter], les options sur la hotlist
+sont affichées.
+
+Pour plus d'informations sur la commande `/fset` et les touches, voir `/help fset`.
+
+[[core_vs_plugins]]
+== Cœur vs extensions
+
+Le cœur de WeeChat ("core") ne fait qu'afficher les données à l'écran et
+interagir avec l'utilisateur, cela signifie que le cœur sans extension
+n'a pas grand intérêt (utilisateurs fidèles : IRC faisait partie du cœur
+dans les versions ≤ 0.2.6).
+
+Tous les protocoles réseau comme IRC sont fournis sous forme d'extensions.
+
+Utilisez la commande `/plugin` pour voir les extensions chargées, vous
+devriez voir "irc" et d'autres extensions dans cette liste.
+
+[[add_irc_server]]
+== Ajouter un serveur IRC
+
+Vous pouvez ajouter un serveur IRC avec la commande `/server`, par exemple :
+
+----
+/server add libera irc.libera.chat/6697 -tls
+----
+
+Dans cette commande, `libera` est le nom interne du serveur utilisé par
+WeeChat : vous pourrez vous connecter avec `/connect libera` et les options
+du serveur sont _irc.server.libera.xxx_.
+
+Comme d'habitude, de l'aide est disponible si vous êtes perdus :
+
+----
+/help server
+----
+
+[[irc_server_options]]
+== Définir les options du serveur IRC
+
+WeeChat utilise des valeurs par défaut pour tous les serveurs, si vous ne
+spécifiez pas de valeur spécifique pour une option de serveur.
+Ces options par défaut sont "irc.server_default.*".
+
+Pour chaque option d'un serveur, WeeChat utilise sa valeur si elle est
+définie (non "null"). Sinon WeeChat utilise la valeur par défaut
+("irc.server_default.xxx").
+
+Par exemple il y a des pseudos par défaut (basés sur votre login un*x), et
+vous pouvez les écraser pour le serveur libera avec la commande suivante :
+
+----
+/set irc.server.libera.nicks "pseudo,pseudo2,pseudo3,pseudo4,pseudo5"
+----
+
+Pour modifier le nom d'utilisateur et nom réel :
+
+----
+/set irc.server.libera.username "Mon nom d'utilisateur"
+/set irc.server.libera.realname "Mon nom réel"
+----
+
+Pour activer la connexion automatique au serveur lors du démarrage :
+
+----
+/set irc.server.libera.autoconnect on
+----
+
+Si SASL est disponible sur le serveur, vous pouvez l'utiliser pour
+l'authentification (vous serez identifié avant de rejoindre les canaux) :
+
+----
+/set irc.server.libera.sasl_username "pseudo"
+/set irc.server.libera.sasl_password "xxxxxxx"
+----
+
+Pour lancer une commande après connexion au serveur, par exemple pour
+s'authentifier auprès de nickserv (seulement si vous n'utilisez pas SASL pour
+l'authentification) :
+
+----
+/set irc.server.libera.command "/msg nickserv identify xxxxxxx"
+----
+
+[NOTE]
+Plusieurs commandes dans l'option _command_ peuvent être séparées par `;`
+(point-virgule).
+
+Si vous souhaitez protéger votre mot de passe dans les fichiers de
+configuration, vous pouvez utiliser les données sécurisées.
+
+Définissez d'abord une phrase de chiffrement :
+
+----
+/secure passphrase this is my secret passphrase
+----
+
+Puis ajoutez une donnée sécurisée avec votre mot de passe libera :
+
+----
+/secure set libera_password xxxxxxx
+----
+
+Vous pouvez alors utiliser `+${sec.data.libera_password}+` au lieu de votre
+mot de passe dans les options IRC mentionnées ci-dessus, par exemple :
+
+----
+/set irc.server.libera.sasl_password "${sec.data.libera_password}"
+----
+
+Pour rejoindre automatiquement des canaux lors de la connexion au serveur :
+
+----
+/set irc.server.libera.autojoin "#canal1,#canal2"
+----
+
+La commande `/autojoin` vous permet de configurer l'option _autojoin_ facilement
+(voir `/help autojoin`).
+
+Vous pouvez aussi configurer WeeChat pour automatiquement mettre à jour l'option
+_autojoin_ lorsque vous rejoignez ou quittez des canaux :
+
+----
+/set irc.server_default.autojoin_dynamic on
+----
+
+Pour supprimer la valeur d'une option du serveur et utiliser sa valeur par
+défaut à la place, par exemple pour utiliser les pseudos par défaut
+(irc.server_default.nicks) :
+
+----
+/unset irc.server.libera.nicks
+----
+
+Autres options : vous pouvez modifier les autres options avec la commande
+suivante ("xxx" est le nom d'une option) :
+
+----
+/set irc.server.libera.xxx valeur
+----
+
+[TIP]
+Vous pouvez compléter le nom et la valeur des options avec la touche kbd:[Tab]
+et kbd:[Shift+Tab] pour une complétion partielle (utile pour les mots longs
+comme le nom de l'option).
+
+[[connect_to_irc_server]]
+== Se connecter au serveur IRC
+
+----
+/connect libera
+----
+
+Avec cette commande, WeeChat se connecte au serveur libera et rejoint
+automatiquement les canaux configurés dans l'option "autojoin" du serveur.
+
+[NOTE]
+Cette commande peut aussi être utilisée pour créer et se connecter au serveur
+sans utiliser la commande `/server` (voir `/help connect`).
+
+Par défaut, les tampons des serveurs sont mélangés avec le tampon _core_
+WeeChat. Pour basculer entre le tampon _core_ et les tampons des serveurs, il
+faut utiliser la touche kbd:[Ctrl+x].
+
+Il est possible de désactiver le mélange des tampons serveurs pour avoir un
+tampon distinct par serveur :
+
+----
+/set irc.look.server_buffer independent
+----
+
+[[join_part_irc_channels]]
+== Rejoindre/quitter les canaux IRC
+
+Rejoindre un canal :
+
+----
+/join #channel
+----
+
+Quitter un canal (en laissant le tampon ouvert) :
+
+----
+/part [message de fin]
+----
+
+Fermer un tampon serveur, canal ou privé (`/close` est un alias sur
+`/buffer close`) :
+
+----
+/close
+----
+
+[CAUTION]
+Fermer le tampon du serveur fermera tous les tampons canaux/privés.
+
+Se déconnecter du serveur, sur le tampon du serveur :
+
+----
+/disconnect
+----
+
+[[irc_private_messages]]
+== Messages privés IRC
+
+Ouvrir un tampon et envoyer un message à un autre utilisateur (pseudo _foo_) :
+
+----
+/query foo ceci est un message
+----
+
+Fermer le tampon privé :
+
+----
+/close
+----
+
+[[buffer_window]]
+== Gérer les tampons/fenêtres
+
+Un tampon ("buffer") est un composant lié à une extension, avec une
+catégorie et un nom. Le tampon contient les données affichées à l'écran.
+
+Une fenêtre ("window") est une vue sur un tampon. Par défaut il n'y a
+qu'une fenêtre affichant un tampon. Si vous divisez l'écran, vous verrez
+alors plusieurs fenêtres avec plusieurs tampons en même temps.
+
+Commandes pour gérer les tampons et les fenêtres :
+
+----
+/buffer
+/window
+----
+
+Par exemple, pour découper verticalement l'écran en une petite fenêtre
+(1/3 de la largeur) et une large (2/3), utilisez la commande :
+
+----
+/window splitv 33
+----
+
+Pour supprimer le découpage :
+
+----
+/window merge
+----
+
+[[key_bindings]]
+== Raccourcis clavier
+
+WeeChat utilise un certain nombre de touches par défaut. Toutes ces
+touches sont dans la documentation
+(link:weechat_user.fr.html#key_bindings[Guide utilisateur / Raccourcis clavier ^↗^^]),
+mais vous devriez connaître au moins les touches vitales :
+
+- kbd:[Alt+←] / kbd:[Alt+→] ou kbd:[F5] / kbd:[F6] : aller au tampon précédent/suivant
+- kbd:[F1] / kbd:[F2] : faire défiler la barre avec la liste des tampons ("buflist")
+- kbd:[F7] / kbd:[F8] : aller à la fenêtre précédente/suivante (quand l'écran est divisé)
+- kbd:[F9] / kbd:[F10] : faire défiler la barre de titre
+- kbd:[F11] / kbd:[F12] : faire défiler la liste des pseudos
+- kbd:[Tab] : compléter le texte de la barre d'entrée, comme avec votre shell
+- kbd:[PgUp] / kbd:[PgDn] : faire défiler le texte dans le tampon courant
+- kbd:[Alt+a] : sauter au tampon avec de l'activité (dans la "hotlist")
+
+Selon votre clavier et/ou vos besoins, vous pouvez associer n'importe
+quelle touche à une commande avec la commande `/key`.
+Une touche utile est kbd:[Alt+k] pour trouver le code des touches.
+
+Par exemple, pour associer kbd:[Alt+!] à la commande `/buffer close` :
+
+----
+/key bind (pressez alt-k) (pressez alt-!) /buffer close
+----
+
+Vous aurez une ligne de commande qui ressemble à ceci :
+
+----
+/key bind meta-! /buffer close
+----
+
+Pour enlever la touche :
+
+----
+/key unbind meta-!
+----
+
+[[plugins_scripts]]
+== Extensions/scripts
+
+Sur certaines distributions comme Debian, les extensions sont disponibles
+via un paquet séparé (par exemple weechat-plugins).
+Les extensions sont automatiquement chargées lorsqu'elles sont trouvées
+(merci de regarder la documentation WeeChat pour charger/décharger des
+extensions ou des scripts).
+
+De nombreux scripts externes (de contributeurs) sont disponibles pour WeeChat,
+vous pouvez télécharger et installer les scripts avec la commande `/script`,
+par exemple :
+
+----
+/script install go.py
+----
+
+Voir `/help script` pour plus d'infos.
+
+Une liste des scripts est disponible avec `/script` ou sur
+https://weechat.org/scripts/[cette page ^↗^^].
+
+[[more_doc]]
+== Plus de documentation
+
+Vous pouvez maintenant utiliser WeeChat et lire la
+https://weechat.org/doc/[FAQ/documentation ^↗^^]
+pour toute autre question.
+
+Bon WeeChat !

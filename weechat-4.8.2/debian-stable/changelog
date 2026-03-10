@@ -1,0 +1,1026 @@
+weechat (4.8.2-1) noble; urgency=medium
+
+  *  New upstream release
+
+ -- Sébastien Helleu <flashcode@flashtux.org>  Sat, 07 Mar 2026 00:51:54 +0100
+
+weechat (4.7.2-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1119787)
+  * Update debian/watch to version 5
+  * Remove useless 'Rules-Requires-Root: no' from debian/control
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 29 Nov 2025 08:53:10 +0000
+
+weechat (4.6.3-1) unstable; urgency=medium
+
+  * New upstream release
+    - fixes multiple security vulnerabilities (Closes: #1104554)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 17 May 2025 05:49:46 +0000
+
+weechat (4.6.1-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1102450, #1098090)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 16 Apr 2025 20:31:07 +0000
+
+weechat (4.5.1-1) unstable; urgency=medium
+
+  * New upstream release
+  * Update copyright file (new year)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Mon, 20 Jan 2025 14:39:42 +0000
+
+weechat (4.4.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove (fixed upstream) the fix for a possible privacy breach with html
+    documentation which includes stylesheets and fonts (font-awesome) hosted
+    on remote CDN (Cloudflare).
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 06 Nov 2024 21:27:08 +0000
+
+weechat (4.4.2-1) unstable; urgency=medium
+
+  * New upstream release
+    - fix crash where exiting (Closes: #1076532)
+    - fix a minor security issue (Closes: #1081942)
+  * Bump Standards-Version to 4.7.0
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 22 Sep 2024 13:08:28 +0000
+
+weechat (4.3.1-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1067608)
+    - fix FTBFS against libgcrypt 1.11 (Closes: #1071960)
+  * Add build dependency on libcjson-dev
+  * Replace pkg-config build dependency by pkgconf
+  * Minor updates in debian/copyright
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 01 Jun 2024 14:21:02 +0000
+
+weechat (4.1.1-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1055278)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 03 Nov 2023 20:23:37 +0000
+
+weechat (4.0.5-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 24 Sep 2023 07:49:41 +0000
+
+weechat (4.0.2-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1040248)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 22 Jul 2023 05:48:35 +0000
+
+weechat (4.0.1-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove NEWS file, no longer required
+  * Update build dependency from libncursesw5-dev to libncurses-dev
+  * Bump Standards-Version to 4.6.2
+  * Remove all patches (no longer required)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 04 Jul 2023 19:02:41 +0000
+
+weechat (3.8-1) unstable; urgency=medium
+
+  * New upstream release
+  * Add a patch remove some autotools leftovers
+  * Update debian/copyright (new year)
+  * Update debian/rules to remove workarounds which avoid issues with
+  autotools build system
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 15 Jan 2023 08:34:04 +0000
+
+weechat (3.7.1-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 22 Oct 2022 12:55:10 +0000
+
+weechat (3.7-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 18 Oct 2022 12:44:29 +0000
+
+weechat (3.6-1) unstable; urgency=medium
+
+  * New upstream release
+  * Bump Standards-Version to 4.6.1.0
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 23 Jul 2022 09:56:24 +0000
+
+weechat (3.5-1) unstable; urgency=medium
+
+  * New upstream release
+  * Add build dependency on libzstd-dev
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Thu, 31 Mar 2022 11:36:01 +0000
+
+weechat (3.4.1-1) unstable; urgency=medium
+
+  * New upstream release
+    - Fix a possible man-in-the-middle attack in TLS connection to servers
+  * Update build dependency from libargon2-0-dev to libargon2-dev
+    (libargon2-0-dev is now virtual package) (Closes: #1005703)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 22 Mar 2022 05:55:14 +0000
+
+weechat (3.4-2) unstable; urgency=medium
+
+  * Remove build dependency on ruby-pygments.rb (no longer required)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 08 Jan 2022 06:00:17 +0000
+
+weechat (3.4-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1001654, #1001245)
+  * Remove tester's guide from weechat-doc (according to upstream changes)
+  * Refresh ASCII Doctor options patch
+  * Update lintian override on weechat-plugins
+  * Update copyright (new year)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 07 Jan 2022 23:03:49 +0000
+
+weechat (3.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove patch merged upstream (which command detection in libgcrypt)
+  * Minor updates in debian/copyright
+  * Enable Typing plugin
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Mon, 20 Sep 2021 10:05:56 +0000
+
+weechat (3.2.1-1) unstable; urgency=medium
+
+  * New upstream release
+    - fix CVE-2021-40516: possible denial of service (crash) via a crafted
+    WebSocket in relay plugin (Closes: #993803)
+  * Add a patch to fix a FTBFS (related to recent changes on which command
+    output) (Closes: #993333)
+  * Bump Standards-Version to 4.6.0.1
+  * Remove useless HomePage field in upstream/metadata
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 07 Sep 2021 20:25:39 +0000
+
+weechat (3.0.1-1) unstable; urgency=medium
+
+  * New upstream release
+  * Bump Standards-Version to 4.5.1
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 03 Mar 2021 05:30:44 +0000
+
+weechat (3.0-1) unstable; urgency=medium
+
+  * New upstream release
+  * Build against Guile 3.0 (instead of 2.2) (Closes: #969680)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 21 Nov 2020 07:34:12 +0000
+
+weechat (2.9-1) unstable; urgency=medium
+
+  * New upstream release
+  * Refresh ASCII Doctor options patch
+  * Switch debhelper compatibility to 13 and add debian/not-installed
+    accordingly
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 15 Aug 2020 20:31:09 +0000
+
+weechat (2.8-1) unstable; urgency=medium
+
+  * New upstream release
+    - Fix FTBFS with ruby 2.7 (Closes: #954701, #954789)
+    - Remove patch to fix compilation error while testing iconv support
+    - Remove patch to fix a crash when loading script with PHP 7.4
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 04 Apr 2020 09:01:45 +0000
+
+weechat (2.7.1-1) unstable; urgency=medium
+
+  * New upstream release
+    - fix CVE-2020-8955: possible remote DOS via malformed IRC messages
+      (Closes: #951289)
+    - rebuilt against python 3.8 (Closes: #953620)
+  * Remove Guile 2.2 support patch (merged upstream)
+  * Add a patch to fix compilation error while testing iconv support
+  * Add a patch to fix a crash when loading script with PHP 7.4
+  * Bump Standards-Version to 4.5.0
+  * Replace gem2deb build dependency by ruby-dev to facilitate
+    transitions to new versions of ruby (Closes: #951713)
+  * Set Rules-Requires-Root to no
+  * Switch debhelper compatibility to 12
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Mon, 09 Mar 2020 14:59:31 +0000
+
+weechat (2.6-2) unstable; urgency=medium
+
+  * Add a patch from upstream to support Guile 2.2 (Closes: #885235)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 11 Oct 2019 15:07:22 +0000
+
+weechat (2.6-1) unstable; urgency=medium
+
+  * New upstream release
+  * Build only with Python3 (Closes: #938817)
+  * Bump Standards-Version to 4.4.0
+  * Build Lua plugin against Lua 5.3
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 17 Sep 2019 13:30:32 +0000
+
+weechat (2.4-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 03 Mar 2019 19:29:13 +0000
+
+weechat (2.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * Bump Standards-Version to 4.3.0
+  * Switch debhelper compatibility to 12
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 04 Jan 2019 16:06:44 +0000
+
+weechat (2.2-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove upstream patch about localized manpages for weechat-headless
+  * Bump Standards-Version to 4.1.5
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 19 Sep 2018 09:41:45 +0000
+
+weechat (2.1-2) unstable; urgency=medium
+
+  * Disable build of javascript plugin to fix weechat autoremoval from
+    testing (RC bugs in libv8) (Closes: #894680)
+  * Add missing localized manpages for weechat-headless
+  * Fix debian/copyright Format URI
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 03 Apr 2018 10:48:35 +0200
+
+weechat (2.1-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #887114)
+    - Enable build against Ruby 2.5 (Closes: #892072)
+    - New PHP plugin (update build dependencies accordingly)
+  * Split up the package so that plugins are now separated in multiple
+    binary packages to avoid unnecessary dependencies (Closes: #745266)
+  * Switch debhelper compatibility to 11
+  * Bump Standards-Version to 4.1.3
+  * Add debian/upstream/metadata (DEP 12)
+  * Rewrite debian/copyright to be more accurate
+  * Update Vcs-Git and Vcs-Browser with new repository on salsa.debian.org
+  * Update debian/NEWS to introduces weechat-headless and the package split
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 21 Mar 2018 07:46:21 +0100
+
+weechat (1.9.1-1) unstable; urgency=medium
+
+  * New upstream release
+    - CVE-2017-14727 - Include a patch which fix a possible crash in logger
+      plugin (Closes: #876553)
+  * Disable build of javascript plugin to fix weechat autoremoval from
+    testing (RC bugs in libv8)
+  * Bump Standards-Version to 4.1.0
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 23 Sep 2017 21:47:32 +0200
+
+weechat (1.9-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove useless weechat-dbg binary package
+  * Bump Standards-Version to 4.0.0
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 04 Jul 2017 13:29:55 +0200
+
+weechat (1.8-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove usless patches (backports from upstream)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 16 May 2017 14:53:07 +0200
+
+weechat (1.7-3) unstable; urgency=medium
+
+  * Add a patch to fix CVE-2017-8073 which allows a remote crash by
+    sending a filename via DCC to the IRC plugin (Closes: #861121)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 25 Apr 2017 10:46:10 +0200
+
+weechat (1.7-2) unstable; urgency=medium
+
+  * Add a patch to fix slowness after terminal resize (Closes: #855079)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 24 Feb 2017 16:43:09 +0100
+
+weechat (1.7-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove lintian-override for weechat-curses manpage
+  * Add a lintian-override about no hardening flags on fifo.so plugin
+    (false positive)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Thu, 09 Feb 2017 20:15:48 +0100
+
+weechat (1.6-1) unstable; urgency=medium
+
+  * New upstream release
+  * Add a patch to build html documentation without requiring data
+    (javascript, fonts) on external websites (potential privacy breach)
+  * Documentation is now built with asciidoctor (adjust dependencies
+    accordingly)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Thu, 06 Oct 2016 13:55:35 +0200
+
+weechat (1.5-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove patch to build ruby plugin against ruby2.3
+  * Bump Standards-Version to 3.9.8
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 03 May 2016 09:29:42 +0200
+
+weechat (1.4-2) unstable; urgency=medium
+
+  * Fix Vcs-(Git|Browser) fields to use secure URIs
+  * Enable hardening=+all build
+  * Add a patch to build ruby plugin against ruby2.3 (fix FTBFS). Thanks
+    to Christian Hofstaedtler for the patch (Closes: #816312)
+  * Build Tcl plugin against Tcl 8.6 (Closes: #812320)
+  * Bump Standards-Version to 3.9.7
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 04 Mar 2016 15:58:54 +0100
+
+weechat (1.4-1) unstable; urgency=medium
+
+  * New upstream release
+    - Update copyright (new year)
+    - Refresh XPM menu icon following upstream changes
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 15 Jan 2016 15:16:11 +0100
+
+weechat (1.3-1) unstable; urgency=medium
+
+  * New upstream release
+    - Remove backported patch to fix FTBFS with ruby 2.2
+  * Use dh-exec to build javascript plugin only on architectures which v8
+    engine supports. Thanks to Mateusz Łukasik for the patch
+    (Closes: #794584)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 19 Aug 2015 18:34:17 +0200
+
+weechat (1.2-2) unstable; urgency=medium
+
+  * Add patch (backported from upstream) to fix a FTBFS while building
+    against ruby 2.2 (Closes: #791836)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Thu, 16 Jul 2015 18:23:55 +0200
+
+weechat (1.2-1) unstable; urgency=medium
+
+  * New upstream release
+    - Enable build of javascript plugin (using v8 engine)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Mon, 11 May 2015 18:00:01 +0200
+
+weechat (1.1.1-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #776105)
+    - Add a new entry in News.Debian about new format for regex replacement
+      in triggers
+  * Update debian/{control,copyright,watch} to use https links with the
+    upstream project resources
+  * Bump Standards-Version to 3.9.6
+  * Update year in debian/copyright
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 25 Jan 2015 20:27:04 +0100
+
+weechat (1.0.1-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 28 Sep 2014 17:41:10 +0200
+
+weechat (1.0-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #758230, #751108)
+    - Remove the patch to fix FTBFS while building against ruby 2.1
+    - Fix the way to install upstream changelog
+    - Add new plugins (exec, trigger)
+    - Fix the way to install docs (upstream changes to asciidoc)
+  * Re-enable the build of guile plugin
+  * Fix various typos in packaging
+  * Update copyright years in debian/copyright
+  * Add new doc-base files (Relay Protocol in Japanese)
+  * Add git-buildpackage configuration
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 24 Aug 2014 17:40:36 +0200
+
+weechat (0.4.3-4) unstable; urgency=medium
+
+  * Fix FTBFS by adding a missing Build Depends on docbook-xml
+    (Closes:#753166)
+  * Update libgnutls and libgcrypt Build Depends to libgnutls28-dev and
+    libgcrypt20-dev (Closes: #753167)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 02 Jul 2014 23:42:41 +0200
+
+weechat (0.4.3-3) unstable; urgency=medium
+
+  * Add patch (backported from upstream) to fix a FTBFS while building
+    against ruby 2.1 (Closes: #747708)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Mon, 12 May 2014 12:49:14 +0200
+
+weechat (0.4.3-2) unstable; urgency=medium
+
+  * Add missing symlink for Polish manpage
+  * Change ruby-* Build-Depends to gem2deb so that ruby plugin will be
+    built against the newest Ruby interpreter available (Closes: #738685)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Thu, 13 Feb 2014 12:11:54 +0000
+
+weechat (0.4.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * Bump Standards-Version to 3.9.5
+  * Update debian/watch to check upstream tarballs signatures
+  * Add new doc-base files:
+    - Devel guide in French and Japanese
+    - Plugins guide in Japanese
+    - Relay protocol guide in French
+    - User guide in Polish
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Mon, 10 Feb 2014 17:15:21 +0000
+
+weechat (0.4.2-3) unstable; urgency=low
+
+  * Fix FTBS while building without Internet access (add a missing build
+    dependency on docbook-xsl) (Closes: #727206)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 23 Oct 2013 20:54:08 +0000
+
+weechat (0.4.2-2) unstable; urgency=low
+
+  * Move dependencies from Build-Depends-Indep to Build-Depends (weechat-curses
+    as arch:any needs them to build manpages)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 08 Oct 2013 07:16:59 +0000
+
+weechat (0.4.2-1) unstable; urgency=low
+
+  * New upstream release
+    - Add build dependency on xsltproc
+    - Enable build of documentation and manpages (now disabled by default)
+    - Install new localized manpages
+    - weechat-curses renamed to weechat
+      o update packaging accordingly
+      o add symlinks for backward compatibility
+  * Refresh XPM menu icon following upstream changes
+  * Switch to debhelper >= 9
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Mon, 07 Oct 2013 21:40:15 +0000
+
+weechat (0.4.1-2) unstable; urgency=low
+
+  * Disable build of guile plugin (as guile-2.0-dev FTBFS on multiple
+    architectures)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 29 Jun 2013 14:48:33 +0000
+
+weechat (0.4.1-1) unstable; urgency=low
+
+  * New upstream release
+  * Move guile build dependency to guile-2.0-dev (previous versions are
+    no longer supported).
+  * Add supported protocols in long description. Thanks to Jonas Smedegaard
+    for the suggestion (Closes: #705216)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 21 May 2013 19:44:31 +0000
+
+weechat (0.4.0-1) unstable; urgency=low
+
+  * New upstream release.
+  * Bump Standards-Version to 3.9.4
+  * Remove UPGRADE_0.3 from doc (no more included in upstream sources).
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 23 Jan 2013 18:44:36 +0000
+
+weechat (0.3.9.2-1) unstable; urgency=low
+
+  * New upstream release
+    - do not call shell to execute command in hook_process (fix security
+    problem when a plugin/script gives untrusted command)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 18 Nov 2012 13:35:21 +0000
+
+weechat (0.3.9.1-1) unstable; urgency=low
+
+  * New upstream release
+    - fix crash when decoding IRC colors in strings
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 09 Nov 2012 23:11:09 +0000
+
+weechat (0.3.9-1) unstable; urgency=low
+
+  * New upstream release
+  * Add the new 'script' plugin and update the long descriptions accordingly
+  * Add new doc-base files:
+    - Testers guide in Japanese
+    - Users guide in Japanese
+    - Scripting guide in Japanese
+  * Fix wrong Vcs-Browser URL (Closes: #689203)
+  * Update lintian override on weechat-curses
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 30 Sep 2012 21:14:22 +0000
+
+weechat (0.3.8-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 03 Jun 2012 07:54:52 +0000
+
+weechat (0.3.7-1) unstable; urgency=low
+
+  * New upstream release
+  * Bump Standards-Version to 3.9.3
+  * Update debian/copyright: new year
+  * Add new doc-base files:
+    - Developer's Guide in English
+    - Relay Protocol in English
+    - Quickstart in Spanish
+  * Update Vcs-Git and Vcs-Browser fields
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 26 Feb 2012 10:32:35 +0000
+
+weechat (0.3.6-2) unstable; urgency=low
+
+  * Update debian/rules to use build flags from dpkg-buildflags when it's
+  possible (ie: with dpkg >= 1.16.1).
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 29 Oct 2011 07:31:14 +0000
+
+weechat (0.3.6-1) unstable; urgency=low
+
+  * New upstream release
+    - Fix a FTBFS due to wrong detection of ncursesw headers
+      (Closes: #646299)
+  * Add new doc-base files (Polish translations).
+  * Install html documentation in /usr/share/doc/weechat/html instead
+    of /usr/share/doc/weechat
+  * Add a symlink from /usr/share/doc/weechat/html to
+  /usr/share/doc/weechat-doc/html so that it will be easier to find
+  documentation when weechat-doc is installed (Closes: #632621)
+  * Add a Suggest on weechat-doc for weechat and weechat-curses. Thanks to
+  Jonathan Nieder for the proposal.
+  * Fix the cmake invocation from debian/rules (cflags and ldflags)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 26 Oct 2011 20:10:09 +0000
+
+weechat (0.3.5-1) unstable; urgency=low
+
+  * New upstream release
+    - Fix usage of deprecated _set_priority GnuTLS functions (Closes: #624055)
+  * Remove patch added to fix crash when completing /part command
+  * Bump Standards-Version to 3.9.2
+  * Update debian/copyright, switch to DEP5 format
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Mon, 16 May 2011 11:40:09 +0000
+
+weechat (0.3.4-2) unstable; urgency=low
+
+  * Add a patch which fix a crash when completing /part command on a
+  non-irc buffer.
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 13 Feb 2011 21:13:35 +0000
+
+weechat (0.3.4-1) unstable; urgency=low
+
+  * New upstream release (add relay and rmodifier plugins).
+  * Update Build depends (tcl-dev, ruby-dev, asciidoc).
+  * Remove the patch to make weechat aware of python 2.7 (merged upstream).
+  * Remove the backported patch which fix the bug with hostmasks in IRC
+    command /ignore.
+  * Update lintian override on weechat-curses.
+  * Update long descriptions regarding the new features.
+  * Add source/local-options file.
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 16 Jan 2011 11:54:55 +0000
+
+weechat (0.3.3-3) unstable; urgency=low
+
+  * Upload to unstable.
+  * Downgrade tcl-dev dependency to 8.4 until tcl 8.5 hit unstable.
+  * Add a patch to make cmake aware of python 2.7 (Closes: #606989).
+    Thanks to Matthias Klose.
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Mon, 27 Dec 2010 23:29:46 +0000
+
+weechat (0.3.3-2) experimental; urgency=low
+
+  * Switch to dpkg-source 3.0 (quilt) format
+  * Add a patch to fix bug with hostmasks in IRC command /ignore
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 20 Aug 2010 20:39:06 +0000
+
+weechat (0.3.3-1) experimental; urgency=low
+
+  * New upstream release
+  * Add new doc-base files (German translations).
+  * Update Standards-Version to 3.9.1
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 10 Aug 2010 11:23:14 +0000
+
+weechat (0.3.2-2) experimental; urgency=low
+
+  * Fix Vcs-Browser url (Closes: #580859).
+  * Rebuild against tcl-dev (>= 8.5) (Closes: #582588).
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 23 May 2010 08:32:37 +0000
+
+weechat (0.3.2-1) unstable; urgency=low
+
+  * New upstream release
+    - Add SASL authentication support (Closes: #574053)
+    - Add Build-Depend on libgcrypt11-dev (needed by SASL auth.)
+  * Fix build dependency against asciidoc (>=8.4 is needed). Thanks
+    to Michal Suchanek who spotted this bug (Closes: #574050).
+  * Update Standards-Version to 3.8.4
+  * Add debian/source/format to make lintian happy.
+  * Update lintian-override for weechat-curses manpage.
+  * Add new doc-base files (italian translations).
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 20 Mar 2010 18:09:38 +0100
+
+weechat (0.3.1.1-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 31 Jan 2010 19:18:42 +0000
+
+weechat (0.3.1-1) unstable; urgency=low
+
+  * New upstream release:
+   - Add ssl client certificate support (Closes: #453348)
+   - Fix a color bug in status line (Closes: #512957)
+  * Remove patch 'fix_ftbfs_kfreebsd' (fixed upstream)
+  * Maintainer became Debian Developer: adjust email, VCS and DM fields.
+  * Update doc-base files:
+   - Remove not needed asciidoc templates
+   - Add new translations
+  * Update debian/NEWS about new SSL behaviour.
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 16 Jan 2010 12:16:26 +0100
+
+weechat (0.3.0-2) unstable; urgency=low
+
+  * Add a patch to fix a FTBFS on GNU/kFreeBSD.
+
+ -- Emmanuel Bouthenot <kolter@openics.org>  Sat, 03 Oct 2009 13:22:10 +0000
+
+weechat (0.3.0-1) unstable; urgency=low
+
+  * New (final) upstream release.
+  * Upload to unstable.
+  * Add doc-base files for documentation.
+
+ -- Emmanuel Bouthenot <kolter@openics.org>  Tue, 15 Sep 2009 20:58:07 +0000
+
+weechat (0.3.0~rc3-1) experimental; urgency=low
+
+  * New (major) upstream release.
+    - Fix the excessive number of wakeups (Closes: #461945)
+  * Remove patches (merged upstream).
+  * Update debian/copyright: add new copyright holder.
+  * Packaging changes (taking into account future frontends: weechat-gtk,
+    weechat-qt, etc.):
+      - Drop weechat-common
+      - Add weechat-doc (Documentation)
+      - Add weechat-core (locales files, essential plugins)
+      - Add weechat-dev (plugins development files)
+      - Add weechat-dbg (gdb debugging symbols)
+  * Switch packaging from cdbs to debhelper 7.
+  * Update packages descriptions.
+  * Add a lintian-override against manpage line wrapping error.
+  * Update Standards-Version to 3.8.3.
+  * Add file UPGRADE_0.3 to doc files.
+  * Update debian/NEWS about major changes in this release.
+
+ -- Emmanuel Bouthenot <kolter@openics.org>  Sun, 16 Aug 2009 20:32:01 +0000
+
+weechat (0.2.6.3-1) unstable; urgency=low
+
+  * New upstream release
+    - drop the usage of the deprecated libgnutls-config script to detect
+      gnutls (Closes: #529912).
+
+ -- Emmanuel Bouthenot <kolter@openics.org>  Sat, 13 Jun 2009 21:47:56 +0000
+
+weechat (0.2.6.2-1) unstable; urgency=low
+
+  * New upstream release
+  * Add a patch which fix typos in aspell plugin.
+  * Refresh patch multiple_ip_servers according to the new upstream release.
+
+ -- Emmanuel Bouthenot <kolter@openics.org>  Sun, 19 Apr 2009 10:23:26 +0000
+
+weechat (0.2.6.1-1) unstable; urgency=low
+
+  * New upstream release which includes a fix against a possible remote
+    Denial of Service (crash) while receiving messages with special chars
+    (Closes: #519940).
+  * Refresh patch multiple_ip_servers according to the new upstream release.
+  * Update Standards-Version to 3.8.1.
+
+ -- Emmanuel Bouthenot <kolter@openics.org>  Mon, 16 Mar 2009 13:18:29 +0000
+
+weechat (0.2.6-3) unstable; urgency=low
+
+  * Add a patch to make weechat try to connect other server IPs
+    when the first one failed. Thanks to Lionel Elie Mamane for
+    his patch (Closes: #498610).
+  * Rename patch 01_perlembed_init_macros to perlembed_init_macros.
+  * Update debian/control:
+     - add ${misc:Depends}
+     - update descriptions
+  * Update debian/copyright about debian packaging.
+  * Add Vcs-Browser and Vcs-Git fields in debian/control.
+  * Add DM-Upload-Allowed field.
+
+ -- Emmanuel Bouthenot <kolter@openics.org>  Sat, 21 Feb 2009 18:34:08 +0000
+
+weechat (0.2.6-2) unstable; urgency=low
+
+  * Setting me as maintainer with previous maintainer agreement.
+  * Remove Uploaders field.
+  * Add quilt to Build-Depends.
+  * Add a patch to fix probable pthread mutex locks on hppa architecture
+  with perl plugin (Closes: #495080).
+  * Add a Homepage field.
+  * Update Standards-Version to 3.8.0.
+  * Reformat NEWS file to avoid lintian warnings.
+  * Fix typos in control file.
+
+ -- Emmanuel Bouthenot <kolter@openics.org>  Sun, 07 Sep 2008 19:39:42 +0000
+
+weechat (0.2.6-1) unstable; urgency=low
+
+  * New Upstream Version
+  * Switch to GPLv3 (update copyright)
+  * Update menu entry
+
+ -- Emmanuel Bouthenot <kolter@openics.org>  Thu, 06 Sep 2007 20:10:26 +0200
+
+weechat (0.2.5-1) unstable; urgency=low
+
+  * New Upstream Version
+
+ -- Julien Louis <ptitlouis@sysif.net>  Tue, 12 Jun 2007 19:42:15 +0200
+
+weechat (0.2.4-2) unstable; urgency=low
+
+  * Backport iso-2022-jp patch from upstream CVS (Closes: #421833).
+  * Set myself as Maintainer with previous Maintainer agreement.
+
+ -- Julien Louis <ptitlouis@sysif.net>  Thu, 03 May 2007 21:15:59 +0200
+
+weechat (0.2.4-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Julien Louis <ptitlouis@sysif.net>  Thu, 29 Mar 2007 21:01:46 +0200
+
+weechat (0.2.3-1) unstable; urgency=low
+
+  * New upstream release
+  * Bump lua build-dependency to liblua5.1-0-dev
+  * Add pkg-config to Build-Depends
+  * Remove some duplicated changelog entries.
+  * Improve weechat-plugins description
+
+ -- Julien Louis <ptitlouis@sysif.net>  Fri, 12 Jan 2007 09:01:46 +0100
+
+weechat (0.2.1-1) unstable; urgency=low
+
+  * New upstream release
+  * Override lintian menu-icon-missing warning
+    since the icon is in the weechat-common package.
+
+ -- Julien Louis <ptitlouis@sysif.net>  Mon,  2 Oct 2006 15:30:06 +0200
+
+weechat (0.2.0-2) unstable; urgency=low
+
+  * Add libaspell-dev to Build-Depends. This enables the aspell plugin built.
+
+ -- Julien Louis <ptitlouis@sysif.net>  Mon, 25 Sep 2006 23:56:16 +0200
+
+weechat (0.2.0-1) unstable; urgency=low
+
+  * New upstream release
+  * Rebuild against new default python version (Closes: #380985).
+
+ -- Julien Louis <ptitlouis@sysif.net>  Sat, 19 Aug 2006 17:10:59 +0200
+
+weechat (0.1.9-3) unstable; urgency=low
+
+  * Remove gnutls Build-Depends introduced in the previous upload
+  (closes: #379765).
+  * Move xsltproc, docbook-xml, docbook-xsl to Build-Depends-Indep.
+  * Change icon format from png to xpm.
+
+ -- Julien Louis <ptitlouis@sysif.net>  Tue, 25 Jul 2006 11:53:25 +0200
+
+weechat (0.1.9-2) unstable; urgency=low
+
+  * Fix ${datadir} expansion in configure.in which caused some problem when
+    loading scripts from /usr/share/weechat.
+  * Add weechat-scripts to weechat-plugins Suggests.
+  * Apply patch from Andreas Metzler to make weechat binNMUable
+    (Closes: #379419).
+  * Build-Depends against libgnutls13-dev | libgnutls-dev.
+
+ -- Julien Louis <ptitlouis@sysif.net>  Sun, 23 Jul 2006 17:28:34 +0200
+
+weechat (0.1.9-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Julien Louis <ptitlouis@sysif.net>  Thu, 25 May 2006 07:40:53 +0200
+
+weechat (0.1.8-2) unstable; urgency=low
+
+  * Switch to cdbs
+  * update debhelper compatibility to 5
+  * update Build-Depends
+  * update debian/copyright
+  * Bump Standards-Version, no changes needed
+
+ -- Julien Louis <ptitlouis@sysif.net>  Fri, 21 Apr 2006 22:39:00 +0200
+
+weechat (0.1.8-1) unstable; urgency=low
+
+  * New upstream release
+  * Add liblualib50-dev and docbook-xml to Build-Depends
+
+ -- Julien Louis <ptitlouis@sysif.net>  Sat, 18 Mar 2006 11:32:52 +0100
+
+weechat (0.1.7-2) unstable; urgency=low
+
+   * force linking against libpthread on GNU/Hurd (Closes: #350487)
+
+ -- Julien Louis <ptitlouis@sysif.net>  Sun,  5 Feb 2006 18:23:24 +0100
+
+weechat (0.1.7-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Julien Louis <ptitlouis@sysif.net>  Sat, 14 Jan 2006 14:14:29 +0100
+
+weechat (0.1.6-2) unstable; urgency=low
+
+  * Apply path to fix segfault when removing server.
+  * Move plugins in a separate package
+
+ -- Julien Louis <ptitlouis@sysif.net>  Tue, 22 Nov 2005 08:33:09 +0100
+
+weechat (0.1.6-1) unstable; urgency=low
+
+  * New upstream release
+  * Add menu entry
+  * Move libperl5.8 and python2.3 from Depends to Recommends
+
+ -- Julien Louis <ptitlouis@sysif.net>  Fri, 11 Nov 2005 22:21:08 +0100
+
+weechat (0.1.5-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Julien Louis <ptitlouis@sysif.net>  Sat, 24 Sep 2005 14:08:55 +0200
+
+weechat (0.1.4-2) unstable; urgency=low
+
+  * Add autotools-dev to Build-Depends.
+  * update autotools stuff automatically to always
+    have up-to-date config.{guess,sub}
+  * Update Build-Depends: libgnutls11-dev -> libgnutls-dev
+
+ -- Julien Louis <ptitlouis@sysif.net>  Mon,  1 Aug 2005 11:46:39 +0200
+
+weechat (0.1.4-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Julien Louis <ptitlouis@sysif.net>  Sat, 30 Jul 2005 16:26:55 +0200
+
+weechat (0.1.3-2) unstable; urgency=low
+
+  * Update config.{guess,sub} to fix FTBFS on k*BSD (Closes: #316791)
+
+ -- Julien Louis <ptitlouis@sysif.net>  Fri,  8 Jul 2005 21:30:38 +0200
+
+weechat (0.1.3-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Julien Louis <ptitlouis@sysif.net>  Sat,  2 Jul 2005 20:06:29 +0200
+
+weechat (0.1.2-3) unstable; urgency=low
+
+  * Apply patch against gui-display.c to fix curses color bug.
+  * remove dh_install --sourcedir to allow builds on woody.
+
+ -- Julien Louis <ptitlouis@sysif.net>  Sun, 19 Jun 2005 22:37:11 +0200
+
+weechat (0.1.2-2) unstable; urgency=low
+
+  * Patch src/gui/curse/gui-display.c to fix segfault
+    when config file does not exists (Closes: #310589).
+
+ -- Julien Louis <ptitlouis@sysif.net>  Tue, 24 May 2005 20:55:02 +0200
+
+weechat (0.1.2-1) unstable; urgency=low
+
+  * WeeChat version 0.1.2, see ChangeLog for detail.
+
+ -- Sébastien Helleu <flashcode@flashtux.org>  Sat, 21 May 2005 08:00:00 +0200
+
+weechat (0.1.1-2) unstable; urgency=low
+
+  * debian/control:
+    - Add myself to uploaders.
+    - Remove unnecessary dependency on weechat-gtk (Closes: #308287).
+
+ -- Julien Louis <ptitlouis@sysif.net>  Tue, 10 May 2005 22:38:52 +0200
+
+weechat (0.1.1-1) unstable; urgency=low
+
+  * WeeChat version 0.1.1, see ChangeLog for detail (closes: #306492)
+
+ -- Sébastien Helleu <flashcode@flashtux.org>  Sat, 20 Mar 2005 08:00:00 +0200
+
+weechat (0.1.0-1) unstable; urgency=low
+
+  * WeeChat version 0.1.0, see ChangeLog for detail.
+
+ -- Sébastien Helleu <flashcode@flashtux.org>  Sat, 12 Feb 2005 12:00:00 +0200
+
+weechat (0.0.9-1) unstable; urgency=low
+
+  * WeeChat version 0.0.9, see ChangeLog for detail.
+
+ -- FlashCode <flashcode@flashtux.org>  Sat, 01 Jan 2005 13:00:00 +0200
+
+weechat (0.0.8-1) unstable; urgency=low
+
+  * WeeChat version 0.0.8, see ChangeLog for detail.
+
+ -- FlashCode <flashcode@flashtux.org>  Sat, 30 Oct 2004 11:40:00 +0200
+
+weechat (0.0.7-1) unstable; urgency=low
+
+  * WeeChat version 0.0.7, see ChangeLog for detail.
+
+ -- FlashCode <flashcode@flashtux.org>  Sat, 08 Aug 2004 21:00:00 +0200
+
+weechat (0.0.6-1) unstable; urgency=low
+
+  * WeeChat version 0.0.6, see ChangeLog for detail.
+
+ -- FlashCode <flashcode@flashtux.org>  Sat, 05 Jun 2004 11:30:00 +0200
+
+weechat (0.0.5-1) unstable; urgency=low
+
+  * WeeChat version 0.0.5, see ChangeLog for detail.
+
+ -- FlashCode <flashcode@flashtux.org>  Sat, 07 Feb 2004 20:30:00 +0200
+
+weechat (0.0.4-1) unstable; urgency=low
+
+  * WeeChat version 0.0.4, see ChangeLog for detail.
+
+ -- FlashCode <flashcode@flashtux.org>  Thu, 01 Jan 2004 13:00:00 +0200
+
+weechat (0.0.3-1) unstable; urgency=low
+
+  * WeeChat version 0.0.3, see ChangeLog for detail.
+
+ -- FlashCode <flashcode@flashtux.org>  Mon, 03 Nov 2003 23:15:00 +0200
+
+weechat (0.0.2-1) unstable; urgency=low
+
+  * WeeChat version 0.0.2, see ChangeLog for detail.
+
+ -- FlashCode <flashcode@flashtux.org>  Sun, 05 Oct 2003 12:00:00 +0200
+
+weechat (0.0.1-1) unstable; urgency=low
+
+  * First version.
+
+ -- FlashCode <flashcode@flashtux.org>  Sat, 27 Sep 2003 12:00:00 +0200

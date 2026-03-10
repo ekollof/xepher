@@ -1,0 +1,98 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2012 Marco Paolone <marcopaolone@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// tag::standard[]
+*-a*, *--no-connect*::
+    Disabilita la connessione automatica ai server all'avvio di WeeChat.
+
+*-c*, *--colors*::
+    Mostra i colori prefefiniti nel terminale.
+
+// TRANSLATION MISSING
+*--daemon*::
+    Run WeeChat in background, as a daemon (works only with the command
+    *weechat-headless*).
+
+// TRANSLATION MISSING
+*--stdout*::
+    Display log messages on standard output instead of writing them in log file
+    (works only with the command *weechat-headless*, not compatible with option
+    "--daemon").
+
+// TRANSLATION MISSING
+*-d*, *--dir* _<path>_::
+    Force a single directory for all WeeChat files (directory is created if not found).
+    Four directories can be given, separated by colons (in this order: config,
+    data, cache, runtime).
+    If this option is not given, the environment variable WEECHAT_HOME is used
+    (if not empty).
+
+// TRANSLATION MISSING
+*-t*, *--temp-dir*::
+    Create a temporary WeeChat home directory and delete it on exit
+    (incompatible with option "-d"). +
+    The name of the directory is automatically built by WeeChat, with this
+    template: "weechat_temp_XXXXXX" (where "XXXXXX" is random). It it created
+    in the first available directory in this list: environment variable "TMPDIR",
+    "/tmp" (may be different according to the operating system), environment
+    variable "HOME", current directory. +
+    The temporary home directory has permissions 0700 (only owner can read,
+    write and execute).
+
+*-h*, *--help*::
+    Mostra l'aiuto.
+
+// TRANSLATION MISSING
+*-i*, *--build-info*::
+    Display build information and exit.
+
+*-l*, *--license*::
+    Mostra la licenza di WeeChat.
+
+*-p*, *--no-plugin*::
+    Disabilita il caricamento automatico dei plugin.
+
+// TRANSLATION MISSING
+*-P*, *--plugins* _<plugins>_::
+    Load only these plugins at startup (see /help weechat.plugin.autoload).
+    If this option is given, the option weechat.plugin.autoload is not used.
+
+// TRANSLATION MISSING
+*-r*, *--run-command* _<command>_::
+    Run command(s) after startup; many commands can be separated by semicolons,
+    this option can be given multiple times.
+
+*-s*, *--no-script*::
+    Disabilita il caricamento automatico dei script.
+
+// TRANSLATION MISSING
+*--upgrade*::
+    Upgrade WeeChat using session files generated with command `/upgrade -quit`.
+
+*-v*, *--version*::
+    Mostra la versione di WeeChat.
+
+*plugin:option*::
+    Opzione per il plugin.
+// end::standard[]
+
+// tag::debug[]
+// TRANSLATION MISSING
+*--no-dlclose*::
+    Do not call the function dlclose after plugins are unloaded.
+    This is useful with tools like Valgrind to display stack for unloaded
+    plugins.
+
+// TRANSLATION MISSING
+*--no-gnutls*::
+    Do not call the init and deinit functions of GnuTLS library.
+    This is useful with tools like Valgrind and electric-fence, to prevent
+    GnuTLS memory errors.
+
+// TRANSLATION MISSING
+*--no-gcrypt*::
+    Do not call the init and deinit functions of Gcrypt library.
+    This is useful with tools like Valgrind, to prevent Gcrypt memory errors.
+// end::debug[]

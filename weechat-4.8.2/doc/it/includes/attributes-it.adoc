@@ -1,0 +1,28 @@
+// SPDX-FileCopyrightText: 2017-2020 Dan Allen, Sarah White, Ryan Waldron
+// SPDX-FileCopyrightText: 2017-2021 Marco Ciampa <ciampix@posteo.net>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Italian translation, courtesy of Marco Ciampa <ciampix@posteo.net>
+:appendix-caption: Appendice
+:appendix-refsig: {appendix-caption}
+:caution-caption: Attenzione
+:chapter-signifier: Capitolo
+:chapter-refsig: {chapter-signifier}
+:example-caption: Esempio
+:figure-caption: Figura
+:important-caption: Importante
+:last-update-label: Ultimo aggiornamento
+ifdef::listing-caption[:listing-caption: Elenco]
+ifdef::manname-title[:manname-title: Nome]
+:note-caption: Nota
+:part-signifier: Parte
+:part-refsig: {part-signifier}
+ifdef::preface-title[:preface-title: Prefazione]
+:section-refsig: Sezione
+:table-caption: Tabella
+:tip-caption: Suggerimento
+:toc-title: Indice
+:untitled-label: Senza titolo
+:version-label: Versione
+:warning-caption: Attenzione

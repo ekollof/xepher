@@ -1,0 +1,71 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2016 Evgeny Shmarnev <eshmarnev@suse.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= weechat(1)
+:doctype: manpage
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: ru
+// TRANSLATION MISSING
+:man manual: WeeChat Manual
+:man source: WeeChat {revnumber}
+
+== НАЗВАНИЕ
+
+weechat - расширяемый чат-клиент
+
+== ОБЗОР
+
+// TRANSLATION MISSING
+[verse]
+*weechat* [-a|--no-connect] [-d|--dir <путь>] [-t|--temp-dir] [-p|--no-plugin] [-P|--plugins <plugins>] [-r|--run-command <команда>] [-s|--no-script] [--upgrade] [debug-option...] [<плагин>:<параметр>...]
+*weechat* [-c|--colors]
+*weechat* [-h|--help]
+*weechat* [-l|--license]
+*weechat* [-v|--version]
+
+== ОПИСАНИЕ
+
+WeeChat (Wee Enhanced Environment for Chat) это свободный чат-клиент - быстрый и легкий,
+он подходит для большинства операционных систем.
+Его легко настроить, кроме того, вы можете расширить его функицонал при помощи скриптов.
+
+== ПАРАМЕТРЫ
+
+include::includes/cmdline_options.ru.adoc[tag=standard]
+
+// TRANSLATION MISSING
+== DEBUG OPTIONS
+
+*WARNING:* these options are for debug purposes only, *DO NOT USE IN PRODUCTION!*
+
+include::includes/cmdline_options.ru.adoc[tag=debug]
+
+== ПАРАМЕТРЫ ПЛАГИНОВ
+
+include::includes/man.ru.adoc[tag=plugin_options]
+
+== ФАЙЛЫ
+
+include::includes/man.ru.adoc[tag=files]
+
+// TRANSLATION MISSING
+== SEE ALSO
+
+*weechat-headless*(1)
+
+== АВТОРЫ
+
+Эта man-страница написана {author}.
+
+Перевод: Alexander Turenko.
+
+== КОПИРАЙТ
+
+include::includes/man.ru.adoc[tag=copyright]
+
+== ПОДДЕРЖКА / СООБЩЕНИЯ ОБ ОШИБКАХ
+
+Получить помощь или сообщить об ошибке: https://weechat.org/about/support/

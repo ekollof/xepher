@@ -1,0 +1,416 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2012 Lázaro A. <uranio-235@myopera.com>
+// SPDX-FileCopyrightText: 2021 Victorhck <victorhck@mailbox.org>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= WeeChat guía rápida
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: es
+include::includes/attributes-es.adoc[]
+
+[[start]]
+== Iniciar WeeChat
+
+Es recomendable un emulador de terminal para X (pero no indispensable)
+rxvt-unicode: tiene un buen soporte para UTF-8, y no da problemas con
+los atajos de teclado predeterminados.
+
+Ejecuta desde una consola:
+
+[source,shell]
+----
+weechat
+----
+
+[[help]]
+== Ayuda en línea
+
+WeeChat tiene ayuda para todos los comandos, simplemente escriba:
+
+----
+/help
+----
+
+Para obtener ayuda específica de un comando, escriba:
+
+----
+/help comando
+----
+
+También hay ayuda disponible para las opciones:
+
+----
+/help config.section.option
+----
+
+(donde `config` es el nombre de la configuración del núcleo o del
+complemento que desea configurar,  `section`, la sección de esa configuración
+y `option` el nombre de la opción).
+
+[[options]]
+== Configurar las opciones
+
+Para configurar una opción, utilice:
+
+----
+/set config.section.option valor
+----
+
+WeeChat usará inmediatamente el nuevo valor asignado (*no* es necesario
+reiniciar WeeChat después de aplicar cambios a la configuración).
+
+Todas las opciones se guardarán de manera automática cuando cierre
+WeeChat o usando el comando `/save` para forzar a WeeChat a
+guardar todos los archivos de configuración.
+
+[IMPORTANT]
+*No se recomienda* editar los archivos de configuración a mano porque WeeChat
+puede escribirlos en cualquier momento (por ejemplo al ejecutar `/quit`) y después de cualquier cambio
+debería ejecutar el comando `/reload` (con el riesgo de perder otros cambios
+que todavía no fueron guardados con `/save`). +
+Puede utilizar el comando `/set`, que comprueba el valor y aplica inmediatamente
+los cambios.
+
+El complemento _fset_ le permite navegar fácilmente por las opciones y cambiarlas.
+
+Por ejemplo para mostrar las opciones de WeeChat:
+
+----
+/fset weechat.*
+----
+
+Opciones de IRC:
+
+----
+/fset irc.*
+----
+
+El comando `/fset` dispone de autocompletado de parte de los nombres de opciones, así por ejemplo si
+escribe `/fset hot` y presiona kbd:[Tab] el resto del comando será autocompletado como `/fset hotlist`.
+Si pulsa kbd:[Enter], se mostrarán las opciones sobre los atajos de teclado.
+
+Para más información sobre el comando `/fset` y las teclas, vea `/help fset`.
+
+[[core_vs_plugins]]
+== Núcleo vs Complementos
+
+Llamaremos "Núcleo de WeeChat" a la aplicación que solo se usa para
+mostrar información en pantalla e interactuar con el usuario, eso es lo
+único que hace el núcleo de WeeChat sin no tiene complementos. (para los
+fieles seguidores: IRC fue parte del núcleo para las versiones ≤
+0.2.6).
+
+Todos los protocolos de red como IRC, provienen de complementos separados.
+
+Use el comando `/plugin` para ver una lista de los complementos cargados,
+seguramente vera irc y otros.
+
+[[add_irc_server]]
+== Añadir un servidor IRC
+
+Puede añadir un servidor IRC mediante el comando `/server`, por ejemplo:
+
+----
+/server add libera irc.libera.chat/6697 -tls
+----
+
+En este comando, `libera` es el nombre interno del servidor utilizado por WeeChat:
+más tarde podrá conectar con ese servidor mediante `/connect libera` y las opciones del servidor
+serán _irc.server.libera.xxx_.
+
+Si se encuentra perdido, puede consultar la ayuda disponible:
+
+----
+/help server
+----
+
+[[irc_server_options]]
+== Personalizar las opciones de un servidor IRC
+
+WeeChat usa las opciones predeterminadas para todos los servidores
+("predeterminado") si no le especifica un valor individual a un servidor
+en específico. Esas opciones predeterminadas son las que se muestran en
+"irc.server_default.*"
+
+Para cada opción de "server", WeeChat usa estos valores previamente
+asignados siempre y cuando no sean Nulos. Si no hay nada asignado,
+WeeChat usara los valores predeterminados ("irc.server_default.xxx")
+
+Por ejemplo, tenemos el nick por defecto (que se basa en su login) pero
+usted puedes sobreescribirlo para el servidor identificado como libera
+de la siguiente manera:
+
+----
+/set irc.server.libera.nicks "nick,nick2,nick3,nick4,nick5"
+----
+
+También para configurar el nombre de usuario y el nombre real:
+
+----
+/set irc.server.libera.username "Mi nombre de usuario"
+/set irc.server.libera.realname "Mi nombre real"
+----
+
+Para que el servidor se conecte cuando WeeChat inicie:
+
+----
+/set irc.server.libera.autoconnect on
+----
+
+Si la opción SASL está disponible en el servidor, puede utilizarla para autentificarse (será
+identificado o identificada antes de unirse a los canales):
+
+----
+/set irc.server.libera.sasl_username "nick"
+/set irc.server.libera.sasl_password "xxxxxxx"
+----
+
+Para ejecutar un comando después de conectarse al servidor, por ejemplo autentificarse
+con el servicio de identificación de nicks nickserv (solo si no utiliza SASL para autentificarse):
+
+----
+/set irc.server.libera.command "/msg nickserv identify xxxxxxx"
+----
+
+[NOTE]
+Muchos comandos en la opción _command_ pueden ser separados por `;` (punto y coma).
+
+Si quiere proteger su contraseña en los archivos de configuración, puede utilizar
+una securización de los datos.
+
+Primero configure una frase de contraseña
+
+----
+/secure passphrase this is my secret passphrase
+----
+
+Después añada un dato securizado con su contraseña de libera:
+
+----
+/secure set libera_password xxxxxxx
+----
+
+Después puede utilizar `+${sec.data.libera_password}+` en vez de su contraseña en
+las opciones de IRC mencionadas anteriormente, por ejemplo:
+
+----
+/set irc.server.libera.sasl_password "${sec.data.libera_password}"
+----
+
+Para unirse automáticamente a canales cuando el servidor se conecte:
+
+----
+/set irc.server.libera.autojoin "#uncanal,#otrocanal"
+----
+
+// TRANSLATION MISSING
+The `/autojoin` command lets you configure the _autojoin_ option easily
+(see `/help autojoin`).
+
+// TRANSLATION MISSING
+You can also configure WeeChat to automatically update the _autojoin_ option
+when you join or leave channels:
+
+----
+/set irc.server_default.autojoin_dynamic on
+----
+
+Para eliminar un valor asignado a una opción de servidor y usar los
+valores predeterminados en su lugar, por ejemplo, usar el nick predeterminado
+(irc.server_default.nicks):
+
+----
+/unset irc.server.libera.nicks
+----
+
+Otras opciones: puede configurar otras opciones con el siguiente comando,
+donde "xxx" es el nombre de la opción.
+
+----
+/set irc.server.libera.xxx valor
+----
+
+[TIP]
+Puede completar el nombre y el valor de las opciones con la tecla kbd:[Tab]
+y kbd:[Shift+Tab] para un autocompletado parcial (útil para palabras largas como
+el nombre de la opción).
+
+[[connect_to_irc_server]]
+== Conectarse a un servidor IRC
+
+----
+/connect libera
+----
+
+Con este comando, WeeChat se conecta al servidor de libera y inicia sesión automáticamente en
+los canales configurados en la opción del servidor "autojoin".
+
+[NOTE]
+Este comando también puede usarse para crear y conectarse a un nuevo
+servidor sin usar el comando `/server` (vea `/help connect`).
+
+Por defecto, todos los buffers del servidor están junto al buffer de
+núcleo. Para cambiar entre el buffer del núcleo y el buffer de los
+servidores use kbd:[Ctrl+x].
+
+Es posible deshabilitar esta manera de tener todos los buffer de
+servidores juntos para tenerlos de manera independiente:
+
+----
+/set irc.look.server_buffer independent
+----
+
+[[join_part_irc_channels]]
+== join/part y canales IRC
+
+Se une a un canal llamado "#canal":
+
+----
+/join #canal
+----
+
+Sale de un canal (mantiene el buffer abierto):
+
+----
+/part [mensaje de partida]
+----
+
+Cierra un servidor, canal o buffer privado (`/close` es un alias para
+`/buffer close`):
+
+----
+/close
+----
+
+[CAUTION]
+Al cerrar el buffer del servidor cerrará todos los buffer de canales/privados
+
+Para desconectar del servidor, en el buffer del servidor ejecute:
+
+----
+/disconnect
+----
+
+[[irc_private_messages]]
+== Mensajes privados en IRC
+
+Abre un buffer y envíe un mensaje a otra persona (nick _foo_):
+
+----
+/query foo esto es un mensaje
+----
+
+Cierra el buffer privado:
+
+----
+/close
+----
+
+[[buffer_window]]
+== Manipulando buffer/ventana
+
+Un buffer, es un componente vinculado a un complemento con un número, una
+categoría y un nombre. El buffer contiene los datos que se muestran en
+la pantalla.
+
+Una ventana es una vista de un buffer. De manera predeterminada, una sola ventana
+muestra un solo buffer. Si divide la pantalla, podrá ver muchas
+ventanas conteniendo varios buffer al mismo tiempo.
+
+Comandos para manipular buffer y ventana:
+
+----
+/buffer
+/window
+----
+
+Por ejemplo, para dividir la pantalla una pequeña ventana (1/3)
+junto a otras mas grande (2/3) use el comando
+
+----
+/window splitv 33
+----
+
+Para eliminar esa división:
+
+----
+/window merge
+----
+
+[[key_bindings]]
+== Atajos de teclado
+
+// TRANSLATION MISSING
+WeeChat usa muchas teclas por defecto. Éstas, están bien explicadas en la documentación
+(link:weechat_user.en.html#key_bindings[User's guide / Key bindings ^↗^^]),
+pero debe conocer al menos la mas importantes.
+
+- kbd:[Alt+←] / kbd:[Alt+→] o kbd:[F5] / kbd:[F6]: Cambiará al buffer
+  siguiente/anterior
+// TRANSLATION MISSING
+- kbd:[F1] / kbd:[F2]: desplazará la barra de scroll con la lista de buffers ("buflist")
+- kbd:[F7] / kbd:[F8]: cambiará a la siguiente/anterior ventana (cuando la pantalla
+  este dividida)
+- kbd:[F9] / kbd:[F10]: desplazamiento del texto en la barra de título
+- kbd:[F11] / kbd:[F12]: desplazamiento del texto en la lista de nicks
+- kbd:[Tab]: completa los textos o nicks que se escriben
+- kbd:[PgUp] / kbd:[PgDn]: desplazamiento del texto en el buffer
+- kbd:[Alt+a]: salta al siguiente buffer con actividad reciente
+
+De acuerdo con su teclado y/o sus necesidades, puede asignar teclas a un
+comando usando el comando `/key`.
+Una combinación de teclas muy valiosa es kbd:[Alt+k] para hallar el código de
+alguna tecla.
+
+Por ejemplo, para asignar la combinación kbd:[Alt+!] al comando `/buffer close`:
+
+----
+/key bind (presionamos Alt-k) (presionamos Alt-!) /buffer close
+----
+
+El comando tendrá un aspecto similar a esto:
+
+----
+/key bind meta-! /buffer close
+----
+
+Para eliminar una combinación:
+
+----
+/key unbind meta-!
+----
+
+[[plugins_scripts]]
+== Complementos/scripts
+
+En algunas distribuciones como Debian, los complementos están disponibles en
+un paquete separado (como weechat-plugin).
+Los complementos se cargan de manera automática cuando son encontrados por WeeChat
+(por favor, refierase a la documentación de WeeChat para ver como cargar/descargar
+complementos y scripts).
+
+Muchos scripts externo (ofrecidos por colaboradores) están disponibles para WeeChat, puede
+descargar e instalar scripts desde el repositorio mediante el comando `/script`,
+por ejemplo:
+
+----
+/script install go.py
+----
+
+Vea `/help script` para obtener más información.
+
+// TRANSLATION MISSING
+A list of scripts is available in WeeChat with `/script` or on
+https://weechat.org/scripts/[this page ^↗^^].
+
+[[more_doc]]
+== Más documentación
+
+// TRANSLATION MISSING
+You can now use WeeChat and read
+https://weechat.org/doc/[FAQ/documentation ^↗^^]
+for any other questions.
+
+¡Disfrute de WeeChat!

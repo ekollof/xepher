@@ -1,0 +1,87 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2016 Krzysztof Koroscik <soltys1@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// tag::standard[]
+*-a*, *--no-connect*::
+    Wyłącza automatyczne łączenie się z serwerami podczas uruchamiania WeeChat.
+
+*-c*, *--colors*::
+    Wyświetla domślne kolory w terminalu.
+
+*--daemon*::
+    Uruchamia WeeChat w tle jako demona (działa tylko z komendą *weechat-headless*).
+
+*--stdout*::
+    Wyświetla informacje z logów na standardowe wyjście zamiast zapisywać je do
+    pliku z logami (działa tylko z opcją *weechat-headless*, nie kompatybilne z
+    opcją "--daemon").
+
+*-d*, *--dir* _<ścieżka>_::
+    Wymusza użycie wskazanego katalogu na wszyskie pliki WeeChat (katalog zostanie
+    utworzony jeśli nie istnieje). Można podać cztery katalogi oddzielając
+    je dwukropkami (w kolejności: config, data, cache, runtime).
+    Jeśli ta opcja nie zostanie podada, użyta zostanie zawartość zmiennej
+    WEECHAT_HOME (jeśli została ustawiona).
+
+*-t*, *--temp-dir*::
+    Tworzy tymczasowy katalog dla ustawień WeeChat, który jest kasowany po wyłączeniu
+    aplikacji (nie kompatybilne z opcją "-d"). +
+    Nazwa katalogu jest automatyczne tworzona według wzoru: "weechat_temp_XXXXXX"
+    (gdzie "XXXXXX" jest losowe). Katalog jest tworzony w pierwszym dostępnym miejscu
+    według tej listy: zmienna środowiskowa "TMPDIR", "/tmp" (może być inaczej na
+    niektórych systemach operacyjnych), zmienna środowiskowa "HOME", obecny katalog. +
+    Utworony katalog ma uprawnienia 0700 (tylko właściciel może czytać, pisać i
+    wykonywać).
+
+*-h*, *--help*::
+    Wyświetla pomoc.
+
+*-i*, *--build-info*::
+    Wyświetla informację o kompilacji.
+
+*-l*, *--license*::
+    Wyświetla licencję.
+
+*-p*, *--no-plugin*::
+    Wyłącza automatyczne ładowanie wtyczek.
+
+*-P*, *--plugins* _<wtyczki>_::
+    Załaduje przy starcie tylko podane wtyczki (zobacz /help weechat.plugin.autoload).
+    Jeśli ta opcja zotanie użyta, opcja weechat.plugin.autoload zostanie zignorowana.
+
+*-r*, *--run-command* _<komenda>_::
+    Uruchamia komende(-y) po uruchomieniu; kilka komend należy oddzielić średnikiem,
+    ta opcja może zotać podana kilka razy.
+
+*-s*, *--no-script*::
+    Wyłącza automatyczne ładowanie skryptów.
+
+*--upgrade*::
+    Aktualizuje WeeChat z użyciem plików sesji wygenerowanych przez komende
+    `/upgrade -quit`.
+
+*-v*, *--version*::
+    Wyświetla wersję WeeChat.
+
+*wtyczka:opcja*::
+    Opcja dla wtyczki.
+// end::standard[]
+
+// tag::debug[]
+*--no-dlclose*::
+    Nie wołaj funkcji dlclose po wyładowaniu wtyczek.
+    Jest to przydatne przy użyciu narzędzi jak Valgrind do wyświetlania
+    stosu wyładowywanych wtyczek.
+
+*--no-gnutls*::
+    Nie wywołuj funkcji (de)inicjijących z biblioteki GnuTLS.
+    Jest to przydatne przy użyciu narzędzi jak Valgrind i electric-fence,
+    aby zapobiec błędą pamięci GnuTLS.
+
+*--no-gcrypt*::
+    Nie wywołuj funkcji (de)inicjijących z biblioteki Gcrypt.
+    Jest to przydatne przy użyciu narzędzi jak Valgrind, aby zapobiec błędą
+    pamięci Gcrypt.
+// end::debug[]

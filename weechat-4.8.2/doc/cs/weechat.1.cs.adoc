@@ -1,0 +1,71 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2005-2011 Jiri Golembiovsky <golemj@gmail.com>
+// SPDX-FileCopyrightText: 2015-2017 Ondřej Súkup <mimi.vx@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= weechat(1)
+:doctype: manpage
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: cs
+// TRANSLATION MISSING
+:man manual: WeeChat Manual
+:man source: WeeChat {revnumber}
+
+== JMÉNO
+
+weechat - the extensible chat client
+
+== PŘEHLED
+
+// TRANSLATION MISSING
+[verse]
+*weechat* [-a|--no-connect] [-d|--dir <path>] [-t|--temp-dir]  [-p|--no-plugin] [-P|--plugins <plugins>] [-r|--run-command <command>] [-s|--no-script] [--upgrade] [debug-option...] [plugin:option...]
+*weechat* [-c|--colors]
+*weechat* [-h|--help]
+*weechat* [-l|--license]
+*weechat* [-v|--version]
+
+== POPIS
+
+WeeChat (Wee Enhanced Environment for Chat) je svobodný chatovací klient.
+Je lehký, plně konfigurovatelný a lehce rozšiřitelný pomocí pluginů a scriptů
+v obvyklých sciptovacích jazycích.
+
+== VOLBY
+
+include::includes/cmdline_options.cs.adoc[tag=standard]
+
+// TRANSLATION MISSING
+== DEBUG OPTIONS
+
+*WARNING:* these options are for debug purposes only, *DO NOT USE IN PRODUCTION!*
+
+include::includes/cmdline_options.cs.adoc[tag=debug]
+
+== VOLBY PLUGINŮ
+
+include::includes/man.cs.adoc[tag=plugin_options]
+
+== SOUBORY
+
+include::includes/man.cs.adoc[tag=files]
+
+// TRANSLATION MISSING
+== SEE ALSO
+
+*weechat-headless*(1)
+
+== AUTOŘI
+
+Tato manuálová stránka byla napsána {author}.
+Tato manuálová stránka byla přeložena Ondřejem Súkupem.
+
+== COPYRIGHT
+
+include::includes/man.cs.adoc[tag=copyright]
+
+== PODPORA / HLÁŠENÍ CHYB
+
+Pro pomoc nebo hlášení chyb https://weechat.org/about/support/

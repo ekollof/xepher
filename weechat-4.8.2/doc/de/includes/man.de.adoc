@@ -1,0 +1,119 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2025 Nils Görs <weechatter@arcor.de>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// tag::plugin_options[]
+Um eine vollständige Dokumentation der Optionen zu erhalten, siehe
+https://weechat.org/doc/[WeeChat user's guide].
+
+Mit der IRC-Erweiterung können Sie sich mit einer URL wie der folgenden mit einem Server verbinden:
+
+    irc[6][s]://[[nickname][:password]@]server[:port][/#channel1[,#channel2...]]
+
+Um dem WeeChat IRC Support-Channel, mit dem Nick "mynick", beizutreten:
+
+    irc://mynick@irc.libera.chat/#weechat
+
+Um eine IPv6 Adresse zu nutzen, muss diese in eckige Klammern gesetzt werden:
+
+    irc://mynick@[2001:db8:0:85a3::ac1f:8001]:6668/#test
+// end::plugin_options[]
+
+// tag::files[]
+$HOME/.config/weechat/weechat.conf::
+    WeeChats Konfigurationsdatei
+
+$HOME/.config/weechat/plugins.conf::
+    Konfigurationsdatei für Erweiterungen
+
+$HOME/.config/weechat/sec.conf::
+    Konfigurationsdatei mit schutzwürdigen Daten
+
+$HOME/.config/weechat/alias.conf::
+    Konfigurationsdatei für _alias_ Erweiterung
+
+$HOME/.config/weechat/buflist.conf::
+    Konfigurationsdatei für _buflist_ Erweiterung
+
+$HOME/.config/weechat/charset.conf::
+    Konfigurationsdatei für _charset_ Erweiterung
+
+$HOME/.config/weechat/exec.conf::
+    Konfigurationsdatei für _exec_ Erweiterung
+
+$HOME/.config/weechat/fifo.conf::
+    Konfigurationsdatei für _fifo_ Erweiterung
+
+$HOME/.config/weechat/fset.conf::
+    Konfigurationsdatei für _fset_ Erweiterung
+
+$HOME/.config/weechat/guile.conf::
+    Konfigurationsdatei für _guile_ Erweiterung
+
+$HOME/.config/weechat/irc.conf::
+    Konfigurationsdatei für _irc_ Erweiterung
+
+$HOME/.config/weechat/javascript.conf::
+    Konfigurationsdatei für _javascript_ Erweiterung
+
+$HOME/.config/weechat/logger.conf::
+    Konfigurationsdatei für _logger_ Erweiterung
+
+$HOME/.config/weechat/lua.conf::
+    Konfigurationsdatei für _lua_ Erweiterung
+
+$HOME/.config/weechat/perl.conf::
+    Konfigurationsdatei für _perl_ Erweiterung
+
+$HOME/.config/weechat/php.conf::
+    Konfigurationsdatei für _php_ Erweiterung
+
+$HOME/.config/weechat/python.conf::
+    Konfigurationsdatei für _python_ Erweiterung
+
+$HOME/.config/weechat/relay.conf::
+    Konfigurationsdatei für _relay_ Erweiterung
+
+$HOME/.config/weechat/ruby.conf::
+    Konfigurationsdatei für _ruby_ Erweiterung
+
+$HOME/.config/weechat/script.conf::
+    Konfigurationsdatei für _script_ Erweiterung
+
+$HOME/.config/weechat/spell.conf::
+    Konfigurationsdatei für _spell_ Erweiterung
+
+$HOME/.config/weechat/tcl.conf::
+    Konfigurationsdatei für _tcl_ Erweiterung
+
+$HOME/.config/weechat/trigger.conf::
+    Konfigurationsdatei für _trigger_ Erweiterung
+
+$HOME/.config/weechat/typing.conf::
+    Konfigurationsdatei für _typing_ Erweiterung
+
+$HOME/.config/weechat/xfer.conf::
+    Konfigurationsdatei für _xfer_ Erweiterung
+
+$HOME/.local/share/weechat/weechat.log::
+    WeeChat Protokolldatei
+// end::files[]
+
+// tag::copyright[]
+WeeChat wird programmiert von Sébastien Helleu und weiteren Beteiligten (eine vollständige Auflistung
+findet man in der AUTHORS.md Datei).
+
+// REUSE-IgnoreStart
+Copyright (C) 2003-2025 {author}
+// REUSE-IgnoreEnd
+
+WeeChat is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+Please read the COPYING file for more information.
+
+Web: https://weechat.org/
+// end::copyright[]

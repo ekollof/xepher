@@ -1,0 +1,1598 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2014-2019 Ryuunosuke Ayanokouzi <i38w7i3@yahoo.co.jp>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= WeeChat 開発者ガイド
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: ja-jp
+include::includes/attributes-ja.adoc[]
+
+このマニュアルは WeeChat チャットクライアントについての文書で、これは WeeChat の一部です。
+
+// TRANSLATION MISSING
+Latest version of this document can be found on
+https://weechat.org/doc/[this page ^↗^^].
+
+[[introduction]]
+== はじめに
+
+WeeChat (Wee Enhanced Environment for Chat)
+は無料のチャットクライアントで、高速、軽量、多くのオペレーティングシステムで動くように設計されています。
+
+このマニュアルは WeeChat の内部構造について書かれています:
+
+* リポジトリ
+* コーディングルール
+* 中核部の内部構造
+* プラグインの内部構造
+* WeeChat に貢献する方法
+
+[[repositories]]
+== リポジトリ
+
+WeeChat リポジトリは GitHub organization の https://github.com/weechat[weechat ^↗^^] にあります:
+
+リポジトリのリスト:
+
+weechat::
+    ソースコードと文書を含むコアリポジトリ
+
+scripts::
+    weechat.org に投稿された _公式_ スクリプト
+
+// TRANSLATION MISSING
+weechat.org::
+    source of https://weechat.org/[WeeChat website ^↗^^]
+
+weercd::
+    IRC テストサーバ
+
+qweechat::
+    WeeChat の Qt リモート GUI。
+
+このマニュアルは _weechat_ リポジトリだけを説明しています。
+
+[[overview]]
+=== 概要
+
+主な WeeChat ディレクトリは:
+
+[width="100%",cols="2m,3",options="header"]
+|===
+| ディレクトリ       | 説明
+| src/               | ソースコードのルートディレクトリ
+|    core/           | コア関数: エントリポイント、内部構造体
+|       hook/        | フック関数
+|    gui/            | バッファ、ウィンドウ、... を操作する関数 (全てのインターフェースで使う)
+|       curses/      | curses インターフェース
+|          headless/ | ヘッドレスモード (インターフェースなし)
+|          normal/   | curses インターフェース
+|    plugins/        | プラグインとスクリプト向け API
+|       alias/       | alias プラグイン
+|       buflist/     | buflist プラグイン
+|       charset/     | charset プラグイン
+|       exec/        | exec プラグイン
+|       fifo/        | fifo プラグイン (WeeChat にコマンドを送信する FIFO パイプ)
+|       fset/        | fset (高速設定) プラグイン
+|       guile/       | guile (scheme) スクリプト用 API
+|       irc/         | IRC (Internet Relay Chat) プラグイン
+|       javascript/  | javascript スクリプト用 API
+|       logger/      | logger プラグイン (表示されたメッセージをファイルに書き込む)
+|       lua/         | lua スクリプト用 API
+|       perl/        | perl スクリプト用 API
+|       php/         | php スクリプト用 API
+|       python/      | python スクリプト用 API
+|       relay/       | relay プラグイン (irc プロキシ + リモートインターフェース用の中継)
+|       ruby/        | ruby スクリプト用 API
+|       script/      | スクリプトマネージャ
+|       spell/       | spell プラグイン
+|       tcl/         | tcl スクリプト用 API
+|       trigger/     | trigger プラグイン
+|       typing/      | typing プラグイン
+|       xfer/        | xfer (IRC DCC ファイル/チャット)
+| tests/             | テスト
+// TRANSLATION MISSING
+|    fuzz/           | Fuzz testing.
+// TRANSLATION MISSING
+|       core/        | Fuzz testing for core functions.
+|    unit/           | 単体テスト
+|       core/        | コア関数の単体テスト
+// TRANSLATION MISSING
+|          hook/     | Unit tests for hook functions.
+|       gui/         | インターフェース関数の単体テスト
+// TRANSLATION MISSING
+|          curses/   | Unit tests for Curses interface functions.
+|       scripts/     | スクリプト API テスト
+|          python/   | スクリプト API テストを生成、実行する Python スクリプト
+|       plugins/     | プラグインの単体テスト
+// TRANSLATION MISSING
+|          alias/    | Unit tests for alias plugin.
+|          irc/      | IRC プラグインの単体テスト
+// TRANSLATION MISSING
+|          logger/   | Unit tests for logger plugin.
+// TRANSLATION MISSING
+|          relay/    | Unit tests for relay plugin.
+// TRANSLATION MISSING
+|          trigger/  | Unit tests for trigger plugin.
+// TRANSLATION MISSING
+|          typing/   | Unit tests for typing plugin.
+// TRANSLATION MISSING
+|          xfer/     | Unit tests for xfer plugin.
+| doc/               | 文書
+| po/                | 翻訳ファイル (gettext)
+| debian/            | Debian パッケージ用
+|===
+
+[[sources]]
+=== ソースコード
+
+[[sources_core]]
+==== コア
+
+WeeChat "core" は以下のディレクトリに配置されています:
+
+* _src/core/_: コア関数 (データ操作用)
+* _src/gui/_: インターフェースの関数 (バッファ、ウィンドウ、...)
+
+[width="100%",cols="2m,3",options="header"]
+|===
+| パス/ファイル名               | 説明
+| core/                         | コア関数: エントリポイント、内部構造体
+|    core-arraylist.c           | 配列リスト
+|    core-backtrace.c           | クラッシュした際にバックトレースを表示
+// TRANSLATION MISSING
+|    core-calc.c                | Calculate result of expressions.
+|    core-command.c             | WeeChat コアコマンド
+|    core-completion.c          | デフォルト補完
+|    core-config-file.c         | 設定ファイル管理
+|    core-config.c              | WeeChat コアの設定オプション (weechat.conf ファイル)
+// TRANSLATION MISSING
+|    core-crypto.c              | Cryptographic functions.
+|    core-debug.c               | デバッグ用関数
+// TRANSLATION MISSING
+|    core-dir.c                 | Directory/file functions.
+// TRANSLATION MISSING
+|    core-doc.c                 | Build of files for documentation.
+|    core-eval.c                | 内部変数へのリファレンスを含む式を評価
+|    core-hashtable.c           | ハッシュテーブル
+|    core-hdata.c               | hdata (ハッシュテーブルを用いて直接データを読む)
+|    core-hook.c                | フック
+|    core-infolist.c            | インフォリスト (オブジェクトに関するデータを含むリスト)
+|    core-input.c               | コマンドおよびテキストの入力
+|    core-list.c                | ソート済みリスト
+|    core-log.c                 | WeeChat ログファイル (weechat.log) に書き込む
+|    core-network.c             | ネットワーク関数 (サーバやプロキシへの接続)
+|    core-proxy.c               | プロキシ管理
+|    core-secure.c              | データ保護用の関数
+|    core-secure-buffer.c       | データ保護用のバッファ
+|    core-secure-config.c       | 安全なデータオプション (sec.conf ファイル)
+// TRANSLATION MISSING
+|    core-signal.c              | Signal functions.
+|    core-string.c              | 文字列関数
+// TRANSLATION MISSING
+|    core-sys.c                 | System functions.
+|    core-upgrade-file.c        | 内部アップグレードシステム
+|    core-upgrade.c             | WeeChat コアのアップグレード (バッファ、行、履歴、...)
+|    core-url.c                 | URL 転送 (libcurl を使う)
+|    core-utf8.c                | UTF-8 関数
+|    core-util.c                | その他の関数
+|    core-version.c             | WeeChat バージョンについての関数
+|    weechat.c                  | 主要関数: コマンドラインオプション、起動
+|    hook/                      | フック関数
+|       hook-command-run.c      | "command_run" フック
+|       hook-command.c          | "command" フック
+|       hook-completion.c       | "completion" フック
+|       hook-config.c           | "config" フック
+|       hook-connect.c          | "connect" フック
+|       hook-fd.c               | "fd" フック
+|       hook-focus.c            | "focus" フック
+|       hook-hdata.c            | "hdata" フック
+|       hook-hsignal.c          | "hsignal" フック
+|       hook-info-hashtable.c   | "info_hashtable" フック
+|       hook-info.c             | "info" フック
+|       hook-infolist.c         | "infolist" フック
+|       hook-line.c             | "line" フック
+|       hook-modifier.c         | "modifier" フック
+|       hook-print.c            | "print" フック
+|       hook-process.c          | "process" フック
+|       hook-signal.c           | "signal" フック
+|       hook-timer.c            | "timer" フック
+|       hook-url.c              | "url" フック
+| gui/                          | バッファ、ウィンドウなどの関数 (全てのインターフェースで利用)
+|    gui-bar-item.c             | バー要素
+|    gui-bar-window.c           | バーウィンドウ
+|    gui-bar.c                  | バー
+|    gui-buffer.c               | バッファ
+|    gui-chat.c                 | チャット関数 (メッセージの表示、...)
+|    gui-color.c                | 色関数
+|    gui-completion.c           | コマンドラインの補完
+|    gui-cursor.c               | カーソルモード (カーソルを自由に移動)
+|    gui-filter.c               | フィルタ
+|    gui-focus.c                | フォーカスについての関数 (カーソルモードとマウス用)
+|    gui-history.c              | コマンドおよびバッファに保存されたテキスト
+|    gui-hotlist.c              | ホットリスト管理 (活発なバッファのリスト)
+|    gui-input.c                | 入力関数 (入力バー)
+|    gui-key.c                  | キーボード関数
+|    gui-layout.c               | レイアウト
+|    gui-line.c                 | バッファ中の行
+|    gui-mouse.c                | マウス
+|    gui-nick.c                 | ニックネーム関数
+|    gui-nicklist.c             | バッファのニックネームリスト
+|    gui-window.c               | ウィンドウ
+|    curses/                    | curses インターフェース
+|       gui-curses-bar-window.c | バーウィンドウへの表示
+|       gui-curses-chat.c       | チャットエリアへの表示 (メッセージ)
+|       gui-curses-color.c      | 色関数
+|       gui-curses-key.c        | キーボード関数 (デフォルトキー、入力の読み取り)
+|       gui-curses-main.c       | WeeChat メインループ (キーボードやネットワークイベントの待ち受け)
+|       gui-curses-mouse.c      | マウス
+|       gui-curses-term.c       | 端末についての関数
+|       gui-curses-window.c     | ウィンドウ
+|       headless/               | ヘッドレスモード (インターフェースなし)
+|          main.c               | ヘッドレスモード用のエントリポイント
+|          ncurses-fake.c       | ダミーの ncurses ライブラリ
+|       normal/                 | curses インターフェース
+|          main.c               | curses インターフェース用のエントリポイント
+|===
+
+[[sources_plugins]]
+==== プラグイン
+
+[width="100%",cols="2m,3",options="header"]
+|===
+| パス/ファイル名                    | 説明
+| plugins/                           | プラグインのルートディレクトリ
+|    plugin.c                        | プラグイン管理 (動的 C 言語ライブラリのロード/アンロード)
+|    plugin-api.c                    | プラグイン API の追加関数 (WeeChat コア関数のラッパー)
+|    plugin-api-info.c               | プラグイン API 用のインフォ/インフォリストに関する追加関数
+|    plugin-config.c                 | プラグイン設定オプション (plugins.conf ファイル)
+|    plugin-script.c                 | スクリプトプラグインの共用関数
+|    plugin-script-api.c             | スクリプト API 関数: 一部のプラグイン API 関数のラッパー
+|    plugin-script-config.c          | スクリプトプラグインの設定オプション (python.conf、perl.conf 等のファイル)
+|    weechat-plugin.h                | WeeChat プラグインと一緒に配布されるヘッダファイル、プラグインのコンパイルに必要
+|    alias/                          | alias プラグイン
+|       alias.c                      | alias の主要関数
+|       alias-command.c              | alias コマンド
+|       alias-completion.c           | alias 補完
+|       alias-config.c               | alias 設定オプション (alias.conf ファイル)
+|       alias-info.c                 | alias の情報/インフォリスト/hdata
+|    spell/                          | spell プラグイン
+|       spell.c                      | spell の主関数
+|       spell-bar-item.c             | spell バー要素
+|       spell-command.c              | spell コマンド
+|       spell-completion.c           | spell 補完
+|       spell-config.c               | spell 設定オプション (spell.conf ファイル)
+|       spell-info.c                 | spell の情報/インフォリスト/hdata
+|       spell-speller.c              | spell のスペラー管理
+|    buflist/                        | buflist プラグイン
+|       buflist.c                    | buflist の主要関数
+|       buflist-bar-item.c           | buflist バー要素
+|       buflist-command.c            | buflist コマンド
+// TRANSLATION MISSING
+|       buflist-completion.c         | Buflist completions.
+|       buflist-config.c             | buflist 設定オプション (buflist.conf ファイル)
+|       buflist-info.c               | buflist の情報/インフォリスト/hdata
+|       buflist-mouse.c              | buflist マウス動作
+|    charset/                        | charset プラグイン
+|       charset.c                    | charset 関数
+|    exec/                           | exec プラグイン
+|       exec.c                       | exec の主要関数
+|       exec-buffer.c                | exec バッファ
+|       exec-command.c               | exec コマンド
+|       exec-completion.c            | exec 補完
+|       exec-config.c                | exec 設定オプション (exec.conf ファイル)
+|    fifo/                           | fifo プラグイン
+|       fifo.c                       | fifo の主要関数
+|       fifo-command.c               | fifo コマンド
+|       fifo-config.c                | fifo 設定オプション (fifo.conf ファイル)
+|       fifo-info.c                  | fifo の情報/インフォリスト/hdata
+|    fset/                           | fset プラグイン
+|       fset.c                       | fset の主要関数
+|       fset-bar-item.c              | fset バー要素
+|       fset-buffer.c                | fset バッファ
+|       fset-command.c               | fset コマンド
+|       fset-completion.c            | fset 補完
+|       fset-config.c                | fset 設定オプション (fset.conf ファイル)
+|       fset-info.c                  | fset の情報/インフォリスト/hdata
+|       fset-mouse.c                 | fset マウス動作
+|       fset-option.c                | fset オプション管理
+|    guile/                          | guile (scheme) プラグイン
+|       weechat-guile.c              | guile の主要関数 (スクリプトのロード/アンロード、guile コードの実行)
+|       weechat-guile-api.c          | guile スクリプト作成 API 関数
+|    irc/                            | IRC (Internet Relay Chat) プラグイン
+|       irc.c                        | IRC の主要関数
+|       irc-bar-item.c               | IRC バー要素
+// TRANSLATION MISSING
+|       irc-batch.c                  | IRC batched events.
+|       irc-buffer.c                 | IRC バッファ
+|       irc-channel.c                | IRC チャンネル
+|       irc-color.c                  | IRC 色
+|       irc-command.c                | IRC コマンド
+|       irc-completion.c             | IRC 補完
+|       irc-config.c                 | IRC 設定オプション (irc.conf ファイル)
+|       irc-ctcp.c                   | IRC CTCP
+|       irc-debug.c                  | IRC デバッグ関数
+|       irc-ignore.c                 | IRC 無視
+|       irc-info.c                   | IRC の情報/インフォリスト/hdata
+|       irc-input.c                  | コマンドおよびテキストの入力
+// TRANSLATION MISSING
+|       irc-join.c                   | Functions for list of channels to join.
+// TRANSLATION MISSING
+|       irc-list.c                   | Buffer for reply to /list command.
+|       irc-message.c                | IRC メッセージを操作する関数
+|       irc-mode.c                   | チャンネルおよびニックネームのモードを操作する関数
+|       irc-modelist.c               | IRC チャンネルモードリスト (+b、+e、+I、...).
+|       irc-msgbuffer.c              | IRC メッセージを送るバッファ
+|       irc-nick.c                   | IRC ニックネーム
+|       irc-notify.c                 | IRC 通知リスト
+|       irc-protocol.c               | IRC プロトコル (RFC 1459/2810/2811/2812/2813/7194)
+|       irc-raw.c                    | IRC 生バッファ
+|       irc-redirect.c               | IRC コマンド出力のリダイレクト
+|       irc-sasl.c                   | IRC サーバに対する SASL 認証
+|       irc-server.c                 | IRC サーバとの入出力通信
+// TRANSLATION MISSING
+|       irc-tag.c                    | Functions to manipulate IRC message tags.
+// TRANSLATION MISSING
+|       irc-typing.c                 | Typing status.
+|       irc-upgrade.c                | WeeChat をアップグレードする際の IRC データの保存およびロード
+|    javascript/                     | JavaScript プラグイン
+|       weechat-js.cpp               | JavaScript の主要関数 (スクリプトのロード/アンロード、JavaScript コードの実行)
+|       weechat-js-api.cpp           | JavaScript スクリプト作成 API 関数
+|       weechat-js-v8.cpp            | JavaScript v8 関数
+|    logger/                         | logger プラグイン
+|       logger.c                     | logger の主要関数
+// TRANSLATION MISSING
+|       logger-backlog.c             | Logger backlog functions.
+|       logger-buffer.c              | logger バッファリスト管理
+|       logger-command.c             | logger コマンド
+|       logger-config.c              | logger 設定オプション (logger.conf ファイル)
+|       logger-info.c                | logger の情報/インフォリスト/hdata
+|       logger-tail.c                | ファイル末尾の行を返す
+|    lua/                            | lua プラグイン
+|       weechat-lua.c                | lua の主要関数 (スクリプトのロード/アンロード、lua コードの実行)
+|       weechat-lua-api.c            | lua スクリプト作成 API 関数
+|    perl/                           | perl プラグイン
+|       weechat-perl.c               | perl の主要関数 (スクリプトのロード/アンロード、perl コードの実行)
+|       weechat-perl-api.c           | perl スクリプト作成 API 関数
+|    php/                            | php プラグイン
+|       weechat-php.c                | php の主要関数 (スクリプトのロード/アンロード、php コードの実行)
+|       weechat-php-api.c            | php スクリプト作成 API 関数
+|    python/                         | python プラグイン
+|       weechat-python.c             | python の主要関数 (スクリプトのロード/アンロード、python コードの実行)
+|       weechat-python-api.c         | python スクリプト作成 API 関数
+|    relay/                          | relay プラグイン (IRC プロキシとリモートインターフェースへの中継)
+|       relay.c                      | relay の主要関数
+// TRANSLATION MISSING
+|       relay-auth.c                 | Clients authentification.
+// TRANSLATION MISSING
+|       relay-bar-item.c             | Relay bar items.
+|       relay-buffer.c               | relay バッファ
+|       relay-client.c               | relay クライアント
+|       relay-command.c              | relay コマンド
+|       relay-completion.c           | relay 補完
+|       relay-config.c               | relay 設定オプション (relay.conf ファイル)
+// TRANSLATION MISSING
+|       relay-http.c                 | HTTP functions.
+|       relay-info.c                 | relay の情報/インフォリスト/hdata
+|       relay-network.c              | relay 用のネットワーク関数
+|       relay-raw.c                  | relay 生バッファ
+// TRANSLATION MISSING
+|       relay-remote.c               | Relay remote.
+|       relay-server.c               | relay サーバ
+|       relay-upgrade.c              | WeeChat をアップグレードする際にデータを保存/回復
+|       relay-websocket.c            | リレー用の websocket サーバ関数 (RFC 6455)
+// TRANSLATION MISSING
+|       api/                         | Relay for remote interfaces (using HTTP REST API).
+// TRANSLATION MISSING
+|          relay-api.c               | Main API functions for HTTP REST API.
+// TRANSLATION MISSING
+|          relay-api-msg.c           | Send JSON messages to clients.
+// TRANSLATION MISSING
+|          relay-api-protocol.c      | HTTP REST API protocol.
+// TRANSLATION MISSING
+// TRANSLATION MISSING
+|          remote/                   | Relay remote functions, specific to API.
+// TRANSLATION MISSING
+|             relay-remote-event.c   | Process events received from relay remote.
+// TRANSLATION MISSING
+|             relay-remote-network.c | Network functions for relay remote.
+|       irc/                         | IRC プロキシ
+|          relay-irc.c               | IRC プロキシの主要関数
+// TRANSLATION MISSING
+|       weechat/                     | Relay for remote interfaces (using "weechat" binary protocol).
+|          relay-weechat.c           | リモートインターフェースへの中継 (主要関数)
+|          relay-weechat-msg.c       | クライアントにバイナリメッセージを送信
+|          relay-weechat-nicklist.c  | ニックネームリスト関数
+|          relay-weechat-protocol.c  | クライアントからのコマンドを読み取る
+|    ruby/                           | ruby プラグイン
+|       weechat-ruby.c               | ruby の主要関数 (スクリプトのロード/アンロード、ruby コードの実行)
+|       weechat-ruby-api.c           | ruby スクリプト作成 API 関数
+|    script/                         | スクリプトマネージャ
+|       script.c                     | スクリプトマネージャの主要関数
+|       script-action.c              | スクリプトに対する操作 (ロード/アンロード、インストール/削除、...)
+|       script-buffer.c              | スクリプトマネージャ用のバッファ
+|       script-command.c             | スクリプトマネージャ用のコマンド
+|       script-completion.c          | スクリプトマネージャ用の補完
+|       script-config.c              | スクリプトマネージャ用の設定オプション (script.conf ファイル)
+|       script-info.c                | スクリプトマネージャの情報/インフォリスト/hdata
+|       script-mouse.c               | スクリプトマネージャのマウス動作
+|       script-repo.c                | リポジトリファイルのダウンロードとロード
+|    tcl/                            | tcl プラグイン
+|       weechat-tcl.c                | tcl の主要関数 (スクリプトのロード/アンロード、tcl コードの実行)
+|       weechat-tcl-api.c            | tcl スクリプト作成 API 関数
+|    trigger/                        | trigger プラグイン
+|       trigger.c                    | trigger の主要関数
+|       trigger-buffer.c             | trigger バッファ
+|       trigger-callback.c           | trigger コールバック
+|       trigger-command.c            | trigger コマンド
+|       trigger-completion.c         | trigger 補完
+|       trigger-config.c             | trigger 設定オプション (trigger.conf ファイル)
+// TRANSLATION MISSING
+|    typing/                         | Typing plugin.
+// TRANSLATION MISSING
+|       typing.c                     | Main typing functions.
+// TRANSLATION MISSING
+|       typing-bar-item.c            | Typing bar items.
+// TRANSLATION MISSING
+|       typing-config.c              | Typing config options (file typing.conf).
+// TRANSLATION MISSING
+|       typing-status.c              | Messages typing status on buffers.
+|    xfer/                           | xfer プラグイン (IRC DCC ファイル/チャット)
+|       xfer.c                       | xfer の主要関数
+|       xfer-buffer.c                | xfer バッファ
+|       xfer-chat.c                  | xfer DCC チャット
+|       xfer-command.c               | xfer コマンド
+|       xfer-completion.c            | xfer 補完
+|       xfer-config.c                | xfer 設定オプション (xfer.conf ファイル)
+|       xfer-dcc.c                   | DCC ファイル転送
+|       xfer-file.c                  | xfer のファイル関数
+|       xfer-info.c                  | xfer の情報/インフォリスト/hdata
+|       xfer-network.c               | xfer のネットワーク関数
+|       xfer-upgrade.c               | WeeChat をアップグレードする際の xfer データの保存および回復
+|===
+
+[[sources_tests]]
+==== テスト
+
+[width="100%",cols="2m,3",options="header"]
+|===
+| パス/ファイル名                                 | 説明
+| tests/                                          | テスト用のルートディレクトリ
+// TRANSLATION MISSING
+|    fuzz/                                        | Root of fuzz testing.
+// TRANSLATION MISSING
+|       ossfuzz.sh                                | Build script for https://github.com/google/oss-fuzz[OSS-Fuzz ^↗^^].
+// TRANSLATION MISSING
+|       core/                                     | Root of fuzz testing for core.
+// TRANSLATION MISSING
+|          calc-fuzzer.c                          | Fuzz testing: calculation of expressions.
+// TRANSLATION MISSING
+|          crypto-fuzzer.c                        | Fuzz testing: cryptographic functions.
+// TRANSLATION MISSING
+|          secure-fuzzer.c                        | Fuzz testing: secured data.
+// TRANSLATION MISSING
+|          string-fuzzer.c                        | Fuzz testing: 文字列
+// TRANSLATION MISSING
+|          utf8-fuzzer.c                          | Fuzz testing: UTF-8.
+// TRANSLATION MISSING
+|          util-fuzzer.c                          | Fuzz testing: utility functions.
+|    unit/                                        | 単体テスト用のルートディレクトリ
+|       tests.cpp                                 | 全テストの実行時に使われるプログラム
+// TRANSLATION MISSING
+|       tests-record.cpp                          | Record and search in messages displayed.
+|       core/                                     | core 向け単体テスト用のルートディレクトリ
+|          test-core-arraylist.cpp                | テスト: 配列リスト
+// TRANSLATION MISSING
+|          test-core-calc.cpp                     | Tests: calculation of expressions.
+// TRANSLATION MISSING
+|          test-core-command.cpp                  | Tests: commands.
+// TRANSLATION MISSING
+|          test-core-config-file.cpp              | Tests: configuration files.
+// TRANSLATION MISSING
+|          test-core-crypto.cpp                   | Tests: cryptographic functions.
+// TRANSLATION MISSING
+|          test-core-dir.cpp                      | Tests: directory/file functions.
+|          test-core-eval.cpp                     | テスト: 式の評価
+|          test-core-hashtable.cpp                | テスト: ハッシュテーブル
+|          test-core-hdata.cpp                    | テスト: hdata
+|          test-core-hook.cpp                     | テスト: フック
+|          test-core-infolist.cpp                 | テスト: インフォリスト
+// TRANSLATION MISSING
+|          test-core-input.cpp                    | Tests: input functions.
+|          test-core-list.cpp                     | テスト: リスト
+// TRANSLATION MISSING
+|          test-core-network.cpp                  | Tests: network functions.
+|          test-core-secure.cpp                   | テスト: データ保護
+// TRANSLATION MISSING
+|          test-core-signal.cpp                   | テスト: signals.
+|          test-core-string.cpp                   | テスト: 文字列
+// TRANSLATION MISSING
+|          test-core-sys.cpp                      | Tests: system functions.
+|          test-core-url.cpp                      | テスト: URL
+|          test-core-utf8.cpp                     | テスト: UTF-8
+|          test-core-util.cpp                     | テスト: ユーティリティ関数
+// TRANSLATION MISSING
+|          hook/                                  | Root of unit tests for hooks.
+// TRANSLATION MISSING
+|             test-hook-command.cpp               | Tests: hooks "command".
+// TRANSLATION MISSING
+|             test-hook-command-run.cpp           | Tests: hooks "command_run".
+// TRANSLATION MISSING
+|             test-hook-completion.cpp            | Tests: hooks "completion".
+// TRANSLATION MISSING
+|             test-hook-config.cpp                | Tests: hooks "config".
+// TRANSLATION MISSING
+|             test-hook-connect.cpp               | Tests: hooks "connect".
+// TRANSLATION MISSING
+|             test-hook-fd.cpp                    | Tests: hooks "fd".
+// TRANSLATION MISSING
+|             test-hook-focus.cpp                 | Tests: hooks "focus".
+// TRANSLATION MISSING
+|             test-hook-hdata.cpp                 | Tests: hooks "hdata".
+// TRANSLATION MISSING
+|             test-hook-hsignal.cpp               | Tests: hooks "hsignal".
+// TRANSLATION MISSING
+|             test-hook-info-hashtable.cpp        | Tests: hooks "info_hashtable".
+// TRANSLATION MISSING
+|             test-hook-info.cpp                  | Tests: hooks "info".
+// TRANSLATION MISSING
+|             test-hook-infolist.cpp              | Tests: hooks "infolist".
+// TRANSLATION MISSING
+|             test-hook-line.cpp                  | Tests: hooks "line".
+// TRANSLATION MISSING
+|             test-hook-modifier.cpp              | Tests: hooks "modifier".
+// TRANSLATION MISSING
+|             test-hook-print.cpp                 | Tests: hooks "print".
+// TRANSLATION MISSING
+|             test-hook-process.cpp               | Tests: hooks "process".
+// TRANSLATION MISSING
+|             test-hook-signal.cpp                | Tests: hooks "signal".
+// TRANSLATION MISSING
+|             test-hook-timer.cpp                 | Tests: hooks "timer".
+// TRANSLATION MISSING
+|             test-hook-url.cpp                   | Tests: hooks "url".
+
+|       gui/                                      | インターフェースの単体テストを収める最上位ディレクトリ
+// TRANSLATION MISSING
+|          test-gui-bar-item-custom.cpp           | Tests: custom bar item functions.
+// TRANSLATION MISSING
+|          test-gui-bar-item.cpp                  | Tests: bar item functions.
+// TRANSLATION MISSING
+|          test-gui-bar-window.cpp                | Tests: bar window functions.
+// TRANSLATION MISSING
+|          test-gui-bar.cpp                       | Tests: bar functions.
+// TRANSLATION MISSING
+|          test-gui-buffer.cpp                    | Tests: buffer functions.
+// TRANSLATION MISSING
+|          test-gui-chat.cpp                      | Tests: chat functions.
+// TRANSLATION MISSING
+|          test-gui-color.cpp                     | Tests: colors.
+// TRANSLATION MISSING
+|          test-gui-filter.cpp                    | Tests: filters.
+// TRANSLATION MISSING
+|          test-gui-hotlist.cpp                   | Tests: hotlist functions.
+// TRANSLATION MISSING
+|          test-gui-input.cpp                     | Tests: input functions.
+// TRANSLATION MISSING
+|          test-gui-key.cpp                       | Tests: keys.
+|          test-gui-line.cpp                      | テスト: 行
+// TRANSLATION MISSING
+|          test-gui-nick.cpp                      | テスト: nicks
+// TRANSLATION MISSING
+|          test-gui-nicklist.cpp                  | Tests: nicklist functions.
+// TRANSLATION MISSING
+|          curses/                                | Root of unit tests for Curses interface.
+// TRANSLATION MISSING
+|             test-gui-curses-mouse.cpp           | Tests: mouse (Curses interface).
+|       scripts/                                  | スクリプト API テスト用のルートディレクトリ
+|          test-scripts.cpp                       | スクリプト API テストの実行時に使われるプログラム
+|          python/                                | スクリプト API テストを生成、実行する Python スクリプト
+|             testapigen.py                       | スクリプト API のテスト時にすべての言語に関するスクリプトを生成する Python スクリプト
+|             testapi.py                          | スクリプト API テスト時に使われる Python スクリプト (スクリプト testapigen.py から使われます)
+|          unparse.py                             | Python コードを別の言語に変換 (スクリプト testapigen.py から使われます)
+|       plugins/                                  | プラグインの単体テストを収める最上位ディレクトリ
+// TRANSLATION MISSING
+|          test-plugin-api-info.cpp               | Tests: plugin API info functions.
+// TRANSLATION MISSING
+|          test-plugin-config.cpp                 | Tests: plugin config functions.
+|          test-plugins.cpp                       | テスト: プラグイン
+// TRANSLATION MISSING
+|          alias/                                 | Root of unit tests for alias plugin.
+// TRANSLATION MISSING
+|             test-alias.cpp                      | Tests: aliases.
+|          irc/                                   | IRC プラグインの単体テストを収める最上位ディレクトリ
+// TRANSLATION MISSING
+|             test-irc-batch.cpp                  | Tests: IRC batched events.
+// TRANSLATION MISSING
+|             test-irc-buffer.cpp                 | Tests: IRC buffers.
+// TRANSLATION MISSING
+|             test-irc-channel.cpp                | Tests: IRC channels.
+|             test-irc-color.cpp                  | Tests: IRC colors.
+// TRANSLATION MISSING
+|             test-irc-command.cpp                | Tests: IRC commands.
+|             test-irc-config.cpp                 | テスト: IRC 設定
+// TRANSLATION MISSING
+|             test-irc-ctcp.cpp                   | Tests: IRC CTCP.
+// TRANSLATION MISSING
+|             test-irc-ignore.cpp                 | Tests: IRC ignores.
+// TRANSLATION MISSING
+|             test-irc-info.cpp                   | Tests: IRC info.
+// TRANSLATION MISSING
+|             test-irc-join.cpp                   | Tests: IRC join functions.
+// TRANSLATION MISSING
+|             test-irc-list.cpp                   | Tests: IRC buffer for reply to /list command.
+// TRANSLATION MISSING
+|             test-irc-message.cpp                | Tests: IRC messages.
+// TRANSLATION MISSING
+|             test-irc-mode.cpp                   | Tests: IRC modes.
+// TRANSLATION MISSING
+|             test-irc-nick.cpp                   | Tests: IRC nicks.
+|             test-irc-protocol.cpp               | テスト: IRC プロトコル
+// TRANSLATION MISSING
+|             test-irc-sasl.cpp                   | Tests: SASL authentication with IRC protocol.
+// TRANSLATION MISSING
+|             test-irc-server.cpp                 | Tests: IRC server.
+// TRANSLATION MISSING
+|             test-irc-tag.cpp                    | Tests: IRC message tags.
+// TRANSLATION MISSING
+|          logger/                                | Root of unit tests for logger plugin.
+// TRANSLATION MISSING
+|             test-logger.cpp                     | Tests: logger.
+// TRANSLATION MISSING
+|             test-logger-backlog.cpp             | Tests: logger backlog.
+// TRANSLATION MISSING
+|             test-logger-tail.cpp                | Tests: logger tail functions.
+// TRANSLATION MISSING
+|          relay/                                 | Root of unit tests for Relay plugin.
+// TRANSLATION MISSING
+|             test-relay-auth.cpp                 | Tests: clients authentication.
+// TRANSLATION MISSING
+|             test-relay-http.cpp                 | Tests: HTTP functions for Relay plugin.
+// TRANSLATION MISSING
+|             test-relay-raw.cpp                  | Tests: raw messages functions for Relay plugin.
+// TRANSLATION MISSING
+|             test-relay-remote.cpp               | Tests: remote functions for Relay plugin.
+// TRANSLATION MISSING
+|             test-relay-websocket.cpp            | Tests: websocket functions for Relay plugin.
+// TRANSLATION MISSING
+|             api/                                | Root of unit tests for Relay "api" protocol.
+// TRANSLATION MISSING
+|                test-relay-api.cpp               | Tests: Relay "api" protocol: general functions.
+// TRANSLATION MISSING
+|                test-relay-api-msg.cpp           | Tests: Relay "api" protocol: messages.
+// TRANSLATION MISSING
+|                test-relay-api-protocol.cpp      | Tests: Relay "api" protocol: protocol.
+// TRANSLATION MISSING
+|                remote/                          | Tests: Relay "api" protocol: remote functions.
+// TRANSLATION MISSING
+|                   test-relay-remote-event.cpp   | Tests: Relay "api" protocol: remote events.
+// TRANSLATION MISSING
+|                   test-relay-remote-network.cpp | Tests: Relay "api" protocol: remote network.
+// TRANSLATION MISSING
+|             irc/                                | Root of unit tests for Relay "irc" protocol.
+// TRANSLATION MISSING
+|                test-relay-irc.cpp               | Tests: Relay "irc" protocol.
+// TRANSLATION MISSING
+|          trigger/                               | Root of unit tests for trigger plugin.
+// TRANSLATION MISSING
+|             test-trigger.cpp                    | Tests: triggers.
+// TRANSLATION MISSING
+|             test-trigger-config.cpp             | Tests: trigger configuration.
+// TRANSLATION MISSING
+|          typing/                                | Root of unit tests for typing plugin.
+// TRANSLATION MISSING
+|             test-typing.cpp                     | Tests: typing.
+// TRANSLATION MISSING
+|             test-typing-status.cpp              | Tests: typing status.
+// TRANSLATION MISSING
+|          xfer/                                  | Root of unit tests for Xfer plugin.
+// TRANSLATION MISSING
+|             test-xfer-file.cpp                  | Tests: file functions.
+// TRANSLATION MISSING
+|             test-xfer-network.cpp               | Tests: network functions.
+|===
+
+[[documentation_translations]]
+=== 文書 / 翻訳
+
+文書ファイル:
+
+[width="100%",cols="2m,3",options="header"]
+|===
+| パス/ファイル名                               | 説明
+| doc/                                          | 文書
+|    docinfo.html                               | asciidoctor スタイル
+|    XX/                                        | 言語コード XX (言語コード: en、fr、de、it、...) 用のディレクトリ
+|       weechat.1.XX.adoc                       | man ページ (`man weechat`)
+|       weechat_dev.XX.adoc                     | link:weechat_dev.ja.html[開発者リファレンス ^↗^^] (この文書)
+|       weechat_faq.XX.adoc                     | link:weechat_faq.ja.html[FAQ ^↗^^]
+|       weechat_plugin_api.XX.adoc              | link:weechat_plugin_api.ja.html[プラグイン API リファレンス ^↗^^]
+|       weechat_quickstart.XX.adoc              | link:weechat_quickstart.ja.html[クイックスタートガイド ^↗^^]
+// TRANSLATION MISSING
+|       weechat_relay_api.XX.adoc               | Relay "api" protocol (for remote interfaces).
+// TRANSLATION MISSING
+|       weechat_relay_weechat.XX.adoc           | link:weechat_relay_weechat.ja.html[Relay "weechat" protocol ^↗^^] (for remote interfaces).
+|       weechat_scripting.XX.adoc               | link:weechat_scripting.ja.html[スクリプト作成ガイド ^↗^^]
+|       weechat_user.XX.adoc                    | link:weechat_user.ja.html[ユーザーズガイド ^↗^^]
+// TRANSLATION MISSING
+|       includes/                               | Files included in documentation.
+// TRANSLATION MISSING
+|          cmdline_options.XX.adoc              | Command-line options (file included in man pages and user's guide).
+// TRANSLATION MISSING
+|          man.XX.adoc                          | Part of man pages: plugin options, files and copyright.
+|===
+
+WeeChat とプラグインの翻訳は gettext で行います、ファイルは _po/_ ディレクトリに含まれています:
+
+[width="100%",cols="2m,3",options="header"]
+|===
+| パス/ファイル名 | 説明
+| po/            | 翻訳ファイル (gettext)
+|    XX.po       | 言語コード XX (言語コード: en、fr、de、it、...) への翻訳、翻訳元言語は英語
+|    weechat.pot | 翻訳用テンプレート (自動作成)
+|===
+
+[[coding_rules]]
+== コーディングルール
+
+[[coding_general_rules]]
+=== 一般的なルール
+
+* ソースコード内で使用する、コメント、変数名、...
+  は必ず *英語* で記述してください (他の言語を使わないでください)
+* 新しいファイルにはコピーライトヘッダを入れ、以下の情報を含めてください:
+** 日付
+** 名前
+** 電子メールアドレス
+** ライセンス
+** ファイルの短い説明 (1 行)。
+
+// TRANSLATION MISSING
+The copyright and license must be set using SPDX (System Package Data Exchange),
+following best practices in REUSE Software
+(see the https://reuse.software/spec/[REUSE specification ^↗^^]).
+
+// TRANSLATION MISSING
+All files in the repository must have a valid copyright and license information. +
+When the information can not be put in the file itself, you can use the REUSE.toml
+file at the root of the project tree.
+
+// TRANSLATION MISSING
+Example in C:
+
+// REUSE-IgnoreStart
+[source,c]
+----
+/*
+ * SPDX-FileCopyrightText: 2025 Your Name <your@email.com>
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This file is part of WeeChat, the extensible chat client.
+ *
+ * WeeChat is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * WeeChat is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with WeeChat.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Core functions for WeeChat */
+----
+// REUSE-IgnoreEnd
+
+[[coding_c_style]]
+=== C 言語スタイル
+
+C 言語のコードを書く際には以下の基本的なルールを *必ず* 守ってください。:
+
+// TRANSLATION MISSING
+* Use 4 spaces for indentation (no tabs).
+* 読みやすくする必要がある場合を除いて、1
+  行は 80 文字以内に収めてください。
+* コメントは `+/* comment */+` のようにしてください (`+// comment+` のような C99 スタイルのコメントは使わないでください)。
+* 関数の前に、その関数の機能を説明するコメントを付けてください
+  (説明が短くても、必ず複数行コメントを使ってください)。
+
+例:
+
+[source,c]
+----
+/*
+ * Checks if a string with boolean value is valid.
+ *
+ * Returns:
+ *   1: boolean value is valid
+ *   0: boolean value is NOT valid
+ */
+
+int
+foo ()
+{
+    int i;
+
+    /* one line comment */
+    i = 1;
+
+    /*
+     * multi-line comment: this is a very long description about next block
+     * of code
+     */
+    i = 2;
+    printf ("%d\n", i);
+}
+----
+
+* 具体的な変数名を使ってください、例えば "n" や "nc" の代わりに "nicks_count" を使ってください。
+  例外: `for` ループのカウンタ変数に "i" や "n" を使うのは問題ありません。
+* 関数内で行うローカル変数の初期化は宣言の後に行ってください、例:
+
+[source,c]
+----
+void
+foo ()
+{
+    int nick_count, buffer_count;
+
+    nick_count = 0;
+    buffer_count = 1;
+    /* ... */
+}
+----
+
+* たとえ必要無くとも、丸括弧を使って式を評価する順番を明示してください、例:
+  `+x + y * z+` の代わりに `+x + (y * z)+` と書いてください
+* 中括弧 `+{ }+` は制御文の次の行に単独で置き、制御文 (以下の `if` です)
+  と同じ空白文字の数だけインデントしてください:
+
+[source,c]
+----
+if (nicks_count == 1)
+{
+    /* something */
+}
+----
+
+* 関数内部でブロックを分けるには空行を使ってください、可能であればそれぞれのブロックにコメントを付けてください:
+
+[source,c]
+----
+/*
+ * Sends a message from out queue.
+ */
+
+void
+irc_server_outqueue_send (struct t_irc_server *server)
+{
+    /* ... */
+
+    /* send signal with command that will be sent to server */
+    irc_server_send_signal (server, "irc_out",
+                            server->outqueue[priority]->command,
+                            server->outqueue[priority]->message_after_mod,
+                            NULL);
+    tags_to_send = irc_server_get_tags_to_send (server->outqueue[priority]->tags);
+    irc_server_send_signal (server, "irc_outtags",
+                            server->outqueue[priority]->command,
+                            server->outqueue[priority]->message_after_mod,
+                            (tags_to_send) ? tags_to_send : "");
+    if (tags_to_send)
+        free (tags_to_send);
+
+    /* send command */
+    irc_server_send (server, server->outqueue[priority]->message_after_mod,
+                     strlen (server->outqueue[priority]->message_after_mod));
+    server->last_user_message = time_now;
+
+    /* start redirection if redirect is set */
+    if (server->outqueue[priority]->redirect)
+    {
+        irc_redirect_init_command (server->outqueue[priority]->redirect,
+                                   server->outqueue[priority]->message_after_mod);
+    }
+
+    /* ... */
+}
+----
+
+* `if` 条件はインデントし、演算子を含む条件は丸括弧で括ってください
+  (単独のブール値を評価する場合は不要)、例:
+
+[source,c]
+----
+if (something)
+{
+    /* something */
+}
+else
+{
+    /* something else */
+}
+
+if (my_boolean1 && my_boolean2 && (i == 10)
+    && ((buffer1 != buffer2) || (window1 != window2)))
+{
+    /* something */
+}
+else
+{
+    /* something else */
+}
+----
+
+* `switch` 文は以下の様にインデントしてください:
+
+[source,c]
+----
+switch (string[0])
+{
+    case 'A':  /* first case */
+        foo ("abc", "def");
+        break;
+    case 'B':  /* second case */
+        bar (1, 2, 3);
+        break;
+    default:  /* other cases */
+        baz ();
+        break;
+}
+----
+
+* 関数プロトタイプには `typedef` を使い、構造体を使わないでください:
+
+[source,c]
+----
+typedef int (t_hook_callback_fd)(void *data, int fd);
+
+struct t_hook_fd
+{
+    t_hook_callback_fd *callback;      /* fd callback                       */
+    int fd;                            /* socket or file descriptor         */
+    int flags;                         /* fd flags (read,write,..)          */
+    int error;                         /* contains errno if error occurred  */
+                                       /* with fd                           */
+};
+
+/* ... */
+
+struct t_hook_fd *new_hook_fd;
+
+new_hook_fd = malloc (sizeof (*new_hook_fd));
+----
+
+* Emacs テキストエディタのユーザは以下の Lisp コードを
+  _~/.emacs.el_ に追記することで、適切なインデントを行うことができます。
+
+[source,lisp]
+----
+(add-hook 'c-mode-common-hook
+          '(lambda ()
+             (c-toggle-hungry-state t)
+             (c-set-style "k&r")
+             (setq c-basic-offset 4)
+             (c-tab-always-indent t)
+             (c-set-offset 'case-label '+)))
+----
+
+[[coding_python_style]]
+=== Python スタイル
+
+https://www.python.org/dev/peps/pep-0008/[PEP 8 ^↗^^] を参照
+
+[[core_internals]]
+== コアの構造
+
+[[naming_convention]]
+=== 命名規則
+
+[[naming_convention_files]]
+==== ファイル
+
+ファイル名に使えるのは文字とハイフンだけで、書式: _xxx-yyyyy.[ch]_
+に従ってください。_xxx_ はディレクトリおよび構成要素 (略称も可) で、_yyyyy_
+はファイルの名前です。
+
+主要ファイルにはディレクトリと同じ名前を付ける事ができます。例えば
+irc プラグインの _irc.c_ など。
+
+例:
+
+[width="100%",cols="2m,3",options="header"]
+|===
+| ディレクトリ        | ファイル
+| src/core/           | weechat.c、core-backtrace.c、core-command.c、...
+| src/gui/            | gui-bar.c、gui-bar-item.c、gui-bar-window.c、...
+| src/gui/curses/     | gui-curses-bar.c、gui-curses-bar-window.c、gui-curses-chat.c、...
+| src/plugins/        | plugin.c、plugin-api.c、plugin-api-info.c、plugin-config.c、plugin-script.c、...
+| src/plugins/irc/    | irc.c、irc-bar-item.c、irc-buffer.c、...
+| src/plugins/python/ | weechat-python.c、weechat-python-api.c、...
+|===
+
+C 言語ファイルのヘッダはファイルと同じ名前です、例えばファイル
+_core-command.c_ のヘッダファイルは _core-command.h_ です
+
+[[naming_convention_structures]]
+==== 構造体
+
+構造体の名前は _t_X_Y_ または _t_X_Y_Z_ という書式に従います:
+
+* _X_: ディレクトリ/構成要素 (略称も可)
+* _Y_: ファイル名の最後
+* _Z_: 構造体の名前 (任意)
+
+例: IRC のニックネーム (_src/plugins/irc/irc-nick.h_ より):
+
+[source,c]
+----
+struct t_irc_nick
+{
+    char *name;                     /* nickname                              */
+    char *host;                     /* full hostname                         */
+    char *prefixes;                 /* string with prefixes enabled for nick */
+    char prefix[2];                 /* current prefix (higher prefix set in  */
+                                    /* prefixes)                             */
+    int away;                       /* 1 if nick is away                     */
+    char *color;                    /* color for nickname in chat window     */
+    struct t_irc_nick *prev_nick;   /* link to previous nick on channel      */
+    struct t_irc_nick *next_nick;   /* link to next nick on channel          */
+};
+----
+
+[[naming_convention_variables]]
+==== 変数
+
+グローバル変数 (関数の外側) の名前は _X_Y_Z_ という書式に従います:
+
+* _X_: ディレクトリ/構成要素 (略称も可)
+* _Y_: ファイル名の最後
+* _Z_: 変数の名前
+
+例外として、リストの「最後の」ノードを表す変数の名前は _last_X_
+という書式に従います (ここで _X_ は変数の名前で、単数形を使います)。
+
+例: ウィンドウ (_src/gui/gui-window.c_ より):
+
+[source,c]
+----
+struct t_gui_window *gui_windows = NULL;        /* first window             */
+struct t_gui_window *last_gui_window = NULL;    /* last window              */
+struct t_gui_window *gui_current_window = NULL; /* current window           */
+----
+
+ローカル変数 (関数内) に対する命名規則はありません。ただし具体的な (短すぎない)
+名前をつけることを推奨します。とは言うものの、構造体へのポインタは通常 _ptr_xxxx_
+のように名付けます。例えば、_struct t_gui_buffer *_ へのポインタは: _*ptr_buffer_
+のように名付けます。
+
+[[naming_convention_functions]]
+==== 関数
+
+関数に対する命名規則は<<naming_convention_variables,変数>>と同じです。
+
+例: 新しいウィンドウの作成 (_src/gui/gui-window.c_ より):
+
+[source,c]
+----
+/*
+ * Creates a new window.
+ *
+ * Returns pointer to new window, NULL if error.
+ */
+
+struct t_gui_window *
+gui_window_new (struct t_gui_window *parent_window, struct t_gui_buffer *buffer,
+                int x, int y, int width, int height,
+                int width_pct, int height_pct)
+{
+    /* ... */
+
+    return new_window;
+}
+----
+
+[[single_thread]]
+=== シングルスレッド
+
+WeeChat はシングルスレッドです。これはつまり、コードの全ての部分を非常に高速に実行する必要があり、`sleep`
+などの関数を呼び出すことは *厳格に禁止* されているということです (この点は
+WeeChat コアだけでなく、C 言語プラグインとスクリプトでも同じことが言えます)。
+
+何らかの理由でしばらく sleep したい場合は、`hook_timer` をコールバックと併せて使ってください。
+
+[[doubly_linked_lists]]
+=== 双方向連結リスト
+
+WeeChat のほとんどの連結リストは双方向連結リストです: 各ノードは
+1 つ前と 1 つ後のノードへのポインタを持っています。
+
+例: バッファのリスト (_src/gui/gui-buffer.h_ より):
+
+[source,c]
+----
+struct t_gui_buffer
+{
+    /* data */
+
+    /* ... */
+
+    struct t_gui_buffer *prev_buffer;  /* link to previous buffer           */
+    struct t_gui_buffer *next_buffer;  /* link to next buffer               */
+};
+----
+
+さらにリストの最初と最後を示す 2 つのポインタがあります:
+
+[source,c]
+----
+struct t_gui_buffer *gui_buffers = NULL;           /* first buffer          */
+struct t_gui_buffer *last_gui_buffer = NULL;       /* last buffer           */
+----
+
+[[color_codes_in_strings]]
+=== 文字列中の色コード
+
+WeeChat は文字列中に独自の色コードを使うことで、属性
+(太字、下線、...) と画面上の色を表現します。
+
+文字列にある文字を含め、その後に属性および色を指定します、これは:
+
+* _0x19_: 色コード (これの後に色コード指定)
+// TRANSLATION MISSING
+* _0x1A_: set attribute (followed by raw attribute on one char)
+// TRANSLATION MISSING
+* _0x1B_: remove attribute (followed by raw attribute on one char)
+* _0x1C_: リセット (これの後には何も付けない)
+
+指定できる色は:
+
+* 標準色: 任意属性 + 2 桁の番号
+* 拡張色: `+@+` + 任意属性 + 5 桁の番号
+
+以下の表に使われる組み合わせを示す:
+
+* `STD`: 標準色 (2 桁の番号)
+* `(ATTR)STD`: 任意属性を含めた標準色 (属性 + 2 桁の番号)
+* `EXT`: 拡張色 (`+@+` + 5 桁の番号)
+* `(ATTR)EXT`:任意属性を含めた拡張色 (`+@+` + 属性 + 5 桁の番号)
+// TRANSLATION MISSING
+* `(ATTR)`: one or more attribute chars:
+// TRANSLATION MISSING
+** `+%+`: blink
+// TRANSLATION MISSING
+** `+.+`: "dim" (half bright)
+** `+*+`: 太字
+** `+!+`: 反転
+** `+/+`: イタリック
+** `+_+`: 下線
+** `+|+`: 属性を保存
+// TRANSLATION MISSING
+* `(a)`: one raw attribute char:
+// TRANSLATION MISSING
+** _0x01_: bold
+// TRANSLATION MISSING
+** _0x02_: reverse
+// TRANSLATION MISSING
+** _0x03_: italic
+// TRANSLATION MISSING
+** _0x04_: underline
+// TRANSLATION MISSING
+** _0x05_: blink
+// TRANSLATION MISSING
+** _0x06_: "dim" (half bright)
+
+以下の表にすべての組み合わせをまとめています:
+
+[width="100%",cols="4,3,2,8",options="header"]
+|===
+| コード                                            | 例                           | エリア      | 説明
+| [hex]#19# + `STD`                                 | [hex]#19# `+01+`             | chat + bars | オプションを使って属性と色を指定、色コードは以下の表を参照
+| [hex]#19# + `EXT`                                 | [hex]#19# `+@00001+`         | chat        | ncurses ペアを使って色を指定 (`/color` バッファのみ有効)
+| [hex]#19# + `F` + `(ATTR)STD`                     | [hex]#19# `+F*05+`           | chat + bars | 文字色 (WeeChat 色) を設定
+| [hex]#19# + `F` + `(ATTR)EXT`                     | [hex]#19# `+F@00214+`        | chat + bars | 文字色 (拡張色) を設定
+| [hex]#19# + `B` + `STD`                           | [hex]#19# `+B05+`            | chat + bars | 背景色 (WeeChat 色) を設定
+| [hex]#19# + `B` + `EXT`                           | [hex]#19# `+B@00124+`        | chat + bars | 背景色 (拡張色) を設定
+| [hex]#19# + `*` + `(ATTR)STD`                     | [hex]#19# `+*05+`            | chat + bars | 文字色(WeeChat 色) を設定
+| [hex]#19# + `*` + `(ATTR)EXT`                     | [hex]#19# `+*@00214+`        | chat + bars | 文字色 (拡張色) を設定
+| [hex]#19# + `*` + `(ATTR)STD` + `,` + `STD` ^(1)^ | [hex]#19# `+*08,05+`         | chat + bars | 文字色および背景色 (WeeChat 色) を設定
+| [hex]#19# + `*` + `(ATTR)STD` + `,` + `EXT` ^(1)^ | [hex]#19# `+*01,@00214+`     | chat + bars | 文字色 (WeeChat 色) と背景色 (拡張色) を設定
+| [hex]#19# + `*` + `(ATTR)EXT` + `,` + `STD` ^(1)^ | [hex]#19# `+*@00214,05+`     | chat + bars | 文字色 (拡張色) と背景色 (WeeChat 色) を設定
+| [hex]#19# + `*` + `(ATTR)EXT` + `,` + `EXT` ^(1)^ | [hex]#19# `+*@00214,@00017+` | chat + bars | 文字色および背景色 (拡張色) を設定
+| [hex]#19# + `*` + `(ATTR)STD` + `~` + `STD`       | [hex]#19# `+*08~05+`         | chat + bars | 文字色および背景色 (WeeChat 色) を設定
+| [hex]#19# + `*` + `(ATTR)STD` + `~` + `EXT`       | [hex]#19# `+*01~@00214+`     | chat + bars | 文字色 (WeeChat 色) と背景色 (拡張色) を設定
+| [hex]#19# + `*` + `(ATTR)EXT` + `~` + `STD`       | [hex]#19# `+*@00214~05+`     | chat + bars | 文字色 (拡張色) と背景色 (WeeChat 色) を設定
+| [hex]#19# + `*` + `(ATTR)EXT` + `~` + `EXT`       | [hex]#19# `+*@00214~@00017+` | chat + bars | 文字色および背景色 (拡張色) を設定
+| [hex]#19# + `b` + `F`                             | [hex]#19# `+bF+`             | bars        | バーの文字色を設定
+| [hex]#19# + `b` + `D`                             | [hex]#19# `+bD+`             | bars        | バーの区切り文字色を設定
+| [hex]#19# + `b` + `B`                             | [hex]#19# `+bB+`             | bars        | バーの背景色を設定
+| [hex]#19# + `b` + `_`                             | [hex]#19# `+b_+`             | input bar   | 文字入力を開始 ("input_text" 要素のみで利用可)
+| [hex]#19# + `b` + `-`                             | [hex]#19# `+b-+`             | input bar   | 隠し文字入力を開始 ("input_text" 要素のみで利用可)
+| [hex]#19# + `b` + `#`                             | [hex]#19# `+b#+`             | input bar   | カーソル文字を移動 ("input_text" 要素のみで利用可)
+| [hex]#19# + `b` + `i`                             | [hex]#19# `+bi+`             | bars        | 要素を開始
+| [hex]#19# + `b` + `l` (小文字の L)                | [hex]#19# `+bl+`             | bars        | 行要素を開始
+| [hex]#19# + `E`                                   | [hex]#19# `+E+`              | chat + bars | テキストを強調 _(WeeChat バージョン 0.4.2 以上で利用可)_
+| [hex]#19# + [hex]#1C#                             | [hex]#19# [hex]#1C#          | chat + bars | 色をリセット (属性は保存)
+| [hex]#1A# + `(a)`                                 | [hex]#1A# [hex]#01#          | chat + bars | 属性を設定
+| [hex]#1B# + `(a)`                                 | [hex]#1B# [hex]#01#          | chat + bars | 属性を削除
+| [hex]#1C#                                         | [hex]#1C#                    | chat + bars | 属性と色をリセット
+|===
+
+// TRANSLATION MISSING
+[NOTE]
+^(1)^ The use of comma as separator was used until WeeChat 2.5. +
+With WeeChat ≥ 2.6, a tilde is used to separate foreground from background
+color. If you are developing a WeeChat relay client and want to be compatible
+with all WeeChat versions, you should support both separators (for example if a
+user with WeeChat ≤ 2.5 runs `/upgrade` to a version ≥ 2.6, both separators
+could be used at same time in buffers).
+
+オプションを使う色コード
+(_src/gui/gui-color.h_ ファイルの _t_gui_color_enum_ を参照):
+
+[width="80%",cols="^1m,10",options="header"]
+|===
+| コード | オプション
+| 00   | weechat.color.separator
+| 01   | weechat.color.chat
+| 02   | weechat.color.chat_time
+| 03   | weechat.color.chat_time_delimiters
+| 04   | weechat.color.chat_prefix_error
+| 05   | weechat.color.chat_prefix_network
+| 06   | weechat.color.chat_prefix_action
+| 07   | weechat.color.chat_prefix_join
+| 08   | weechat.color.chat_prefix_quit
+| 09   | weechat.color.chat_prefix_more
+| 10   | weechat.color.chat_prefix_suffix
+| 11   | weechat.color.chat_buffer
+| 12   | weechat.color.chat_server
+| 13   | weechat.color.chat_channel
+| 14   | weechat.color.chat_nick
+| 15   | weechat.color.chat_nick_self
+| 16   | weechat.color.chat_nick_other
+| 17   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 18   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 19   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 20   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 21   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 22   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 23   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 24   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 25   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 26   | _(WeeChat バージョン 0.3.4 以上で利用不可)_
+| 27   | weechat.color.chat_host
+| 28   | weechat.color.chat_delimiters
+| 29   | weechat.color.chat_highlight
+| 30   | weechat.color.chat_read_marker
+| 31   | weechat.color.chat_text_found
+| 32   | weechat.color.chat_value
+| 33   | weechat.color.chat_prefix_buffer
+| 34   | weechat.color.chat_tags _(WeeChat バージョン 0.3.6 以上で利用可)_
+| 35   | weechat.color.chat_inactive_window _(WeeChat バージョン 0.3.6 以上で利用可)_
+| 36   | weechat.color.chat_inactive_buffer _(WeeChat バージョン 0.3.6 以上で利用可)_
+| 37   | weechat.color.chat_prefix_buffer_inactive_buffer _(WeeChat バージョン 0.3.6 以上で利用可)_
+| 38   | weechat.color.chat_nick_offline _(WeeChat バージョン 0.3.9 以上で利用可)_
+| 39   | weechat.color.chat_nick_offline_highlight _(WeeChat バージョン 0.3.9 以上で利用可)_
+| 40   | weechat.color.chat_nick_prefix _(WeeChat バージョン 0.4.1 以上で利用可)_
+| 41   | weechat.color.chat_nick_suffix _(WeeChat バージョン 0.4.1 以上で利用可)_
+| 42   | weechat.color.emphasized _(WeeChat バージョン 0.4.2 以上で利用可)_
+| 43   | weechat.color.chat_day_change _(WeeChat バージョン 0.4.2 以上で利用可)_
+| 44   | weechat.color.chat_value_null _(WeeChat バージョン 1.4 以上で利用可)_
+| 45   | weechat.color.chat_status_disabled _(WeeChat バージョン 4.0.0 以上で利用可)_
+| 46   | weechat.color.chat_status_enabled _(WeeChat バージョン 4.0.0 以上で利用可)_
+|===
+
+WeeChat 色は:
+
+[width="80%",cols="^1m,10",options="header"]
+|===
+| コード | 色
+| 00   | デフォルト (端末の文字色/背景色)
+| 01   | 黒
+| 02   | 暗い灰色
+| 03   | 暗い赤
+| 04   | 明るい赤
+| 05   | 暗い緑
+| 06   | 明るい緑
+| 07   | 茶色
+| 08   | 黄色
+| 09   | 暗い青
+| 10   | 明るい青
+| 11   | 暗いマゼンダ
+| 12   | 明るいマゼンダ
+| 13   | 暗いシアン
+| 14   | 明るいシアン
+| 15   | 灰色
+| 16   | 白
+|===
+
+色コードの例:
+
+[width="100%",cols="1,2",options="header"]
+|===
+| コード                         | 説明
+| [hex]#19# `+01+`               | オプション "01" の色 (チャットテキスト)
+| [hex]#19# `+*08,03+`           | 文字色が黄色、背景色が赤色
+| [hex]#19# `+*@00214+`          | オレンジ (拡張色 214)
+| [hex]#19# `+*@*_00214,@00017+` | 文字は太字で下線付きのオレンジ色 (214)、背景色は青 (17)
+| [hex]#1A# `+_+`                | 下線
+| [hex]#1B# `+_+`                | 下線を削除
+| [hex]#1C#                      | 属性と色をリセット
+|===
+
+[[plugin_internals]]
+== プラグインの内部構造
+
+ファイル _src/plugins/weechat-plugin.h_ は API
+で使うことのできる全ての関数を定義し、エクスポートします。
+
+_t_weechat_plugin_ 構造体はプラグインに関する情報
+(ファイル名、プラグイン名、作者、説明、...)
+と全ての API 関数をポインタにしてを保存するために使われます
+
+API 関数を簡単に呼び出すためのマクロが定義されています。
+
+例えば、関数 _hook_timer_ は以下のように構造体
+_t_weechat_plugin_ で定義されています:
+
+[source,c]
+----
+struct t_hook *(*hook_timer) (struct t_weechat_plugin *plugin,
+                              long interval,
+                              int align_second,
+                              int max_calls,
+                              int (*callback)(void *data,
+                                              int remaining_calls),
+                              void *callback_data);
+----
+
+この関数を呼び出すマクロは:
+
+[source,c]
+----
+#define weechat_hook_timer(__interval, __align_second, __max_calls,     \
+                           __callback, __data)                          \
+    weechat_plugin->hook_timer(weechat_plugin, __interval,              \
+                               __align_second, __max_calls,             \
+                               __callback, __data)
+----
+
+このため、プラグイン内での関数の呼び出しは以下の例の様に行います:
+
+[source,c]
+----
+server->hook_timer_sasl = weechat_hook_timer (timeout * 1000,
+                                              0, 1,
+                                              &irc_server_timer_sasl_cb,
+                                              server);
+----
+
+[[contribute]]
+== WeeChat への貢献
+
+[[git_repository]]
+=== Git リポジトリ
+
+// TRANSLATION MISSING
+Git repository is on https://github.com/weechat/weechat[GitHub ^↗^^].
+
+バグや新機能のパッチは必ず `main` ブランチに対して適用できるものを作成し、GitHub の pull
+リクエストを使って提出することを推奨します。パッチは電子メールで送信することも可能です
+(`git diff` または `git format-patch` で作成してください)。
+
+// TRANSLATION MISSING
+Format of commit message is the following (with automatic close of a GitHub issue):
+
+----
+component: fix a problem (closes #123)
+----
+
+_component_ には以下から 1 つ選んで記入してください:
+
+[width="100%",cols="1m,4m,5",options="header"]
+|===
+// TRANSLATION MISSING
+| Component | Files | Description
+
+| core
+| AUTHORS.md +
+  CHANGELOG.md +
+  CONTRIBUTING.md +
+  .github/FUNDING.yml +
+  .github/ISSUE_TEMPLATE/* +
+  icons/* +
+  po/* +
+  README.md +
+  UPGRADING.md +
+  src/core/* +
+  src/gui/* +
+  version.sh +
+  weechat.desktop
+// TRANSLATION MISSING
+| WeeChat core
+
+| build
+| CMakeLists.txt +
+  cmake/* +
+  tools/* +
+  weechat.cygport.in
+// TRANSLATION MISSING
+|  Build
+
+| ci
+| .github/workflows/*
+// TRANSLATION MISSING
+| Continuous integration
+
+| debian
+| debian-devel/* +
+  debian-stable/*
+// TRANSLATION MISSING
+| Debian packaging
+
+| tests/fuzz
+| tests/fuzz/*
+// TRANSLATION MISSING
+| Fuzz testing
+
+| tests/unit
+| tests/unit/*
+// TRANSLATION MISSING
+| Unit tests
+
+| doc
+| doc/*
+// TRANSLATION MISSING
+| General doc updates, for example build
+
+| doc/man
+| doc/xx/weechat.1.xx.adoc +
+  doc/xx/weechat-headless.1.xx.adoc
+// TRANSLATION MISSING
+| Man pages
+
+| doc/faq
+| doc/xx/weechat_faq.xx.adoc
+// TRANSLATION MISSING
+| Frequently asked questions (FAQ)
+
+| doc/quickstart
+| doc/xx/weechat_quickstart.xx.adoc
+// TRANSLATION MISSING
+| Quickstart guide
+
+| doc/user
+| doc/xx/weechat_user.xx.adoc
+// TRANSLATION MISSING
+| User's guide
+
+| doc/scripting
+| doc/xx/weechat_scripting.xx.adoc
+// TRANSLATION MISSING
+| Scripting guide
+
+| doc/api
+| doc/xx/weechat_plugin_api.xx.adoc
+// TRANSLATION MISSING
+| Plugin API reference
+
+| doc/relay
+| doc/xx/weechat_relay_api.xx.adoc +
+  doc/xx/weechat_relay_weechat.xx.adoc
+// TRANSLATION MISSING
+| Relay protocols
+
+| doc/dev
+| doc/xx/weechat_dev.en.adoc
+// TRANSLATION MISSING
+| Developer's guide
+
+| irc +
+  python +
+  relay +
+  …
+| src/plugins/<name>/*
+// TRANSLATION MISSING
+| Plugin
+
+|===
+
+以下のルールに従ってください:
+
+* 英語を使ってください
+* 動詞の原形を使ってください
+// TRANSLATION MISSING
+* If commit is related to a GitHub issue, write it in parenthesis after
+  the message, with this format: `(issue #123)` or `(closes #123)` to close it.
+
+コミットメッセージの例:
+
+----
+core: add callback "nickcmp" for nick comparison in buffers
+core: update Japanese translations
+irc: add command /unquiet (closes #36)
+python: fix crash when unloading a script without pointer to interpreter
+ruby: add detection of ruby version 1.9.3 in CMake
+----
+
+[[translations]]
+=== 翻訳
+
+[[gettext]]
+==== Gettext
+
+Gettext ファイルは _po/_
+
+ディレクトリに入っています。新しい言語の翻訳を始める際は、コマンド
+`msginit` を使ってください。例えばオランダ語の空ファイルを作成するには:
+
+[source,shell]
+----
+cd po
+msginit -i weechat.pot -l nl_NL -o nl.po
+----
+
+WeeChat
+の翻訳元言語は英語です、翻訳する場合は必ず英語から翻訳してください
+
+ソースに変更があった際は、以下のコマンドを Cmake の "build"
+ディレクトリで実行することで、すべての翻訳を再生成する事が可能です。
+
+[source,shell]
+----
+make translations && make update-po
+----
+
+その後翻訳できるならば .po ファイルを編集します。
+
+// TRANSLATION MISSING
+When done, you *have* to check your file with
+https://github.com/flashcode/msgcheck[msgcheck ^↗^^]:
+
+[source,shell]
+----
+msgcheck.py xx.po
+----
+
+新しい翻訳を使うには WeeChat を再コンパイルしてください。
+
+[[asciidoc]]
+==== Asciidoc
+
+Asciidoc ファイルは _doc/XX/_ ディレクトリにあり、_XX_
+は言語コード (en、fr、de、it、...) です。
+
+最初に英語の asciidoc ファイル (_doc/en/_ ディレクトリ中にある)
+をコピーして、それを編集してください。
+
+ファイル中の未翻訳部分には以下の文字列で目印が付けられています:
+
+----
+// TRANSLATION MISSING
+----
+
+メモや警告などを示すリンクおよび特殊キーワードを除く全ての部分を必ず翻訳してください、以下の単語を書き換えるのはやめてください:
+
+----
+[[link_name]]
+<<link_name>>
+
+[NOTE]
+[TIP]
+[IMPORTANT]
+[WARNING]
+[CAUTION]
+----
+
+`+<<link_name>>+` の後に名前がある場合、これも必ず翻訳してください:
+
+----
+<<link_name,このテキストは必ず翻訳してください>>
+----

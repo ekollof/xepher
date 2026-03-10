@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2013-2025 Sébastien Helleu <flashcode@flashtux.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# files/directories excluded from tarballs
+
+.git*                  export-ignore
+debian-devel           export-ignore
+debian-stable          export-ignore
+.mailmap               export-ignore
+tools/build_debian.sh  export-ignore

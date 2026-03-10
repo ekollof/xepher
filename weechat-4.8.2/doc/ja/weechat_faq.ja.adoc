@@ -1,0 +1,1306 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2012-2019 Ryuunosuke Ayanokouzi <i38w7i3@yahoo.co.jp>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= WeeChat FAQ (よくある質問)
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: ja-jp
+include::includes/attributes-ja.adoc[]
+
+[[general]]
+== 一般
+
+[[weechat_name]]
+=== "WeeChat" という名前の由来は何ですか?
+
+"Wee" は再帰的頭字語で、"Wee Enhanced Environment"
+の略です。そのため、完全な名前は "Wee Enhanced Environment for Chat" です。
+
+"Wee" はまた「とても小さい」を意味します。(もちろん、その他の意味もありますが、それは
+WeeChat とは関係ありませんよ!)。
+
+[[why_choose_weechat]]
+=== WeeChat を選ぶ理由は何ですか? X-Chat や Irssi は最高なのに...
+
+WeeChat は非常に軽く、革新的な機能を備えているからです。
+
+// TRANSLATION MISSING
+More info on the WeeChat
+https://weechat.org/about/features/[features page ^↗^^].
+
+[[compilation_install]]
+== コンパイル / インストール
+
+[[gui]]
+=== WeeChat には多くの GUI があると聞きました。コンパイル/利用方法を教えてください。
+
+// TRANSLATION MISSING
+Some remote GUIs are available, see the
+https://weechat.org/about/interfaces/[remote interfaces page ^↗^^].
+
+[[compile_git]]
+=== git リポジトリをクローンした後に WeeChat をコンパイルできません。
+
+// TRANSLATION MISSING
+WeeChat must be compiled with CMake.
+
+// TRANSLATION MISSING
+Please follow link:weechat_user.en.html#source_package[build instructions ^↗^^]
+and ensure all required dependencies are installed.
+
+// TRANSLATION MISSING
+If you still have issues, please report them to the developers.
+
+[[compile_macos]]
+=== どうすれば macOS に WeeChat をインストールできますか?
+
+https://brew.sh/[Homebrew ^↗^^] を使うことをお勧めします、ヘルプを見るには:
+
+[source,shell]
+----
+brew info weechat
+----
+
+以下のコマンドで WeeChat をインストールします:
+
+[source,shell]
+----
+brew install weechat
+----
+
+[[lost]]
+=== WeeChat を起動しました。でも何をすればいいかわかりません。
+
+ヘルプを見るには、`/help` と入力してください。コマンドに関するヘルプを見るには、`/help command`
+と入力してください。link:weechat_user.ja.html#key_bindings[キー ^↗^^]とlink:weechat_user.ja.html#commands_and_options[コマンド ^↗^^]は文書中で説明されています。
+
+新しいユーザはlink:weechat_quickstart.ja.html[クイックスタートガイド ^↗^^]を読むことをお勧めします
+
+[[display]]
+== 表示
+
+[[charset]]
+=== いくつかの文字が見えません。どうすれば良いですか。
+
+これは良くある問題であり、様々な原因に起因しています。以下の内容をよく読んで、*全ての*
+解決策をチェックしてください:
+
+* weechat が libncursesw にリンクされていることの確認 (警告:
+  全てではありませんが、ほとんどのディストリビューションで必要です): `ldd /path/to/weechat`
+* `/plugin` コマンドで "charset" プラグインがロード済みであることの確認
+  (ロードされていない場合、"weechat-plugins" パッケージが必要かもしれません)。
+* `/charset` コマンドの出力を確認 (core バッファ上で)。端末の文字セットとして _ISO-XXXXXX_
+  または _UTF-8_ があるはずです。その他の値がある場合は、ロケールが間違っている可能性があります。 +
+  ロケールを修正するには、`locale -a` を使ってインストール済みのロケールを確認し、$LANG
+  に適切な値を設定してください。これを行うには `+export LANG=en_US.UTF-8+` のようにします。
+* グローバルデコードを設定、例えば:
+  `/set charset.default.decode "ISO-8859-15"`
+* UTF-8 ロケールを使っている場合は:
+** 端末で UTF-8 が使えることを確認 (UTF-8 対応の端末としては
+   rxvt-unicode を推奨)
+** screen を使っている場合は、UTF-8 モードで起動されていることを確認
+   (~/.screenrc に "`defutf8 on`" の記述があるかまたは `screen -U` のようにして起動)。
+* link:weechat_user.ja.html#option_weechat.look.eat_newline_glitch[_weechat.look.eat_newline_glitch_ ^↗^^]
+  オプションが off であることを確認してください (このオプションは表示上のバグを引き起こす可能性があります)
+
+[NOTE]
+WeeChat は UTF-8 ロケールを推奨します。ISO
+またはその他のロケールを使う場合、*全ての* 設定 (端末、screen、..)
+が ISO であり、UTF-8 *でない* ことを確認してください。
+
+[[unicode_chars]]
+=== 端末で表示されるユニコード文字が WeeChat では表示されない場合があります。なぜでしょうか。
+
+この問題は libc の _wcwidth_ 関数のバグによって引き起こされている可能性があります。これは glibc 2.22
+で修正されているはずです (使用中のディストリビューションではまだ提供されていないかもしれません)
+
+次の回避方法を使えば、修正済みの _wcwidth_ 関数を使う事が可能です:
+https://blog.nytsoi.net/2015/05/04/emoji-support-for-weechat[https://blog.nytsoi.net/2015/05/04/emoji-support-for-weechat ^↗^^].
+
+// TRANSLATION MISSING
+See this https://github.com/weechat/weechat/issues/79[bug report ^↗^^]
+for more information.
+
+[[bars_background]]
+=== タイトルやステータスバー等の背景色が行末ではなくテキストの最後で終わってしまいます。
+
+シェルの TERM 変数に間違った値が設定されている可能性があります
+(端末で `echo $TERM` の出力を確認してください)。
+
+WeeChat を起動した場所に依存しますが、以下の値を持つはずです:
+
+* WeeChat を screen および tmux
+  を使わずにローカルまたはリモートマシンで実行している場合、使用中の端末に依存します:
+  _xterm_、_xterm-256color_、_rxvt-unicode_、_rxvt-256color_、...
+* WeeChat を screen 内で実行している場合、_screen_ または _screen-256color_ です、
+* WeeChat を tmux
+  内で実行している場合、_tmux_、_tmux-256color_、_screen_、_screen-256color_ です。
+
+もし必要であれば、TERM 変数を修正してください: `export TERM="xxx"`
+
+[[screen_weird_chars]]
+=== weechat を screen/tmux の中で使っている場合、おかしなランダム文字列が表示されます。どうすれば直りますか。
+
+シェルの TERM 変数に間違った値が設定されている可能性があります
+(端末、*screen/tmux の外* で `echo $TERM` の出力を確認してください)。 +
+例えば、_xterm-color_ の場合、おかしな文字列が表示される可能性があります。_xterm_
+と設定すればこのようなことは起こらないので (その他多くの値でも問題は起きません)、これを使ってください。 +
+もし必要であれば、TERM 変数を修正してください: `export TERM="xxx"`
+
+gnome-terminal
+を使っている場合、設定/プロファイル/互換性メニュー内にある「曖昧幅の文字」を
+`半角` にしてください。
+
+[[macos_display_broken]]
+=== macOS 上で WeeChat をコンパイルした場合、"(null)" という文字列が至る所に表示されます。
+
+ncursesw を自分でコンパイルした場合は、標準の (システムに元から存在する)
+ncurses を使ってみてください。
+
+さらに macOS では、Homebrew パッケージマネージャを使って
+WeeChat をインストールすることをお勧めします。
+
+[[buffer_vs_window]]
+=== 「バッファ」と「ウィンドウ」の違いは何ですか。
+
+_バッファ_ とは番号、名前、表示行 (とその他のデータ)
+からなります。
+
+_ウィンドウ_
+とはバッファを表示する画面エリアです。画面を複数のウィンドウに分割出来ます。
+
+それぞれのウィンドウは 1
+つのバッファの内容もしくは複数のバッファの内容をマージして表示します。バッファを隠す
+(ウィンドウで表示させない) ことや 1 つ以上のウィンドウに表示させることも出来ます。
+
+[[buffers_list]]
+=== どうすれば左側にバッファリストを表示できますか。
+
+// TRANSLATION MISSING
+The plugin link:weechat_user.ja.html#buflist[buflist ^↗^^]
+is loaded and enabled by default.
+
+// TRANSLATION MISSING
+To limit size of bar:
+
+----
+/set weechat.bar.buflist.size_max 15
+----
+
+バッファリストバーの位置を下に移動するには以下の方法を使ってください:
+
+----
+/set weechat.bar.buflist.position bottom
+----
+
+_buflist_ バーをスクロールする方法: マウスを有効化しているならば
+(キー: kbd:[Alt+m])、マウスホイールでバッファリストバーをスクロールできます。
+
+_buflist_ バーをスクロールするデフォルトキーは
+kbd:[F1] (または kbd:[Ctrl+F1])、kbd:[F2] (または kbd:[Ctrl+F2])、kbd:[Alt+F1]、kbd:[Alt+F2] です。
+
+// TRANSLATION MISSING
+[[customize_buflist]]
+=== How can I customize the list of buffers list, like the color of the active buffer?
+
+You can browse all buflist options with the command:
+
+----
+/fset buflist
+----
+
+The background of the active buffer is blue by default, you can change it
+like this, for example to `red`:
+
+----
+/set buflist.format.buffer_current "${color:,red}${format_buffer}"
+----
+
+[NOTE]
+There's a comma before the color name "red" because it is used as the background,
+not the text color. +
+You can also use any numeric color instead of `red`,
+like `237` for dark gray.
+
+The buflist plugin provides lot of options that you can customize, please read
+the help on each option.
+
+There's also a https://github.com/weechat/weechat/wiki/buflist[wiki page ^↗^^]
+with examples of advanced buflist configuration.
+
+[[customize_prefix]]
+=== どうすればチャットエリア内のニックネームの最大長さを短く、またはニックネーム整列機能を無効化できますか。
+
+チャットエリアのニックネームの最大長を短くするには:
+
+----
+/set weechat.look.prefix_align_max 15
+----
+
+ニックネーム整列を抑制するには:
+
+----
+/set weechat.look.prefix_align none
+----
+
+[[status_hotlist]]
+=== ステータスバーに表示される [H: 3(1,8), 2(4)] の意味を教えてください。
+
+これは「ホットリスト」と呼ばれ、ここにはバッファ番号およびそのバッファの未読メッセージカウンタが表示されます。未読メッセージカウンタの表示順はハイライト、プライベートメッセージ、一般メッセージ、その他のメッセージ
+(参加/退出メッセージなど)
+の順です。 +
+バッファの「未読メッセージ」とは、最後にそのバッファにフォーカスが移された以降に表示されたり受信した新しいメッセージを意味します。
+
+上記の例 `[H: 3(1,8), 2(4)]` の場合:
+
+* バッファ 3 番にハイライトが 1 通、未読が 8 通あり、
+* バッファ 2 番に未読が 4 通あることを意味します。
+
+バッファおよびカウンタのテキスト色はメッセージの種類を意味します。色のデフォルト設定は以下です:
+
+* ハイライト: `lightmagenta` および `magenta`
+* プライベートメッセージ: `lightgreen` および `green`
+* 一般メッセージ: `yellow` および `brown`
+* その他のメッセージ: `default` および `default` (端末のテキスト色)
+
+これらの色を変えるには、__weechat.color.status_data_*__ オプション (バッファ)
+および __weechat.color.status_count_*__ オプション (カウンタ) を設定します。 +
+その他のホットリスト関連オプションは __weechat.look.hotlist_*__ オプションを使って変更します。
+
+ホットリストに関する詳しい情報はlink:weechat_user.ja.html#screen_layout[ユーザーズガイド / 画面レイアウト ^↗^^]を参照してください
+
+[[input_bar_size]]
+=== コマンドラインの行数を増やすにはどうすればいいですか。
+
+インプットバーの _size_ オプションには 1 (サイズ固定、デフォルト値)
+以上の値または動的なサイズの意味で 0 を設定できます。_size_max_
+オプションではサイズの最大値を設定できます (0 = 制限なし)。
+
+動的サイズを設定する例:
+
+----
+/set weechat.bar.input.size 0
+----
+
+サイズの最大値を 2 に設定:
+
+----
+/set weechat.bar.input.size_max 2
+----
+
+[[one_input_root_bar]]
+=== 全てのウィンドウに対して入力バーの数を 1 つだけにすることができますか (画面分割されている場合)。
+
+できます。"root" 型のバー (あなたのいるウィンドウを区別するための要素を持つ)
+を作成し、現在の入力バーを削除してください。
+
+例えば:
+
+----
+/bar add rootinput root bottom 1 0 [buffer_name]+[input_prompt]+(away),[input_search],[input_paste],input_text
+/bar del input
+----
+
+これに満足できない場合は、新しいバーを削除してください。全てのバーに
+"input_text" 要素が設定されていない場合は
+WeeChat は自動的にデフォルトバー "input" を作成します:
+
+----
+/bar del rootinput
+----
+
+[[terminal_copy_paste]]
+=== どうすればニックネームリストを選択せずにテキストだけをコピー/ペーストできますか。
+
+// TRANSLATION MISSING
+You can use the bare display (default key: kbd:[Alt+l] (`L`)), which shows
+just the contents of the currently selected window, without any formatting.
+
+矩形選択のできる端末を使ってください
+(rxvt-unicode、konsole、gnome-terminal、...)。通常、キーは
+kbd:[Ctrl] + kbd:[Alt] + マウス選択です。
+
+// TRANSLATION MISSING
+You can toggle nicklist and make it visible only when needed, with key
+kbd:[Alt+Shift+N].
+
+別の解決策はニックネームリストを上か下かに移動することです、例えば:
+
+----
+/set weechat.bar.nicklist.position top
+/set weechat.bar.nicklist.size_max 8
+----
+
+[[urls]]
+=== どうすれば長い (一行以上に渡る) URL をクリックできますか。
+
+// TRANSLATION MISSING
+You can use the bare display (default key: kbd:[Alt+l] (`L`)).
+
+URL を簡単にクリックできるようにするには、以下を試してみてください:
+
+// TRANSLATION MISSING
+* toggle nicklist and make it visible only when needed, with key kbd:[Alt+Shift+N]
+
+* ニックネームリストを上方に移動します:
+
+----
+/set weechat.bar.nicklist.position top
+/set weechat.bar.nicklist.size_max 8
+----
+
+* 複数行に渡る単語の整列を無効化します:
+
+----
+/set weechat.look.align_multiline_words off
+----
+
+* もしくは、すべての折り返された行について整列を無効化します:
+
+----
+/set weechat.look.align_end_of_lines time
+----
+
+// TRANSLATION MISSING
+You can enable option "eat_newline_glitch", so that new line char is not added
+at the end of each line displayed (it will not break URL selection):
+
+----
+/set weechat.look.eat_newline_glitch on
+----
+
+[IMPORTANT]
+このオプションには表示上の問題を引き起こす可能性があります。表示上の問題が起きた場合はこのオプションを無効化してください。
+
+別の解決策として、スクリプトを利用することもできます:
+
+----
+/script search url
+----
+
+[[change_locale_without_quit]]
+=== WeeChat が出力するメッセージの言語を、再起動せずに変更したいです。このようなことは可能ですか。
+
+// TRANSLATION MISSING
+Sure it is possible:
+
+----
+/set env LANG ja_JP.UTF-8
+/upgrade
+----
+
+// TRANSLATION MISSING
+[[timezone]]
+=== How can I change the timezone?
+
+// TRANSLATION MISSING
+There is no option in WeeChat to change the timezone, the environment variable
+`TZ` must be set to the appropriate value.
+
+// TRANSLATION MISSING
+In your shell initialization file or on command line, before starting WeeChat:
+
+[source,shell]
+----
+export TZ=Asia/Tokyo
+----
+
+// TRANSLATION MISSING
+In WeeChat, the new value is immediately used:
+
+----
+/set env TZ Asia/Tokyo
+----
+
+[[use_256_colors]]
+=== どうすれば WeeChat で 256 色が使えますか。
+
+最初に _TERM_
+環境変数が正しいことを確認してください、お勧めの値は:
+
+* screen 内の場合: _screen-256color_
+* tmux 内の場合: _screen-256color_ または _tmux-256color_
+* screen および tmux の外の場合: _xterm-256color_、_rxvt-256color_、_putty-256color_、...
+
+[NOTE]
+これらの値を _TERM_ に設定するには、"ncurses-term"
+パッケージをインストールする必要があるかもしれません。
+
+screen を使っている場合は、以下の行を _~/.screenrc_ に追加してください:
+
+----
+term screen-256color
+----
+
+_TERM_ 変数が間違った値に設定された状態で WeeChat が起動完了している場合は、以下の
+2 つのコマンドを使って変数の値を変更してください:
+
+----
+/set env TERM screen-256color
+/upgrade
+----
+
+// TRANSLATION MISSING
+You can use any color number in options (optional: you can add color aliases
+with command `/color`).
+
+色管理に関するより詳しい情報はlink:weechat_user.ja.html#colors[ユーザーズガイド / 色 ^↗^^]を参照してください
+
+[[search_text]]
+=== どうすればバッファ内の文字列を検索できますか (irssi の /lastlog の様に)。
+
+デフォルトのキーは kbd:[Ctrl+r] です (コマンドは: `+/input search_text_here+`)。
+ハイライト部分へのジャンプは: kbd:[Alt+p] / kbd:[Alt+n]
+
+この機能に関するより詳しい情報はlink:weechat_user.ja.html#key_bindings[ユーザーズガイド / デフォルトのキー割り当て ^↗^^]を参照してください
+
+[[terminal_focus]]
+=== どうすれば端末にフォーカスが合った時や外れた時にコマンドを実行できますか。
+
+端末に特殊コードを送信してフォーカスイベントを必ず有効化してください。
+
+*重要*:
+
+* 必ず最新の xterm 互換の端末を使ってください。
+* 加えて、TERM 環境変数を _xterm_ または _xterm-256color_
+  にすることが重要かもしれません。
+* tmux を使っているなら、必ず `set -g focus-events on` を
+  _.tmux.conf_ に追加して、フォーカスイベントを有効化してください。
+* screen ではこの機能を *使えません*。
+
+WeeChat の開始時にコードを送信するには:
+
+----
+/set weechat.startup.command_after_plugins "/print -stdout \033[?1004h\n"
+----
+
+さらに端末から送信される 2 種類の特殊キーシーケンスに対してコマンドを割り当ててください
+(例に挙げた `/print` コマンドは適当なコマンドに書き換えてください):
+
+----
+/key bind meta-[I /print -core focus
+/key bind meta-[O /print -core unfocus
+----
+
+端末のフォーカスが外れた時点でバッファに未読マークをつける例:
+
+----
+/key bind meta-[O /allbuf /buffer set unread
+----
+
+[[screen_paste]]
+=== WeeChat を screen の内部で実行している場合、別の screen ウィンドウ内にペーストされるテキストの周りに ~0 と ~1 が追加されます。なぜでしょうか。
+
+scrreen
+がデフォルトで有効化されている括弧付きペーストオプションの挙動を別のウィンドウ内で適切に処理できないことが原因です。
+
+括弧付きペーストモードを無効化するには以下のコマンドを使います:
+
+----
+/set weechat.look.paste_bracketed off
+----
+
+// TRANSLATION MISSING
+[[small_terminal]]
+=== How can I customize display for very small terminal size (like 80x25), to not waste space?
+
+// TRANSLATION MISSING
+You can remove side bars (buflist and nicklist), change time format to display
+only hours and minutes, disable alignment of messages and set a char for nick
+prefix/suffix:
+
+----
+/set buflist.look.enabled off
+/bar hide nicklist
+/set weechat.look.buffer_time_format "%H:%M"
+/set weechat.look.prefix_align none
+/set weechat.look.align_end_of_lines prefix
+/set weechat.look.nick_suffix ">"
+/set weechat.look.nick_prefix "<"
+----
+
+// TRANSLATION MISSING
+Terminal 80x25, with default configuration:
+
+....
+┌────────────────────────────────────────────────────────────────────────────────┐
+│1.local     │Welcome on WeeChat channel!                                        │
+│  weechat   │16:27:16        --> | FlashCode (~flashcode@localhost)  │@FlashCode│
+│2.  #weechat│                    | has joined #weechat               │ bob      │
+│            │16:27:16         -- | Mode #weechat [+nt] by hades.arpa │          │
+│            │16:27:16         -- | Channel #weechat: 1 nick (1 op, 0 │          │
+│            │                    | voices, 0 normals)                │          │
+│            │16:27:18         -- | Channel created on Sun, 22 Mar    │          │
+│            │                    | 2020 16:27:16                     │          │
+│            │17:02:28        --> | bob (~bob_user@localhost) has     │          │
+│            │                    | joined #weechat                   │          │
+│            │17:03:12 @FlashCode | hi bob, you're the first user     │          │
+│            │                    | here, welcome on the WeeChat      │          │
+│            │                    | support channel!                  │          │
+│            │17:03:33        bob | hi FlashCode                      │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │[17:04] [2] [irc/local] 2:#weechat(+nt){2}                         │
+│            │[@FlashCode(i)] █                                                  │
+└────────────────────────────────────────────────────────────────────────────────┘
+....
+
+// TRANSLATION MISSING
+Terminal 80x25, after changes:
+
+....
+┌────────────────────────────────────────────────────────────────────────────────┐
+│Welcome on WeeChat channel!                                                     │
+│16:27 --> FlashCode (~flashcode@localhost) has joined #weechat                  │
+│16:27 -- Mode #weechat [+nt] by hades.arpa                                      │
+│16:27 -- Channel #weechat: 1 nick (1 op, 0 voices, 0 normals)                   │
+│16:27 -- Channel created on Sun, 22 Mar 2020 16:27:16                           │
+│17:02 --> bob (~bob_user@localhost) has joined #weechat                         │
+│17:03 <@FlashCode> hi bob, you're the first user here, welcome on the WeeChat   │
+│      support channel!                                                          │
+│17:03 <bob> hi FlashCode                                                        │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│[17:04] [2] [irc/local] 2:#weechat(+nt){2}                                      │
+│[@FlashCode(i)] █                                                               │
+└────────────────────────────────────────────────────────────────────────────────┘
+....
+
+[[key_bindings]]
+== キー割り当て
+
+[[meta_keys]]
+=== いくつかのメタキーが (alt + key) が動きません。
+
+xterm や uxterm 等の端末を利用している場合、いくつかのメタキーはデフォルトでは利用できません。以下の行を
+_~/.Xresources_ に追加してください:
+
+* xterm の場合:
+----
+XTerm*metaSendsEscape: true
+----
+* uxterm の場合:
+----
+UXTerm*metaSendsEscape: true
+----
+
+このファイルをリロードするか (`xrdb -override ~/.Xresources`) または X を再起動してください。
+
+macOS のターミナル.app を使っている場合、設定メニューのキーボードから「メタキーとして option
+キーを使用」を有効化してください。こうすることで、kbd:[Option]
+キーをメタキーとして使うことが可能です。
+
+// TRANSLATION MISSING
+[[enter_key]]
+=== Some keys including Enter are not working, why?
+
+If you run a WeeChat < 4.0.0 with configuration files created by any
+version ≥ 4.0.0, the keys names become invalid and many keys won't work at all. +
+To repair them, exit WeeChat, remove all sections `[key*]` from weechat.conf
+and start WeeChat again: all default keys will be created.
+
+// TRANSLATION MISSING
+[[key_f11]]
+=== Key F11 maximizes the terminal window, how can I scroll up the nicklist?
+
+The key kbd:[F11] is commonly used by terminals to maximize the window, and
+kbd:[F11]/kbd:[F12] are the default keys in WeeChat to scroll the nicklist.
+
+You can bind other keys, for example kbd:[Shift+F11] and kbd:[Shift+F12],
+with WeeChat ≥ 4.0.0:
+
+----
+/key bind shift-f11 /bar scroll nicklist * -100%
+/key bind shift-f12 /bar scroll nicklist * +100%
+----
+
+Other solution is to enable mouse (key: kbd:[Alt+m]) and scroll with the mouse
+wheel (see also questions about <<mouse,mouse>>).
+
+[[customize_key_bindings]]
+=== どうすればキー割り当てをカスタマイズできますか。
+
+キー割り当ては `/key` コマンドでカスタマイズできます。
+
+デフォルトキー kbd:[Alt+k] でキーコードを取り込み、これをコマンドラインに入力できます。
+
+[[jump_to_buffer_11_or_higher]]
+=== バッファ 11 番 (またはそれ以上の番号) にジャンプするキーは何ですか。
+
+キー kbd:[Alt+j] の後に 2 桁の数字を入力します、例えば kbd:[Alt+j]
+その後に kbd:[1]、kbd:[1] でバッファ 11 番にジャンプします。
+
+これにキーを割り当てることが出来ます、例えば:
+
+----
+/key bind meta-q /buffer *11
+----
+
+デフォルトキー割り当てのリストはlink:weechat_user.ja.html#key_bindings[ユーザーズガイド / デフォルトのキー割り当て ^↗^^]を参照してください
+
+番号 100 以上のバッファにジャンプするには、以下のトリガを定義してください。こうすることでコマンド
+`/123` でバッファ #123 にジャンプできるようになります:
+
+----
+/trigger add numberjump modifier "2000|input_text_for_buffer" "${tg_string} =~ ^/[0-9]+$" "=\/([0-9]+)=/buffer *${re:1}=" "" "" "none"
+----
+
+// TRANSLATION MISSING
+For an easy jump to buffers, you can also install the _go.py_ script:
+
+----
+/script install go.py
+----
+
+[[global_history]]
+=== どうすればグローバルヒストリを (バッファヒストリの代わりに) 上下矢印キーで使えますか。
+
+上下矢印キーをグローバルヒストリに割り当ててください
+(グローバルヒストリに対するデフォルトのキーは kbd:[Ctrl+↑] と kbd:[Ctrl+↓] です。
+
+例:
+
+----
+/key bind up /input history_global_previous
+/key bind down /input history_global_next
+----
+
+// TRANSLATION MISSING
+With WeeChat ≤ 3.8, you must use the raw key code (press kbd:[Alt+k] then key
+to display its code):
+
+----
+/key bind meta2-A /input history_global_previous
+/key bind meta2-B /input history_global_next
+----
+
+[[mouse]]
+== マウス
+
+[[mouse_not_working]]
+=== マウスが少しも動きません。どうすれば良いですか。
+
+最初にマウスを有効化してください:
+
+----
+/mouse enable
+----
+
+これでマウスが動かない場合は、シェルの TERM
+変数を確認してください (端末内で `echo $TERM`
+の出力を見てください)。端末の種類によってはマウスがサポートされていない可能性があります。
+
+マウスサポートを端末から確認するには:
+
+[source,shell]
+----
+printf '\033[?1002h'
+----
+
+端末の最初の文字 (左上) をクリックしてください。" !!#!!" と見えるはずです。
+
+端末のマウスサポートを無効化するには:
+
+[source,shell]
+----
+printf '\033[?1002l'
+----
+
+[[mouse_coords]]
+=== マウスの位置座標 X または Y が 94 (または 222) よりも大きい場合にマウス機能が正しく動きません。
+
+一部の端末ではマウスの位置座標を指定するために ISO 文字だけを使います、
+このため X/Y が 94 (または 222) よりも大きい場合は正しく動きません。
+
+マウスの位置座標を指定するのに UTF-8 座標をサポートしている端末を使ってください、
+例えば rxvt-unicode 等です。
+
+[[mouse_select_paste]]
+=== WeeChat でマウスが利用可能な場合、端末のテキストを選択したり、ペーストするにはどうすれば良いですか。
+
+WeeChat でマウスが利用可能な場合、kbd:[Shift]
+キーを押しながら端末をクリックして選択してください、マウスが無効化されます
+(例えば iTerm 等の場合、kbd:[Shift] の代わりに kbd:[Alt] を使ってください)。
+
+[[irc]]
+== IRC
+
+[[irc_tls_connection]]
+=== TLS を使うサーバへの接続中に問題が発生しました。どうすればいいですか。
+
+macOS をお使いの場合、必ず Homebrew から `openssl`
+をインストールしてください。こうすることでシステムの鍵束に含まれる証明書を使いつつ、CA
+
+gnutls ハンドシェイクに関するエラーの場合、Diffie-Hellman キー
+(デフォルトは 2048) のサイズを小さくすることを試してみてください:
+
+----
+/set irc.server.example.tls_dhkey_size 1024
+----
+
+証明書に関するエラーの場合、"tls_verify" を無効化してください
+(接続の機密保護がより甘くなることに注意):
+
+----
+/set irc.server.example.tls_verify off
+----
+
+サーバが不正な証明書を持っており、正常な証明書がどのようなものであるかわかっている場合、証明書の指紋を設定しておくことが可能です
+(SHA-512、SHA-256、SHA-1):
+
+----
+/set irc.server.example.tls_fingerprint 0c06e399d3c3597511dc8550848bfd2a502f0ce19883b728b73f6b7e8604243b
+----
+
+[[irc_tls_handshake_error]]
+=== TLS を使うサーバへの接続中に、"TLS handshake failed" というエラーだけが表示されます。どうすれば良いですか。
+
+// TRANSLATION MISSING
+You can try a different priority string, replace "xxx" by your server name:
+
+----
+/set irc.server.xxx.tls_priorities "NORMAL:%COMPAT"
+----
+
+[[irc_tls_libera]]
+=== どうすれば TLS を使って libera サーバに接続できますか。
+
+// TRANSLATION MISSING
+Check that you have certificates installed on your system, this is commonly
+provided by the package "ca-certificates".
+
+サーバポート、TLS を設定の後に接続してください:
+
+----
+/set irc.server.libera.addresses "irc.libera.chat/6697"
+/set irc.server.libera.tls on
+/connect libera
+----
+
+[[irc_oauth]]
+=== どうすれば "oauth" が必要なサーバに接続出来ますか?
+
+_twitch_ などの一部のサーバは接続するために oauth が必要です。
+
+oauth を使うにはパスワードを "oauth:XXXX" のように指定してください。
+
+以下のコマンドを使って、この種のサーバを追加し接続することが可能です
+(サーバ名とアドレスは適切な値を使ってください):
+
+----
+/server add name irc.server.org -password=oauth:XXXX
+/connect name
+----
+
+[[irc_sasl]]
+=== どうすればチャンネル参加前にニックネーム認証を行うことができますか。
+
+サーバで SASL を利用可能なら、nickserv 認証のコマンドを送信するよりも
+SASL を利用する方が良いです。例えば:
+
+----
+/set irc.server.libera.sasl_username "mynick"
+/set irc.server.libera.sasl_password "xxxxxxx"
+----
+
+対象のサーバが SASL
+をサポートしない場合、コマンドとチャンネル参加の間に遅延時間を入れることもできます:
+
+----
+/set irc.server.libera.command_delay 5
+----
+
+[[edit_autojoin]]
+=== どうすれば自動参加オプションにチャンネルを追加/削除できますか。
+
+// TRANSLATION MISSING
+With WeeChat ≥ 3.5, you can automatically record the channels you manually
+join and part in the "autojoin" server option.
+
+// TRANSLATION MISSING
+For all servers:
+
+----
+/set irc.server_default.autojoin_dynamic on
+----
+
+// TRANSLATION MISSING
+For a single server:
+
+----
+/set irc.server.libera.autojoin_dynamic on
+----
+
+// TRANSLATION MISSING
+You can also add the current channel in the "autojoin" server option using the
+`/autojoin` command:
+
+----
+/autojoin add
+----
+
+// TRANSLATION MISSING
+Or another channel:
+
+----
+/autojoin add #test
+----
+
+// TRANSLATION MISSING
+There are also scripts:
+
+----
+/script search autojoin
+----
+
+[[ignore_vs_filter]]
+=== /ignore と /filter コマンドの違いは何ですか。
+
+`/ignore` コマンドは IRC コマンドです、このため
+IRC バッファ (サーバとチャンネル)
+にのみ有効です。これを使うことでニックネームやホスト名を基準にして、あるサーバやチャンネルにいる一部のユーザを無視できます
+(表示済みメッセージに対しては適用されません)。マッチするメッセージは
+IRC プラグインによって表示される前に削除されます
+(無視設定されたものは完全に見えなくなります。無視設定を元に戻すには、無視エントリを削除してください)。
+
+`/filter` コマンドは
+WeeChat
+のコアコマンドです。このため、このコマンドの結果は任意のバッファに適用されます。バッファ内の行のプレフィックスと内容に基づいて付けられたタグや正規表現にマッチする行をフィルタすることが可能です。
+フィルタされた行は隠されているだけで削除されているわけではありません。このため、フィルタを無効化
+(デフォルトでは kbd:[Alt+=] でフィルタの有効無効を切り替えられます) すれば見ることが可能です。
+
+// TRANSLATION MISSING
+[[filter_irc_join_part_quit]]
+=== How can I filter join/part/quit and other annoying messages on IRC channels?
+
+See link:weechat_user.ja.html#irc_smart_filter[User's guide / IRC smart filter ^↗^^].
+
+[[filter_irc_join_channel_messages]]
+=== どうすれば IRC チャンネルに参加した際に表示される一部のメッセージをフィルタできますか。
+
+// TRANSLATION MISSING
+You can choose which messages are displayed when joining a channel with the
+option _irc.look.display_join_message_ (see `+/help irc.look.display_join_message+`
+for more info).
+
+メッセージを隠す (ただしバッファに残す) には、タグを使ってメッセージをフィルタしてください
+(たとえばチャンネル作成日時を隠すには _irc_329_ タグを使ってください)。フィルタの書き方に関する情報は
+`/help filter` を参照してください。
+
+[[filter_voice_messages]]
+=== どうすれば voice メッセージをフィルタできますか (例えば Bitlbee サーバ上で)。
+
+voice メッセージをフィルタするのは簡単ではありません、なぜなら voice
+モードの設定は同じ IRC メッセージの中で他のモード設定と同時に行われる可能性があるからです。
+
+Bitlbee は離席ユーザを表示するために voice を利用します。このため、voice
+メッセージでチャットエリアが溢れてしまいます。おそらくこれをフィルタしたいのではないでしょうか。この様な場合には、Bitlbee
+が離席状態を通知することを禁止し、WeeChat にニックネームリスト中に含まれる離席中のニックネームに対して特別な色を使わせることができます。
+
+Bitlbee 3 以上の場合、以下のコマンドをチャンネル _&bitlbee_ で入力:
+
+----
+channel set show_users online,away
+----
+
+Bitlbee の古いバージョンでは、以下のコマンドを _&bitlbee_ で入力:
+
+----
+set away_devoice false
+----
+
+WeeChat
+で離席中のニックネームをチェックするには、<<color_away_nicks,離席状態のニックネーム>>に関する質問を参照してください。
+
+もし本当に voice メッセージをフィルタしたい場合は、以下のコマンドを使ってください、ただしこれは完璧なものではありません
+(voice モードの変更が最初に指定されている場合のみ有効)。
+
+----
+/filter add hidevoices * irc_mode (\+|\-)v
+----
+
+[[color_away_nicks]]
+=== どうすればニックネームリストから離席中のニックネームを確認できますか。
+
+オプション _irc.server_default.away_check_ に正の値を設定してください
+(離席状態確認のインターバルを分単位で)。
+
+オプション _irc.server_default.away_check_max_nicks_
+を設定することで離席状態確認を小さなチャンネルのみに制限できます。
+
+例えば、5 分間隔で離席状態確認を行い、25
+人より多いチャンネルではこれを行わないようにするには:
+
+----
+/set irc.server_default.away_check 5
+/set irc.server_default.away_check_max_nicks 25
+----
+
+[[highlight_notification]]
+=== どうすればあるチャンネルで自分が呼ばれたら警告できますか。
+
+// TRANSLATION MISSING
+There is a default trigger "beep" which sends a _BEL_ to the terminal on
+a highlight or private message. Thus you can configure your terminal
+(or multiplexer like screen/tmux) to run a command or play a sound when
+a _BEL_ occurs.
+
+もしくは "beep" トリガにコマンドを追加することもできます:
+
+----
+/set trigger.trigger.beep.command "/print -beep;/exec -bg /path/to/command arguments"
+----
+
+古い WeeChat をお使いの場合、_beep.pl_ や _launcher.pl_ 等のスクリプトを使ってください。
+
+_launcher.pl_ の場合、コマンドの設定が必要です:
+
+----
+/set plugins.var.perl.launcher.signal.weechat_highlight "/path/to/command arguments"
+----
+
+この問題に対するその他のスクリプトは:
+
+----
+/script search notify
+----
+
+[[disable_highlights_for_specific_nicks]]
+=== 特定のニックネームのみハイライトを無効化する方法を教えてください。
+
+// TRANSLATION MISSING
+You can use the
+link:weechat_user.ja.html#max_hotlist_level_nicks[hotlist_max_level_nicks_add ^↗^^]
+buffer property to set the max hotlist level for some nicks, per buffer,
+or per group of buffers (like IRC servers).
+
+ハイライトを無効化するだけなら、このプロパティを 2 に設定してください.
+
+// TRANSLATION MISSING
+For the current buffer:
+
+----
+/buffer setauto hotlist_max_level_nicks_add joe:2,mike:2
+----
+
+// TRANSLATION MISSING
+For all channels on server "libera":
+
+----
+/set weechat.buffer.irc.libera.*.hotlist_max_level_nicks_add joe:2,mike:2
+----
+
+[[irc_target_buffer]]
+=== どうすればマージされたバッファ内であるコマンドを発行するターゲットバッファを変更できますか。
+
+デフォルトのキーは kbd:[Ctrl+x] です (コマンドは: `+/buffer switch+`)。
+
+[[plugins_scripts]]
+== プラグイン / スクリプト
+
+[[openbsd_plugins]]
+=== OpenBSD と WeeChat を使っている場合、プラグインが 1 つもロードされません。
+
+OpenBSD では、プラグインファイル名の末尾が ".so.0.0" です (Linux では ".so")。
+
+以下の様に設定してください:
+
+----
+/set weechat.plugin.extension ".so.0.0"
+/plugin autoload
+----
+
+[[install_scripts]]
+=== どうすればスクリプトをインストールできますか。スクリプトは他の IRC クライアントと互換性がありますか。
+
+// TRANSLATION MISSING
+You can use the command `/script` to install and manage scripts (see `/help script`
+for help).
+
+スクリプトは他の IRC クライアントのものと互換性がありません。
+
+[[scripts_update]]
+=== コマンド "/script update" でスクリプトを読み込むことができません。どうすればいいですか。
+
+手始めに、この FAQ の TLS 接続に関する質問を確認してください。
+
+それでもだめなら、手作業で (シェルから) スクリプトリストファイルを削除してください:
+
+[source,shell]
+----
+rm ~/.cache/weechat/script/plugins.xml.gz
+----
+
+// TRANSLATION MISSING
+[NOTE]
+If you are not using the XDG directories, the path could be: _~/.weechat/script/plugins.xml.gz_.
+
+その後、WeeChat からスクリプトリストを更新してください:
+
+----
+/script update
+----
+
+それでもまだエラーが出るなら、WeeChat に含まれるファイルの自動更新を無効化して、WeeChat
+を使わずに手作業でファイルをダウンロードしなければいけません
+(つまり、更新を入手するには自分自身でそのファイルを更新しなければいけないということです):
+
+* WeeChat から WeeChat のファイル自動更新機能を無効化します:
+
+----
+/set script.scripts.cache_expire -1
+----
+
+* シェルからスクリプトリストファイルをダウンロードします (必要なら curl をインストールしてください):
+
+[source,shell]
+----
+cd ~/.cache/weechat/script
+curl -O https://weechat.org/files/plugins.xml.gz
+----
+
+// TRANSLATION MISSING
+If you're running macOS and the downloaded file has a size of 0 bytes,
+try to set this variable in your shell initialization file or on command line,
+before starting WeeChat:
+
+[source,shell]
+----
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+----
+
+[[spell_dictionaries]]
+=== システムに aspell 辞書をインストールした後、WeeChat を再起動せずにそれを使う方法を教えてください。
+
+spell プラグインをリロードしてください:
+
+----
+/plugin reload spell
+----
+
+[[settings]]
+== 設定
+
+[[editing_config_files]]
+=== 手作業で設定ファイル (*.conf) を編集することは可能ですか。
+
+可能ですが、*非推奨* です。
+
+その代わり WeeChat 内でコマンド `/set` を使うことを推奨します。その理由は:
+
+* kbd:[Tab] キー を使ってオプションの名前と値を補完できるからです (さらに
+  kbd:[Shift+Tab] キーを使えばオプション名の補完に役立つ部分補完もできるからです)
+* 設定しようとした値は検証され、値に問題があった場合にはメッセージが表示されるからです
+* 設定した値はすぐに反映され、再起動の必要もないからです
+
+それでもなお手作業で設定ファイルを編集したいなら、以下の点に注意してください:
+
+* あるオプションに対して不正な値を設定した場合、WeeChat
+  は設定ファイルのロード時にエラーを表示し、その値を破棄します (そのオプションのデフォルト値が使われます)
+* WeeChat が実行中の場合には、必ずコマンド `/reload` を実行してください。設定が変更されその変更をコマンド
+  `/save` で保存していなかった場合、これらの設定の変更内容は破棄されます
+
+[[memory_usage]]
+=== どうすれば WeeChat のメモリ使用量を節約できますか。
+
+メモリ使用量を減らすには以下のヒントを試してください:
+
+* 最新の安定版を使う
+  (古いバージョンよりもメモリリークの可能性が減ると思われます)
+* 使わないプラグインのロードを禁止する、例えば:
+  buflist、fifo、logger、perl、python、ruby、lua、tcl、guile、javascript、php、spell、xfer (DCC で使用)。
+  `/help weechat.plugin.autoload` を参照してください。
+* 本当に必要なスクリプトだけをロード
+// TRANSLATION MISSING
+* Do not load system certificates if TLS is *NOT* used: turn off this option:
+  _weechat.network.gnutls_ca_system_.
+* _weechat.history.max_buffer_lines_number_
+  オプションの値を減らすか、_weechat.history.max_buffer_lines_minutes_ オプションに値を設定してください。
+* _weechat.history.max_commands_ オプションの値を減らしてください。
+
+[[cpu_usage]]
+=== どうすれば WeeChat の CPU 負荷を低減できますか?
+
+以下に挙げる <<memory_usage,memory>> に関するヒントに従ってください:
+
+// TRANSLATION MISSING
+* "nicklist" バーを非表示にする: `/bar hide nicklist` (key: kbd:[Alt+Shift+N]).
+// TRANSLATION MISSING
+* Disable "buflist": `/buflist disable` (key: kbd:[Alt+Shift+B]).
+* ステータスバー時間に秒の表示を止める:
+  `+/set weechat.look.item_time_format "%H:%M"+` (これはデフォルト値です)
+* コマンドライン内の単語スペルミスのリアルタイムチェックを無効にする (有効にしていた場合):
+  `+/set spell.check.real_time off+`
+* _TZ_ 変数を設定する (例: `export TZ="Europe/Paris"`)、こうすることで
+  _/etc/localtime_ ファイルへ頻繁にアクセスしないようになります。
+
+[[security]]
+=== セキュリティを気にしています。セキュリティを高めるためにはどの設定を変更すればよいですか?
+
+IRC の退出および終了メッセージを無効化します:
+
+----
+/set irc.server_default.msg_part ""
+/set irc.server_default.msg_quit ""
+----
+
+すべての CTCP クエリに対する応答を無効化します:
+
+----
+/set irc.ctcp.clientinfo ""
+/set irc.ctcp.source ""
+/set irc.ctcp.time ""
+/set irc.ctcp.version ""
+/set irc.ctcp.ping ""
+----
+
+// TRANSLATION MISSING
+With WeeChat < 4.1.0, other CTCP queries were replied by default and must be
+disabled as well:
+
+----
+/set irc.ctcp.finger ""
+/set irc.ctcp.userinfo ""
+----
+
+"xfer" プラグイン (これは IRC DCC 機能を使うためのものです) をアンロードして自動ロードを無効化します:
+
+----
+/plugin unload xfer
+/set weechat.plugin.autoload "*,!xfer"
+----
+
+パスフレーズを定義してパスワードなどの保護したいデータの使用時は常にセキュアデータを使います:
+`/help secure` およびセキュアデータを使用したいオプションの `/help` を参照してください
+(セキュアデータを使うことが可能なオプションのヘルプにはこの点が明記されています)。
+link:weechat_user.ja.html#secured_data[ユーザーズガイド / 暗号化データ ^↗^^] を参照してください。
+
+例:
+
+----
+/secure passphrase xxxxxxxxxx
+/secure set libera_username username
+/secure set libera_password xxxxxxxx
+/set irc.server.libera.sasl_username "${sec.data.libera_username}"
+/set irc.server.libera.sasl_password "${sec.data.libera_password}"
+----
+
+[[sharing_config_files]]
+=== WeeChat の設定を共有したいのですが、公開しても良いファイルと秘密にしておくべきファイルを教えてください。
+
+// TRANSLATION MISSING
+You can share configuration files _*.conf_ except the file _sec.conf_ which
+contains your passwords ciphered with your passphrase.
+
+// TRANSLATION MISSING
+Some other files may contain sensitive info like passwords (if they are not
+stored in _sec.conf_ with the `/secure` command).
+
+設定ファイルに関する詳しい情報はlink:weechat_user.ja.html#files_and_directories[ユーザーズガイド / ファイルとディレクトリ ^↗^^]を参照してください。
+
+// TRANSLATION MISSING
+[[move_to_another_device]]
+=== I want to move my WeeChat to another device and keep my config, what should I copy?
+
+First check directories used by WeeChat with this command: `/debug dirs`. +
+Directories home/config and home/data must be copied (all files and sub-directories).
+
+For example if you're using XDG directories (default with WeeChat ≥ 3.2),
+the directories should be `$HOME/.config/weechat` and `$HOME/.local/share/weechat`. +
+If you're using a single directory (default with WeeChat < 3.2), the directory
+should be `$HOME/.weechat`.
+
+[IMPORTANT]
+The WeeChat version on the new device must be greater than or equal to the version
+on the initial device. +
+Downgrading WeeChat configuration is *NOT SUPPORTED* and can break it,
+leading to unusable WeeChat.
+
+Steps:
+
+. Quit Weechat: `/quit` (or `/upgrade -quit` if you want to resume the session,
+  which includes content of all buffers).
+. Copy all directories, sub-directories and files to the new device, keeping
+  same names and permissions.
+. Optional: copy any file outside these directories that you refer to in your
+  configuration (it's not recommended to use files outside WeeChat directories).
+. Start WeeChat on the new device: `weechat` (or `weechat --upgrade` if you
+  saved the session).
+
+[[development]]
+== 開発
+
+[[bug_task_patch]]
+=== どのようにバグ報告、新機能のリクエスト、パッチ送信すればよいですか。
+
+// TRANSLATION MISSING
+See https://weechat.org/about/support/[this page ^↗^^].
+
+[[gdb_error_threads]]
+=== gdb で WeeChat を実行する場合、スレッドに関するエラーが発生します。
+
+gdb で WeeChat を実行する場合、以下のエラーが出るかもしれません:
+
+[source,shell]
+----
+$ gdb /path/to/weechat
+(gdb) run
+[Thread debugging using libthread_db enabled]
+Cannot find new threads: generic error
+----
+
+これを修正するには、以下のコマンドを使って gdb を実行してください
+(システム上の libpthread と WeeChat へのパスを変更):
+
+[source,shell]
+----
+$ LD_PRELOAD=/lib/libpthread.so.0 gdb /path/to/weechat
+(gdb) run
+----
+
+[[supported_os]]
+=== WeeChat をサポートするプラットフォームのリストを教えてください。他のオペレーティングシステムへの移植予定はありますか。
+
+// TRANSLATION MISSING
+WeeChat runs fine on most Linux/BSD distributions, GNU/Hurd, macOS and Windows
+(Cygwin and Windows Subsystem for Linux).
+
+我々は可能な限り多くのプラットフォームに移植することに最善を尽くしています。我々が持っていない
+OS で WeeChat をテストすることを歓迎します。
+
+[[help_developers]]
+=== どうすれば WeeChat 開発者を手伝えますか。
+
+多くの課題があります (テスト、コード、ドキュメント作成、...)。
+
+// TRANSLATION MISSING
+Please contact us via IRC or mail, look at
+https://weechat.org/about/support/[support page ^↗^^].
+
+[[donate]]
+=== WeeChat 開発者にお金か何かを贈りたいのですが。
+
+// TRANSLATION MISSING
+You can give us money to help development.
+Details on https://weechat.org/donate/[donation page ^↗^^].

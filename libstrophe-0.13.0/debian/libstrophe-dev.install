@@ -1,0 +1,4 @@
+usr/include/*
+usr/lib/*/libstrophe.a
+usr/lib/*/libstrophe.so
+usr/lib/*/pkgconfig/*

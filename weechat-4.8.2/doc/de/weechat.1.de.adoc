@@ -1,0 +1,67 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2010-2025 Nils Görs <weechatter@arcor.de>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= weechat(1)
+:doctype: manpage
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: de
+:man manual: WeeChat Manual
+:man source: WeeChat {revnumber}
+
+== NAME
+
+weechat - der erweiterbare Chat Client
+
+== SYNOPSIS
+
+[verse]
+*weechat* [-a|--no-connect] [-d|--dir <path>] [-t|--temp-dir] [-p|--no-plugin] [-P|--plugins <plugins>] [-r|--run-command <command>] [-s|--no-script] [--upgrade] [debug-option...] [plugin:option...]
+*weechat* [-c|--colors]
+*weechat* [-h|--help]
+*weechat* [-l|--license]
+*weechat* [-v|--version]
+
+== BESCHREIBUNG
+
+WeeChat (Wee Enhanced Environment for Chat) ist ein freier, schneller und
+schlanker Chat-Client der für unterschiedliche Betriebssysteme entwickelt wird.
+Durch Skripten ist das Hauptprogramm äußerst flexibel und erweiterbar.
+
+== OPTIONEN
+
+include::includes/cmdline_options.de.adoc[tag=standard]
+
+== DEBUG-OPTIONEN
+
+*WARNUNG:* Diese Optionen sind lediglich für Debug-Zwecke *DIESE FUNKTIONEN SOLLTE NICHT IM PRODUKTIVEM EINSATZ GENUTZT WERDEN!*
+
+include::includes/cmdline_options.de.adoc[tag=debug]
+
+== OPTIONEN VON ERWEITERUNGEN
+
+include::includes/man.de.adoc[tag=plugin_options]
+
+== DATEIEN
+
+include::includes/man.de.adoc[tag=files]
+
+== SIEHE AUCH
+
+*weechat-headless*(1)
+
+== AUTOREN
+
+Diese manpage wurde von {author} geschrieben.
+
+Übersetzt von Nils Görs.
+
+== COPYRIGHT
+
+include::includes/man.de.adoc[tag=copyright]
+
+== SUPPORT / FEHLER MELDEN
+
+für Hilfe oder um einen Fehler zu melden: https://weechat.org/about/support/

@@ -1,0 +1,409 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2013 Marco Paolone <marcopaolone@gmail.com>
+// SPDX-FileCopyrightText: 2023 Mattia Ronchi <ronchimattia03@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= Guida Rapida a WeeChat
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: it
+include::includes/attributes-it.adoc[]
+
+[[start]]
+== Avvio di WeeChat
+
+Un emulatore di terminale raccomandato per X (ma non obbligatorio) è
+rxvt-unicode: ha un buon supporto per UTF-8, e nessun problema con
+le scorciatoie da tastiera predefinite.
+
+Avviare dalla propria shell:
+
+[source,shell]
+----
+weechat
+----
+
+[[help]]
+== Aiuto online
+
+WeeChat offre aiuto per tutti i comandi, basta digitare:
+
+----
+/help
+----
+
+Per ricevere aiuto su un comando specifico, digitare:
+
+----
+/help comando
+----
+
+L'aiuto è anche disponibile per le opzioni:
+
+----
+/help config.section.option
+----
+
+(dove `config` è il nome della configurazione (`weechat` per il core,
+oppure un nome plugin), `sezione` la sezione di questa configurazione
+e `opzione` il nome dell'opzione).
+
+[[options]]
+== Imposta opzioni
+
+Per impostare le opzioni, utilizzare:
+
+----
+/set config.sezione.opzione valore
+----
+
+WeeChat utilizza subito il nuovo valore (non c'è *mai* bisogno di riavviare
+WeeChat dopo aver cambiato la configurazione).
+
+Tutte le impostazioni vengono salvato all'uscita di WeeChat (o con il comando
+`/save` per forzare il salvataggio di una o più opzioni).
+
+[IMPORTANT]
+*Non è consigliato* modificare i file di configurazione a mano perchè WeeChat
+potrebbe scrivervi in ogni momento (ad esempio dopo `/quit`) e dopo ogni cambiamento
+devi eseguire il comando `/reload` (con il rischio di perdere altri cambiamenti non ancora
+salvati con `/save`). +
+Puoi usare il comando `/set`, che controlla i valori e applica immediatamente
+i cambiamenti.
+
+Il plugin _fset_ ti permette facilmente di navigare tra le opzioni e cambiarle.
+
+Per esempio, per mostrare le opzioni di WeeChat:
+
+----
+/fset weechat.*
+----
+
+Opzioni IRC:
+
+----
+/fset irc.*
+----
+
+Il comando `/fset` ha il completamento nei nomi delle opzioni, quindi se ad esempio
+scrivi `/fset hot` e premi kbd:[Tab], questo viene completato come `/fset hotlist`.
+Se premi kbd:[Enter], vengono mostrate le opzioni riguardo la hotlist.
+
+Per più informazioni sul comando `/fset` e i suoi tasti, vedi `/help fset`.
+
+[[core_vs_plugins]]
+== Core vs plugin
+
+Il "core" di WeeChat è utilizzato solo per visualizzare i dati sullo schermo
+e interagire con l'utente; ciò vuol dire che il core di weechat senza i
+plugin è inutile (utenti più fedeli: IRC faceva parte del core per le
+versioni ≤ 0.2.6).
+
+Tutti i protocolli di rete come IRC sono forniti in plugin separati.
+
+Utilizzando il comando `plugin` per elencare i plugin caricati, è possibile
+vedere "irc" ed altri plugin nella lista.
+
+[[add_irc_server]]
+== Aggiungi un server IRC
+
+Puoi aggiungere un server IRC con il comando `/server`, per esempio:
+
+----
+/server add libera irc.libera.chat/6697 -tls
+----
+
+In questo comando, `libera` è il nome interno del server usato da WeeChat:
+sarai in grado di connetterti con `/connect libera` e le opzioni del server
+sono _irc.server.libera.xxx_.
+
+Come al solito, è disponibile l'aiuto se c'è qualche problema:
+
+----
+/help server
+----
+
+[[irc_server_options]]
+== Impostare opzioni personalizzate per il server IRC
+
+WeeChat usa valori predefiniti per tutti i server, se non si specifica un
+valore preciso per un'opzione del server. Questi valori predefiniti sono
+"irc.server_default.*"
+
+Per ogni opzione del server, WeeChat usa il proprio valore se definito
+(non "nullo"). Altrimenti si utilizza il valore predefinito
+("irc.server_default.xxx").
+
+Per esempio ci sono dei nick predefiniti (basati sul proprio login un*x), ed
+è possibile sovrascriverli per il server libera con il seguente comando:
+
+----
+/set irc.server.libera.nicks "mynick,mynick2,mynick3,mynick4,mynick5"
+----
+
+Per impostare il nome utente ed il nome reale:
+
+----
+/set irc.server.libera.username "Mio nome utente"
+/set irc.server.libera.realname "Mio nome reale"
+----
+
+Per impostare la connessione automatica al server all'avvio:
+
+----
+/set irc.server.libera.autoconnect on
+----
+
+Se SASL è disponibile sul server, è possibile usarlo per l'autenticazione
+(l'autenticazione avviene prima dell'ingresso nei canali):
+
+----
+/set irc.server.libera.sasl_username "mynick"
+/set irc.server.libera.sasl_password "xxxxxxx"
+----
+
+Per eseguire un comando dopo la connessione al server, ad esempio per
+autenticarsi con nickserv (solo se non viene usato SASL per l'autenticazione):
+
+----
+/set irc.server.libera.command "/msg nickserv identify xxxxxxx"
+----
+
+[NOTE]
+Molti comandi nell'opzione _command_ possono essere separati da `;` (punto e virgola).
+
+Se vuoi proteggere la tua password nei file di configurazione, puoi usare
+dati protetti.
+
+Per prima cosa imposta una frase segreta (passphrase):
+
+----
+/secure passphrase this is my secret passphrase
+----
+
+Ora aggiungi il dato protetto con la tua password di libera:
+
+----
+/secure set libera_password xxxxxxx
+----
+
+Puoi usare `+${sec.data.libera_password}+` al posto della tua password
+nelle opzioni IRC menzionate sopra, per esempio:
+
+----
+/set irc.server.libera.sasl_password "${sec.data.libera_password}"
+----
+
+Per entrare automaticamente in alcuni canali quando ci si connette
+al server:
+
+----
+/set irc.server.libera.autojoin "#canale1,#canale2"
+----
+
+Il comando `/autojoin` ti permette di configurare l'opzione _autojoin_ facilmente
+(vedi `/help autojoin`).
+
+Puoi anche configurare WeeChat per aggiornare automaticamente l'opzione _autojoin_
+quando entri o esci dai canali:
+
+----
+/set irc.server_default.autojoin_dynamic on
+----
+
+Per eliminare il valore di un'opzione del server, e usare invece il valore
+predefinito, per esempio per utilizzare i nick predefiniti
+(irc.server_default.nicks):
+
+----
+/unset irc.server.libera.nicks
+----
+
+Altre opzioni: è possibile impostare altre opzioni con il seguente comando
+("xxx" è il nome dell'opzione):
+
+----
+/set irc.server.libera.xxx value
+----
+
+[TIP]
+Puoi completare il nome e il valore dell'opzione con kbd:[Tab]
+e con kbd:[Shift+Tab] per un completamento parziale (utile per parole lunghe
+come il nome di un'opzione).
+
+[[connect_to_irc_server]]
+== Connessione al server IRC
+
+----
+/connect libera
+----
+
+Con questo comando, WeeChat si connette al server libera ed entra automaticamente
+nei canali configurati nell'opzione "autojoin" del server.
+
+[NOTE]
+Questo comando può essere usato per creare e connettersi ad un nuovo server
+senza utilizzare il comando `/server` (see `/help connect`).
+
+I buffer dei server vengono uniti al buffer _core_ di WeeChat in modo
+predefinito. Per passare tra buffer _core_ e buffer server, si può digitare
+kbd:[Ctrl+x].
+
+È possibile disabilitare l'unione automatica dei server dei buffer per avere i
+buffer dei server indipendenti:
+
+----
+/set irc.look.server_buffer independent
+----
+
+[[join_part_irc_channels]]
+== Entrare/uscire dai canali IRC
+
+Entra in un canale:
+
+----
+/join #canale
+----
+
+Esce da un canale (mantenendo il buffer aperto):
+
+----
+/part [messaggio di uscita]
+----
+
+Chiude un server, un canele o un buffer privato (`/close` è un sinonimo
+per `/buffer close`):
+
+----
+/close
+----
+
+[CAUTION]
+Chiudere il buffer del server chiuderà tutti i canali/buffer privati.
+
+Disconnette dal server:
+
+----
+/disconnect
+----
+
+[[irc_private_messages]]
+== Messaggi privati IRC
+
+Apre un buffer e invia un messaggio a un altro utente (nome _foo_):
+
+----
+/query foo this is a message
+----
+
+Chiude il buffer privato:
+
+----
+/close
+----
+
+[[buffer_window]]
+== Gestione buffer/finestra
+
+Un buffer è un componente collegato ad un plugin con un numero,
+una categoria e un nome. Un buffer contiene i dati visualizzati sullo
+schermo.
+
+Una finestra è la vista di un buffer. Il comportamento predefinito
+prevede solo una finestra che visualizza un buffer. Se lo schermo
+viene diviso, sarà possibile vedere più finestre con molti buffer allo
+stesso tempo.
+
+I comandi per gestire buffer e finestre:
+
+----
+/buffer
+/window
+----
+
+Per esempio, per dividere verticalmente lo schermo in una finestra piccola
+(1/3 della larghezza) ed una grande (2/3), utilizzare il comando:
+
+----
+/window splitv 33
+----
+
+Per rimuovere la divisione:
+
+----
+/window merge
+----
+
+[[key_bindings]]
+== Associazione tasti
+
+// TRANSLATION MISSING
+WeeChat usa molti tasti. Essi sono tutti presenti nella documentazione
+(link:weechat_user.it.html#key_bindings[Guida per l'Utente / Key bindings ^↗^^]),
+ma si dovrebbero conoscere almeno quelli vitali:
+
+- kbd:[Alt+←] / kbd:[Alt+→] oppure kbd:[F5] / kbd:[F6]: passa al buffer
+  precedente/successivo
+- kbd:[F1] / kbd:[F2]: barra di scorrimento della lista dei buffer("buflist")
+- kbd:[F7] / kbd:[F8]: passa alla finestra precedente/successiva (quando lo schermo
+  è diviso)
+- kbd:[F9] / kbd:[F10]: scorre la barra del titolo
+- kbd:[F11] / kbd:[F12]: scorre la lista nick
+- kbd:[Tab]: completa il testo nella barra di input, proprio come nella shell
+- kbd:[PgUp] / kbd:[PgDn]: scorre testo nel buffer corrente
+- kbd:[Alt+a]: passa al buffer con attività (nella hotlist)
+
+A seconda della propria tastiera e/o le proprie necessità, è possibile
+associare nuovamente qualsiasi tasto ad un comando tramite
+`/key`.
+Un tasto utile è kbd:[Alt+k] per trovare i codici tasti.
+
+Ad esempio, per associare kbd:[Alt+!] al comando `/buffer close`:
+
+----
+/key bind (digitare alt-k) (digitare alt-!) /buffer close
+----
+
+Si otterrà una riga di comando simile a:
+
+----
+/key bind meta-! /buffer close
+----
+
+Per eliminare il tasto:
+
+----
+/key unbind meta-!
+----
+
+[[plugins_scripts]]
+== Plugin/script
+
+Su alcune distribuzioni come Debian, i plugin sono disponibili tramite un
+pacchetto separato (come weechat-plugins).
+I plugin vengono caricati automaticamente quando trovati
+(per favore consultare la documentazione per caricare/scaricare plugin
+o script).
+
+Sono disponibili molti script esterni (da contributori) per WeeChat, puoi
+scaricare e installare script dal repository con il comando `/script`,
+per esempio:
+
+----
+/script install go.py
+----
+
+Vedi `/help script` per più informazioni.
+
+Una lista degli script è disponibile su WeeChat tramite `/script` o su
+https://weechat.org/scripts/[questa pagina ^↗^^].
+
+[[more_doc]]
+== Ulteriore documentazione
+
+Ora sei in grado di usare WeeChat e leggere
+https://weechat.org/doc/[FAQ/documentazione ^↗^^]
+per qualsiasi altra domanda.
+
+Buon WeeChat!

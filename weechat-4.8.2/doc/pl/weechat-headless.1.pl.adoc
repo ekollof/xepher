@@ -1,0 +1,71 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2024 Krzysztof Korościk <soltys1@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= weechat-headless(1)
+:doctype: manpage
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: pl
+:man manual: WeeChat Manual
+:man source: WeeChat {revnumber}
+
+== NAZWA
+
+weechat-headless - rozszerzalny klient rozmów (wersja headless)
+
+== SKŁADNIA
+
+[verse]
+*weechat-headless* [-a|--no-connect] [--daemon] [--stdout] [-d|--dir <path>] [-t|--temp-dir] [-p|--no-plugin] [-P|--plugins <wtyczki>] [-r|--run-command <komenda>] [-s|--no-script] [--upgrade] [debug-option...] [wtyczka:opcja...]
+*weechat-headless* [-c|--colors]
+*weechat-headless* [-h|--help]
+*weechat-headless* [-l|--license]
+*weechat-headless* [-v|--version]
+
+== OPIS
+
+WeeChat (Wee Enhanced Environment for Chat) to darmowy klient rozmów, szybki
+i lekki, przeznaczony dla wielu systemów operacyjnych.
+Posiada dużo opcji konfiguracyjnych i dodatkowych wtyczek.
+
+Komenda *weechat-headless* uruchamia WeeChat w trybie headless (bez interfejsu).
+Może być używana do testów lub do uruchamiania WeeChat w trybie demona za pomocą
+opcji "--daemon".
+
+== OPCJE
+
+include::includes/cmdline_options.pl.adoc[tag=standard]
+
+== OPCJE DEBUGUJĄCE
+
+*WARNING:* these options are for debug purposes only, *DO NOT USE IN PRODUCTION!*
+
+include::includes/cmdline_options.pl.adoc[tag=debug]
+
+== OPCJE WTYCZEK
+
+include::includes/man.pl.adoc[tag=plugin_options]
+
+== PLIKI
+
+include::includes/man.pl.adoc[tag=files]
+
+== Zobacz również
+
+*weechat*(1)
+
+== AUTORZY
+
+Autorem tej strony pomocy {author}.
+
+Tłumaczenie Krzysztof Korościk.
+
+== PRAWA AUTORSKIE
+
+include::includes/man.pl.adoc[tag=copyright]
+
+== WSPARCIE / ZGŁASZANIE BŁĘDÓW
+
+W celu uzyskania pomocy, lub zgłoszenia błędu zajrzyj na: https://weechat.org/about/support/

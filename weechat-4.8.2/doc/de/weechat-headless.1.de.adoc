@@ -1,0 +1,71 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2010-2025 Nils Görs <weechatter@arcor.de>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= weechat-headless(1)
+:doctype: manpage
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: de
+:man manual: WeeChat Manual
+:man source: WeeChat {revnumber}
+
+== NAME
+
+weechat-headless - der erweiterbare Chat Client (headless version)
+
+== SYNOPSIS
+
+[verse]
+*weechat-headless* [-a|--no-connect] [--daemon] [--stdout] [-d|--dir <path>] [-t|--temp-dir] [-p|--no-plugin] [-P|--plugins <plugins>] [-r|--run-command <command>] [-s|--no-script] [--upgrade] [debug-option...] [plugin:option...]
+*weechat-headless* [-c|--colors]
+*weechat-headless* [-h|--help]
+*weechat-headless* [-l|--license]
+*weechat-headless* [-v|--version]
+
+== BESCHREIBUNG
+
+WeeChat (Wee Enhanced Environment for Chat) ist ein freier, schneller und
+schlanker Chat-Client der für unterschiedliche Betriebssysteme entwickelt wird.
+Durch Skripten ist das Hauptprogramm äußerst flexibel und erweiterbar.
+
+Mit dem Befehl *weechat-headless* kann man WeeChat ohne Benutzeroberfläche ausführen.
+Dies kann zu Testzwecken oder dazu genutzt werden um WeeChat in einem Deamon-Modus
+zu starten. Dazu nutzt man die Option "--daemon".
+
+== OPTIONEN
+
+include::includes/cmdline_options.de.adoc[tag=standard]
+
+== DEBUG-OPTIONEN
+
+*WARNUNG:* Diese Optionen sind lediglich für Debug-Zwecke *DIESE FUNKTIONEN SOLLTE NICHT IM PRODUKTIVEM EINSATZ GENUTZT WERDEN!*
+
+include::includes/cmdline_options.de.adoc[tag=debug]
+
+== OPTIONEN VON ERWEITERUNGEN
+
+include::includes/man.de.adoc[tag=plugin_options]
+
+== DATEIEN
+
+include::includes/man.de.adoc[tag=files]
+
+== SIEHE AUCH
+
+*weechat*(1)
+
+== AUTOREN
+
+Diese manpage wurde von {author} geschrieben.
+
+Übersetzt von Nils Görs.
+
+== COPYRIGHT
+
+include::includes/man.de.adoc[tag=copyright]
+
+== SUPPORT / FEHLER MELDEN
+
+für Hilfe oder um einen Fehler zu melden: https://weechat.org/about/support/

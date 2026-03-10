@@ -1,0 +1,81 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2012 Marco Paolone <marcopaolone@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// TRANSLATION MISSING (WHOLE FILE)
+= weechat-headless(1)
+:doctype: manpage
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: it
+// TRANSLATION MISSING
+:man manual: WeeChat Manual
+:man source: WeeChat {revnumber}
+
+== NAME
+
+weechat-headless - the extensible chat client (headless version)
+
+== SYNOPSIS
+
+// TRANSLATION MISSING
+[verse]
+*weechat-headless* [-a|--no-connect] [--daemon] [--stdout] [-d|--dir <path>] [-t|--temp-dir] [-p|--no-plugin] [-P|--plugins <plugins>] [-r|--run-command <command>] [-s|--no-script] [--upgrade] [debug-option...] [plugin:option...]
+*weechat-headless* [-c|--colors]
+*weechat-headless* [-h|--help]
+*weechat-headless* [-l|--license]
+*weechat-headless* [-v|--version]
+
+== DESCRIPTION
+
+// TRANSLATION MISSING
+WeeChat (Wee Enhanced Environment for Chat) è un client di chat
+libero, veloce e leggero, realizzato per diversi sistemi operativi.
+It is highly customizable and extensible with scripts.
+
+// TRANSLATION MISSING
+The command *weechat-headless* runs WeeChat in a headless mode (no interface).
+It can be used for tests or to daemonize WeeChat with the option "--daemon".
+
+== OPTIONS
+
+include::includes/cmdline_options.it.adoc[tag=standard]
+
+// TRANSLATION MISSING
+== DEBUG OPTIONS
+
+*WARNING:* these options are for debug purposes only, *DO NOT USE IN PRODUCTION!*
+
+include::includes/cmdline_options.it.adoc[tag=debug]
+
+== PLUGIN OPTIONS
+
+include::includes/man.it.adoc[tag=plugin_options]
+
+// TRANSLATION MISSING
+== FILES
+
+include::includes/man.it.adoc[tag=files]
+
+// TRANSLATION MISSING
+== SEE ALSO
+
+*weechat*(1)
+
+== AUTHORS
+
+This manpage was written by {author}.
+
+// TRANSLATION MISSING
+// Translated by Name.
+
+== COPYRIGHT
+
+include::includes/man.it.adoc[tag=copyright]
+
+// TRANSLATION MISSING
+== SUPPORT / REPORTING BUGS
+
+// TRANSLATION MISSING
+For help or a bug report: https://weechat.org/about/support/

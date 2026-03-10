@@ -1,0 +1,121 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2005-2011 Jiri Golembiovsky <golemj@gmail.com>
+// SPDX-FileCopyrightText: 2015-2017 Ondřej Súkup <mimi.vx@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// tag::plugin_options[]
+Pro kompletní dokumentaci nastavení pluginů a jejich volby podívejte se na
+https://weechat.org/doc/[WeeChat user's guide].
+
+// TRANSLATION MISSING
+With irc plugin, you can connect to a server with an URL like:
+
+    irc[6][s]://[[nickname][:password]@]server[:port][/#channel1[,#channel2...]]
+
+K připojení na IRC kanál Weechatu pro podporu s přezdívkou "mynick":
+
+    irc://mynick@irc.libera.chat/#weechat
+
+IPv6 adresa může být uzavřena do hranatých závorek k přidání portu, například:
+
+    irc://mynick@[2001:db8:0:85a3::ac1f:8001]:6668/#test
+// end::plugin_options[]
+
+// tag::files[]
+$HOME/.config/weechat/weechat.conf::
+    hlavní konfigurační soubor WeeChatu
+
+$HOME/.config/weechat/plugins.conf::
+    soubor konfigurace pluginů
+
+$HOME/.config/weechat/sec.conf::
+    konfigurační soubor s chráněnými daty
+
+$HOME/.config/weechat/alias.conf::
+    configurační soubor pro _alias_ plugin
+
+$HOME/.config/weechat/buflist.conf::
+    konfigurační soubor pro _buflist_ plugin
+
+$HOME/.config/weechat/charset.conf::
+    konfigurační soubor pro _charset_ plugin
+
+$HOME/.config/weechat/exec.conf::
+    konfigurační soubor pro _exec_ plugin
+
+$HOME/.config/weechat/fifo.conf::
+    konfigurační soubor pro _fifo_ plugin
+
+$HOME/.config/weechat/fset.conf::
+    konfigurační soubor pro _fset_ plugin
+
+$HOME/.config/weechat/guile.conf::
+    konfigurační soubor pro _guile_ plugin
+
+$HOME/.config/weechat/irc.conf::
+    konfigurační soubor pro _irc_ plugin
+
+$HOME/.config/weechat/javascript.conf::
+    konfigurační soubor pro _javascript_ plugin
+
+$HOME/.config/weechat/logger.conf::
+    konfigurační soubor pro _logger_ plugin
+
+$HOME/.config/weechat/lua.conf::
+    konfigurační soubor pro _lua_ plugin
+
+$HOME/.config/weechat/perl.conf::
+    konfigurační soubor pro _perl_ plugin
+
+$HOME/.config/weechat/php.conf::
+    konfigurační soubor pro _php_ plugin
+
+$HOME/.config/weechat/python.conf::
+    konfigurační soubor pro _python_ plugin
+
+$HOME/.config/weechat/relay.conf::
+    konfigurační soubor pro _relay_ plugin
+
+$HOME/.config/weechat/ruby.conf::
+    konfigurační soubor pro _ruby_ plugin
+
+$HOME/.config/weechat/script.conf::
+    konfigurační soubor pro _script_ plugin
+
+$HOME/.config/weechat/spell.conf::
+    konfigurační soubor pro _spell_ plugin
+
+$HOME/.config/weechat/tcl.conf::
+    konfigurační soubor pro _tcl_ plugin
+
+$HOME/.config/weechat/trigger.conf::
+    konfigurační soubor pro _trigger_ plugin
+
+$HOME/.config/weechat/typing.conf::
+    konfigurační soubor pro _typing_ plugin
+
+$HOME/.config/weechat/xfer.conf::
+    konfigurační soubor pro _xfer_ plugin
+
+$HOME/.local/share/weechat/weechat.log::
+    soubor záznamů WeeChatu
+// end::files[]
+
+// tag::copyright[]
+WeeChat je napsán Sébastienem Helleu a přispěvovateli (kompletní seznam je v
+souboru AUTHORS.md).
+
+// REUSE-IgnoreStart
+Copyright (C) 2003-2025 {author}
+// REUSE-IgnoreEnd
+
+WeeChat is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+Prosím přečtěte si soubor COPYING pro více informací.
+
+Web: https://weechat.org/
+// end::copyright[]

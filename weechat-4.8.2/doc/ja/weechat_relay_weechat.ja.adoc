@@ -1,0 +1,2930 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2014-2019 Ryuunosuke Ayanokouzi <i38w7i3@yahoo.co.jp>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= WeeChat リレープロトコル
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: ja-jp
+include::includes/attributes-ja.adoc[]
+
+[[introduction]]
+== はじめに
+
+この文書は _weechat_ リレープロトコルについて述べたものです: リレープロトコルとは、WeeChat
+データをクライアントに中継するためのもので、多くの場合クライアントはリモートインターフェースを指します。
+
+[[terminology]]
+=== 用語
+
+この文書では以下の用語を利用します:
+
+* _リレー_: これは relay プラグインを備えた WeeChat を指し、"サーバ"
+  のように振る舞い、_クライアント_ からの接続を受け付けます
+* _クライアント_: これは他のソフトウェアのことを指し、ネットワークを介して _リレー_
+  に接続します; 多くの場合、_クライアント_ はリモートインターフェースのことを指します。
+
+[[network_diagram]]
+=== ネットワーク図
+
+以下の図に示すように _クライアント_ は _リレー_ に接続しています:
+
+include::includes/relay.ja.adoc[tag=diagram]
+
+// TRANSLATION MISSING
+[NOTE]
+All clients here are clients using _weechat_ protocol in _relay_ plugin. +
+The _relay_ plugin also allows _api_ and _irc_ protocols (not described in this document).
+
+[[protocol_generalities]]
+== プロトコルの一般的説明
+
+* _リレー_ プラグインは新しい接続を受け入れるために IP/port をリッスンし、_クライアント_
+  は TCP ソケットを使って _リレー_ に接続します。
+* _クライアント_ の数はオプション _relay.network.max_clients_ で制限されています。
+* それぞれの _クライアント_ が自分以外のクライアントと協調して動くことはできません。
+* _クライアント_ から _リレー_ へのメッセージを _コマンド_
+  と呼び、これはテキスト形式 (文字列) で送信されます。
+* _リレー_ から _クライアント_ へのメッセージを _メッセージ_
+  と呼び、これはバイナリデータとして送信されます。
+
+[[commands]]
+== コマンド (クライアント → リレー)
+
+コマンドの書式は以下です:
+
+----
+(id) command arguments\n
+----
+
+フィールドは:
+
+* _id_: _リレー_ からの応答に含まれる任意指定のメッセージ識別子;
+  識別子は必ず括弧で括り、アンダースコアを最初につけるのは禁止されています
+  (アンダースコアが最初についている識別子は WeeChat _event_ メッセージ用に予約されています)
+* _command_: コマンド (以下のテーブルを参照)
+* _arguments_: コマンドに対する任意指定の引数
+  (複数の引数を渡す場合は空白で区切ってください)。
+
+利用可能なコマンドのリスト (詳しくは次の章を参照):
+
+[width="100%",cols="1m,8",options="header"]
+|===
+| コマンド   | 説明
+// TRANSLATION MISSING
+| handshake  | Handshake: prepare client authentication and set options, before _init_ command.
+| init       | _リレー_ 接続を初期化
+| hdata      | _hdata_ を要求
+| info       | _インフォ_ を要求
+| infolist   | _インフォリスト_ を要求
+| nicklist   | _ニックネームリスト_ を要求
+| input      | バッファにデータを送信 (テキストまたはコマンド)
+// TRANSLATION MISSING
+| completion | Request completion of a string.
+| sync       | バッファを同期: バッファの最新情報を取得
+| desync     | バッファを非同期: バッファの更新を止める
+| quit       | _リレー_ から切断
+|===
+
+// TRANSLATION MISSING
+[[command_handshake]]
+=== handshake
+
+// TRANSLATION MISSING
+_WeeChat ≥ 2.9, updated in versions 3.5, 4.0.0._
+
+Perform an handshake between the client and WeeChat: this is required in most
+cases to know the session settings and prepare the authentication with the
+_init_ command.
+
+Only one handshake is allowed before the _init_ command.
+
+Syntax:
+
+----
+(id) handshake [<option>=<value>,[<option>=<value>,...]]
+----
+
+Arguments:
+
+* _option_: one of following options:
+** _password_hash_algo_: list of hash algorithms supported by the client
+   (separated by colons), allowed values are:
+*** _plain_: plain text password (no hash)
+*** _sha256_: password salted and hashed with SHA256 algorithm
+*** _sha512_: password salted and hashed with SHA512 algorithm
+*** _pbkdf2+sha256_: password salted and hashed with PBKDF2 algorithm (using SHA256 hash)
+*** _pbkdf2+sha512_: password salted and hashed with PBKDF2 algorithm (using SHA512 hash)
+// TRANSLATION MISSING
+** _compression_: list of supported compression types supported by the client
+   (separated by colons and sorted from most important to the fallback value);
+   if compression is enabled, messages from _relay_ to client are compressed
+   to save bandwidth; allowed values are:
+*** _off_: no compression (default if option is not given)
+*** _zlib_: compress with https://zlib.net/[zlib ^↗^^] _(WeeChat ≥ 0.3.7)_
+*** _zstd_: compress with https://facebook.github.io/zstd/[Zstandard ^↗^^]: better
+    compression and much faster than _zlib_ for both compression and decompression
+    _(WeeChat ≥ 3.5)_
+// TRANSLATION MISSING
+** _escape_commands_: commands sent by the client to relay must be escaped:
+   all backslashes are interpreted and a single backslash must be escaped (`\\`);
+   this allows for example the client to send multiline messages (chars `\n` are
+   converted to newlines, see <<command_input,input command>>)
+   _(WeeChat ≥ 4.0.0)_
+
+Notes about option _password_hash_algo_:
+
+* If the option is not given (or if the _handshake_ command is not sent by the
+  client), _relay_ uses automatically _plain_ authentication (if allowed on
+  _relay_ side).
+* _Relay_ chooses the more secure algorithm available on both client and
+  _relay_, by order of priority from first (most secure) to last used:
+  . _pbkdf2+sha512_
+  . _pbkdf2+sha256_
+  . _sha512_
+  . _sha256_
+  . _plain_
+
+WeeChat replies with a hashtable containing the following keys and values:
+
+* _password_hash_algo_: the password authentication negotiated: supported by
+  both the client and _relay_:
+** (empty value): negotiation failed, password authentication is *NOT* possible;
+   in this case the connection with the client is immediately closed
+** _plain_
+** _sha256_
+** _sha512_
+** _pbkdf2+sha256_
+** _pbkdf2+sha512_
+* _password_hash_iterations_: number of iterations for hash
+  (for the PBKDF2 algorithm only)
+* _totp_:
+** _on_: Time-based One-Time Password (TOTP) is configured and expected
+   in the _init_ command
+** _off_: Time-based One-Time Password (TOTP) is not enabled and not needed
+   in the _init_ command
+* _nonce_: a buffer of unpredictable bytes, sent as hexadecimal, to prevent
+  replay attacks; if _password_hash_algo_ is a hash algorithm, the client must
+  compute the hash of password on this nonce, concatenated with a client nonce
+  and the user password (the _relay_ nonce + the client nonce is the salt used
+  in the password hash algorithm)
+* _compression_: compression type:
+** _off_: messages are not compressed
+** _zlib_: messages are compressed with https://zlib.net/[zlib ^↗^^]
+** _zstd_: messages are compressed with https://facebook.github.io/zstd/[Zstandard ^↗^^]
+// TRANSLATION MISSING
+* _escape_commands_:
+** _on_: all backslashes are interpreted in the client messages
+** _off_: backslashes are *NOT* interpreted in the client messages and used as-is
+
+[TIP]
+With WeeChat ≤ 2.8, the command _handshake_ is not implemented, WeeChat silently
+ignores this command, even if it is sent before the _init_ command. +
+So it is safe to send this command to any WeeChat version.
+
+Examples:
+
+* Nothing offered by the client, authentication password "plain" will be used
+if allowed on relay side:
+
+----
+(handshake) handshake
+----
+
+Response:
+
+[source,python]
+----
+id: 'handshake'
+htb: {
+    'password_hash_algo': 'plain',
+    'password_hash_iterations': '100000',
+    'totp': 'on',
+    'nonce': '85B1EE00695A5B254E14F4885538DF0D',
+    'compression': 'off',
+    'escape_commands': 'off',
+}
+----
+
+* Escape of commands enabled by the client _(WeeChat ≥ 4.0.0)_:
+
+----
+(handshake) handshake escape_commands=on
+----
+
+Response:
+
+[source,python]
+----
+id: 'handshake'
+htb: {
+    'password_hash_algo': 'plain',
+    'password_hash_iterations': '100000',
+    'totp': 'on',
+    'nonce': '85B1EE00695A5B254E14F4885538DF0D',
+    'compression': 'off',
+    'escape_commands': 'on',
+}
+----
+
+* Only "plain" is supported by the client:
+
+----
+(handshake) handshake password_hash_algo=plain
+----
+
+Response:
+
+[source,python]
+----
+id: 'handshake'
+htb: {
+    'password_hash_algo': 'plain',
+    'password_hash_iterations': '100000',
+    'totp': 'on',
+    'nonce': '85B1EE00695A5B254E14F4885538DF0D',
+    'compression': 'off',
+    'escape_commands': 'off',
+}
+----
+
+* Only "plain", "sha256" and "pbkdf2+sha256" are supported by the client:
+
+----
+(handshake) handshake password_hash_algo=plain:sha256:pbkdf2+sha256
+----
+
+Response:
+
+[source,python]
+----
+id: 'handshake'
+htb: {
+    'password_hash_algo': 'pbkdf2+sha256',
+    'password_hash_iterations': '100000',
+    'totp': 'on',
+    'nonce': '85B1EE00695A5B254E14F4885538DF0D',
+    'compression': 'off',
+    'escape_commands': 'off',
+}
+----
+
+The client can authenticate with this command (see <<command_init,init command>>),
+the salt is the _relay_ nonce + client nonce ("A4B73207F5AAE4" in hexadecimal),
+the password is "test" in this example:
+
+----
+init password_hash=pbkdf2+sha256:85b1ee00695a5b254e14f4885538df0da4b73207f5aae4:100000:ba7facc3edb89cd06ae810e29ced85980ff36de2bb596fcf513aaab626876440
+----
+
+* Only "sha256" and "sha512" are supported by the client, enable zstd (preferred)
+or zlib compression:
+
+----
+(handshake) handshake password_hash_algo=sha256:sha512,compression=zstd:zlib
+----
+
+Response:
+
+[source,python]
+----
+id: 'handshake'
+htb: {
+    'password_hash_algo': 'sha512',
+    'password_hash_iterations': '100000',
+    'totp': 'on',
+    'nonce': '85B1EE00695A5B254E14F4885538DF0D',
+    'compression': 'zstd',
+    'escape_commands': 'off',
+}
+----
+
+[[command_init]]
+=== init
+
+// TRANSLATION MISSING
+_Updated in versions 2.4, 2.8, 2.9, 3.5._
+
+// TRANSLATION MISSING
+Authenticate with _relay_.
+
+// TRANSLATION MISSING
+This must be first command sent to _relay_ (only _handshake_ command can be sent
+before _init_). +
+If not sent, _relay_ will close connection on first command received (except
+_handshake_), without warning.
+
+構文:
+
+----
+(id) init [<option>=<value>,[<option>=<value>,...]]
+----
+
+引数:
+
+* _option_: 以下のうちの 1 つ:
+** _password_: _リレー_ の認証用パスワード
+   (WeeChat の _relay.network.password_ オプション)
+// TRANSLATION MISSING
+** _password_hash_: hash of password used to authenticate on _relay_
+   (option _relay.network.password_ in WeeChat), see below for the format
+   _(WeeChat バージョン 2.8 で利用可能)_
+** _totp_: パスワードに加えた二要素認証で利用する時間ベースのワンタイムパスワード (TOTP)
+   (WeeChat の _relay.network.totp_secret_ オプション)
+   _(WeeChat バージョン 2.4 で利用可能)_
+
+[NOTE]
+WeeChat バージョン 1.6 以上の場合、コンマをエスケープすることで value にコンマを設定可能です。例えば
+"foo,bar" というパスワードを送信するには `+init password=foo\,bar+` のように設定してください。
+
+// TRANSLATION MISSING
+Format of hashed password is one of the following, where _hash_ is the hashed
+password as hexadecimal:
+
+* `+sha256:salt:hash+` with:
+** _salt_: salt (hexadecimal), which must start with the server nonce,
+   concatenated to the client nonce
+** _hash_: the hashed salt + password (hexadecimal)
+* `+sha512:salt:hash+` with:
+** _salt_: salt (hexadecimal), which must start with the server nonce,
+   concatenated to the client nonce
+** _hash_: the hashed salt + password (hexadecimal)
+* `+pbkdf2+sha256:salt:iterations:hash+` with:
+** _salt_: salt (hexadecimal), which must start with the server nonce,
+   concatenated to the client nonce
+** _iterations_: number of iterations
+** _hash_: the hashed salt + password with SHA256 algorithm (hexadecimal)
+* `+pbkdf2+sha512:salt:iterations:hash+` with:
+** _salt_: salt (hexadecimal), which must start with the server nonce,
+   concatenated to the client nonce
+** _iterations_: number of iterations
+** _hash_: the hashed salt + password with SHA512 algorithm (hexadecimal)
+
+[NOTE]
+Hexadecimal strings can be lower or upper case, _relay_ can decode both.
+
+// TRANSLATION MISSING
+Examples:
+
+* Initialize with password:
+
+----
+init password=mypass
+----
+
+* Initialize with commas in the password _(WeeChat ≥ 1.6)_:
+
+----
+init password=mypass\,with\,commas
+----
+
+* Initialize with password and TOTP _(WeeChat ≥ 2.4)_:
+
+----
+init password=mypass,totp=123456
+----
+
+* Initialize with hashed password "test" (SHA256: salt=relay nonce + client nonce)
+  _(WeeChat ≥ 2.9)_:
+
+----
+init password_hash=sha256:85b1ee00695a5b254e14f4885538df0da4b73207f5aae4:2c6ed12eb0109fca3aedc03bf03d9b6e804cd60a23e1731fd17794da423e21db
+----
+
+* Initialize with hashed password "test" (SHA512: salt=relay nonce + client nonce)
+  _(WeeChat ≥ 2.9)_:
+
+----
+init password_hash=sha512:85b1ee00695a5b254e14f4885538df0da4b73207f5aae4:0a1f0172a542916bd86e0cbceebc1c38ed791f6be246120452825f0d74ef1078c79e9812de8b0ab3dfaf598b6ca14522374ec6a8653a46df3f96a6b54ac1f0f8
+----
+
+* Initialize with hashed password "test" (PBKDF2: SHA256, salt=relay nonce + client nonce,
+  100000 iterations) _(WeeChat ≥ 2.9)_:
+
+----
+init password_hash=pbkdf2+sha256:85b1ee00695a5b254e14f4885538df0da4b73207f5aae4:100000:ba7facc3edb89cd06ae810e29ced85980ff36de2bb596fcf513aaab626876440
+----
+
+[[command_hdata]]
+=== hdata
+
+_hdata_ を要求。
+
+構文:
+
+----
+(id) hdata <path> [<keys>]
+----
+
+引数:
+
+* _path_: hdata へのパス、書式: "hdata:pointer/var/var/.../var"、最後の
+  var に対応する hdata が返されます:
+** _hdata_: hdata の名前
+// TRANSLATION MISSING
+** _pointer_: ポインタ (eg: "0x1234abcd") またはリスト名 (例: "gui_buffers")
+   (番号も可能、以下を参照)
+** _var_: 親 hdata に含まれる変数名 (パスで言う 1 つ前の名前)
+   (番号も可能、以下を参照)
+* _keys_: hdata で返すキーのコンマ区切りリスト
+  (指定しなかった場合、全てのキーが返されます。強大な hdata 構造体の場合全てのキーを返すことはお勧めしません)
+
+ポインタと変数の後に番号を指定することができます。書式は
+"(N)"。可能な値は:
+
+* 正数: N 回次の要素への反復を繰り返す
+* 負数: N 回前の要素への反復を繰り返す
+* _*_: 最後の要素まで、次の要素への反復を繰り返す
+
+[NOTE]
+WeeChat バージョン 1.6 以上では、hdata へのパスが無効または NULL ポインタが見つかった場合、空の
+hdata が返されます (<<object_hdata,hdata オブジェクト>>の例を参照してください)。 +
+1.6 よりも古いバージョンでは、何も返されません。
+
+// TRANSLATION MISSING
+Examples:
+
+* Request "number" and "full_name" of all buffers:
+
+----
+(hdata_buffers) hdata buffer:gui_buffers(*) number,full_name
+----
+
+Response:
+
+[source,python]
+----
+id: 'hdata_buffers'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x558d61ea3e60']
+        number: 1
+        full_name: 'core.weechat'
+    item 2:
+        __path: ['0x558d62840ea0']
+        number: 1
+        full_name: 'irc.server.libera'
+    item 3:
+        __path: ['0x558d62a9cea0']
+        number: 2
+        full_name: 'irc.libera.#weechat'
+----
+
+* Request all lines of first buffer:
+
+----
+(hdata_lines) hdata buffer:gui_buffers/own_lines/first_line(*)/data
+----
+
+Response:
+
+[source,python]
+----
+id: 'hdata_lines'
+hda:
+    keys: {
+        'buffer': 'ptr',
+        'y': 'int',
+        'date': 'tim',
+        'date_usec': 'int',
+        'date_printed': 'tim',
+        'date_usec_printed', 'int',
+        'str_time': 'str',
+        'tags_count': 'int',
+        'tags_array': 'arr',
+        'displayed': 'chr',
+        'notify_level': 'chr',
+        'highlight': 'chr',
+        'refresh_needed': 'chr',
+        'prefix': 'str',
+        'prefix_length': 'int',
+        'message': 'str',
+    }
+    path: ['buffer', 'lines', 'line', 'line_data']
+    item 1:
+        __path: ['0x558d61ea3e60', '0x558d61ea40e0', '0x558d62920d80', '0x558d62abf040']
+        buffer: '0x558d61ea3e60'
+        y: -1
+        date: 1588404926
+        date_usec: 118712
+        date_printed: 1588404926
+        date_usec_printed: 118712
+        str_time: 'F@0025209F@0024535F@0024026'
+        tags_count: 0
+        tags_array: []
+        displayed: 1
+        notify_level: 0
+        highlight: 0
+        refresh_needed: 0
+        prefix: ''
+        prefix_length: 0
+        message: 'this is the first line'
+    item 2:
+        __path: ['0x558d61ea3e60', '0x558d61ea40e0', '0x558d626779f0', '0x558d62af9700']
+        buffer: '0x558d61ea3e60'
+        y: -1
+        date: 1588404930
+        date_usec: 25
+        date_printed: 1588404930
+        date_usec_printed: 25
+        str_time: 'F@0025209F@0024535F@0024030'
+        tags_count: 0
+        tags_array: []
+        displayed: 1
+        notify_level: 0
+        highlight: 0
+        refresh_needed: 0
+        prefix: ''
+        prefix_length: 0
+        message: 'this is the second line'
+----
+
+* Request the hotlist content:
+
+----
+(hdata_hotlist) hdata hotlist:gui_hotlist(*)
+----
+
+Response:
+
+[source,python]
+----
+id: 'hdata_hotlist'
+hda:
+    keys: {
+        'priority': 'int',
+        'creation_time.tv_sec': 'tim',
+        'creation_time.tv_usec': 'lon',
+        'buffer': 'ptr',
+        'count': 'arr',
+        'prev_hotlist': 'ptr',
+        'next_hotlist': 'ptr',
+    }
+    path: ['hotlist']
+    item 1:
+        __path: ['0x558d629601b0']
+        priority: 3
+        creation_time.tv_sec: 1588405398
+        creation_time.tv_usec: 355383
+        buffer: '0x558d62a9cea0'
+        count: [1, 1, 0, 1]
+        prev_hotlist: '0x0'
+        next_hotlist: '0x0'
+----
+
+[[command_info]]
+=== info
+
+_インフォ_ を要求。
+
+構文:
+
+----
+(id) info <name> [<arguments>]
+----
+
+引数:
+
+* _name_: 読み出すインフォの名前
+* _arguments_: 引数 (任意)
+
+// TRANSLATION MISSING
+Examples:
+
+* Request WeeChat version:
+
+----
+(info_version) info version
+----
+
+Response:
+
+[source,python]
+----
+id: 'info_version'
+inf: ('version', '2.9-dev')
+----
+
+* Request WeeChat version as number:
+
+----
+(info_version_number) info version_number
+----
+
+Response:
+
+[source,python]
+----
+id: 'info_version_number'
+inf: ('version_number', '34144256')
+----
+
+* Request WeeChat directory:
+
+----
+(info_weechat_config_dir) info weechat_config_dir
+----
+
+Response:
+
+[source,python]
+----
+id: 'info_weechat_config_dir'
+inf: ('weechat_config_dir', '/home/user/.config/weechat')
+----
+
+[[command_infolist]]
+=== infolist
+
+_インフォリスト_ を要求。
+
+[IMPORTANT]
+インフォリストの内容は実際のデータの複製です。可能な限り <<command_hdata,hdata>>
+コマンドを使ってください、このコマンドはデータを直接読み出すことが可能です
+(高速、省メモリ、メッセージで返すオブジェクトのサイズが小さいです)。
+
+構文:
+
+----
+(id) infolist <name> [<pointer> [<arguments>]]
+----
+
+引数:
+
+* _name_: 取得するインフォリストの名前
+* _pointer_: ポインタ (任意)
+* _arguments_: 引数 (任意)
+
+// TRANSLATION MISSING
+Examples:
+
+* Request infolist "buffer":
+
+----
+(infolist_buffer) infolist buffer
+----
+
+Response:
+
+[source,python]
+----
+id: 'infolist_buffer'
+inl:
+    name: buffer
+    item 1:
+        pointer: '0x558d61ea3e60'
+        current_buffer: 1
+        plugin: '0x0'
+        plugin_name: 'core'
+        number: 1
+        layout_number: 1
+        layout_number_merge_order: 0
+        name: 'weechat'
+        full_name: 'core.weechat'
+        old_full_name: None
+        short_name: 'weechat'
+        type: 0
+        notify: 3
+        num_displayed: 1
+        active: 1
+        hidden: 0
+        zoomed: 0
+        print_hooks_enabled: 1
+        day_change: 1
+        clear: 1
+        filter: 1
+        closing: 0
+        first_line_not_read: 0
+        lines_hidden: 0
+        prefix_max_length: 0
+        time_for_each_line: 1
+        nicklist_case_sensitive: 0
+        nicklist_display_groups: 1
+        nicklist_max_length: 0
+        nicklist_count: 0
+        nicklist_groups_count: 0
+        nicklist_nicks_count: 0
+        nicklist_visible_count: 0
+        title: 'WeeChat 2.9-dev (C) 2003-2020 - https://weechat.org/'
+        input: 1
+        input_get_any_user_data: 0
+        input_get_unknown_commands: 0
+        input_get_empty: 0
+        input_multiline: 0
+        input_buffer: ''
+        input_buffer_alloc: 256
+        input_buffer_size: 0
+        input_buffer_length: 0
+        input_buffer_pos: 0
+        input_buffer_1st_display: 0
+        num_history: 0
+        text_search: 0
+        text_search_direction: 0
+        text_search_exact: 0
+        text_search_regex: 0
+        text_search_regex_compiled: '0x0'
+        text_search_where: 0
+        text_search_history: 0
+        text_search_found: 0
+        text_search_ptr_history: '0x0'
+        text_search_input: None
+        highlight_words: None
+        highlight_disable_regex: None
+        highlight_disable_regex_compiled: '0x0'
+        highlight_regex: None
+        highlight_regex_compiled: '0x0'
+        highlight_tags_restrict: None
+        highlight_tags: None
+        hotlist_max_level_nicks: None
+        keys_count: 0
+        localvar_name_00000: 'plugin'
+        localvar_value_00000: 'core'
+        localvar_name_00001: 'name'
+        localvar_value_00001: 'weechat'
+----
+
+* Request infolist "window":
+
+----
+(infolist_window) infolist window
+----
+
+Response:
+
+[source,python]
+----
+id: 'infolist_window'
+inl:
+    name: window
+    item 1:
+        pointer: '0x558d61ddc800'
+        current_window: 1
+        number: 1
+        x: 14
+        y: 0
+        width: 259
+        height: 71
+        width_pct: 100
+        height_pct: 100
+        chat_x: 14
+        chat_y: 1
+        chat_width: 259
+        chat_height: 68
+        buffer: '0x558d61ea3e60'
+        start_line_y: 0
+----
+
+[[command_nicklist]]
+=== nicklist
+
+1 つまたは全てのバッファから _ニックネームリスト_ を要求。
+
+構文:
+
+----
+(id) nicklist [<buffer>]
+----
+
+引数:
+
+// TRANSLATION MISSING
+* _buffer_: ポインタ (eg: "0x1234abcd") またはバッファの完全な名前 (例:
+  _core.weechat_ または _irc.libera.#weechat_)
+
+// TRANSLATION MISSING
+Examples:
+
+* Request nicklist for all buffers:
+
+----
+(nicklist_all) nicklist
+----
+
+Response:
+
+[source,python]
+----
+id: 'nicklist_all'
+hda:
+    keys: {
+        'group': 'chr',
+        'visible': 'chr',
+        'level': 'int',
+        'name': 'str',
+        'color': 'str',
+        'prefix': 'str',
+        'prefix_color': 'str',
+    }
+    path: ['buffer', 'nicklist_item']
+    item 1:
+        __path: ['0x558d61ea3e60', '0x558d61ea4120']
+        group: 1
+        visible: 0
+        level: 0
+        name: 'root'
+        color: None
+        prefix: None
+        prefix_color: None
+    item 2:
+        __path: ['0x558d62840ea0', '0x558d61e75f90']
+        group: 1
+        visible: 0
+        level: 0
+        name: 'root'
+        color: None
+        prefix: None
+        prefix_color: None
+    item 3:
+        __path: ['0x558d62a9cea0', '0x558d62abf2e0']
+        group: 1
+        visible: 0
+        level: 0
+        name: 'root'
+        color: None
+        prefix: None
+        prefix_color: None
+    item 4:
+        __path: ['0x558d62a9cea0', '0x558d62afb9d0']
+        group: 1
+        visible: 1
+        level: 1
+        name: '000|o'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 5:
+        __path: ['0x558d62a9cea0', '0x558d62aff930']
+        group: 0
+        visible: 1
+        level: 0
+        name: 'FlashCode'
+        color: 'weechat.color.chat_nick_self'
+        prefix: '@'
+        prefix_color: 'lightgreen'
+    item 6:
+        __path: ['0x558d62a9cea0', '0x558d62af9930']
+        group: 1
+        visible: 1
+        level: 1
+        name: '001|v'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 7:
+        __path: ['0x558d62a9cea0', '0x558d62afc510']
+        group: 1
+        visible: 1
+        level: 1
+        name: '999|...'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 8:
+        __path: ['0x558d62a9cea0', '0x558d6292c290']
+        group: 0
+        visible: 1
+        level: 0
+        name: 'flashy'
+        color: '142'
+        prefix: ' '
+        prefix_color: 'lightblue'
+    item 9:
+        __path: ['0x558d62914680', '0x558d62afc4b0']
+        group: 1
+        visible: 0
+        level: 0
+        name: 'root'
+        color: None
+        prefix: None
+        prefix_color: None
+----
+
+* Request nicklist for buffer "irc.libera.#weechat":
+
+----
+(nicklist_weechat) nicklist irc.libera.#weechat
+----
+
+Response:
+
+[source,python]
+----
+id: 'nicklist_weechat'
+hda:
+    keys: {
+        'group': 'chr',
+        'visible': 'chr',
+        'level': 'int',
+        'name': 'str',
+        'color': 'str',
+        'prefix': 'str',
+        'prefix_color': 'str',
+    }
+    path: ['buffer', 'nicklist_item']
+    item 1:
+        __path: ['0x558d62a9cea0', '0x558d62abf2e0']
+        group: 1
+        visible: 0
+        level: 0
+        name: 'root'
+        color: None
+        prefix: None
+        prefix_color: None
+    item 2:
+        __path: ['0x558d62a9cea0', '0x558d62afb9d0']
+        group: 1
+        visible: 1
+        level: 1
+        name: '000|o'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 3:
+        __path: ['0x558d62a9cea0', '0x558d62aff930']
+        group: 0
+        visible: 1
+        level: 0
+        name: 'FlashCode'
+        color: 'weechat.color.chat_nick_self'
+        prefix: '@'
+        prefix_color: 'lightgreen'
+    item 4:
+        __path: ['0x558d62a9cea0', '0x558d62af9930']
+        group: 1
+        visible: 1
+        level: 1
+        name: '001|v'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 5:
+        __path: ['0x558d62a9cea0', '0x558d62afc510']
+        group: 1
+        visible: 1
+        level: 1
+        name: '999|...'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 6:
+        __path: ['0x558d62a9cea0', '0x558d6292c290']
+        group: 0
+        visible: 1
+        level: 0
+        name: 'flashy'
+        color: '142'
+        prefix: ' '
+        prefix_color: 'lightblue'
+----
+
+[[command_input]]
+=== input
+
+バッファにデータを送信。
+
+構文:
+
+----
+(id) input <buffer> <data>
+----
+
+引数:
+
+// TRANSLATION MISSING
+* _buffer_: ポインタ (eg: "0x1234abcd") またはバッファの完全な名前 (例:
+  _core.weechat_ または _irc.libera.#weechat_)
+* _data_: バッファに送信するデータ: `/`
+   で始まる場合、バッファ内でコマンドとして実行されます、それ以外の場合、テキストはバッファの入力として送信されます。
+
+Examples:
+
+* Send command "/help filter" on WeeChat core bufer:
+
+----
+input core.weechat /help filter
+----
+
+* Send message "hello!" to #weechat channel:
+
+----
+input irc.libera.#weechat hello!
+----
+
+// TRANSLATION MISSING
+* Send multiline message to #test channel (option _escape_commands_ must have
+  been enabled in <<command_handshake,handshake command>> and requires
+  WeeChat ≥ 4.0.0):
+
+----
+input irc.ergo.#test this message has\n2 lines
+----
+
+// TRANSLATION MISSING
+[[command_completion]]
+=== completion
+
+_WeeChat ≥ 2.9._
+
+Request completion of a string: list of possible words at a given position in
+a string for a given buffer.
+
+構文:
+
+----
+(id) completion <buffer> <position> [<data>]
+----
+
+引数:
+
+// TRANSLATION MISSING
+* _buffer_: pointer (eg: "0x1234abcd") or full name of buffer (for example:
+  _core.weechat_ or _irc.libera.#weechat_)
+* _position_: position for completion in string (starts to 0);
+  if the value is -1, the position is the length of _data_ (so the completion
+  is made at the end of _data_)
+* _data_: the input string; if not given, completion is performed on an empty
+  string
+
+WeeChat replies with a hdata:
+
+[width="100%",cols="2m,3,14",options="header"]
+|===
+| Name      | Type             | Description
+| context   | string           | Completion context: "null" (no completion), "command", "command_arg", "auto".
+| base_word | string           | The base word used for completion.
+| pos_start | integer          | Index of first char to replace (starts to 0).
+| pos_end   | integer          | Index of last char to replace (starts to 0).
+| add_space | integer          | 1 if a space must be added after words, 0 otherwise.
+| list      | array of strings | List of words found; empty if nothing was found to complete at asked position.
+|===
+
+[NOTE]
+In case of error, for example invalid buffer or internal error on WeeChat side,
+an empty hdata is returned.
+
+Examples:
+
+* Completion of a command argument:
+
+----
+(completion_help) completion core.weechat -1 /help fi
+----
+
+Response:
+
+[source,python]
+----
+id: 'completion_help'
+hda:
+    keys: {
+        'context': 'str',
+        'base_word': 'str',
+        'pos_start': 'int',
+        'pos_end': 'int',
+        'add_space': 'int',
+        'list': 'arr',
+    }
+    path: ['completion']
+    item 1:
+      __path: ['0x55d0ccc842c0']
+      context: 'command_arg'
+      base_word: 'fi'
+      pos_start: 6
+      pos_end: 7
+      add_space: 0
+      list: [
+          'fifo',
+          'fifo.file.enabled',
+          'fifo.file.path',
+          'filter',
+      ]
+----
+
+* Completion of a command in the middle of a word:
+
+----
+(completion_query) completion core.weechat 5 /quernick
+----
+
+Response:
+
+[source,python]
+----
+id: 'completion_query'
+hda:
+    keys: {
+        'context': 'str',
+        'base_word': 'str',
+        'pos_start': 'int',
+        'pos_end': 'int',
+        'add_space': 'int',
+        'list': 'arr',
+    }
+    path: ['completion']
+    item 1:
+        __path: ['0x55d0ccc88470']
+        context: 'command'
+        base_word: 'quer'
+        pos_start: 1
+        pos_end: 4
+        add_space: 1
+        list: ['query']
+----
+
+* Nothing to complete:
+
+----
+(completion_abcdefghijkl) completion core.weechat -1 abcdefghijkl
+----
+
+Response:
+
+[source,python]
+----
+id: 'completion_abcdefghijkl'
+hda:
+    keys: {
+        'context': 'str',
+        'base_word': 'str',
+        'pos_start': 'int',
+        'pos_end': 'int',
+        'add_space': 'int',
+        'list': 'arr',
+    }
+    path: ['completion']
+    item 1:
+        __path: ['0x55d0ccc88470']
+        context: 'auto'
+        base_word: 'abcdefghijkl'
+        pos_start: 0
+        pos_end: 11
+        add_space: 1
+        list: []
+----
+
+* Completion on an invalid buffer:
+
+----
+(completion_help) completion buffer.does.not.exist -1 /help fi
+----
+
+Response:
+
+[source,python]
+----
+id: 'completion_help'
+hda:
+    keys: {}
+    path: ['completion']
+----
+
+[[command_sync]]
+=== sync
+
+_WeeChat バージョン 0.4.1 で更新。_
+
+更新を取得して 1 つまたは複数のバッファを同期。
+
+[IMPORTANT]
+バッファのデータ (行、...)
+を要求した直後にこのコマンドを送信することをお勧めします。1
+つのメッセージの中にこのコマンドを含める (改行文字 "\n" で区切る) ことで同時に送信できます。
+
+構文:
+
+----
+(id) sync [<buffer>[,<buffer>...] <option>[,<option>...]]
+----
+
+引数:
+
+// TRANSLATION MISSING
+* _buffer_: ポインタ (eg: "0x1234abcd") またはバッファの完全な名前 (例:
+  _core.weechat_ または _irc.libera.#weechat_);
+  全てのバッファを指定するには "*" を使ってください
+* _options_: 以下に挙げるキーワード、コンマ区切り ("*" に対するデフォルトは
+  _buffers,upgrade,buffer,nicklist_、バッファに対するデフォルトは _buffer,nicklist_):
+** _buffers_: バッファに関するシグナルを受け取る
+   (オープン/クローズ、移動、リネーム、マージ/アンマージ、隠す/隠さない); これは名前が "*" の場合のみ利用可能
+   _(WeeChat バージョン 0.4.1 以上で利用可)_
+** _upgrade_: WeeChat アップグレードに関するシグナルを受信 (アップグレード、アップグレードの終了);
+   名前が "*" のバッファに対してのみ利用可能
+   _(WeeChat バージョン 0.4.1 以上で利用可)_
+** _buffer_: バッファに関するシグナルを受信
+   (新しい行、型の変更、タイトルの変更、ローカル変数の追加/削除、_buffers_
+   と同じバッファに関するシグナル) _(WeeChat バージョン 0.4.1 で更新)_
+** _nicklist_: 変更後にニックネームリストを受信
+
+// TRANSLATION MISSING
+Examples:
+
+* Synchronize all buffers with nicklist (the 3 commands are equivalent,
+but the first one is recommended for compatibility with future versions):
+
+----
+sync
+sync *
+sync * buffers,upgrade,buffer,nicklist
+----
+
+* Synchronize WeeChat core buffer:
+
+----
+sync core.buffer
+----
+
+* Synchronize #weechat channel, without nicklist:
+
+----
+sync irc.libera.#weechat buffer
+----
+
+* Get general signals + all signals for #weechat channel:
+
+----
+sync * buffers,upgrade
+sync irc.libera.#weechat
+----
+
+[[command_desync]]
+=== desync
+
+_WeeChat バージョン 0.4.1 で更新。_
+
+更新を中止して 1 つまたは複数のバッファの同期を中止。
+
+[NOTE]
+バッファの _オプション_
+を削除します。バッファに対する一部のオプションがまだ有効な場合、クライアントはバッファに対するアップデートを受け取ります。
+
+構文:
+
+----
+(id) desync [<buffer>[,<buffer>...] <option>[,<option>...]]
+----
+
+引数:
+
+// TRANSLATION MISSING
+* _buffer_: ポインタ (eg: "0x1234abcd") またはバッファの完全な名前 (例:
+  _core.weechat_ または _irc.libera.#weechat_);
+  全てのバッファを指定するには "*" を使ってください
+* _options_: 以下に挙げるキーワード、コンマ区切り ("*" に対するデフォルトは
+  _buffers,upgrade,buffer,nicklist_、バッファに対するデフォルトは _buffer,nicklist_):
+  値に関する詳しい情報は <<command_sync,sync コマンド>>を参照してください
+
+[NOTE]
+buffer に "*" を指定した場合、(名前を使って) 同期されている他のバッファは同期状態が保存されます。 +
+このため "sync *"、"sync irc.libera.#weechat"、"desync *" の順に送信した場合、WeeChat
+は #weechat チャンネルに対するアップデートを送信し続けます
+(アップデートを止めるには、明示してこれを中止しなければいけません)。
+
+// TRANSLATION MISSING
+Examples:
+
+* Desynchronize all buffers (the 3 commands are equivalent, but the first one
+  is recommended for compatibility with future versions):
+
+----
+desync
+desync *
+desync * buffers,upgrade,buffer,nicklist
+----
+
+* Desynchronize nicklist for #weechat channel (keep buffer updates):
+
+----
+desync irc.libera.#weechat nicklist
+----
+
+* Desynchronize #weechat channel:
+
+----
+desync irc.libera.#weechat
+----
+
+[[command_test]]
+=== test
+
+テストコマンド: WeeChat は様々な種類のオブジェクトを返します。
+
+このコマンドは WeeChat
+が返すバイナリオブジェクトのデコーディングをテストする際に便利です。
+
+構文:
+
+----
+(id) test
+----
+
+返されるオブジェクト (以下の順番):
+
+// TRANSLATION MISSING
+[width="100%",cols="1m,2,6m",options="header"]
+|===
+| 型      | Description    | 値
+| chr     | char           | 65 ("A")
+| int     | integer        | 123456
+| int     | integer        | -123456
+| lon     | long           | 1234567890
+| lon     | long           | -1234567890
+| str     | string         | "a string"
+| str     | string         | ""
+| str     | string         | NULL
+| buf     | buffer         | "buffer"
+| buf     | buffer         | NULL
+| ptr     | pointer        | 0x1234abcd
+| ptr     | pointer        | NULL
+| tim     | time           | 1321993456
+| arr str | string の配列  | [ "abc", "de" ]
+| arr int | integer の配列 | [ 123, 456, 789 ]
+|===
+
+[IMPORTANT]
+このコマンドが返したポインタ値を絶対に使ってはいけません、ポインタ値は無効です。このコマンドを
+WeeChat
+が返すメッセージのデコーディングをテストする場合以外に使わないでください。
+
+例:
+
+----
+(test) test
+----
+
+// TRANSLATION MISSING
+Response:
+
+----
+id: 'test'
+chr: 65
+int: 123456
+int: -123456
+lon: 1234567890
+lon: -1234567890
+str: 'a string'
+str: ''
+str: None
+buf: 'buffer'
+buf: None
+ptr: '0x1234abcd'
+ptr: '0x0'
+tim: 1321993456
+arr: ['abc', 'de']
+arr: [123, 456, 789]
+----
+
+[[command_ping]]
+=== ping
+
+_WeeChat バージョン 0.4.2 以上で利用可。_
+
+WeeChat にメッセージ "_pong" と同じ引数を持つ返信 ping を送信。
+
+このコマンドは WeeChat
+との接続がまだ保持されいることの確認と応答時間を計測する場合に便利です。
+
+構文:
+
+----
+(id) ping [<arguments>]
+----
+
+例:
+
+----
+ping 1370802127000
+----
+
+// TRANSLATION MISSING
+Response:
+
+----
+id:'_pong'
+str: '1370802127000'
+----
+
+[[command_quit]]
+=== quit
+
+_リレー_ から切断。
+
+構文:
+
+----
+(id) quit
+----
+
+例:
+
+----
+quit
+----
+
+[[messages]]
+== メッセージ (リレー → クライアント)
+
+メッセージは以下の書式でバイナリデータとして送信されます (サイズはバイト単位):
+
+....
+┌────────╥─────────────╥─────────╥────────┬──────────╥───────╥────────┬──────────┐
+│ length ║ compression ║   id    ║ type 1 │ object 1 ║  ...  ║ type N │ object N │
+└────────╨─────────────╨─────────╨────────┴──────────╨───────╨────────┴──────────┘
+ └──────┘ └───────────┘ └───────┘ └──────┘ └────────┘         └──────┘ └────────┘
+     4          1        4 + str      3        ??                 3        ??
+ └────────────────────┘ └───────────────────────────────────────────────────────┘
+       ヘッダ (5)                          圧縮されたデータ (??)
+ └──────────────────────────────────────────────────────────────────────────────┘
+                               'length' バイト
+....
+
+* _length_ (符号なし整数型、4 バイト): メッセージ全体のバイト数
+  (このフィールドを含む)
+* _compression_ (バイト型): フラグ:
+** _0x00_: これ以降のデータは圧縮されていません
+** _0x01_: これ以降のデータは https://zlib.net/[zlib ^↗^^] で圧縮されています
+** _0x02_: これ以降のデータは https://facebook.github.io/zstd/[Zstandard ^↗^^] で圧縮されています
+* _id_ (文字列型、4 バイト + 内容): クライアントが送信した識別子 (コマンド名の前につけられる);
+  コマンドに識別子が含まれない場合は空文字列でも可
+  (内容を含まない長さゼロの文字列)
+* _type_ (3 文字): 型の種類: 3 文字 (以下の表を参照)
+* _object_: オブジェクト (以下の表を参照)
+
+[[message_compression]]
+=== 圧縮
+
+// TRANSLATION MISSING
+If flag _compression_ is equal to 0x01 or 0x02, then *all* data after is compressed
+with https://zlib.net/[zlib ^↗^^] or
+https://facebook.github.io/zstd/[Zstandard ^↗^^],
+and therefore must be uncompressed before being processed.
+
+[[message_identifier]]
+=== 識別子
+
+識別子 (_id_) には 2 種類あります:
+
+* _クライアント_ が送信する _id_: _リレー_ は _id_ を含む受信メッセージに対して同じ _id_ を付けて応答します。
+* イベントの _id_: 一部のイベントで、_リレー_ は _クライアント_ に向けて特別な、アンダースコアで始まる、_id_
+  を含むメッセージを送信します (以下の表を参照)
+
+WeeChat の予約識別子:
+
+[width="100%",cols="5m,5,3,4,7",options="header"]
+|===
+| 識別子 | _sync_ で受信 | 送信されるデータ
+| 説明 | 推奨するクライアントの挙動
+
+| _buffer_opened | buffers / buffer | hdata: buffer
+| バッファのオープン | バッファを開く
+
+| _buffer_type_changed | buffers / buffer | hdata: buffer
+| バッファの種類変更 | バッファの種類を変更
+
+| _buffer_moved | buffers / buffer | hdata: buffer
+| バッファの移動 | バッファを移動
+
+| _buffer_merged | buffers / buffer | hdata: buffer
+| バッファのマージ | バッファをマージ
+
+| _buffer_unmerged | buffers / buffer | hdata: buffer
+| バッファのアンマージ | バッファをアンマージ
+
+| _buffer_hidden | buffers / buffer | hdata: buffer
+| バッファを隠す | バッファを隠す
+
+| _buffer_unhidden | buffers / buffer | hdata: buffer
+| バッファを隠すことを止める | バッファを隠すことを止める
+
+| _buffer_renamed | buffers / buffer | hdata: buffer
+| バッファのリネーム | バッファをリネーム
+
+| _buffer_title_changed | buffers / buffer | hdata: buffer
+| バッファのタイトル変更 | バッファのタイトルを変更
+
+| _buffer_localvar_added | buffers / buffer | hdata: buffer
+| ローカル変数の追加 | バッファに対するローカル変数を追加
+
+| _buffer_localvar_changed | buffers / buffer | hdata: buffer
+| ローカル変数の変更 | バッファに対するローカル変数を変更
+
+| _buffer_localvar_removed | buffers / buffer | hdata: buffer
+| ローカル変数を削除 | バッファからローカル変数を削除
+
+| _buffer_closing | buffers / buffer | hdata: buffer
+| バッファのクローズ | バッファを閉じる
+
+| _buffer_cleared | buffer | hdata: buffer
+| バッファのクリア | バッファをクリア
+
+| _buffer_line_added | buffer | hdata: line
+| バッファへの行追加 | バッファに行を表示
+
+// TRANSLATION MISSING
+| _buffer_line_data_changed | buffer | hdata: line
+| Line changed in buffer. | Update line displayed in buffer.
+
+| _nicklist | nicklist | hdata: nicklist_item
+| バッファのニックネームリスト | ニックネームリストを置換
+
+| _nicklist_diff | nicklist | hdata: nicklist_item
+| バッファに対するニックネームの差分  | ニックネームリストを更新
+
+| _pong | (常に) | string: ping arguments
+| "ping" に対する応答 | 応答時間の測定
+
+| _upgrade | upgrade | (空)
+| WeeChat のアップグレード中 | WeeChat との同期を中止 (または切断)
+
+| _upgrade_ended | upgrade | (空)
+| WeeChat のアップグレード終了 | WeeChat との同期および再同期
+|===
+
+[[message_buffer_opened]]
+==== _buffer_opened
+
+このメッセージは WeeChat が "buffer_opened"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前            | 型        | 説明
+| number          | integer   | バッファ番号 (1 以上)
+| full_name       | string    | 完全な名前 (例: _irc.libera.#weechat_)
+| short_name      | string    | 短い名前 (例: _#weechat_)
+| nicklist        | integer   | バッファがニックネームリストを持つ場合 1、それ以外は 0
+| title           | string    | バッファのタイトル
+| local_variables | hashtable | ローカル変数
+| prev_buffer     | pointer   | 前のバッファへのポインタ
+| next_buffer     | pointer   | 次のバッファへのポインタ
+|===
+
+例: libera の _#weechat_ チャンネルに参加、新しいバッファは
+_irc.libera.#weechat_:
+
+[source,python]
+----
+id: '_buffer_opened'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'short_name': 'str',
+        'nicklist': 'int',
+        'title': 'str',
+        'local_variables': 'htb',
+        'prev_buffer': 'ptr',
+        'next_buffer': 'ptr',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x35a8a60']
+        number: 3
+        full_name: 'irc.libera.#weechat'
+        short_name: None
+        nicklist: 0
+        title: None
+        local_variables: {
+            'plugin': 'irc',
+            'name': 'libera.#weechat',
+        }
+        prev_buffer: '0x34e7400'
+        next_buffer: '0x0'
+----
+
+[[message_buffer_moved]]
+==== _buffer_moved
+
+このメッセージは WeeChat が "buffer_moved"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前        | 型      | 説明
+| number      | integer | バッファ番号 (1 以上)
+| full_name   | string  | 完全な名前 (例: _irc.libera.#weechat_)
+| prev_buffer | pointer | 前のバッファへのポインタ
+| next_buffer | pointer | 次のバッファへのポインタ
+|===
+
+例: バッファ _irc.libera.#weechat_ を番号 2 に移動:
+
+[source,python]
+----
+id: '_buffer_moved'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'prev_buffer': 'ptr',
+        'next_buffer': 'ptr',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x34588c0']
+        number: 2
+        full_name: 'irc.libera.#weechat'
+        prev_buffer: '0x347b9f0'
+        next_buffer: '0x3471bc0'
+----
+
+[[message_buffer_merged]]
+==== _buffer_merged
+
+このメッセージは WeeChat が "buffer_merged"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前        | 型      | 説明
+| number      | integer | バッファ番号 (1 以上)
+| full_name   | string  | 完全な名前 (例: _irc.libera.#weechat_)
+| prev_buffer | pointer | 前のバッファへのポインタ
+| next_buffer | pointer | 次のバッファへのポインタ
+|===
+
+例: バッファ _irc.libera.#weechat_ をバッファ #2 とマージ:
+
+[source,python]
+----
+id: '_buffer_merged'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'prev_buffer': 'ptr',
+        'next_buffer': 'ptr',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4db4c00']
+        number: 2
+        full_name: 'irc.libera.#weechat'
+        prev_buffer: '0x4cef9b0'
+        next_buffer: '0x0'
+----
+
+[[message_buffer_unmerged]]
+==== _buffer_unmerged
+
+このメッセージは WeeChat が "buffer_unmerged"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前        | 型      | 説明
+| number      | integer | バッファ番号 (1 以上)
+| full_name   | string  | 完全な名前 (例: _irc.libera.#weechat_)
+| prev_buffer | pointer | 前のバッファへのポインタ
+| next_buffer | pointer | 次のバッファへのポインタ
+|===
+
+例: バッファ _irc.libera.#weechat_ をアンマージ:
+
+[source,python]
+----
+id: '_buffer_unmerged'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'prev_buffer': 'ptr',
+        'next_buffer': 'ptr',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4db4c00']
+        number: 3
+        full_name: 'irc.libera.#weechat'
+        prev_buffer: '0x4cef9b0'
+        next_buffer: '0x0'
+----
+
+[[message_buffer_hidden]]
+==== _buffer_hidden
+
+_WeeChat バージョン 1.0 以上で利用可。_
+
+このメッセージは WeeChat が "buffer_hidden"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前        | 型      | 説明
+| number      | integer | バッファ番号 (1 以上)
+| full_name   | string  | 完全な名前 (例: _irc.libera.#weechat_)
+| prev_buffer | pointer | 前のバッファへのポインタ
+| next_buffer | pointer | 次のバッファへのポインタ
+|===
+
+例: バッファ _irc.libera.#weechat_ を隠す:
+
+[source,python]
+----
+id: '_buffer_hidden'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'prev_buffer': 'ptr',
+        'next_buffer': 'ptr',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4db4c00']
+        number: 2
+        full_name: 'irc.libera.#weechat'
+        prev_buffer: '0x4cef9b0'
+        next_buffer: '0x0'
+----
+
+[[message_buffer_unhidden]]
+==== _buffer_unhidden
+
+_WeeChat バージョン 1.0 以上で利用可。_
+
+このメッセージは WeeChat が "buffer_unhidden"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前        | 型      | 説明
+| number      | integer | バッファ番号 (1 以上)
+| full_name   | string  | 完全な名前 (例: _irc.libera.#weechat_)
+| prev_buffer | pointer | 前のバッファへのポインタ
+| next_buffer | pointer | 次のバッファへのポインタ
+|===
+
+例: バッファ _irc.libera.#weechat_ を隠すことを止める:
+
+[source,python]
+----
+id: '_buffer_unhidden'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'prev_buffer': 'ptr',
+        'next_buffer': 'ptr',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4db4c00']
+        number: 3
+        full_name: 'irc.libera.#weechat'
+        prev_buffer: '0x4cef9b0'
+        next_buffer: '0x0'
+----
+
+[[message_buffer_renamed]]
+==== _buffer_renamed
+
+このメッセージは WeeChat が "buffer_renamed"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前            | 型        | 説明
+| number          | integer   | バッファ番号 (1 以上)
+| full_name       | string    | 完全な名前 (例: _irc.libera.#weechat_)
+| short_name      | string    | 短い名前 (例: _#weechat_)
+| local_variables | hashtable | ローカル変数
+|===
+
+例: プライベートバッファを _FlashCode_ から _Flash2_ にリネーム:
+
+[source,python]
+----
+id: '_buffer_renamed'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'short_name': 'str',
+        'local_variables': 'htb',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4df7b80']
+        number: 5
+        full_name: 'irc.libera.Flash2'
+        short_name: 'Flash2'
+        local_variables: {
+            'server': 'libera',
+            'plugin': 'irc',
+            'type': 'private',
+            'channel': 'FlashCode',
+            'nick': 'test',
+            'name': 'libera.Flash2',
+        }
+----
+
+[[message_buffer_title_changed]]
+==== _buffer_title_changed
+
+このメッセージは WeeChat が "buffer_title_changed"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前      | 型      | 説明
+| number    | integer | バッファ番号 (1 以上)
+| full_name | string  | 完全な名前 (例: _irc.libera.#weechat_)
+| title     | string  | バッファのタイトル
+|===
+
+例: チャンネル _#weechat_ のトピックを変更:
+
+[source,python]
+----
+id: '_buffer_title_changed'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'title': 'str',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4a715d0']
+        number: 3
+        full_name: 'irc.libera.#weechat'
+        title: 'Welcome on #weechat!  https://weechat.org/'
+----
+
+[[message_buffer_cleared]]
+==== _buffer_cleared
+
+_WeeChat バージョン 1.0 以上で利用可。_
+
+このメッセージは WeeChat が "buffer_cleared"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前      | 型      | 説明
+| number    | integer | バッファ番号 (1 以上)
+| full_name | string  | 完全な名前 (例: _irc.libera.#weechat_)
+|===
+
+例: バッファ _irc.libera.#weechat_ をクリア:
+
+[source,python]
+----
+id: '_buffer_cleared'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4a715d0']
+        number: 3
+        full_name: 'irc.libera.#weechat'
+----
+
+[[message_buffer_type_changed]]
+==== _buffer_type_changed
+
+このメッセージは WeeChat が "buffer_type_changed"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前      | 型      | 説明
+| number    | integer | バッファ番号 (1 以上)
+| full_name | string  | 完全な名前 (例: _irc.libera.#weechat_)
+| type      | integer | バッファの種類: 0 = 書式あり (デフォルト)、1 = 自由内容
+|===
+
+例: バッファ _script.scripts_ の種類を書式あり (0) から自由内容
+(1) に変更:
+
+[source,python]
+----
+id: '_buffer_type_changed'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'type': 'int',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x27c9a70']
+        number: 4
+        full_name: 'script.scripts'
+        type: 1
+----
+
+[[message_buffer_localvar_added]]
+==== _buffer_localvar_added
+
+このメッセージは WeeChat が "buffer_localvar_added"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前            | 型        | 説明
+| number          | integer   | バッファ番号 (1 以上)
+| full_name       | string    | 完全な名前 (例: _irc.libera.#weechat_)
+| local_variables | hashtable | ローカル変数
+|===
+
+例: _irc.libera.#weechat_ にローカル変数 _test_ を追加:
+
+[source,python]
+----
+id='_buffer_localvar_added', objects:
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'local_variables': 'htb',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4a73de0']
+        number: 3
+        full_name: 'irc.libera.#weechat'
+        local_variables: {
+            'server': 'libera',
+            'test': 'value',
+            'plugin': 'irc',
+            'type': 'channel',
+            'channel': '#weechat',
+            'nick': 'test',
+            'name': 'libera.#weechat',
+        }
+----
+
+[[message_buffer_localvar_changed]]
+==== _buffer_localvar_changed
+
+このメッセージは WeeChat が "buffer_localvar_changed"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前            | 型        | 説明
+| number          | integer   | バッファ番号 (1 以上)
+| full_name       | string    | 完全な名前 (例: _irc.libera.#weechat_)
+| local_variables | hashtable | ローカル変数
+|===
+
+例: _irc.libera.#weechat_ に含まれるローカル変数 _test_ を更新:
+
+[source,python]
+----
+id='_buffer_localvar_changed', objects:
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'local_variables': 'htb',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4a73de0']
+        number: 3
+        full_name: 'irc.libera.#weechat'
+        local_variables: {
+            'server': 'local',
+            'test': 'value2',
+            'plugin': 'irc',
+            'type': 'channel',
+            'channel': '#weechat',
+            'nick': 'test',
+            'name': 'libera.#weechat',
+        }
+----
+
+[[message_buffer_localvar_removed]]
+==== _buffer_localvar_removed
+
+このメッセージは WeeChat が "buffer_localvar_removed"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前            | 型        | 説明
+| number          | integer   | バッファ番号 (1 以上)
+| full_name       | string    | 完全な名前 (例: _irc.libera.#weechat_)
+| local_variables | hashtable | ローカル変数
+|===
+
+例: _irc.libera.#weechat_ からローカル変数 _test_ を削除:
+
+[source,python]
+----
+id: '_buffer_localvar_removed'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+        'local_variables': 'htb',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4a73de0']
+        number: 3
+        full_name: 'irc.libera.#prout'
+        local_variables: {
+            'server': 'local',
+            'plugin': 'irc',
+            'type': 'channel',
+            'channel': '#weechat',
+            'nick': 'test',
+            'name': 'libera.#weechat',
+        }
+----
+
+[[message_buffer_line_added]]
+==== _buffer_line_added
+
+このメッセージは WeeChat が "buffer_line_added"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前              | 型            | 説明
+| buffer            | pointer       | バッファへのポインタ
+// TRANSLATION MISSING
+| id                | integer       | Line identifier.
+| date              | time          | メッセージの日付
+// TRANSLATION MISSING
+| date_usec         | integer       | Microseconds of date.
+| date_printed      | time          | WeeChat メッセージを表示した日付
+// TRANSLATION MISSING
+| date_usec_printed | integer       | Microseconds of date when WeeChat displayed message.
+| displayed         | char          | メッセージが表示される場合は 1、メッセージがフィルタされる (隠される) 場合は 0
+// TRANSLATION MISSING
+| notify_level      | char          | Notify level: -1 = notify disabled, 0 = low, 1 = message, 2 = private, 3 = highlight.
+| highlight         | char          | 行がハイライト部分を含む場合は 1、それ以外は 0
+| tags_array        | string の配列 | 行に対するタグのリスト
+| prefix            | string        | プレフィックス
+| message           | string        | メッセージ
+|===
+
+例: バッファ _irc.libera.#weechat_ でニックネーム _FlashCode_ からの新しいメッセージ _hello!_:
+
+[source,python]
+----
+id: '_buffer_line_added'
+hda:
+    keys: {
+        'buffer': 'ptr',
+        'id': 'int',
+        'date': 'tim',
+        'date_used': 'int',
+        'date_printed': 'tim',
+        'date_usec_printed': 'int',
+        'displayed': 'chr',
+        'notify_level': 'chr',
+        'highlight': 'chr',
+        'tags_array': 'arr',
+        'prefix': 'str',
+        'message': 'str',
+    }
+    path: ['line_data']
+    item 1:
+        __path: ['0x4a49600']
+        buffer: '0x4a715d0'
+        id: 12
+        date: 1362728993
+        date_usec: 902765
+        date_printed: 1362728993
+        date_usec_printed: 902765
+        displayed: 1
+        notify_level: 1
+        highlight: 0
+        tags_array: [
+            'irc_privmsg',
+            'notify_message',
+            'prefix_nick_142',
+            'nick_FlashCode',
+            'log1',
+        ]
+        prefix: 'F06@F@00142FlashCode'
+        message: 'hello!'
+----
+
+[[message_buffer_line_changed]]
+==== _buffer_line_changed
+
+// TRANSLATION MISSING
+This message is sent to the client when the signal "buffer_line_data_changed"
+is sent by WeeChat.
+
+// TRANSLATION MISSING
+Data sent as hdata: same data as <<message_buffer_line_added,_buffer_line_added>>.
+
+// TRANSLATION MISSING
+Example: message _hello!_ from nick _FlashCode_ on buffer _irc.libera.#weechat_ has been updated:
+
+[source,python]
+----
+id: '_buffer_line_data_changed'
+hda:
+    keys: {
+        'buffer': 'ptr',
+        'id': 'int',
+        'date': 'tim',
+        'date_used': 'int',
+        'date_printed': 'tim',
+        'date_usec_printed': 'int',
+        'displayed': 'chr',
+        'notify_level': 'chr',
+        'highlight': 'chr',
+        'tags_array': 'arr',
+        'prefix': 'str',
+        'message': 'str',
+    }
+    path: ['line_data']
+    item 1:
+        __path: ['0x4a49600']
+        buffer: '0x4a715d0'
+        id: 12
+        date: 1362728993
+        date_usec: 902765
+        date_printed: 1362728993
+        date_usec_printed: 902765
+        displayed: 1
+        notify_level: 1
+        highlight: 0
+        tags_array: [
+            'irc_privmsg',
+            'notify_message',
+            'prefix_nick_142',
+            'nick_FlashCode',
+            'log1',
+        ]
+        prefix: 'F06@F@00142FlashCode'
+        message: 'hello!'
+----
+
+[[message_buffer_closing]]
+==== _buffer_closing
+
+このメッセージは WeeChat が "buffer_closing"
+シグナルを送信する際にクライアントに送られます。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前      | 型      | 説明
+| number    | integer | バッファ番号 (1 以上)
+| full_name | string  | 完全な名前 (例: _irc.libera.#weechat_)
+|===
+
+例: WeeChat がバッファ _irc.libera.#weechat_ を閉じる:
+
+[source,python]
+----
+id: '_buffer_closing'
+hda:
+    keys: {
+        'number': 'int',
+        'full_name': 'str',
+    }
+    path: ['buffer']
+    item 1:
+        __path: ['0x4a715d0']
+        number: 3
+        full_name: 'irc.libera.#weechat'
+----
+
+[[message_nicklist]]
+==== _nicklist
+
+このメッセージはニックネームリストに対して巨大な更新 (グループおよびニックネームの追加/更新/変更)
+が行われた場合にクライアントに送られます。このメッセージには完全なニックネームリストが含まれます。
+
+ニックネームリストに対して小さな更新が行われた場合 (例えばニックネームを 1
+つだけ追加)、識別子 __nicklist_diff_ を含むメッセージが送信されます (以下を参照)。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前         | 型      | 説明
+| group        | char    | グループの場合 1、ニックネームの場合 0
+| visible      | char    | グループおよびニックネームが表示される場合 1、それ以外は 0
+| level        | integer | グループのレベル (ニックネームの場合 0)
+| name         | string  | グループおよびニックネームの名前
+| color        | string  | 名前の色
+| prefix       | string  | プレフィックス (ニックネーム専用)
+| prefix_color | string  | プレフィックスの色 (ニックネーム専用)
+|===
+
+例: バッファ _irc.libera.#weechat_ のニックネームリスト:
+
+[source,python]
+----
+id: '_nicklist'
+hda:
+    keys: {
+        'group': 'chr',
+        'visible': 'chr',
+        'level': 'int',
+        'name': 'str',
+        'color': 'str',
+        'prefix': 'str',
+        'prefix_color': 'str',
+    }
+    path: ['buffer', 'nicklist_item']
+    item 1:
+        __path: ['0x4a75cd0', '0x31e95d0']
+        group: 1
+        visible: 0
+        level: 0
+        name: 'root'
+        color: None
+        prefix: None
+        prefix_color: None
+    item 2:
+        __path: ['0x4a75cd0', '0x41247b0']
+        group: 1
+        visible: 1
+        level: 1
+        name: '000|o'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 3:
+        __path: ['0x4a75cd0', '0x4a60d20']
+        group: 0
+        visible: 1
+        level: 0
+        name: 'FlashCode'
+        color: '142'
+        prefix: '@'
+        prefix_color: 'lightgreen'
+    item 4:
+        __path: ['0x4a75cd0', '0x4aafaf0']
+        group: 1
+        visible: 1
+        level: 1
+        name: '001|v'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 5:
+        __path: ['0x4a75cd0', '0x4a48d80']
+        group: 1
+        visible: 1
+        level: 1
+        name: '999|...'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 6:
+        __path: ['0x4a75cd0', '0x4a5f560']
+        group: 0
+        visible: 1
+        level: 0
+        name: 'test'
+        color: 'weechat.color.chat_nick_self'
+        prefix: ' '
+        prefix_color: ''
+----
+
+[[message_nicklist_diff]]
+==== _nicklist_diff
+
+_WeeChat バージョン 0.4.1 以上で利用可。_
+
+このメッセージはニックネームリストに対して小さな更新 (グループおよびニックネームの追加/更新/変更)
+が行われた場合にクライアントに送られます。このメッセージにはニックネームリストの差分が含まれます
+(古いニックネームリストと新しいニックネームリストの差分)。
+
+hdata として送られるデータ:
+
+[width="100%",cols="3m,2,10",options="header"]
+|===
+| 名前         | 型      | 説明
+| _diff        | char    | 差分の種類 (下を参照)
+| group        | char    | グループの場合 1、ニックネームの場合 0
+| visible      | char    | グループおよびニックネームが表示される場合 1、それ以外は 0
+| level        | integer | グループのレベル (ニックネームの場合 0)
+| name         | string  | グループおよびニックネームの名前
+| color        | string  | 名前の色
+| prefix       | string  | プレフィックス (ニックネーム専用)
+| prefix_color | string  | プレフィックスの色 (ニックネーム専用)
+|===
+
+__diff_ のとりうる値:
+
+* `+^+`: 親グループ:
+  これの後に続くグループまたはニックネームに関する操作はこのグループに対して行う
+* `+++`: このグループおよびニックネームを親グループに追加
+* `+-+`: このグループおよびニックネームを親グループから削除
+* `+*+`: このグループおよびニックネームを親グループで更新
+
+例: ニックネーム _master_ を _000|o_ (IRC チャンネルのチャンネルオペレータ)
+グループに追加、ニックネーム _nick1_ と _nick2_ を _999|..._ に追加
+(IRC チャンネルの一般ユーザ):
+
+[source,python]
+----
+id: '_nicklist_diff'
+hda:
+    keys: {
+        '_diff': 'chr',
+        'group': 'chr',
+        'visible': 'chr',
+        'level': 'int',
+        'name': 'str',
+        'color': 'str',
+        'prefix': 'str',
+        'prefix_color': 'str',
+    }
+    path: ['buffer', 'nicklist_item']
+    item 1:
+        __path: ['0x46f2ee0', '0x343c9b0']
+        _diff: 94 ('^')
+        group: 1
+        visible: 1
+        level: 1
+        name: '000|o'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 2:
+        __path: ['0x46f2ee0', '0x47e7f60']
+        _diff: 43 ('+')
+        group: 0
+        visible: 1
+        level: 0
+        name: 'master'
+        color: 'magenta'
+        prefix: '@'
+        prefix_color: 'lightgreen'
+    item 3:
+        __path: ['0x46f2ee0', '0x46b8e70']
+        _diff: 94 ('^')
+        group: 1
+        visible: 1
+        level: 1
+        name: '999|...'
+        color: 'weechat.color.nicklist_group'
+        prefix: None
+        prefix_color: None
+    item 4:
+        __path: ['0x46f2ee0', '0x3dba240']
+        _diff: 43 ('+')
+        group: 0
+        visible: 1
+        level: 0
+        name: 'nick1'
+        color: 'green'
+        prefix: ' '
+        prefix_color: ''
+    item 5:
+        __path: ['0x46f2ee0', '0x3c379d0']
+        _diff: 43 ('+')
+        group: 0
+        visible: 1
+        level: 0
+        name: 'nick2'
+        color: 'lightblue'
+        prefix: ' '
+        prefix_color: ''
+----
+
+[[message_pong]]
+==== _pong
+
+_WeeChat バージョン 0.4.2 以上で利用可。_
+
+このメッセージは _リレー_ が "ping" メッセージを受信する際にクライアントに送られます。
+
+文字列として送られるデータ: "ping" メッセージで受信した引数。
+
+クライアントは応答時間を測定し、応答時間が長い場合は切断することを推奨します。
+
+[[message_upgrade]]
+==== _upgrade
+
+_WeeChat バージョン 0.3.8 以上で利用可。_
+
+このメッセージは WeeChat がアップグレード処理を始める際にクライアントに送られます。
+
+メッセージにデータは含まれません。
+
+クライアントは WeeChat との同期を中止するか
+(_desync_ コマンドを送信)、WeeChat から切断することを推奨します
+(これはアップグレードの後はすべてのポインタが変わるからです)。
+
+[NOTE]
+WeeChat のアップグレード中、ソケットは開いたままです
+(ただし TLS を使っている場合は閉じられます)。
+
+[[message_upgrade_ended]]
+==== _upgrade_ended
+
+_WeeChat バージョン 0.3.8 以上で利用可。_
+
+このメッセージは WeeChat
+がアップグレード処理を終えた際にクライアントに送られます。
+
+メッセージにデータは含まれません。
+
+クライアントは WeeChat との同期を再開することを推奨します:
+クライアントを開始して _init_ 以降に送信したすべてのコマンドを再送信。
+
+[[objects]]
+=== オブジェクト
+
+オブジェクトは _type_ と呼ばれる 3 文字で特定されます。以下の種類が使われます:
+
+[width="100%",cols="1m,2,8",options="header"]
+|===
+| 型   | 値                    | 長さ
+| chr  | 符号付文字            | 1 バイト
+| int  | 符号付整数            | 4 バイト
+| lon  | 符号付長整数          | 1 バイト + 文字列で表現した整数の長さ
+| str  | 文字列                | 4 バイト + 文字列の長さ (最後の `\0` を含まない)
+| buf  | バッファのバイト数    | 4 バイト + データの長さ
+| ptr  | ポインタ              | 1 バイト + 文字列で表現したポインタの長さ
+| tim  | 時間                  | 1 バイト + 文字列で表現した時間の長さ
+| htb  | ハッシュテーブル      | 可変
+| hda  | hdata の内容          | 可変
+| inf  | インフォ: 名前 + 内容 | 可変
+| inl  | インフォリストの内容  | 可変
+| arr  | オブジェクトの配列    | 3 バイト (型) + オブジェクトの数 + データ
+|===
+
+[[object_char]]
+==== 符号付文字
+
+1 つの符号付文字は 1 バイトとして保存されます。
+
+例:
+
+....
+┌────┐
+│ 41 │ ────► 65 (0x41: "A")
+└────┘
+....
+
+[[object_integer]]
+==== 符号付整数
+
+1 つの符号付整数は 4 バイトとして保存され、ビッグエンディアン書式でエンコードされています
+(データは上位バイトを先頭にして並べられています)。
+
+範囲: -2147483648 から 2147483647。
+
+例:
+
+....
+┌────┬────┬────┬────┐
+│ 00 │ 01 │ E2 │ 40 │ ────► 123456
+└────┴────┴────┴────┘
+
+┌────┬────┬────┬────┐
+│ FF │ FE │ 1D │ C0 │ ────► -123456
+└────┴────┴────┴────┘
+....
+
+[[object_long_integer]]
+==== 符号付長整数
+
+1 つの符号付長整数は文字列としてエンコードされています、文字列の長さは 1 バイトで表現されています。
+
+範囲: -9223372036854775808 から 9223372036854775807。
+
+例:
+
+....
+┌────╥────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│ 0A ║ 31 │ 32 │ 33 │ 34 │ 35 │ 36 │ 37 │ 38 │ 39 │ 30 │ ────► 1234567890
+└────╨────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
+ └──┘ └───────────────────────────────────────────────┘
+length '1'  '2'  '3'  '4'  '5'  '6'  '7'  '8'  '9'  '0'
+
+┌────╥────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│ 0B ║ 2D │ 31 │ 32 │ 33 │ 34 │ 35 │ 36 │ 37 │ 38 │ 39 │ 30 │ ────► -1234567890
+└────╨────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
+ └──┘ └────────────────────────────────────────────────────┘
+length '-'  '1'  '2'  '3'  '4'  '5'  '6'  '7'  '8'  '9'  '0'
+....
+
+[[object_string]]
+==== 文字列
+
+1 つの文字列はその長さ (4 バイト表現した整数) + 文字列の内容 (最後の `\0` を除く) で表現されています。
+
+例:
+
+....
+┌────┬────┬────┬────╥────┬────┬────┬────┬────┐
+│ 00 │ 00 │ 00 │ 05 ║ 68 │ 65 │ 6C │ 6C │ 6F │ ────► "hello"
+└────┴────┴────┴────╨────┴────┴────┴────┴────┘
+ └─────────────────┘ └──────────────────────┘
+       length         'h'  'e'  'l'  'l'  'o'
+....
+
+空文字列を表現するには長さをゼロにしてください:
+
+....
+┌────┬────┬────┬────┐
+│ 00 │ 00 │ 00 │ 00 │ ────► ""
+└────┴────┴────┴────┘
+ └─────────────────┘
+       length
+....
+
+_NULL_ 文字列 (C 言語の NULL ポインタ) を表現するにはの長さを -1 にしてください:
+
+....
+┌────┬────┬────┬────┐
+│ FF │ FF │ FF │ FF │ ────► NULL
+└────┴────┴────┴────┘
+ └─────────────────┘
+       length
+....
+
+[[object_buffer]]
+==== バッファ
+
+<<object_string,文字列>>と同じ書式; 内容は単純なバイトの配列。
+
+[[object_pointer]]
+==== ポインタ
+
+1 つのポインタは文字列 (16 進数) としてエンコードされています、文字列の長さは 1 バイトで表現されています。
+
+例:
+
+....
+┌────╥────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│ 09 ║ 31 │ 61 │ 32 │ 62 │ 33 │ 63 │ 34 │ 64 │ 35 │ ────► 0x1a2b3c4d5
+└────╨────┴────┴────┴────┴────┴────┴────┴────┴────┘
+ └──┘ └──────────────────────────────────────────┘
+length '1'  'a'  '2'  'b'  '3'  'c'  '4'  'd'  '5'
+....
+
+_NULL_ ポインタを表現するには長さを 1 で値を 0 にしてください:
+
+....
+┌────╥────┐
+│ 01 ║ 30 │ ────► NULL (0x0)
+└────╨────┘
+ └──┘ └──┘
+length '0'
+....
+
+[[object_time]]
+==== 時間
+
+1 つの時間 (秒数) は文字列としてエンコードされています、文字列の長さは 1 バイトで表現されています。
+
+例:
+
+....
+┌────╥────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│ 0A ║ 31 │ 33 │ 32 │ 31 │ 39 │ 39 │ 33 │ 34 │ 35 │ 36 │ ────► 1321993456
+└────╨────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
+ └──┘ └───────────────────────────────────────────────┘
+length '1'  '3'  '2'  '1'  '9'  '9'  '3'  '4'  '5'  '6'
+....
+
+[[object_hashtable]]
+==== ハッシュテーブル
+
+1 つのハッシュテーブルにはキーの種類、値の種類、ハッシュテーブルに含まれる要素の数
+(1 バイト表現の整数)、要素のキーと値が含まれています。
+
+....
+┌───────────┬─────────────┬───────╥───────┬─────────╥─────╥───────┬─────────┐
+│ type_keys │ type_values │ count ║ key 1 │ value 1 ║ ... ║ key N │ value N │
+└───────────┴─────────────┴───────╨───────┴─────────╨─────╨───────┴─────────┘
+....
+
+例:
+
+....
+┌─────┬─────┬───╥──────┬─────╥──────┬─────┐
+│ str │ str │ 2 ║ key1 │ abc ║ key2 │ def │ ────► { 'key1' => 'abc',
+└─────┴─────┴───╨──────┴─────╨──────┴─────┘         'key2' => 'def' }
+ └───┘ └───┘ └─┘ └──────────┘ └──────────┘
+ type  type count   item 1       item 2
+ keys values
+....
+
+[[object_hdata]]
+==== hdata
+
+1 つの _hdata_ には hdata 名を含むパス、キーのリスト、オブジェクトセットの数、オブジェクトセット
+(ポインタのパス、オブジェクト) が含まれています。
+
+....
+┌────────┬──────┬───────╥────────┬─────────────────────╥─────╥────────┬─────────────────────╥─────┐
+│ h-path │ keys │ count ║ p-path │ value 1 ... value N ║ ... ║ p-path │ value 1 ... value N ║ ... │
+└────────┴──────┴───────╨────────┴─────────────────────╨─────╨────────┴─────────────────────╨─────┘
+....
+
+* _h-path_ (文字列): hdata にアクセスする際に使うパス (例:
+  _buffer/lines/line/line_data_); 返される hdata はパスの最後の要素です
+* _keys_ (文字列): _key:type_ のリスト (コンマ区切り)
+  を含む文字列、例: _number:int,name:str_
+* _count_ (文字列): オブジェクトセットの数
+* _p-path_: オブジェクトへのポインタを含むパス
+  (ポインタの数はパスに含まれる要素の数)
+* _values_: 値のリスト (値の数は hdata
+  で返されるキーの数)
+
+2 つのバッファ (weechat コアと libera サーバ) と
+2 つのキー (_number_ と _full_name_) を持つ hdata の例:
+
+....
+# コマンド
+hdata buffer:gui_buffers(*) number,full_name
+
+# 応答
+┌────────┬──────────────────────────┬───╥─────────┬───┬──────────────╥─────────┬───┬───────────────────┐
+│ buffer │ number:int,full_name:str │ 2 ║ 0x12345 │ 1 │ core.weechat ║ 0x6789a │ 2 │ irc.server.libera │
+└────────┴──────────────────────────┴───╨─────────┴───┴──────────────╨─────────┴───┴───────────────────┘
+ └──────┘ └────────────────────────┘ └─┘ └──────────────────────────┘ └───────────────────────────────┘
+  h-path          keys              count          buffer 1                        buffer 2
+....
+
+コアバッファの行を含む hdata の例:
+
+....
+# コマンド
+hdata buffer:gui_buffers(*)/lines/first_line(*)/data
+
+# 応答
+┌─────────────────────────────┬─────┬────╥──
+│ buffer/lines/line/line_data │ ... │ 50 ║ ...
+└─────────────────────────────┴─────┴────╨──
+ └───────────────────────────┘ └───┘ └──┘
+      h-path (hdata names)     keys  count
+
+   ──╥───────────┬───────────┬───────────┬───────────┬───────╥──
+ ... ║ 0x23cf970 │ 0x23cfb60 │ 0x23d5f40 │ 0x23d8a10 │ ..... ║ ...
+   ──╨───────────┴───────────┴───────────┴───────────┴───────╨──
+      └─────────────────────────────────────────────┘ └─────┘
+                    p-path (pointers)                 objects
+      └─────────────────────────────────────────────────────┘
+                              line 1
+
+   ──╥───────────┬───────────┬───────────┬───────────┬───────╥──────────────┐
+ ... ║ 0x23cf970 │ 0x23cfb60 │ 0x23d6110 │ 0x23d9420 │ ..... ║ ............ │
+   ──╨───────────┴───────────┴───────────┴───────────┴───────╨──────────────┘
+      └─────────────────────────────────────────────┘ └─────┘
+                    p-path (pointers)                 objects
+      └─────────────────────────────────────────────────────┘ └────────────┘
+                              line 2                            lines 3-50
+....
+
+ニックネームリストを含む hdata の例:
+
+....
+# コマンド
+nicklist
+
+# 応答
+┌───────────────────┬──
+│ buffer/nick_group │ ...
+└───────────────────┴──
+ └─────────────────┘
+        h-path
+
+   ──╥───────────────────────────────────────────────────────────┬────╥──
+ ... ║ group:chr,visible:chr,name:str,color:str,prefix:str,(...) │ 12 ║ ...
+   ──╨───────────────────────────────────────────────────────────┴────╨──
+      └─────────────────────────────────────────────────────────┘ └──┘
+                                 keys                             count
+
+   ──╥─────────┬─────────┬───┬───┬──────┬─┬─┬─┬───╥──
+ ... ║ 0x12345 │ 0x6789a │ 1 │ 0 │ root │ │ │ │ 0 ║ ...
+   ──╨─────────┴─────────┴───┴───┴──────┴─┴─┴─┴───╨──
+      └─────────────────┘ └──────────────────────┘
+             p-path               objects
+      └──────────────────────────────────────────┘
+                  group (nicklist root)
+
+   ──╥─────────┬─────────┬───┬───┬───────┬─┬─┬─┬───╥──
+ ... ║ 0x123cf │ 0x678d4 │ 1 │ 0 │ 000|o │ │ │ │ 1 ║ ...
+   ──╨─────────┴─────────┴───┴───┴───────┴─┴─┴─┴───╨──
+      └─────────────────┘ └───────────────────────┘
+             p-path                objects
+      └───────────────────────────────────────────┘
+                    group (channel ops)
+
+   ──╥─────────┬─────────┬───┬───┬──────────┬──────┬───┬────────────┬───╥──
+ ... ║ 0x128a7 │ 0x67ab2 │ 0 │ 1 │ ChanServ │ blue │ @ │ lightgreen │ 0 ║ ...
+   ──╨─────────┴─────────┴───┴───┴──────────┴──────┴───┴────────────┴───╨──
+      └─────────────────┘ └────────────────────────────────────────────┘
+             p-path                          objects
+      └────────────────────────────────────────────────────────────────┘
+                               nick (@ChanServ)
+....
+
+空の hdata の例 (WeeChat のホットリストが空の場合):
+
+....
+# コマンド
+hdata hotlist:gui_hotlist(*)
+
+# 応答
+┌────────┬────────┬───┐
+│ (NULL) │ (NULL) │ 0 │
+└────────┴────────┴───┘
+ └──────┘ └──────┘ └─┘
+  h-path    keys  count
+....
+
+[[object_info]]
+==== インフォ
+
+1 つの _インフォ_ は名前と値を含んでいます (両方とも文字列)。
+
+....
+┌──────┬───────┐
+│ name │ value │
+└──────┴───────┘
+....
+
+* _name_ (文字列): インフォの名前
+* _value_ (文字列): 値
+
+_version_ インフォの例:
+
+....
+┌─────────┬───────────────────┐
+│ version │ WeeChat 0.3.7-dev │
+└─────────┴───────────────────┘
+....
+
+[[object_infolist]]
+==== インフォリスト
+
+1 つの _インフォリスト_ は名前、要素の数、要素
+(変数のセット) を含んでいます。
+
+....
+┌──────┬───────╥────────╥─────╥────────┐
+│ name │ count ║ item 1 ║ ... ║ item N │
+└──────┴───────╨────────╨─────╨────────┘
+....
+
+要素とは:
+
+....
+┌───────╥────────┬────────┬─────────╥─────╥────────┬────────┬─────────┐
+│ count ║ name 1 │ type 1 │ value 1 ║ ... ║ name N │ type N │ value N │
+└───────╨────────┴────────┴─────────╨─────╨────────┴────────┴─────────┘
+....
+
+* _name_ (文字列): インフォリストの名前 (_buffer_、_window_、_bar_、...)
+* _count_ (整数): 要素の数
+* _item_:
+** _count_: 要素に含まれる変数の数
+** _name_: 変数の名前
+** _type_: 変数の型 (_int_、_str_、...)
+** _value_: 変数の値
+
+2 つのバッファ (weechat コアと libera サーバ) を持つインフォリストの例:
+
+....
+# コマンド
+infolist buffer
+
+# 応答
+┌────────┬───╥────┬─────────┬─────┬─────────┬─────╥────┬─────────┬─────┬─────────┬─────┐
+│ buffer │ 2 ║ 42 │ pointer │ ptr │ 0x12345 │ ... ║ 42 │ pointer │ ptr │ 0x6789a │ ... │
+└────────┴───╨────┴─────────┴─────┴─────────┴─────╨────┴─────────┴─────┴─────────┴─────┘
+ └──────┘ └─┘ └──────────────────────────────────┘ └──────────────────────────────────┘
+   name  count              item 1                               item 2
+....
+
+[[object_array]]
+==== 配列
+
+1 つの配列は型 (3 バイト) + オブジェクトの数 (4 バイト表現の整数) + データからなります。
+
+2 つの文字列を持つ配列の例:
+
+....
+┌─────╥────┬────┬────┬────╥────┬────┬────┬────╥────┬────┬────╥────┬────┬────┬────╥────┬────┐
+│ str ║ 00 │ 00 │ 00 │ 02 ║ 00 │ 00 │ 00 │ 03 ║ 61 │ 62 │ 63 ║ 00 │ 00 │ 00 │ 02 ║ 64 │ 65 │ ────► [ "abc", "de" ]
+└─────╨────┴────┴────┴────╨────┴────┴────┴────╨────┴────┴────╨────┴────┴────┴────╨────┴────┘
+ └───┘ └─────────────────┘ └─────────────────┘ └────────────┘ └─────────────────┘ └───────┘
+ type   number of strings        length         'a'  'b'  'c'       length         'd'  'e'
+....
+
+3 つの整数を持つ配列の例:
+
+....
+┌─────╥────┬────┬────┬────╥────┬────┬────┬────╥────┬────┬────┬────╥────┬────┬────┬────┐
+│ int ║ 00 │ 00 │ 00 │ 03 ║ 00 │ 00 │ 00 │ 7B ║ 00 │ 00 │ 01 │ C8 ║ 00 │ 00 │ 03 │ 15 │ ────► [ 123, 456, 789 ]
+└─────╨────┴────┴────┴────╨────┴────┴────┴────╨────┴────┴────┴────╨────┴────┴────┴────┘
+ └───┘ └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘
+ type   number of integers      123 (0x7B)         456 (0x1C8)         789 (0x315)
+....
+
+_NULL_ 配列:
+
+....
+┌─────╥────┬────┬────┬────┐
+│ str ║ 00 │ 00 │ 00 │ 00 │ ────► NULL
+└─────╨────┴────┴────┴────┘
+ └───┘ └─────────────────┘
+ type   number of strings
+....
+
+[[typical_session]]
+== 典型的なセッション
+
+// TRANSLATION MISSING
+....
+    ┌──────────────┐                  ┌────────┐                  ┌─────────┐
+    │ クライアント ├ ─(ネットワーク)─ ┤ リレー ├──────────────────┤ WeeChat │
+    └──────────────┘                  └────────┘                  └─────────┘
+         ║                                 ║                           ║
+         ╟───────────────────────────────► ║                           ║
+         ║ ソケットをオープン              ║ クライアントを追加        ║
+         ║                                 ║                           ║
+         ╟───────────────────────────────► ║                           ║
+         ║ cmd: handshake ...              ║ negotiate algos           ║
+         ║                                 ║ and options               ║
+         ║ ◄───────────────────────────────╢                           ║
+         ║        msg: id: "handshake" ... ║                           ║
+         ║                                 ║                           ║
+         ╟───────────────────────────────► ║                           ║
+         ║ cmd: init password=xxx,...      ║ クライアントを初期化/許可 ║
+         ║                                 ║                           ║
+         ╟───────────────────────────────► ║                           ║
+         ║ cmd: hdata buffer ...           ╟─────────────────────────► ║
+         ║      sync ...                   ║ hdata の要求              ║ hdata
+         ║                                 ║                           ║ の値を読み出し
+         ║                                 ║ ◄─────────────────────────╢
+         ║ ◄───────────────────────────────╢                     hdata ║
+バッファ ║                 msg: hda buffer ║                           ║
+  を作成 ║                                 ║                           ║
+         ║            ........             ║           ........        ║
+         ║                                 ║                           ║
+         ╟───────────────────────────────► ║                           ║
+         ║ cmd: input ...                  ╟─────────────────────────► ║
+         ║                                 ║ バッファにデータを送信    ║ バッファに
+         ║                                 ║                           ║ データを送信
+         ║            ........             ║           ........        ║
+         ║                                 ║                           ║ シグナル
+         ║                                 ║ ◄─────────────────────────╢ の受信
+         ║ ◄───────────────────────────────╢              シグナル XXX ║ (リレー
+バッファ ║          msg: id: "_buffer_..." ║                           ║ がフック)
+  を更新 ║                                 ║                           ║
+         ║            ........             ║           ........        ║
+         ║                                 ║                           ║
+         ╟───────────────────────────────► ║                           ║
+         ║ cmd: ping ...                   ║                           ║
+         ║                                 ║                           ║
+         ║ ◄───────────────────────────────╢                           ║
+    応答 ║            msg: id: "_pong" ... ║                           ║
+    時間 ║                                 ║                           ║
+  を計測 ║            ........             ║           ........        ║
+         ║                                 ║                           ║
+         ╟───────────────────────────────► ║                           ║
+         ║ cmd: quit                       ║ クライアントを切断        ║
+         ║                                 ║                           ║
+....

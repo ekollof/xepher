@@ -1,0 +1,120 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2012-2019 Ryuunosuke Ayanokouzi <i38w7i3@yahoo.co.jp>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// tag::plugin_options[]
+プラグインオプションに関する完全な文書は
+https://weechat.org/doc[WeeChat ユーザーズガイド] のプラグインの章を参照してください。
+
+// TRANSLATION MISSING
+With irc plugin, you can connect to a server with an URL like:
+
+    irc[6][s]://[[nickname][:password]@]server[:port][/#channel1[,#channel2...]]
+
+"mynick" というニックネームで WeeChat IRC チャンネルサポートに参加するには:
+
+    irc://mynick@irc.libera.chat/#weechat
+
+IPv6 アドレスの後にポートを指定するには IPv6
+アドレスを括弧に入れてください、例えば:
+
+    irc://mynick@[2001:db8:0:85a3::ac1f:8001]:6668/#test
+// end::plugin_options[]
+
+// tag::files[]
+$HOME/.config/weechat/weechat.conf::
+    WeeChat の主要設定ファイル
+
+$HOME/.config/weechat/plugins.conf::
+    プラグイン設定ファイル
+
+$HOME/.config/weechat/sec.conf::
+    保護されたデータを含む設定ファイル
+
+$HOME/.config/weechat/alias.conf::
+    _alias_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/buflist.conf::
+    _buflist_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/charset.conf::
+    _charset_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/exec.conf::
+    _exec_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/fifo.conf::
+    _fifo_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/fset.conf::
+    _fset_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/guile.conf::
+    _guile_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/irc.conf::
+    _irc_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/javascript.conf::
+    _javascript_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/logger.conf::
+    _logger_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/lua.conf::
+    _lua_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/perl.conf::
+    _perl_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/php.conf::
+    _php_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/python.conf::
+    _python_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/relay.conf::
+    _relay_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/ruby.conf::
+    _ruby_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/script.conf::
+    _script_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/spell.conf::
+    _spell_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/tcl.conf::
+    _tcl_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/trigger.conf::
+    _trigger_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/typing.conf::
+    _typing_ プラグイン用の設定ファイル
+
+$HOME/.config/weechat/xfer.conf::
+    _xfer_ プラグイン用の設定ファイル
+
+$HOME/.local/share/weechat/weechat.log::
+    WeeChat ログファイル
+// end::files[]
+
+// tag::copyright[]
+WeeChat は Sébastien Helleu さんと貢献者によって作成されています
+(完全なリストは AUTHORS.md ファイルを参照してください)。
+
+// REUSE-IgnoreStart
+著作権 (C) 2003-2025 {author}
+// REUSE-IgnoreEnd
+
+WeeChat はフリーソフトウェアです。あなたはこれを、フリーソフトウェア財団によって発行された
+GNU 一般公衆利用許諾契約書 (バージョン 2 か、希望によってはそれ以降のバージョンのうちどれか)
+の定める条件の下で再頒布または改変することができます。
+
+より詳しい情報は COPYING ファイルを読んでください。
+
+Web: https://weechat.org/
+// end::copyright[]

@@ -1164,6 +1164,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
 
                             auto children = std::unique_ptr<xmpp_stanza_t*[]>(new xmpp_stanza_t*[3 + 1]);
 
+                            weechat_printf(account.buffer,
+                                           "%somemo: [dbg] PEP devicelist from %s — omemo=%s",
+                                           weechat_prefix("network"),
+                                           from ? from : account.jid().data(),
+                                           account.omemo ? "ready" : "NOT ready");
+
                             for (device = xmpp_stanza_get_children(list);
                                  device; device = xmpp_stanza_get_next(device))
                             {
@@ -1178,23 +1184,31 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                 uint32_t dev_id = (uint32_t)strtol(device_id, NULL, 10);
                                 auto fetch_key = std::make_pair(std::string(bundle_target), dev_id);
 
+                                bool already_session = account.omemo && account.omemo.has_session(bundle_target, dev_id);
+                                bool already_inflight = account.omemo && account.omemo.pending_bundle_fetch.count(fetch_key);
+
+                                weechat_printf(account.buffer,
+                                               "%somemo: [dbg]   device %s/%u: has_session=%s in_flight=%s",
+                                               weechat_prefix("network"),
+                                               bundle_target, dev_id,
+                                               already_session ? "yes" : "no",
+                                               already_inflight ? "yes" : "no");
+
                                 // Skip if we already have a session with this device.
-                                if (account.omemo && account.omemo.has_session(bundle_target, dev_id))
+                                if (already_session)
                                     continue;
 
                                 // Skip if a bundle fetch for this device is already in-flight.
-                                if (account.omemo && account.omemo.pending_bundle_fetch.count(fetch_key))
+                                if (already_inflight)
                                     continue;
 
-                                char bundle_node[128] = {0};
-                                snprintf(bundle_node, sizeof(bundle_node),
-                                         "eu.siacs.conversations.axolotl.bundles:%s",
-                                         device_id);
+                                std::string bundle_node = fmt::format(
+                                    "eu.siacs.conversations.axolotl.bundles:{}", device_id);
 
                                 children[1] = NULL;
                                 children[0] =
                                 stanza__iq_pubsub_items(account.context, NULL,
-                                                        bundle_node);
+                                                        bundle_node.c_str());
                                 children[0] =
                                 stanza__iq_pubsub(account.context, NULL, children.get(),
                                                   with_noop("http://jabber.org/protocol/pubsub"));
@@ -1212,6 +1226,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
                                     account.omemo.pending_bundle_fetch.insert(fetch_key);
                                 }
                                 // freed by uuid_g
+
+                                weechat_printf(account.buffer,
+                                               "%somemo: [dbg]   → fetching bundle for %s/%u (IQ id=%s)",
+                                               weechat_prefix("network"),
+                                               bundle_target, dev_id, uuid ? uuid : "(null)");
 
                                 account.connection.send(children[0]);
                                 xmpp_stanza_release(children[0]);
@@ -4950,13 +4969,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
                             // Always publish: ensures our device ID stays in the list
                             // and re-adds it if the server dropped it.
                             weechat::account::device dev;
-                            char id[64] = {0};
 
                             account.devices.clear();
 
                             dev.id = account.omemo.device_id;
-                            snprintf(id, sizeof(id), "%d", dev.id);
-                            dev.name = id;
+                            dev.name = fmt::format("{}", dev.id);
                             dev.label = "weechat";
                             account.devices.emplace(dev.id, dev);
 

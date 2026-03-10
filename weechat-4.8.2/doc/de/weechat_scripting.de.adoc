@@ -1,0 +1,1205 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2010-2025 Nils Görs <weechatter@arcor.de>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= WeeChat Scripting Guide
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: de
+include::includes/attributes-de.adoc[]
+
+Diese Anleitung beschreibt den WeeChat Chat Client und ist Teil von WeeChat.
+
+Die neueste Version dieses Dokuments finden Sie unter
+https://weechat.org/doc/[this page ^↗^^].
+
+[[introduction]]
+== Einleitung
+
+WeeChat (Wee Enhanced Environment for Chat) ist ein freier, schneller und
+schlanker Chat-Client der für verschiedene Betriebssysteme entwickelt wird.
+
+Dieses Handbuch beschreibt wie man Skripten für WeeChat schreiben kann. Dabei
+werden folgende Programmiersprachen unterstützt:
+
+* Python
+* Perl
+* Ruby
+* Lua
+* Tcl
+* Guile (Scheme)
+* JavaScript
+* PHP
+
+[NOTE]
+Fast alle Beispiele in dieser Dokumentation sind für Python erstellt.
+Allerdings ist die API für alle Skriptsprachen nahezu identisch.
+
+[[scripts_in_weechat]]
+== Skripten in WeeChat
+
+[[weechat_architecture]]
+=== WeeChat Architektur
+
+WeeChat ist einzelprozeßgestützt (Single-Threaded) und dies gilt ebenso für Skripten.
+
+Der Code eines Skripts wird ausgeführt:
+
+* wenn das Skript geladen wird: typischer Weise durch einen Aufruf von
+  <<register_function,Register Funktion>>
+* wenn ein hook Callback von WeeChat aufgerufen wird (siehe Kapitel <<hooks,Hooks>>).
+
+Sobald der Code eines Skripts ausgeführt wird wartet WeeChat bis zum Ende der
+Ausführung, bevor fortgefahren wird. Deshalb dürfen innerhalb des Skripts *KEINE*
+blockierende Operationen ausgeführt werden wie zum Beispiel Netzwerkaufrufe,
+ohne die dafür vorgesehene API-Funktion zu verwenden, `+hook_process+`.
+
+[IMPORTANT]
+Ein Skript darf *NIEMALS* einen fork nutzen oder einen eigenen Thread erstellen,
+dafür gibt es explizit eine API Funktion, andernfalls kann WeeChat abstürzen. +
+Wenn etwas in einem Hintergrundprozess ausgeführt werden soll, kann die Funktion
+`+hook_process+` genutzt werden. Siehe Beispiele im Kapitel <<hook_process,Hintergrundprozesse>>
+und die Dokumentation für die Funktion `+hook_process+` in link:weechat_plugin_api.en.html#_hook_process[WeeChat plugin API reference ^↗^^] (Englisch).
+
+[[languages_specificities]]
+=== Besonderheiten der einzelnen Skriptsprachen
+
+[[language_python]]
+==== Python
+
+[[python_module]]
+===== Module
+
+WeeChat definiert ein `weechat` Module welches mittels `import weechat`
+importiert werden muss. +
+Ein Python-Stub für die WeeChat-API ist im Repository verfügbar:
+https://raw.githubusercontent.com/weechat/weechat/main/src/plugins/python/weechat.pyi[weechat.pyi ^↗^^].
+
+[[python_functions]]
+===== Funktionen
+
+Funktionen werden aufgerufen mittels `+weechat.xxx(arg1, arg2, ...)+`.
+
+Die Funktionen `+print*+` werden bei python durch `+prnt*+` ersetzt
+(`print` war ein reserviertes Schlüsselwort unter Python 2).
+
+[[python_strings]]
+===== In Callbacks empfangene Zeichen
+
+Mit Python 3 und WeeChat ≥ 2.7 sind die Zeichenketten in Callbacks
+vom Typ `str`, sofern die Zeichenketten gültige UTF-8 Daten enthalten
+(was am häufigsten zutreffen sollte), oder vom Typ `bytes` falls
+die Zeichenkette keine gültigen UTF-8 Daten enthält. Deshalb sollte
+im Callback darauf geachtet werden das ungültige UTF-8 Daten
+empfangen werden können.
+
+In folgenden Fällen können einige ungültige UTF-8-Daten empfangen werden,
+sodass im Callback Zeichenketten vom Typ `str` oder `bytes` (diese
+Liste ist nicht vollständig):
+
+[width="100%",cols="3m,3m,3m,8",options="header"]
+|===
+| API Funktion | Argumente | Beispiele| Beschreibung
+
+| hook_modifier
+| irc_in_yyy
+| pass:[irc_in_privmsg] +
+  pass:[irc_in_notice]
+| Eine Nachricht die von der IRC Erweiterung empfangen wurde und bevor sie nach UTF-8 dekodiert wurde (intern
+  verwendet). +
+  +
+  Es wird empfohlen den Modifier `+irc_in2_yyy+` zu nutzen, da die empfangene Zeichenkette
+  immer UTF-8 gültig ist. +
+  siehe Funktion `+hook_modifier+` in der
+  link:weechat_plugin_api.en.html#_hook_modifier[WeeChat Anleitung für API Erweiterung ^↗^^].
+
+| hook_signal
+| xxx,irc_out_yyy +
+  xxx,irc_outtags_yyy
+| pass:[*,irc_out_privmsg] +
+  pass:[*,irc_out_notice] +
+  pass:[*,irc_outtags_privmsg] +
+  pass:[*,irc_outtags_notice]
+| Eine Nachricht welche von der IRC Erweiterung versendet wurde, nachdem diese entsprechend
+  der Benutzereinstellung  `encode` Charset kodiert (falls abweichend von der `UTF-8` Standardeinstellung). +
+  +
+  Es wird empfohlen das Signal `+xxx,irc_out1_yyy+` zu nutzen, da die empfangene Zeichenkette
+  immer UTF-8 gültig ist. +
+  siehe Funktion `+hook_signal+` in der
+  link:weechat_plugin_api.en.html#_hook_signal[WeeChat Anleitung für API Erweiterung ^↗^^].
+
+| hook_process +
+  hook_process_hashtable
+| -
+| -
+| Ausgabe des Befehls, dass an den Callback gesendet wurde, kann ungültige UTF-8 Daten enthalten.
+
+|===
+
+[[language_perl]]
+==== Perl
+
+[[perl_functions]]
+===== Funktionen
+
+Funktionen werden aufgerufen mittels `+weechat::xxx(arg1, arg2, ...);+`.
+
+[[language_ruby]]
+==== Ruby
+
+[[ruby_init]]
+===== Initialization
+
+Es muss _weechat_init_ definiert werden und darin dann _register_ ausgeführt werden.
+
+[[ruby_functions]]
+===== Functions
+
+Funktionen werden aufgerufen mittels `+Weechat.xxx(arg1, arg2, ...)+`.
+
+Aufgrund einer Beschränkung von Ruby (maximal 15 Argumente pro Funktion), empfängt
+die Funktion `+Weechat.config_new_option+` ein Callback mit einem Array von 6 Zeichenketten
+(3 Callbacks + 3 Datenzeichenketten), so sieht ein Aufruf dieser Funktion aus:
+
+[source,ruby]
+----
+Weechat.config_new_option(config, section, "name", "string", "description of option", "", 0, 0,
+                          "value", "value", 0, ["check_cb", "", "change_cb", "", "delete_cb", ""])
+----
+
+und die Funktion `+Weechat.bar_new+` erwartet die Farben in einem Array von 4 Zeichenketten
+(color_fg, color_delim, color_bg, color_bg_inactive). Ein Aufruf dieser Funktion sieht also
+folgendermaßen aus:
+
+[source,ruby]
+----
+Weechat.bar_new("name", "off", "0", "window", "", "left", "vertical", "vertical", "0", "0",
+                ["default", "default", "default", "default"], "0", "items")
+----
+
+[[language_lua]]
+==== Lua
+
+[[lua_functions]]
+===== Funktionen
+
+Funktionen werden aufgerufen mittels `+weechat.xxx(arg1, arg2, ...)+`.
+
+[[language_tcl]]
+==== Tcl
+
+[[tcl_functions]]
+===== Funktionen
+
+Funktionen werden aufgerufen mittels `+weechat::xxx arg1 arg2 ...+`.
+
+[[tcl_null]]
+===== Nullwerte
+
+Da Tcl nur String-Typen nutzt, gibt es keinen Null-Typ, der als Argument übergeben
+werden kann wenn eine Funktion Nullwerte akzeptiert, oder als Argument in einem
+Callback zu erhalten Funktion. Um dies zu umgehen, definiert die WeeChat-API die
+Konstante `$::weechat::WEECHAT_NULL`, welches als Nullwert fungiert. Diese Konstante
+ist festgelegt und lautet `\uFFFF\uFFFF\uFFFFWEECHAT_NULL\uFFFF\uFFFF\uFFFF`,
+es ist also sehr unwahrscheinlich das dies ungewollt genutzt wird.
+
+Sie können diese Konstante übergeben, wenn eine Funktion NULL als Argument akzeptiert
+und Sie erhält es als Wert eines Arguments in einer Callback-Funktion zurück, wenn
+der Wert des Arguments NULL ist. Um zu sehen, welche Funktionen Nullwerte akzeptieren
+und Nullwerte in Rückrufen übergeben, schauen Sie sich die Python-Prototypen an
+link:weechat_plugin_api.en.html[WeeChat plugin API reference ^↗^^].
+
+[[language_guile]]
+==== Guile (Scheme)
+
+[[guile_functions]]
+===== Funktionen
+
+Funktionen werden aufgerufen mittels `+(weechat:xxx arg1 arg2 ...)+`.
+
+Die folgenden Funktionen verwenden eine Liste von Argumenten (anstelle vieler Argumente
+für andere Funktionen), da die Anzahl der Argumente die zulässige Anzahl in Guile
+überschreiten würde:
+
+* config_new_section
+* config_new_option
+* bar_new
+
+[[language_javascript]]
+==== JavaScript
+
+[[javascript_functions]]
+===== Funktionen
+
+Funktionen werden aufgerufen mittels `+weechat.xxx(arg1, arg2, ...);+`.
+
+[[language_php]]
+==== PHP
+
+[[php_functions]]
+===== Functions
+
+Funktionen werden aufgerufen mittels `+weechat_xxx(arg1, arg2, ...);+`.
+
+[[register_function]]
+=== Die "Register" Funktion
+
+Ein WeeChat-Skript muss sich bei WeeChat "registrieren". Dazu muss das Skript
+zuerst die "register" Funktion ausführen.
+
+Prototyp (Python):
+
+[source,python]
+----
+def register(name: str, author: str, version: str, license: str, description: str, shutdown_function: str, charset: str) -> int: ...
+----
+
+Argumente:
+
+* _name_: interner Name des Skripts (String)
+* _author_: Name des Authors (String)
+* _version_: Version des Skripts (String)
+* _license_: Lizenz für das Skripts (String)
+* _description_: kurze Beschreibung des Skripts (String)
+* _shutdown_function_: Name der Funktion die beim Beenden des Skripts aufgerufen werden soll
+  (String, kann auch eine leere Zeichenkette sein)
+* _charset_: Skript Zeichensatz (optional, liegt das Skript im UTF-8 Format vor kann dieser Wert
+  leer bleiben. UTF-8 ist der Standardzeichensatz) (String)
+
+Beispielskripten, für jede Sprache:
+
+* Python:
+
+[source,python]
+----
+import weechat
+
+weechat.register("test_python", "FlashCode", "1.0", "GPL3", "Test Skript", "", "")
+weechat.prnt("", "Hallo, von einem python Skript!")
+----
+
+* Perl:
+
+[source,perl]
+----
+weechat::register("test_perl", "FlashCode", "1.0", "GPL3", "Test Skript", "", "");
+weechat::print("", "Hallo, von einem perl Skript!");
+----
+
+* Ruby:
+
+[source,ruby]
+----
+def weechat_init
+  Weechat.register("test_ruby", "FlashCode", "1.0", "GPL3", "Test Skript", "", "")
+  Weechat.print("", "Hallo, von einem ruby Skript!")
+  return Weechat::WEECHAT_RC_OK
+end
+----
+
+* Lua:
+
+[source,lua]
+----
+weechat.register("test_lua", "FlashCode", "1.0", "GPL3", "Test Skript", "", "")
+weechat.print("", "Hallo, von einem lua Skript!")
+----
+
+* Tcl:
+
+[source,tcl]
+----
+weechat::register "test_tcl" "FlashCode" "1.0" "GPL3" "Test Skript" "" ""
+weechat::print "" "Hallo, von einem tcl Skript!"
+----
+
+* Guile (Scheme):
+
+[source,lisp]
+----
+(weechat:register "test_scheme" "FlashCode" "1.0" "GPL3" "Test script" "" "")
+(weechat:print "" "Hallo, von einem scheme Skript!")
+----
+
+* JavaScript:
+
+[source,javascript]
+----
+weechat.register("test_js", "FlashCode", "1.0", "GPL3", "Test Skript", "", "");
+weechat.print("", "Hallo, von einem javascript Skript!");
+----
+
+* PHP:
+
+[source,php]
+----
+weechat_register('test_php', 'FlashCode', '1.0', 'GPL3', 'Test Skript', '', '');
+weechat_print('', 'Hallo, von einem PHP Skript!');
+----
+
+[[load_script]]
+=== Laden von Skripten
+
+Es wird empfohlen die "script" Erweiterung zum Laden von Skripten zu
+nutzen, zum Beispiel:
+
+----
+/script load script.py
+/script load script.pl
+/script load script.rb
+/script load script.lua
+/script load script.tcl
+/script load script.scm
+/script load script.js
+/script load script.php
+----
+
+Es besteht natürlich weiterhin die Möglichkeit, individuell für jede
+Skriptsprache, den entsprechenden Befehl zu nutzen:
+
+----
+/python load script.py
+/perl load script.pl
+/ruby load script.rb
+/lua load script.lua
+/tcl load script.tcl
+/guile load script.scm
+/javascript load script.js
+/php load script.php
+----
+
+Um Skripten automatisch beim Start von WeeChat zu laden sollte man einen Link
+anlegen, der in das Verzeichnis _Skriptsprache/autoload_ zeigt.
+
+Ein Beispiel für ein Python-Skript:
+
+[source,shell]
+----
+cd ~/.local/share/weechat/python/autoload
+ln -s ../script.py
+----
+
+[NOTE]
+Installiert man mittels `/script install` ein Skript, dann wird automatisch
+ein Link in das entsprechende _autoload_ Verzeichnis erzeugt.
+
+[[differences_with_c_api]]
+== Unterschiede zur C API
+
+Die Skripten API ist nahezu identisch mit der API der C Erweiterung.
+Um einen Überblick über alle API Funktionen (Prototyp, Argumente,
+Rückgabe werte, Beispiele) zu erhalten werfen Sie einen Blick in
+die link:weechat_plugin_api.en.html[WeeChat Plugin API Reference ^↗^^] (Englisch).
+Es ist wichtig das man zwischen einer _Erweiterung_ und einem _Skript_
+unterscheidet: Eine _Erweiterung_ ist eine Binärdatei die kompiliert wurde
+und mittels `/plugin` geladen wird. Ein _Skript_ ist eine Textdatei welche
+durch eine Erweiterung z.B. _python_ mittels dem Befehl `/python` geladen
+wird.
+Falls Ihr Skript _test.py_ eine WeeChat API Funktion aufruft wird der Aufruf
+wie folgt abgearbeitet:
+
+....
+               ┌──────────────────────┐        ╔══════════════════╗
+               │  python Erweiterung  │        ║  WeeChat "core"  ║
+               ├────────────┬─────────┤        ╟─────────┐        ║
+test.py ─────► │ Skript API │  C API  │ ─────► ║  C API  │        ║
+               └────────────┴─────────┘        ╚═════════╧════════╝
+....
+
+Gibt WeeChat einen Rückgabewert an Ihr Skript _test.py_ zurück, dann wird der
+Aufruf in umgekehrter Reihenfolge abgearbeitet:
+
+....
+╔══════════════════╗        ┌──────────────────────┐
+║  WeeChat "core"  ║        │  python Erweiterung  │
+║        ┌─────────╢        ├─────────┬────────────┤
+║        │  C API  ║ ─────► │  C API  │ Skript API │ ─────► test.py
+╚════════╧═════════╝        └─────────┴────────────┘
+....
+
+[[pointers]]
+=== Pointer
+
+Wie Sie vermutlich wissen existieren in Skripten keine "Pointer". Sendet nun
+die API Funktion einen Pointer als Rückgabewert an das Skript, dann wird der
+Pointer in einen String konvertiert.
+
+Beispiel: Falls eine Funktion den Pointer 0x1234ab56 zurück gibt erhält das
+Skript einen String in der Form "0x1234ab56".
+
+Erwartet die API Funktion als Argument einen Pointer, dann muss das Skript diesen
+Pointer als String übergeben. Die C Erweiterung konvertiert den String in einen
+echten Pointer bevor die C API Funktion ausgeführt wird.
+
+Ein leerer String oder "0x0" sind hierbei erlaubt. Beides wird in C als NULL interpretiert.
+Im folgenden ein Beispiel um Daten im Core Buffer (WeeChat Hauptbuffer) auszugeben:
+
+[source,python]
+----
+weechat.prnt("", "Hi!")
+----
+
+[WARNING]
+In vielen Funktionen wird aus Gründen der Geschwindigkeit darauf verzichtet
+die Pointer auf ihre Korrektheit zu überprüfen. Es obliegt Ihrer Verantwortung
+einen gültigen Pointer zu übergeben. Sollten Sie dies nicht beachten dann werden
+Sie mit einem netten Crash-Report belohnt ;)
+
+[[callbacks]]
+=== Callbacks
+
+Beinahe alle WeeChat Callbacks müssen entweder WEECHAT_RC_OK oder WEECHAT_RC_ERROR als
+Ergebnis zurück liefern. Eine Ausnahme bildet das modifier Callback, hier wird ein
+String als Rückgabewert erwartet.
+
+C-Callbacks verwenden die Argumente "callback_pointer" und "callback_data", welche Zeiger sind.
+In der Skript-API gibt es nur "callback_data" (oder "data") und es handelt sich dabei um eine Zeichenfolge
+anstelle eines Zeigers.
+
+callback Beispiele, für jede Skriptsprache:
+
+* Python:
+
+[source,python]
+----
+def timer_cb(data, remaining_calls):
+    weechat.prnt("", "timer! data=%s" % data)
+    return weechat.WEECHAT_RC_OK
+
+weechat.hook_timer(1000, 0, 1, "timer_cb", "test")
+----
+
+* Perl:
+
+[source,perl]
+----
+sub timer_cb {
+    my ($data, $remaining_calls) = @_;
+    weechat::print("", "timer! data=$data");
+    return weechat::WEECHAT_RC_OK;
+}
+
+weechat::hook_timer(1000, 0, 1, "timer_cb", "test");
+----
+
+* Ruby:
+
+[source,ruby]
+----
+def timer_cb(data, remaining_calls)
+  Weechat.print("", "timer! data=#{data}");
+  return Weechat::WEECHAT_RC_OK
+end
+
+Weechat.hook_timer(1000, 0, 1, "timer_cb", "test");
+----
+
+* Lua:
+
+[source,lua]
+----
+function timer_cb(data, remaining_calls)
+    weechat.print("", "timer! data="..data)
+    return weechat.WEECHAT_RC_OK
+end
+
+weechat.hook_timer(1000, 0, 1, "timer_cb", "test")
+----
+
+* Tcl:
+
+[source,tcl]
+----
+proc timer_cb { data remaining_calls } {
+    weechat::print {} "timer! data=$data"
+    return $::weechat::WEECHAT_RC_OK
+}
+
+weechat::hook_timer 1000 0 1 timer_cb test
+----
+
+* Guile (Scheme):
+
+[source,lisp]
+----
+(define (timer_cb data remaining_calls)
+  (weechat:print "" (string-append "timer! data=" data))
+  weechat:WEECHAT_RC_OK
+)
+
+(weechat:hook_timer 1000 0 1 "timer_cb" "test")
+----
+
+* JavaScript:
+
+[source,javascript]
+----
+function timer_cb(data, remaining_calls) {
+    weechat.print("", "timer! data=" + data);
+    return weechat.WEECHAT_RC_OK;
+}
+
+weechat.hook_timer(1000, 0, 1, "timer_cb", "test");
+----
+
+* PHP:
+
+[source,php]
+----
+$timer_cb = function ($data, $remaining_calls) {
+    weechat_print('', 'timer! data=' . $data);
+    return WEECHAT_RC_OK;
+};
+
+weechat_hook_timer(1000, 0, 1, $timer_cb, 'test');
+----
+
+[[script_api]]
+== Skript API
+
+Um weiterführende Informationen zu den API Funktionen zu erhalten
+lesen Sie bitte link:weechat_plugin_api.en.html[WeeChat Plugin API Reference ^↗^^] (Englisch).
+
+[[script_api_functions]]
+=== Funktionen
+
+Liste der Skript API Funktionen:
+
+include::{autogendir}/autogen_scripting_functions.de.adoc[tag=functions]
+
+[[script_api_constants]]
+=== Konstanten
+
+Liste der Konstanten in Skript API:
+
+include::{autogendir}/autogen_scripting_constants.de.adoc[tag=constants]
+
+[[common_tasks]]
+== Gemeinschaftsaufgabe
+
+Dieses Kapitel beinhaltet einige Aufgaben mit Lösungsbeispielen.
+Die Skript API wird dabei nur sehr oberflächlich besprochen.Um eine vollständige
+Übersicht aller Befehle zu erhalten nutzen Sie bitte die
+link:weechat_plugin_api.en.html[WeeChat Plugin API Reference ^↗^^] (Englisch).
+
+[[buffers]]
+=== Buffer
+
+[[buffers_display_messages]]
+==== Nachrichten anzeigen
+
+Eine leere Zeichenkette wird häufig verwendet um den WeeChat Core Buffer zu nutzen.
+Möchten Sie einen anderen Buffer nutzen dann muss der Pointer des entsprechenden Buffers
+verwendet werden (Übergabe als String, siehe <<pointers,Pointer>>).
+
+Beispiele:
+
+[source,python]
+----
+# Gibt den Text "Hallo" im Core Buffer aus
+weechat.prnt("", "Hallo")
+
+# Gibt den Text "Hallo" im Core Buffer aus, schreibt diesen aber nicht in die Protokolldatei
+# (nur Version ≥ 0.3.3)
+weechat.prnt_date_tags("", 0, "no_log", "hello")
+
+# Gibt den Präfix "==>" gefolgt von dem Text "Hallo" im aktuellen Buffer aus
+# (Präfix und Text müssen durch ein Tab getrennt werden)
+weechat.prnt(weechat.current_buffer(), "==>\tHallo")
+
+# Gibt eine Fehlermeldung im Core Buffer aus (mit Präfix für Fehler)
+weechat.prnt("", "%sfalsche Anzahl an Argumenten" % weechat.prefix("error"))
+
+# Gibt eine farbige Nachricht im Core Buffer aus
+weechat.prnt("", "Text %sGeld auf Blau" % weechat.color("yellow,blue"))
+
+# sucht einen bestimmten Buffer und gibt dort einen Text aus
+# (der Name des Buffers muss folgendes Format besitzen Erweiterung.Name, Beispiel: "irc.libera.#weechat")
+buffer = weechat.buffer_search("irc", "libera.#weechat")
+weechat.prnt(buffer, "Nachricht im #weechat Channel")
+
+# die zweite Möglichkeit einen Buffer zu suchen (empfohlen!)
+# (bitte beachten Sie dass der Server- und Channelname durch ein Komma zu trennen sind)
+buffer = weechat.info_get("irc_buffer", "libera,#weechat")
+weechat.prnt(buffer, "Nachricht im #weechat Channel")
+----
+
+[NOTE]
+Die Print-Funktion lautet unter Python `prnt` und `print` in den anderen Sprachen.
+
+[[buffers_send_text]]
+==== Text in einen Buffer senden
+
+Sie können einen Text oder einen Befehl in einen Buffer senden. Dies entspricht exakt dem
+Verhalten als ob Sie einen Text oder einen Befehl in die Befehlszeile eingeben und selbigen
+mit der [Eingabe] Taste bestätigen.
+
+Beispiele:
+
+[source,python]
+----
+# führt den Befehl "/help" im aktuellen Buffer aus (die Ausgabe erfolgt im Core-Buffer)
+weechat.command("", "/help")
+
+# sendet den Text "Hallo" in den IRC Channel #weechat (die Teilnehmer des Channels sehen diese Nachricht)
+buffer = weechat.info_get("irc_buffer", "libera,#weechat")
+weechat.command(buffer, "Hallo")
+----
+
+[[buffers_new]]
+==== neuen Buffer öffnen
+
+Sie können aus Ihrem Skript einen neuen Buffer öffnen um dort Nachrichten auszugeben.
+
+Zwei Callbacks können aufgerufen werden (diese sind optional): der erste Callback dient dazu
+eine Routine aufzurufen sobald ein Text eingegeben und mit [Enter] bestätigt wird. Der zweite
+Callback ruft eine Routine auf die beim Schließen des Buffers ausgeführt wird (zum Beispiel
+wenn `/buffer close` genutzt wurde).
+
+Beispiele:
+
+[source,python]
+----
+# Callback falls Daten aus der Eingabezeile empfangen wurden
+def buffer_input_cb(data, buffer, input_data):
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+# Callback falls der Buffer geschlossen wurde
+def buffer_close_cb(data, buffer):
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+# neuen Buffer öffnen
+buffer = weechat.buffer_new("Mein_Buffer", "buffer_input_cb", "", "buffer_close_cb", "")
+
+# Überschrift für Buffer bestimmen
+weechat.buffer_set(buffer, "Titel", "Dies ist die Überschrift für meinen Buffer")
+
+# deaktiviert die Protokollierung. Dazu wird die lokale Variable "no_log" auf "1" gesetzt
+weechat.buffer_set(buffer, "localvar_set_no_log", "1")
+----
+
+[[buffers_properties]]
+==== Eigenschaften von Buffern
+
+Die verschiedenen Eigenschaften von Buffern können in Form eines Strings, Integer oder als Pointer
+vorliegen und gelesen werden.
+
+Beispiele:
+
+[source,python]
+----
+buffer = weechat.current_buffer()
+
+nummer = weechat.buffer_get_integer(buffer, "number")
+name = weechat.buffer_get_string(buffer, "name")
+kurz_name = weechat.buffer_get_string(buffer, "short_name")
+----
+
+Es ist möglich lokale Variablen eines Buffers hinzuzufügen, zu
+lesen oder zu löschen:
+
+[source,python]
+----
+# lokale Variable hinzufügen
+weechat.buffer_set(buffer, "localvar_set_meinevariable", "mit_meinem_Wert")
+
+# lokale Variable lesen
+meine_variable = weechat.buffer_get_string(buffer, "localvar_meinevariable")
+
+# lokale Variable löschen
+weechat.buffer_set(buffer, "localvar_del_meinevariable", "")
+----
+
+Um zu sehen welche lokalen Variablen für einen Buffer gesetzt sind führen Sie
+bitte in WeeChat folgenden Befehl aus:
+
+----
+/buffer listvar
+----
+
+[[hooks]]
+=== Hooks
+
+[[hook_command]]
+==== neuen Befehl hinzufügen
+
+Erstellt mittels `+hook_command+` einen benutzerdefinierten Befehl. Dabei kann
+eine benutzerdefinierte Vervollständigung der Argumente genutzt werden.
+
+Beispiel:
+
+[source,python]
+----
+def mein_befehl_cb(data, buffer, args):
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+hook = weechat.hook_command("meinfilter", "Beschreibung meines Filters",
+    "[list] | [enable|disable|toggle [name]] | [add name plugin.buffer tags regex] | [del name|-all]",
+    "Beschreibung der Argumente...",
+    "list"
+    " || enable %(filters_names)"
+    " || disable %(filters_names)"
+    " || toggle %(filters_names)"
+    " || add %(filters_names) %(buffers_plugins_names)|*"
+    " || del %(filters_names)|-all",
+    "mein_befehl_cb", "")
+----
+
+Der Befehl wird dann in WeeChat wie folgt genutzt:
+
+----
+/help meinfilter
+
+/meinfilter Argumente...
+----
+
+[[hook_timer]]
+==== Nutzung des Timers
+
+Mittels `+hook_timer+` wird eine Zeitfunktion implementiert.
+
+Beispiele:
+
+[source,python]
+----
+def timer_cb(data, remaining_calls):
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+# Timer wird jede Minute aufgerufen (wenn die Sekunden auf 00 springen)
+weechat.hook_timer(60 * 1000, 60, 0, "timer_cb", "")
+----
+
+[[hook_process]]
+==== Hintergrundprozesse
+
+Mit der Funktion `+hook_process+` kann ein Hintergrundprozess gestartet werden.
+Der Callback wird aufgerufen sobald der Hintergrundprozess abgearbeitet wurde.
+Dies kann auch mehrfach der Fall sein.
+
+Für den letzten Aufruf des Callback wird _return_code_ auf 0 oder einen positiven
+Wert gesetzt. Dies ist der Return Code des Befehls.
+
+Beispiele:
+
+[source,python]
+----
+def my_process_cb(data, command, return_code, out, err):
+    if return_code == weechat.WEECHAT_HOOK_PROCESS_ERROR:
+        weechat.prnt("", "Error with command '%s'" % command)
+        return weechat.WEECHAT_RC_OK
+    if return_code >= 0:
+        weechat.prnt("", "return_code = %d" % return_code)
+    if out:
+        weechat.prnt("", "stdout: %s" % out)
+    if err:
+        weechat.prnt("", "stderr: %s" % err)
+    return weechat.WEECHAT_RC_OK
+
+weechat.hook_process("/bin/ls -l /etc", 10 * 1000, "my_process_cb", "")
+----
+
+Sie können statt eines externen Befehls auch direkt eine
+Skriptfunktion aufrufen, die Weechat blockieren würde:
+
+[source,python]
+----
+def get_status(data):
+    # do something blocking...
+    # ...
+    return "this is the result"
+
+def my_process_cb(data, command, return_code, out, err):
+    if return_code == weechat.WEECHAT_HOOK_PROCESS_ERROR:
+        weechat.prnt("", "Error with command '%s'" % command)
+        return weechat.WEECHAT_RC_OK
+    if return_code >= 0:
+        weechat.prnt("", "return_code = %d" % return_code)
+    if out:
+        weechat.prnt("", "stdout: %s" % out)
+    if err:
+        weechat.prnt("", "stderr: %s" % err)
+    return weechat.WEECHAT_RC_OK
+
+hook = weechat.hook_process("func:get_status", 5000, "my_process_cb", "")
+----
+
+[[url_transfer]]
+==== URL Übertragung
+
+_Neu seit Version 0.3.7._
+
+Um URLs herunterzuladen (oder um etwas zu einer URL zu senden), muss die Funktion
+`+hook_process+` genutzt werden. Müssen zusätzliche Optionen gesetzt werden, für
+einen URL Transfer, kommt die Funktion `+hook_process_hashtable+` zum Einsatz.
+
+Beispiel eines URL Transfers, ohne zusätzliche Optionen: Die HTML Seite wird
+dabei in der Callback-Variable "out" gesichert (Standardausgabe des Prozesses):
+
+[source,python]
+----
+# Display latest stable version of WeeChat.
+weechat_latest_version = ""
+
+def weechat_process_cb(data, command, return_code, out, err):
+    global weechat_latest_version
+    if out:
+        weechat_latest_version += out
+    if return_code >= 0:
+        weechat.prnt("", "Latest WeeChat version: %s" % weechat_latest_version)
+    return weechat.WEECHAT_RC_OK
+
+weechat.hook_process("url:https://weechat.org/dev/info/stable/",
+                     30 * 1000, "weechat_process_cb", "")
+----
+
+[TIP]
+Alle verfügbaren Informationen über WeeChat findet man unter
+https://weechat.org/dev/info/[this page ^↗^^].
+
+Beispiel eines URL Transfers, mit zusätzliche Optionen: Es wird das neuste
+WeeChat Entwicklerpaket in die Datei _/tmp/weechat-devel.tar.gz_ gesichert:
+
+[source,python]
+----
+def my_process_cb(data, command, return_code, out, err):
+    if return_code >= 0:
+        weechat.prnt("", "End of transfer (return code = %d)" % return_code)
+    return weechat.WEECHAT_RC_OK
+
+weechat.hook_process_hashtable("url:https://weechat.org/files/src/weechat-devel.tar.gz",
+                               {"file_out": "/tmp/weechat-devel.tar.gz"},
+                               30 * 1000, "my_process_cb", "")
+----
+
+Für weitere Informationen zum URL Transfer und verfügbare Optionen, siehe Funktionen
+`+hook_process+` und `+hook_process_hashtable+` in
+link:weechat_plugin_api.en.html#_hook_process[WeeChat plugin API reference ^↗^^] (Englisch).
+
+[[config_options]]
+=== Konfiguration / Optionen
+
+[[config_options_set_script]]
+==== Optionen von Skripten setzen
+
+Die Funktion `+config_is_set_plugin+` wird dazu benutzt um zu testen ob eine Option
+gesetzt ist oder nicht. Mit der Funktion `+config_set_plugin+` wird eine Option gesetzt.
+
+Beispiele:
+
+[source,python]
+----
+skript_optionen = {
+    "Option1": "Wert1",
+    "Option2": "Wert2",
+    "Option3": "Wert3",
+}
+for option, standardwert in skript_optionen.items():
+    if not weechat.config_is_set_plugin(option):
+        weechat.config_set_plugin(option, standardwert)
+----
+
+[[config_options_detect_changes]]
+==== Veränderungen bemerken
+
+Die Funktion `+hook_config+` wird dazu benutzt um festzustellen falls ein Anwender
+eine Option des Skripts verändert hat.
+
+Beispiele:
+
+[source,python]
+----
+SKRIPT_NAME = "meinskript"
+
+# ...
+
+def config_cb(data, option, value):
+    """Callback welcher genutzt wird wenn eine Option verändert wurde."""
+    # zum Beispiel werden hier alle Optionen des Skripts in die entsprechenden Variablen geschrieben...
+    # ...
+    return weechat.WEECHAT_RC_OK
+
+# ...
+
+weechat.hook_config("plugins.var.python." + SKRIPT_NAME + ".*", "config_cb", "")
+# für die jeweilige Programmiersprache muss "python" durch perl/ruby/lua/tcl/guile/javascript ersetzt werden.
+----
+
+[[config_options_weechat]]
+==== WeeChat Optionen lesen
+
+Die Funktion `+config_get+` gibt einen Pointer zu einer Option zurück. Abhängig vom Typ der Option
+muss entweder `+config_string+`, `+config_boolean+`, `+config_integer+` oder `+config_color+` genutzt werden.
+
+[source,python]
+----
+# string
+weechat.prnt("", "Wert der Option weechat.look.item_time_format ist: %s"
+                 % (weechat.config_string(weechat.config_get("weechat.look.item_time_format"))))
+
+# boolean
+weechat.prnt("", "Wert der Option weechat.look.day_change ist: %d"
+                 % (weechat.config_boolean(weechat.config_get("weechat.look.day_change"))))
+
+# integer
+weechat.prnt("", "Wert der Option weechat.look.scroll_page_percent ist: %d"
+                 % (weechat.config_integer(weechat.config_get("weechat.look.scroll_page_percent"))))
+
+# color
+weechat.prnt("", "Wert der Option weechat.color.chat_delimiters ist: %s"
+                 % (weechat.config_color(weechat.config_get("weechat.color.chat_delimiters"))))
+----
+
+[[irc]]
+=== IRC
+
+[[irc_catch_messages]]
+==== Nachrichten abfangen
+
+Die IRC Erweiterung sendet vier Signale wenn eine Nachricht empfangen wurde
+(`xxx` ist dabei der interne Servername, `yyy` ist der IRC Befehl z.B. JOIN, QUIT, PRIVMSG, 301, ..):
+
+xxx,irc_in_yyy::
+    Signal wird gesendet, bevor die Nachricht verarbeitet wird, nur wenn Nachricht *nicht* ignoriert wird
+
+xxx,irc_in2_yyy::
+    Signal wird gesendet, nachdem die Nachricht verarbeitet wird, nur wenn Nachricht *nicht* ignoriert wird
+
+xxx,irc_raw_in_yyy::
+    Signal wird gesendet, bevor die Nachricht verarbeitet wird, auch wenn Nachricht ignoriert wird
+
+xxx,irc_raw_in2_yyy::
+    Signal wird gesendet, nachdem die Nachricht verarbeitet wird, auch wenn Nachricht ignoriert wird
+
+[source,python]
+----
+def join_cb(data, signal, signal_data):
+    # Das Signal lautet: "libera,irc_in2_join"
+    # signal_data enthält die IRC Nachricht, zum Beispiel: ":nick!user@host JOIN :#channel"
+    server = signal.split(",")[0]
+    msg = weechat.info_get_hashtable("irc_message_parse", {"message": signal_data})
+    buffer = weechat.info_get("irc_buffer", "%s,%s" % (server, msg["channel"]))
+    if buffer:
+        weechat.prnt(buffer, "%s (%s) ist dem Channel beigetreten!" % (msg["nick"], msg["host"]))
+    return weechat.WEECHAT_RC_OK
+
+# es ist sinnvoll als Server "*" anzugeben um alle JOIN Nachrichten von allen
+# IRC Servern abzufangen
+weechat.hook_signal("*,irc_in2_join", "join_cb", "")
+----
+
+[[irc_modify_messages]]
+==== Nachrichten ändern
+
+Die IRC Erweiterung sendet zwei "Modifier" für eine empfangene Nachricht
+("xxx" ist der IRC Befehl), damit die Nachricht verändert werden kann:
+
+irc_in_xxx::
+    Modifier, der vor der Zeichensatzdekodierung gesendet wurde: diese Zeichenkette
+    sollte mit Vorsicht verwendet werden, da sie ungültige UTF-8-Daten enthalten kann;
+    Nur bei Rohoperationen für eine Nachricht verwenden
+
+irc_in2_xxx::
+    Modifier wird nach der Zeichensatzdekodierung gesendet, sodass die empfangene
+    Zeichenkette immer eine gültige UTF-8 Kodierung enthält (*empfohlen*)
+
+[source,python]
+----
+def modifier_cb(data, modifier, modifier_data, string):
+    # füge den Namen des Server zu allen empfangenen Nachrichten hinzu
+    # (Okay dies ist nicht wirklich sinnvoll, aber es ist auch nur ein Beispiel!)
+    return "%s %s" % (string, modifier_data)
+
+weechat.hook_modifier("irc_in2_privmsg", "modifier_cb", "")
+----
+
+[WARNING]
+Eine fehlerhafte Nachricht kann WeeChat zum Absturz bringen oder andere ernsthafte Probleme erzeugen!
+
+[[irc_message_parse]]
+==== Nachrichten parsen
+
+_Neu seit Version 0.3.4._
+
+Man kann IRC Nachrichten mittels einer info_hashtable mit dem Namen
+"irc_message_parse" parsen.
+
+Das Ergebnis ist eine Hashtabelle mit folgenden Schlüsseln
+(das Beispiel bezieht sich auf folgende IRC Nachricht:
+`+@time=2015-06-27T16:40:35.000Z :nick!user@host PRIVMSG #weechat :hello!+`):
+
+[width="100%",cols="3,^2,10,7",options="header"]
+|===
+| Schlüssel | Seit WeeChat ^(1)^ | Beschreibung | Beispiel
+
+| Tags | 0.4.0
+| Tags in der Nachricht (kann leer sein).
+| `+time=2015-06-27T16:40:35.000Z+`
+
+| tag_xxx | 3.3
+| Wert des Tags "xxx" ohne Escapezeichen (ein Schlüssel pro Tag).
+| `+2015-06-27T16:40:35.000Z+`
+
+| message_without_tags | 0.4.0
+| Die IRC Nachricht ohne Tags (wie eine Nachricht ohne Tags).
+| `+:nick!user@host PRIVMSG #weechat :hello!+`
+
+| nick | 0.3.4
+| der ursprüngliche Nick.
+| `+nick+`
+
+| user | 2.7
+| der ursprüngliche Benutzer.
+| `+user+`
+
+| host | 0.3.4
+| der ursprüngliche Host (beinhaltet den Nick).
+| `+nick!user@host+`
+
+| command | 0.3.4
+| der Befehl (_PRIVMSG_, _NOTICE_, ...).
+| `+PRIVMSG+`
+
+| channel | 0.3.4
+| der Zielchanne.l|
+  `+#weechat+`
+
+| arguments | 0.3.4
+| das Argument des Befehls (beinhaltet den Channel).
+| `+#weechat :hello!+`
+
+| text | 1.3
+| der Text (zum Beispiel eine Nachricht eines Users).
+| `+hello!+`
+
+| paramN | 3.4
+| Befehlsparameter (von 1 bis N).
+| `+#weechat+`
+
+| num_params | 3.4
+| Anzahl der Befehlsparameter.
+| `+2+`
+
+| pos_command | 1.3
+| Index von _command_ innerhalb einer Nachricht ("-1" falls _command_ nicht gefunden wird).
+| `+47+`
+
+| pos_arguments | 1.3
+| Index von_arguments_ innerhalb einer Nachricht ("-1" falls _arguments_ nicht gefunden wird).
+| `+55+`
+
+| pos_channel | 1.3
+| Index von _channel_ innerhalb einer Nachricht ("-1" falls _channel_ nicht gefunden wird).
+| `+55+`
+
+| pos_text | 1.3
+| Index von _text_ innerhalb einer Nachricht ("-1" falls _text_ nicht gefunden wird).
+| `+65+`
+|===
+
+[NOTE]
+^(1)^ Der Schlüssel wurde mit dieser WeeChat Version eingeführt.
+
+[source,python]
+----
+dict = weechat.info_get_hashtable(
+    "irc_message_parse",
+    {"message": "@time=2015-06-27T16:40:35.000Z;tag2=value\\sspace :nick!user@host PRIVMSG #weechat :hello!"})
+
+# dict == {
+#     "tags": "time=2015-06-27T16:40:35.000Z;tag2=value\\sspace",
+#     "tag_time": "2015-06-27T16:40:35.000Z",
+#     "tag_tag2": "value space",
+#     "message_without_tags": ":nick!user@host PRIVMSG #weechat :hello!",
+#     "nick": "nick",
+#     "user": "user",
+#     "host": "nick!user@host",
+#     "command": "PRIVMSG",
+#     "channel": "#weechat",
+#     "arguments": "#weechat :hello!",
+#     "text": "hello!",
+#     "param1": "#weechat",
+#     "param2": "hello!",
+#     "num_params": "2",
+#     "pos_command": "65",
+#     "pos_arguments": "73",
+#     "pos_channel": "73",
+#     "pos_text": "83",
+# }
+----
+
+[[infos]]
+=== Infos
+
+[[infos_weechat_version]]
+==== WeeChat Version
+
+Die sinnvollste Methode um die Version abzufragen ist die Nutzung
+von "version_number". Das Ergebnis sollte mit einem hexadezimalen
+Integer-Wert verglichen werden.
+
+Beispiele:
+
+[source,python]
+----
+version = weechat.info_get("version_number", "") or 0
+if int(version) >= 0x00030200:
+    weechat.prnt("", "Es handelt sich um WeeChat 0.3.2 oder neuer")
+else:
+    weechat.prnt("", "Es handelt sich um WeeChat 0.3.1 oder älter")
+----
+
+[NOTE]
+Versionen ≤ 0.3.1.1 geben einen leeren String zurück wenn man _info_get("version_number")_
+aufruft. Deshalb müssen Sie prüfen ob der Rückgabewert *nicht* leer ist.
+
+Um die Version als String zu erhalten:
+
+[source,python]
+----
+# Dies gibt z.B. "Version 0.3.2" im Core Buffer aus
+weechat.prnt("", "Version %s" % weechat.info_get("version", ""))
+----
+
+[[infos_other]]
+==== andere Informationen
+
+[source,python]
+----
+# Zum Beispiel, das WeeChat-Konfigurationsverzeichnis: "/home/user/.config/weechat"
+weechat.prnt("", "WeeChat config dir: %s" % weechat.info_get("weechat_config_dir", ""))
+
+# Inaktivität der Tastatur
+weechat.prnt("", "Tastatur ist seit %s Sekunden nicht mehr betätigt worden" % weechat.info_get("inactivity", ""))
+----
+
+[[infolists]]
+=== Infolisten
+
+[[infolists_read]]
+==== Infoliste einlesen
+
+Es können Infolisten eingelesen werden die entweder von WeeChat oder von
+Erweiterungen erstellt wurden.
+
+Beispiele:
+
+[source,python]
+----
+# Infoliste "buffer" einlesen, um eine Liste aller Buffer zu erhalten
+infolist = weechat.infolist_get("buffer", "", "")
+if infolist:
+    while weechat.infolist_next(infolist):
+        name = weechat.infolist_string(infolist, "name")
+        weechat.prnt("", "Buffer: %s" % name)
+    weechat.infolist_free(infolist)
+----
+
+[IMPORTANT]
+Vergewissern Sie sich `+infolist_free+` aufzurufen um den Speicher wieder
+frei zu geben der durch die Infoliste belegt wurde. WeeChat gibt diesen Speicher
+nicht automatisch frei.

@@ -1,0 +1,87 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2025 Nils Görs <weechatter@arcor.de>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// tag::standard[]
+*-a*, *--no-connect*::
+    deaktiviert das automatische Verbinden mit den Servern beim Start von WeeChat.
+
+*-c*, *--colors*::
+    zeigt die Standardfarben im Terminal an.
+
+*--daemon*::
+    startet WeeChat im Hintergrund, als Deamon (funktioniert nur mit
+    dem Befehl *weechat-headless*).
+
+*--stdout*::
+    die Programmausgabe findet in der Standardausgabe an, anstatt sie in die Protokolldatei zu schreiben
+    Display log messages on standard output instead of writing them in log file
+    (funktioniert ausschließlich mit *weechat-headless* und ist nicht kompatibel mit Option
+    "--daemon").
+
+*-d*, *--dir* _<path>_::
+    Erzwingen Sie ein einzelnes Verzeichnis für alle WeeChat-Dateien (Verzeichnis wird erstellt, wenn es nicht gefunden wird).
+    Es können vier Verzeichnisse angegeben werden, die durch Doppelpunkte getrennt sind (folgende Reihenfolge: Konfiguration, Daten, Cache, Laufzeit).
+    Wird diese Option nicht genutzt, wird die Umgebungsvariable WEECHAT_HOME genutzt
+    (sofern diese vorhanden ist).
+
+*-t*, *--temp-dir*::
+    Erstellt ein temporäres WeeChat Heimatverzeichnis welches beim Beenden gelöscht wird
+    (nicht nutzbar mit Option "-d"). +
+    Der Name des Verzeichnisses wird automatisch durch WeeChat vergeben, die Vorgabe für
+    den Namen lautet: "weechat_temp_XXXXXX" ("XXXXXX" ist dabei ein zufälliger Wert).
+    Dieses Verzeichnis wird dann im ersten möglichen Verzeichnis angelegt und anhand folgender
+    Reihenfolge bestimmt: Umgebungsvariable "TMPDIR", "/tmp" (kann abweichend sein, abhängig
+    vom verwendeten Betriebssystem), Umgebungsvariable "HOME", aktuelles Verzeichnis. +
+    Das temporäre Heimatverzeichnis besitzt die Berichtigung 0700 (nur Besitzer kann lesen,
+    schreiben und ausführen).
+
+*-h*, *--help*::
+    zeigt einen Hilfstext an.
+
+*-i*, *--build-info*::
+    Build-Informationen anzeigen und beenden.
+
+*-l*, *--license*::
+    zeigt die Lizenz von WeeChat an.
+
+*-p*, *--no-plugin*::
+    unterbindet das Laden der Erweiterungen beim Programmstart.
+
+*-P*, *--plugins* _<plugins>_::
+    lädt nur die angegebenen Erweiterungen, beim Start (siehe /help weechat.plugin.autoload).
+    Wenn diese Option genutzt wird, dann wird die Option weechat.plugin.autoload ignoriert.
+
+*-r*, *--run-command* _<command>_::
+    führt einen oder mehrere Befehle nach dem Start aus; mehrere Befehle können durch ein
+    Semikolon getrennt werden, diese Option kann mehrfach genutzt werden.
+
+*-s*, *--no-script*::
+    Skripten werden beim Programmstart nicht geladen.
+
+*--upgrade*::
+    führt ein WeeChat Upgrade mit Sitzungsdateien durch, die mittels dem Befehl `/upgrade -quit` erstellt wurden.
+
+*-v*, *--version*::
+    zeigt die Version von WeeChat an.
+
+*plugin:option*::
+    Option für Erweiterung.
+// end::standard[]
+
+// tag::debug[]
+*--no-dlclose*::
+    die Funktion dlclose wird nicht ausgeführt, nachdem Erweiterungen beendet wurden
+    Dies ist sinnvoll für Tools wie Valgrind um den Stack für Erweiterungen anzuzeigen,
+    welche beendet wurden.
+
+*--no-gnutls*::
+    Es wird die init und deinit Funktion der GnuTLS Bibliothek nicht verwendet.
+    Dies ist sinnvoll für Tools wie Valgrind und electric-fence, um GnuTLS
+    Speicherfehler zu vermeiden.
+
+*--no-gcrypt*::
+    Es wird die init und deinit Funktion der Gcrypt Bibliothek nicht verwendet.
+    Dies ist sinnvoll für Tools wie Valgrind um Speicherfehler von Gcrypt zu vermeiden.
+// end::debug[]

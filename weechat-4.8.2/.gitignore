@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2007-2025 Sébastien Helleu <flashcode@flashtux.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+/build
+/builddir
+/debian
+/debian-devel/changelog
+/debian-devel/*.log
+/debian-devel/*-stamp
+/debian-stable/*.log
+/debian-stable/*-stamp
+/release

@@ -1,0 +1,114 @@
+# SPDX-FileCopyrightText: 2023-2025 Sébastien Helleu <flashcode@flashtux.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Bug report
+description: Create a bug report
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before submitting a bug, please check that it has not already been reported by searching in [open and closed bugs](https://github.com/weechat/weechat/issues?q=is%3Aissue+label%3Abug).
+        If you don't use the latest version, please try if possible with the latest stable release to be sure the issue is still present and report the issue on this version.
+
+        **IMPORTANT**: please do not report any security issue here, see [CONTRIBUTING.md](https://github.com/weechat/weechat/blob/main/CONTRIBUTING.md#security-reports).
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Steps to reproduce the issue.
+        If possible, please try to reproduce with a default configuration and no scripts loaded (`weechat -t`). If the issue is related to a script, please mention the list of all scripts loaded.
+      placeholder: |
+
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Current behavior
+      description: |
+        What currently happens.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What is actually supposed to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested-solutions
+    attributes:
+      label: Suggested solutions
+      description: How you think this issue can be resolved.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-information
+    attributes:
+      label: Additional information
+      description: |
+        For a crash, please include a backtrace from gdb, see the [User's guide](https://weechat.org/doc/weechat/user/#report_crashes).
+        For a display issue, please add a screenshot if it makes sense.
+        Please mention if other versions are affected as well and if some versions are not affected (regression?).
+        And any additional information you deem relevant.
+    validations:
+      required: false
+
+  - type: input
+    id: weechat-version
+    attributes:
+      label: WeeChat version
+      description: |
+        For a stable release: output of `weechat --version`.
+        For the development version: output of command `/v` in WeeChat.
+      placeholder: "4.1.1"
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: What OS/distribution are you using?
+      description: Name of the operating system and its version.
+      placeholder: Debian 12, Ubuntu 24.04, macOS 14, ...
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: On which terminal are you running WeeChat?
+      description: The name of terminal if you think it can be related to the issue (mainly for display issues).
+      placeholder: Terminator, Xterm, GNOME Terminal, Urxvt, ...
+    validations:
+      required: false
+
+  - type: input
+    id: terminal-multiplexer
+    attributes:
+      label: Which terminal multiplexer are you using?
+      description: The name of the terminal multiplexer if you think it can be related to the issue (mainly for display issues).
+      placeholder: none, tmux, screen, ...
+    validations:
+      required: false

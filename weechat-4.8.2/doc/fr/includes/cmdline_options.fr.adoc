@@ -1,0 +1,89 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// tag::standard[]
+*-a*, *--no-connect*::
+    Supprimer la connexion automatique aux serveurs lors du démarrage.
+
+*-c*, *--colors*::
+    Afficher les couleurs par défaut du terminal.
+
+*--daemon*::
+    Lancer WeeChat en tâche de fond, comme un daemon (fonctionne seulement avec
+    la commande *weechat-headless*).
+
+*--stdout*::
+    Afficher les messages de log sur la sortie standard plutôt que de les écrire
+    dans le fichier de log (fonctionne seulement avec la commande
+    *weechat-headless*, non compatible avec l'option "--daemon").
+
+*-d*, *--dir* _<répertoire>_::
+    Forcer un unique répertoire pour tous les fichiers WeeChat (le répertoire
+    est créé s'il n'est pas trouvé).
+    Quatre répertoires peuvent être donnés, séparés par ":" (dans cet ordre :
+    config, data, cache, runtime).
+    Si cette option n'est pas donnée, la variable d'environnement WEECHAT_HOME
+    est utilisée (si non vide).
+
+*-t*, *--temp-dir*::
+    Créer un répertoire de base WeeChat temporaire et le supprimer en quittant
+    (incompatible avec l'option "-d"). +
+    Le nom du répertoire est automatiquement construit par WeeChat, avec ce
+    modèle : "weechat_temp_XXXXXX" (où "XXXXXX" est aléatoire). Il est créé dans
+    le premier répertoire disponible de cette liste : variable d'environnement
+    "TMPDIR", "/tmp" (cela peut être différent selon le système d'exploitation),
+    variable d'environnement "HOME", répertoire courant. +
+    Le répertoire de base temporaire a les permissions 0700 (seul le propriétaire
+    peut lire, écrire et exécuter).
+
+*-h*, *--help*::
+    Afficher l'aide.
+
+*-i*, *--build-info*::
+    Afficher les informations de construction et quitter.
+
+*-l*, *--license*::
+    Afficher la licence de WeeChat.
+
+*-p*, *--no-plugin*::
+    Supprimer le chargement automatique des extensions au démarrage.
+
+*-P*, *--plugins* _<extensions>_::
+    Charger uniquement ces extensions au démarrage (voir /help weechat.plugin.autoload).
+    Si cette option est donnée, l'option weechat.plugin.autoload n'est pas utilisée.
+
+*-r*, *--run-command* _<commande>_::
+    Lancer la/les commande(s) après le démarrage ; plusieurs commandes peuvent
+    être séparées par des points-virgules, cette option peut être donnée
+    plusieurs fois.
+
+*-s*, *--no-script*::
+    Supprimer le chargement automatique des scripts au démarrage.
+
+*--upgrade*::
+    Mettre à jour WeeChat en utilisant les fichiers de session générés avec la
+    commande `/upgrade -quit`.
+
+*-v*, *--version*::
+    Afficher la version de WeeChat.
+
+*extension:option*::
+    Option pour une extension.
+// end::standard[]
+
+// tag::debug[]
+*--no-dlclose*::
+    Do not call the function dlclose after plugins are unloaded.
+    This is useful with tools like Valgrind to display stack for unloaded
+    plugins.
+
+*--no-gnutls*::
+    Do not call the init and deinit functions of GnuTLS library.
+    This is useful with tools like Valgrind and electric-fence, to prevent
+    GnuTLS memory errors.
+
+*--no-gcrypt*::
+    Do not call the init and deinit functions of Gcrypt library.
+    This is useful with tools like Valgrind, to prevent Gcrypt memory errors.
+// end::debug[]

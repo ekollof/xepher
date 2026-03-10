@@ -1,0 +1,93 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2012-2019 Ryuunosuke Ayanokouzi <i38w7i3@yahoo.co.jp>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// tag::standard[]
+*-a*, *--no-connect*::
+    WeeChat の起動時にサーバへの自動接続を行わない
+
+*-c*, *--colors*::
+    端末にデフォルト色を表示
+
+*--daemon*::
+    WeeChat をデーモン化してバックグラウンド実行
+    (*weechat-headless* コマンドで起動した場合のみ有効)
+
+// TRANSLATION MISSING
+*--stdout*::
+    Display log messages on standard output instead of writing them in log file
+    (works only with the command *weechat-headless*, not compatible with option
+    "--daemon").
+
+// TRANSLATION MISSING
+*-d*, *--dir* _<path>_::
+    Force a single directory for all WeeChat files (directory is created if not found).
+    Four directories can be given, separated by colons (in this order: config,
+    data, cache, runtime).
+    このオプションを指定しなかった場合、環境変数 WEECHAT_HOME を使います
+    (空でない限り)。
+
+*-t*, *--temp-dir*::
+    一時的に WeeChat のホームディレクトリを作成し、終了時にこれを削除します
+    ("-d" オプションと同時使用不可)。 +
+    このとき WeeChat が作るディレクトリの名前は "weechat_temp_XXXXXX"
+    ("XXXXXX" はランダム文字列) です。このディレクトリはリスト (環境変数
+    "TMPDIR"、"/tmp" (オペレーティングシステムの種類によって異なります)、環境変数
+    "HOME"、カレントディレクトリ)
+    で最初の利用可能なディレクトリの中に作られます。 +
+    一時的なホームディレクトリは 0700 のパーミッションを設定されます
+    (読み書き実行権限が所有者のみに与えられます)。
+
+*-h*, *--help*::
+    ヘルプを表示
+
+// TRANSLATION MISSING
+*-i*, *--build-info*::
+    Display build information and exit.
+
+*-l*, *--license*::
+    WeeChat ライセンスを表示
+
+*-p*, *--no-plugin*::
+    プラグインの自動ロードを止める
+
+*-P*, *--plugins* _<plugins>_::
+    起動時にロードするプラグインを指定 (/help weechat.plugin.autoload を参照してください)。
+    このオプションを使う場合、weechat.plugin.autoload オプションは無視されます。
+
+*-r*, *--run-command* _<command>_::
+    起動後にコマンドを実行; 複数のコマンドを実行するには各コマンドをセミコロンで区切って下さい。
+    このオプションは複数回使用できます。
+
+*-s*, *--no-script*::
+    スクリプトの自動ロードを止める
+
+*--upgrade*::
+    `/upgrade -quit` コマンドで生成されるセッションファイルを使って WeeChat をアップグレード
+
+*-v*, *--version*::
+    WeeChat のバージョンを表示
+
+*plugin:option*::
+    プラグインに渡すオプション
+// end::standard[]
+
+// tag::debug[]
+*--no-dlclose*::
+    Do not call the function dlclose after plugins are unloaded.
+    This is useful with tools like Valgrind to display stack for unloaded
+    plugins.
+    プラグインがアンロードされた後に関数
+    dlclose を呼び出さない。これは Valgrind
+    などのツールを使ってアンロードされたプラグインのスタックを表示する際に有用です。
+
+*--no-gnutls*::
+    GnuTLS ライブラリの init および deinit
+    関数を呼び出さない。これは Valgrind および electric-fence
+    などのツールを使って GnuTLS メモリエラーを避ける際に有用です。
+
+*--no-gcrypt*::
+    Gcrypt ライブラリの init および deinit 関数を呼び出さない。これは
+    Valgrind などのツールを使って Gcrypt メモリエラーを避ける際に有効です。
+// end::debug[]

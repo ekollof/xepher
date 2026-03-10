@@ -1,0 +1,402 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2019 Ryuunosuke Ayanokouzi <i38w7i3@yahoo.co.jp>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= WeeChat クイックスタートガイド
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: ja-jp
+include::includes/attributes-ja.adoc[]
+
+[[start]]
+== WeeChat を起動
+
+X 用端末エミュレータは rxvt-unicode を推奨します: UTF-8
+がサポートされており、デフォルトのキーバインドで問題が発生しないためです。
+
+シェルから起動するには:
+
+[source,shell]
+----
+weechat
+----
+
+[[help]]
+== オンラインヘルプ
+
+WeeChat はすべてのコマンドにヘルプがあります。ヘルプを見るには、以下のコマンドを入力してください:
+
+----
+/help
+----
+
+特定のコマンドに対するヘルプを見るには、以下のコマンドを入力してください:
+
+----
+/help command
+----
+
+各オプションに関するヘルプもあります:
+
+----
+/help config.section.option
+----
+
+(ここで `config` は設定名 (core の場合は
+`weechat` もしくはプラグイン名)、`section`
+はこの設定のセクション、`option` はオプション名)。
+
+[[options]]
+== オプションの設定
+
+オプションを設定するには以下のコマンドを入力してください:
+
+----
+/set config.section.option value
+----
+
+オプション設定はすぐに反映されます (設定変更後に
+WeeChat を再起動する必要は *ありません*)。
+
+すべての設定は WeeChat の終了時 (または強制的に設定保存を行う
+`/save` コマンドを使用した場合) に保存されます。
+
+[IMPORTANT]
+手作業で設定ファイルを編集することは *推奨されません*。なぜなら
+WeeChat は常時 (例えば `/quit` コマンドの実行時など)
+設定ファイルに書き込む可能性がありますし、手作業で修正を加えた後には必ず `/reload`
+コマンドを実行しなければいけない (これには `/save`
+を使って保存されていない変更を失うリスクがある) からです。 +
+設定を編集するには `/set`
+コマンドを使ってください。これは値を検査し、設定の変更をすぐに適用します。
+
+_fset_ プラグインを使えばオプションを簡単に閲覧、変更できます。
+
+WeeChat オプションの表示:
+
+----
+/fset weechat.*
+----
+
+IRC オプションの表示:
+
+----
+/fset irc.*
+----
+
+`/fset` コマンドに対してもオプション名の部分補完機能が使えるため、例えば `/fset hot`
+を入力した後、kbd:[Tab] を押すことで、`/fset hotlist` のように補完されます。その後
+kbd:[Enter] を押すことで、ホットリストに関するオプションが表示されます。
+
+`/fset` コマンドとキーについては `/help fset` を参照してください。
+
+[[core_vs_plugins]]
+== コア vs プラグイン
+
+WeeChat の "core" にはユーザインタフェースに関わるものだけが含まれているため、プラグインがなければ使い物になりません
+(以前からのユーザーへ: IRC 関連は
+WeeChat バージョン 0.2.6 までコアに含まれていました)。
+
+IRC 等全てのネットワークプロトコルはそれぞれ異なるプラグインで提供しています。
+
+`/plugin` コマンドで読み込まれているプラグイン一覧を表示できます。"irc"
+やその他のプラグインはここから確認してください。
+
+[[add_irc_server]]
+== IRC サーバを追加する
+
+IRC サーバを追加するには `/server` コマンドを使ってください、例:
+
+----
+/server add libera irc.libera.chat/6697 -tls
+----
+
+このコマンドにおいて、`libera` は WeeChat が使う内部サーバ名です:
+接続時には `/connect libera` を使うことが可能で、このサーバに関するオプションは
+_irc.server.libera.xxx_ になります。
+
+書式が思い出せない場合はヘルプを利用してください:
+
+----
+/help server
+----
+
+[[irc_server_options]]
+== IRC サーバのオプションを設定する
+
+もしサーバオプションが特に設定されていない場合、WeeChat
+はデフォルト設定をすべてのサーバに適用します
+(フォールバック方式)。これらのデフォルト設定は "irc.server_default.*" です。
+
+サーバオプションが定義されていれば ("null" でなければ) それを使用します。定義されていなければ、WeeChat
+はデフォルト設定を使用します ("irc.server_default.xxx")。
+
+例えばデフォルトでは (un*x ログイン名をベースにした)
+ニックネームが設定されますが、以下のコマンドで libera サーバ用の設定として上書きすることが可能です:
+
+----
+/set irc.server.libera.nicks "mynick,mynick2,mynick3,mynick4,mynick5"
+----
+
+ユーザ名と実名を設定する場合:
+
+----
+/set irc.server.libera.username "My user name"
+/set irc.server.libera.realname "My real name"
+----
+
+サーバへの自動接続を設定する場合:
+
+----
+/set irc.server.libera.autoconnect on
+----
+
+サーバで SASL を利用可能な場合、SASL を利用してニックネーム認証することができます
+(チャンネル参加前にニックネーム認証が行われるでしょう):
+
+----
+/set irc.server.libera.sasl_username "mynick"
+/set irc.server.libera.sasl_password "xxxxxxx"
+----
+
+例えば nickserv との認証などを行うためにサーバ接続後にコマンドを実行するには
+(SASL を利用して認証を行わない場合):
+
+----
+/set irc.server.libera.command "/msg nickserv identify xxxxxxx"
+----
+
+[NOTE]
+_command_ オプションに複数のコマンドを含める場合は `;` (セミコロン) で区切ってください。
+
+設定ファイル内にパスワードを直接書きたくない場合、保護データを使うことが可能です。
+
+最初にパスフレーズを登録します:
+
+----
+/secure passphrase this is my secret passphrase
+----
+
+その後に libera のパスワードを含む保護データを追加します:
+
+----
+/secure set libera_password xxxxxxx
+----
+
+こうすることで前述したようにパスワードを IRC オプションに直接書くのではなく
+`+${sec.data.libera_password}+` を指定可能になります。例えば以下のように設定します:
+
+----
+/set irc.server.libera.sasl_password "${sec.data.libera_password}"
+----
+
+チャンネルへの自動参加を設定する場合:
+
+----
+/set irc.server.libera.autojoin "#channel1,#channel2"
+----
+
+// TRANSLATION MISSING
+The `/autojoin` command lets you configure the _autojoin_ option easily
+(see `/help autojoin`).
+
+// TRANSLATION MISSING
+You can also configure WeeChat to automatically update the _autojoin_ option
+when you join or leave channels:
+
+----
+/set irc.server_default.autojoin_dynamic on
+----
+
+サーバオプションの代わりにデフォルトの値を使用する、例えばデフォルトのニックネーム
+(irc.server_default.nicks) を使用する場合:
+
+----
+/unset irc.server.libera.nicks
+----
+
+その他設定: その他のオプションも以下のコマンドで設定できます
+("xxx" は設定名です):
+
+----
+/set irc.server.libera.xxx value
+----
+
+[TIP]
+オプションの名前と値を補完するには kbd:[Tab] キーを使います。さらに
+kbd:[Shift+Tab] キーを使えば部分的に補完することも可能です
+(これは オプション名などの長い単語を補完する際に役立ちます)。
+
+// TRANSLATION MISSING
+[[connect_to_irc_server]]
+== Connect to IRC server
+
+----
+/connect libera
+----
+
+// TRANSLATION MISSING
+With this command, WeeChat connects to the libera server and auto-joins the
+channels configured in the "autojoin" server option.
+
+[NOTE]
+このコマンドは、`/server`
+を使わずに新しいサーバの作成および接続ができます (`/help connect` を参照してください)。
+
+デフォルトでは、サーババッファは WeeChat の _core_ バッファとマージされます。_core_
+バッファとサーババッファ間で切り替えたい場合は、kbd:[Ctrl+x] が使用できます。
+
+サーババッファへの自動マージを無効にして
+独立したサーババッファにすることができます:
+
+----
+/set irc.look.server_buffer independent
+----
+
+[[join_part_irc_channels]]
+== チャンネルに参加/退出する
+
+チャンネルに参加します
+
+----
+/join #channel
+----
+
+チャンネルから退出します (バッファは開いたままにします):
+
+----
+/part [切断メッセージ]
+----
+
+サーバから切断し、チャンネルやプライベートバッファを閉じます (`/close` は
+`/buffer close` の別名です):
+
+----
+/close
+----
+
+[CAUTION]
+`/close` を用いてサーバから切断した場合、すべてのチャンネルおよびプライベートバッファは閉じられます。
+
+サーババッファ上で実行することで、サーバから切断します:
+
+----
+/disconnect
+----
+
+
+[[irc_private_messages]]
+== IRC プライベートメッセージ
+
+バッファを開いてメッセージを他のユーザ (ニックネーム _foo_) 宛に送信する:
+
+----
+/query foo this is a message
+----
+
+プライベートバッファを閉じる:
+
+----
+/close
+----
+
+[[buffer_window]]
+== バッファ/ウィンドウの管理
+
+バッファは番号、カテゴリおよび名前とともにプラグインに関連づけられたあるコンポーネントです。バッファは画面に表示するデータを含んでいます。
+
+ウィンドウはバッファを表示するためにあります。デフォルトでは、1
+つのウィンドウは 1
+つのバッファだけを表示できます。画面を分割することで、同時に複数のウィンドウと関連するバッファを見ることができるでしょう。
+
+バッファとウィンドウを管理するためのコマンド:
+
+----
+/buffer
+/window
+----
+
+例えば、ウィンドウを垂直方向に小さいウィンドウ (1/3 幅) と大きいウィンドウ
+(2/3 幅) に分割する場合は次のコマンドを実行します:
+
+----
+/window splitv 33
+----
+
+分割を元に戻す:
+
+----
+/window merge
+----
+
+[[key_bindings]]
+== キー割り当て設定
+
+// TRANSLATION MISSING
+WeeChat uses many keys by default. All these keys are in the documentation
+(link:weechat_user.ja.html#key_bindings[ユーザーズガイド / Key bindings ^↗^^]),
+but you should know at least some vital keys:
+
+- kbd:[Alt+←] / kbd:[Alt+→] または kbd:[F5] / kbd:[F6]: 前後のバッファに切り替える
+- kbd:[F1] / kbd:[F2]: バッファリストを含むバー ("buflist") をスクロール表示
+- kbd:[F7] / kbd:[F8]: 前後のウィンドウに切り替える (画面分割時)
+- kbd:[F9] / kbd:[F10]: タイトルバーをスクロール表示
+- kbd:[F11] / kbd:[F12]: ニックネーム一覧をスクロール表示
+- kbd:[Tab]: 入力バーでシェルと同様のテキスト補完を行う
+- kbd:[PgUp] / kbd:[PgDn]: 現在のバッファのテキストをスクロール表示
+- kbd:[Alt+a]: (ホットリスト内の) アクティブなバッファに移動する
+
+必要であれば、`/key`
+コマンドでショートカットキーの割り当てを変更することができます。キーコードを調べるには、kbd:[Alt+k]
+が役に立つでしょう。
+
+例えば、kbd:[Alt+!] に `/buffer close` を割り当てる場合:
+
+----
+/key bind (alt-kを押下) (alt-!を押下) /buffer close
+----
+
+コマンドラインには以下のように表示されます:
+
+----
+/key bind meta-! /buffer close
+----
+
+キー割り当てを解除する場合:
+
+----
+/key unbind meta-!
+----
+
+[[plugins_scripts]]
+== プラグイン/スクリプト
+
+Debian のようにいくつかのディストリビューションでは、プラグイン用パッケージが独立して用意されています
+(例えば weechat-plugins)。
+見つかったプラグインは自動的に読み込まれます
+(プラグインやスクリプトのロード、有効/無効は WeeChat のドキュメントを参照してください)。
+
+WeeChat では多くの外部スクリプト (貢献者の作った)
+を利用できます、スクリプトをリポジトリからダウンロードしてインストールするには、`/script`
+コマンドを使ってください、例:
+
+----
+/script install go.py
+----
+
+より詳しい情報を参照するには `/help script` を使ってください。
+
+// TRANSLATION MISSING
+A list of scripts is available in WeeChat with `/script` or on
+https://weechat.org/scripts/[this page ^↗^^].
+
+[[more_doc]]
+== 詳しいドキュメント情報
+
+// TRANSLATION MISSING
+You can now use WeeChat and read
+https://weechat.org/doc/[FAQ/documentation ^↗^^]
+for any other questions.
+
+WeeChat をお楽しみください!

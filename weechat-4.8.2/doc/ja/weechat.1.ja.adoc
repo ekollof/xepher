@@ -1,0 +1,67 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2012-2019 Ryuunosuke Ayanokouzi <i38w7i3@yahoo.co.jp>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= weechat(1)
+:doctype: manpage
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: ja-jp
+:man manual: WeeChat マニュアル
+:man source: WeeChat {revnumber}
+
+== 名前
+
+weechat - 拡張可能なチャットクライアント
+
+== 書式
+
+[verse]
+*weechat* [-a|--no-connect] [-d|--dir <path>] [-t|--temp-dir]  [-p|--no-plugin] [-P|--plugins <plugins>] [-r|--run-command <command>] [-s|--no-script] [--upgrade] [debug-option...] [plugin:option...]
+*weechat* [-c|--colors]
+*weechat* [-h|--help]
+*weechat* [-l|--license]
+*weechat* [-v|--version]
+
+== 説明
+
+WeeChat (Wee Enhanced Environment for Chat) はフリーのチャットクライアントです。
+高速で軽量、多くのオペレーティングシステムで動くように設計されています。
+スクリプトを使って高度にカスタマイズと拡張可能です。
+
+== オプション
+
+include::includes/cmdline_options.ja.adoc[tag=standard]
+
+== デバッグオプション
+
+*警告:* 以下のオプションはデバッグ用です。*通常利用時には使わないでください!*
+
+include::includes/cmdline_options.ja.adoc[tag=debug]
+
+== プラグインオプション
+
+include::includes/man.ja.adoc[tag=plugin_options]
+
+== ファイル
+
+include::includes/man.ja.adoc[tag=files]
+
+== 関連項目
+
+*weechat-headless*(1)
+
+== 著者
+
+この manpage を書いたのは {author} さんです。
+
+翻訳したのは Ryuunosuke Ayanokouzi さんです。
+
+== 著作権
+
+include::includes/man.ja.adoc[tag=copyright]
+
+== サポート / バグ報告
+
+手助けを受けたりバグを報告するには: https://weechat.org/about/support/

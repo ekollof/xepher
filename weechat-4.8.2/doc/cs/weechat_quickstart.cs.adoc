@@ -1,0 +1,421 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2015-2017 Ondřej Súkup <mimi.vx@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= WeeChat quick start guide
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: cs
+include::includes/attributes-cs.adoc[]
+
+[[start]]
+== Spuštění WeeChatu
+
+Doporučený terminálový emulátor pro X (ale ne vyžadovaný) je rxvt-unicode:
+má dobrou podporu pro UTF-8, a nemá problémy s výchozím nastavením
+klávesových zkratek.
+
+Spustění z Vašeho shellu:
+
+[source,shell]
+----
+weechat
+----
+
+[[help]]
+== On-line nápověda
+
+WeeChat má nápovědů pro všechny příkazy, postě vložte:
+
+----
+/help
+----
+
+K získání nápovědy pro specifický příkaz napište:
+
+----
+/help příkaz
+----
+
+// TRANSLATION MISSING
+Help is available for options as well:
+
+----
+/help config.section.option
+----
+
+(kde `config` je jméno konfigurace (`weechat` pro jádro, nebo jméno pluginu),
+`section` sekce této konfigurace a `option` jméno volby).
+
+// TRANSLATION MISSING
+[[options]]
+== Set options
+
+K nastavení voleb napište:
+
+----
+/set config.section.option value
+----
+
+WeeChat okamžitě použije novou hodnotu (*nikdy* nebudete potřebovat restart
+WeeChatu po změně konfigurace).
+
+Všechna nastavení jsou uložena při ukončení WeeChatu (nebo použitím příkazu
+`/save` k vynucení zapsaní voleb).
+
+// TRANSLATION MISSING
+[IMPORTANT]
+It is *not recommended* to edit configuration files by hand because WeeChat
+may write them at any time (for example on `/quit`) and after any change
+you must run the command `/reload` (with the risk of losing other changes
+that were not yet saved with `/save`). +
+You can use the command `/set`, which checks the value and applies immediately
+the changes.
+
+// TRANSLATION MISSING
+The plugin _fset_ allows you to easily browse options and change them.
+
+// TRANSLATION MISSING
+For example to display WeeChat options:
+
+----
+/fset weechat.*
+----
+
+// TRANSLATION MISSING
+IRC options:
+
+----
+/fset irc.*
+----
+
+// TRANSLATION MISSING
+The `/fset` command has completion on part of option names, so for example if
+you type `/fset hot` and press kbd:[Tab] this is completed as `/fset hotlist`.
+If you press kbd:[Enter], options about the hotlist are displayed.
+
+// TRANSLATION MISSING
+For more information about `/fset` command and keys, see `/help fset`.
+
+[[core_vs_plugins]]
+== Jádro versus pluginy
+
+"Jádro" WeeChatu je použito pouze k zobrazení dat na obrazovce a k interakci
+s uživatelem, což znamená že jádro weechatu je nepoužitelné bez pluginů.
+(pro věrné uživatele: IRC bylo částí jádra ve verzích ≤ 0.2.6).
+
+Všechny síťové protokoly jako IRC jsou pooskytovány vlastnímy pluginy.
+
+Použijte příkaz `/plugin` k zobrazení nahraných pluginů, pravděpodobně uvidíte
+"irc" a ostatní pluginy v seznamu.
+
+[[add_irc_server]]
+== Přidání IRC serveru
+
+Můžete přidat irc server příkazem `/server`, například:
+
+----
+/server add libera irc.libera.chat/6697 -tls
+----
+
+// TRANSLATION MISSING
+In this command, `libera` is the internal server name used by WeeChat:
+you'll be able to connect with `/connect libera` and the server options
+are _irc.server.libera.xxx_.
+
+Jako obvykle je poskytována nápověda pokud se ztratíte:
+
+----
+/help server
+----
+
+[[irc_server_options]]
+== Nastavení vlastních voleb IRC serveru
+
+WeeChat používá bezpečné výchozí volby pro všechny servery, pokud nenastavíte
+specifické hodnoty pro volby serveru,
+Výchozí volby jsou "irc.server_default.*"
+
+Pro každou serverovou volbu WeeChat použije její hodnotu pokud je definována
+(není "prázdná"). Jinak WeeChat použije výchozí hodnotu ("irc.server_default.xxx).
+
+Například, je zde výchozí přezdívka (založena na vašem un*x loginu), můžete
+ji přepsat pro libera s následujícím příkazem:
+
+----
+/set irc.server.libera.nicks "mynick,mynick2,mynick3,mynick4,mynick5"
+----
+
+Nastavení username a realname:
+
+----
+/set irc.server.libera.username "Mé uživatelské jméno"
+/set irc.server.libera.realname "Mé skutečné jméno"
+----
+
+K zapnutí automatického připojení při spuštění:
+
+----
+/set irc.server.libera.autoconnect on
+----
+
+Pokud je na serveru podporován SASL, můžete jej použít pro autentizaci (mužete
+být identifikován před připojením kanálů):
+
+----
+/set irc.server.libera.sasl_username "mynick"
+/set irc.server.libera.sasl_password "xxxxxxx"
+----
+
+K spuštění příkazů po připojení k serveru, například k autentizaci s nickserv
+(pouze pokud nepoužíváte autentizaci přes SASL):
+
+----
+/set irc.server.libera.command "/msg nickserv identify xxxxxxx"
+----
+
+[NOTE]
+Více příkazů v volbě _command_ bůže být odděleno pomocí `;` (středník).
+
+// TRANSLATION MISSING
+If you want to protect your password in configuration files, you can use
+secured data.
+
+// TRANSLATION MISSING
+First setup a passphrase:
+
+----
+/secure passphrase this is my secret passphrase
+----
+
+// TRANSLATION MISSING
+Then add a secured data with your libera password:
+
+----
+/secure set libera_password xxxxxxx
+----
+
+// TRANSLATION MISSING
+Then you can use `+${sec.data.libera_password}+` instead of your password in
+IRC options mentioned above, for example:
+
+----
+/set irc.server.libera.sasl_password "${sec.data.libera_password}"
+----
+
+K automatickému připojení některých kanálů při připojování k serveru:
+
+----
+/set irc.server.libera.autojoin "#channel1,#channel2"
+----
+
+// TRANSLATION MISSING
+The `/autojoin` command lets you configure the _autojoin_ option easily
+(see `/help autojoin`).
+
+// TRANSLATION MISSING
+You can also configure WeeChat to automatically update the _autojoin_ option
+when you join or leave channels:
+
+----
+/set irc.server_default.autojoin_dynamic on
+----
+
+K smazání hodnoty serverové volby a k použití výchozí hodnoty místo ní,
+například k požití výchozích přezdívek (irc.server_default.nicks):
+
+----
+/unset irc.server.libera.nicks
+----
+
+Ostatní volby: můžete nastavit ostatní volby s následujícím příkazem ("xxx" je
+název volby):
+
+----
+/set irc.server.libera.xxx value
+----
+
+// TRANSLATION MISSING
+[TIP]
+You can complete name and value of options with the kbd:[Tab] key
+and kbd:[Shift+Tab] for a partial completion (useful for long words like
+the name of option).
+
+[[connect_to_irc_server]]
+== Připojení k IRC serveru
+
+----
+/connect libera
+----
+
+// TRANSLATION MISSING
+With this command, WeeChat connects to the libera server and auto-joins the
+channels configured in the "autojoin" server option.
+
+// TRANSLATION MISSING
+[NOTE]
+Tento příkaz může být použit k vytvoření nového připojení k serveru bez
+použití příkazu `/server` (see `/help connect`).
+
+Ve výchozím nastavení jsou serverové bufery spojen s WeeChat _core_ buferem.
+K přepnutí mezi _core_ a server bufery můžete použít klávesu kbd:[Ctrl+x].
+
+Je možné vypnout automatické sloučení serverových buferů a mít nezávislé
+serverové bufery:
+
+----
+/set irc.look.server_buffer independent
+----
+
+[[join_part_irc_channels]]
+== Připojení/Opuštění IRC kanálů
+
+Připojení kanálu:
+
+----
+/join #channel
+----
+
+Opuštění kanálu (zachování otevřeného buferu):
+
+----
+/part [quit message]
+----
+
+// TRANSLATION MISSING
+Close a server, channel or private buffer (`/close` is an alias for
+`/buffer close`):
+
+----
+/close
+----
+
+// TRANSLATION MISSING
+[CAUTION]
+Closing the server buffer will close all channel/private buffers.
+
+// TRANSLATION MISSING
+Disconnect from server, on the server buffer:
+
+----
+/disconnect
+----
+
+[[irc_private_messages]]
+== IRC soukromé zprávy
+
+Otevření buferu a poslání soukromé zprávy jinému uživateli (přezdívka _foo_):
+
+----
+/query foo tato zpráva
+----
+
+Uzavření soukromého buferu:
+
+----
+/close
+----
+
+[[buffer_window]]
+== Managment Buferu/Okna
+
+Bufer je komponenta navázaná na plugin s číslem, kategoriía jménem. Bufer
+obsahuje data zobrazená na obrazovce.
+
+Okno je pohled na bufer. Ve výchozím stavu je zde pouze jedno okno zobrazijící
+jeden bufer. Pokud rozdělíte obrazovku, můžete vidět více oken s více bufery
+ve stejný čas.
+
+Příkazy k spravování buferů a oken:
+
+----
+/buffer
+/window
+----
+
+Například, k svislému rozdělení obrazovky na malé okno (1/3 šířky), a velké
+okno (2/3), použijte příkaz:
+
+----
+/window splitv 33
+----
+
+// TRANSLATION MISSING
+To remove the split:
+
+----
+/window merge
+----
+
+[[key_bindings]]
+== Předvoblby klávesových zkratek
+
+// TRANSLATION MISSING
+WeeChat používá ve výchozím nastavení mnoho klávesových zkratek, Všechny najdete v dokumentaci
+(link:weechat_user.en.html#key_bindings[User's guide / Key bindings ^↗^^]),
+ale je dobré znát alespoň pár těchto důležitých:
+
+- kbd:[Alt+←] / kbd:[Alt+→] nebo kbd:[F5] / kbd:[F6]: přepnout na předchozí/další bufer
+// TRANSLATION MISSING
+- kbd:[F1] / kbd:[F2]: scroll bar with list of buffers ("buflist")
+- kbd:[F7] / kbd:[F8]: přepnout na předchozí/další okno (pokud je obrazovka rozdělena)
+- kbd:[F9] / kbd:[F10]: posunoutí titulku
+- kbd:[F11] / kbd:[F12]: posunutí seznamu přezdívek
+- kbd:[Tab]: doplnění textu v vstupním řádku, podobně jak v shellu
+- kbd:[PgUp] / kbd:[PgDn]: posunutí textu v aktuálním buferu
+- kbd:[Alt+a]: přepni do aktivního buferu (v seznamu)
+
+Dle Vaší klávesnice a/nebo vašich potřeb, můžete přenastavit jakoukoliv
+klávesovou zkratku pomocí příkazu `/key`.
+Užitečná zkratka je kbd:[Alt+k] k najítí kodů kláves.
+
+Například k nastavení zkratky kbd:[Alt+!] na příkaz `/buffer close`:
+
+----
+/key bind (press alt-k) (press alt-!) /buffer close
+----
+
+Můžete vytvořit příkaz jako:
+
+----
+/key bind meta-! /buffer close
+----
+
+K smazání klávesové zkratky:
+
+----
+/key unbind meta-!
+----
+
+[[plugins_scripts]]
+== Pluginy/Skripty
+
+Na mnoha distribucích, například Debian, jsou pluginy dostupné přes oddělený
+balíček (něco jako weechat-plugins).
+Pluginy jsou automaticky nahrány při nálezení (prosím nahlédněte do
+dokumentace WeeChatu jak nahrát/odebrat plugin nebo skript)
+
+Mnoho externích skriptů (od přispěvovatelů) je dostupných pro WeeChat. můžete
+stáhnout a nainstalovat scripty z repozitáře pomocí příkazu `/script`,
+například:
+
+----
+/script install go.py
+----
+
+Zkuste `/help script` pro více informací.
+
+// TRANSLATION MISSING
+A list of scripts is available in WeeChat with `/script` or on
+https://weechat.org/scripts/[this page ^↗^^].
+
+[[more_doc]]
+== Další dokumentace
+
+// TRANSLATION MISSING
+You can now use WeeChat and read
+https://weechat.org/doc/[FAQ/documentation ^↗^^]
+for any other questions.
+
+Ať máte radost z použití WeeChatu!

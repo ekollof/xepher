@@ -1,0 +1,4 @@
+Version: 5
+Source: https://weechat.org/download/
+Matching-Pattern: /files/src/@PACKAGE@@ANY_VERSION@@ARCHIVE_EXT@
+Pgp-Mode: auto

@@ -1,0 +1,1383 @@
+// SPDX-FileCopyrightText: 2003-2025 Sébastien Helleu <flashcode@flashtux.org>
+// SPDX-FileCopyrightText: 2009-2013 Marco Paolone <marcopaolone@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+= FAQ di WeeChat (Domande Frequenti)
+:author: Sébastien Helleu
+:email: flashcode@flashtux.org
+:lang: it
+include::includes/attributes-it.adoc[]
+
+[[general]]
+== Generale
+
+[[weechat_name]]
+=== Da dove viene il nome "WeeChat"?
+
+"Wee" è un acronimo ricorsivo che sta per "Wee Enhanced Environment".
+Quindi il nome completo è "Wee Enhanced Envoronment for Chat."
+
+"Wee" significa anche "molto piccolo" (e sì, c'è un altro significato, ma
+non c'entra con WeeChat!).
+
+[[why_choose_weechat]]
+=== Perché scegliere WeeChat? X-Chat ed Irssi vanno così bene...
+
+// TRANSLATION MISSING
+Because WeeChat is very light and brings innovating features.
+
+// TRANSLATION MISSING
+More info on the WeeChat
+https://weechat.org/about/features/[features page ^↗^^].
+
+[[compilation_install]]
+== Compilazione / installazione
+
+[[gui]]
+=== Ho sentito parlare di molte interfacce per WeeChat. Come si possono compilare/utilizzare?
+
+// TRANSLATION MISSING
+Some remote GUIs are available, see the
+https://weechat.org/about/interfaces/[remote interfaces page ^↗^^].
+
+[[compile_git]]
+=== Non è possibile compilare WeeChat dopo aver clonato il repository git, perché?
+
+// TRANSLATION MISSING
+WeeChat must be compiled with CMake.
+
+// TRANSLATION MISSING
+Please follow link:weechat_user.en.html#source_package[build instructions ^↗^^]
+and ensure all required dependencies are installed.
+
+// TRANSLATION MISSING
+If you still have issues, please report them to the developers.
+
+// TRANSLATION MISSING
+[[compile_macos]]
+=== How can I install WeeChat on macOS?
+
+// TRANSLATION MISSING
+It is recommended to use https://brew.sh/[Homebrew ^↗^^],
+you can get help with:
+
+[source,shell]
+----
+brew info weechat
+----
+
+// TRANSLATION MISSING
+You can install WeeChat with this command:
+
+[source,shell]
+----
+brew install weechat
+----
+
+[[lost]]
+=== Ho avviato WeeChat, ma mi sono perso, cosa posso fare?
+
+// TRANSLATION MISSING
+Per l'aiuto digitare `/help`. Per l'aiuto su un comando, digitare `/help comando`.
+link:weechat_user.it.html#key_bindings[Keys ^↗^^] and
+link:weechat_user.it.html#commands_and_options[commands ^↗^^] are listed
+in documentation.
+
+// TRANSLATION MISSING
+It's recommended for new users to read the
+link:weechat_quickstart.it.html[Quickstart guide ^↗^^].
+
+[[display]]
+== Visualizzare
+
+[[charset]]
+=== Non riesco a vedere alcuni caratteri con gli accenti, cosa posso fare?
+
+// TRANSLATION MISSING
+It's a common issue with a variety of causes, please read carefully and check
+*ALL* solutions below:
+
+* verificare che weechat abbia un link con libncursesw (attenzione:
+  necessario su molte distribuzioni ma non tutte): `ldd /path/di/weechat`
+* verificare che il plugin "charset" sia caricato con il comando `plugin` (se non
+  lo è, probabilmente è necessario il pacchetto "weechat-plugins")
+// TRANSLATION MISSING
+* verificare l'output del comando `/charset` (sul buffer core). Dovrebbero essere
+  visualizzati _ISO-XXXXXX_ oppure _UTF-8_ per il set caratteri del terminale.
+  Se invece compaiono _ANSI_X3.4-1968_ o altri valori, il locale probabilmente
+  non è esatto. +
+  To fix your locale, check the installed locales with `locale -a` and set
+  an appropriate value in $LANG, for example: `+export LANG=en_US.UTF-8+`.
+* impostare il valore di decodifica globale, per esempio:
+  `/set charset.default.decode = ISO-8859-15`
+* se si usa la localizzazione UTF-8:
+** verificare che il proprio terminale sia compatibile con UTF-8 (quello
+    raccomandato è rxvt-unicode)
+** se si sta utilizzando screen, verificare che sia in esecuzione in modalità
+    UTF-8 ("`defutf8 on` nel file ~/.screenrc` oppure `screen -U` per avviare
+    screen)
+// TRANSLATION MISSING
+* check that option
+  link:weechat_user.it.html#option_weechat.look.eat_newline_glitch[_weechat.look.eat_newline_glitch_ ^↗^^]
+  is off (this option may cause display bugs)
+
+[NOTE]
+Si raccomanda il locale UTF-8 per WeeChat. Se si utilizza ISO o un altro
+locale, per favore verificare che *tutte* le impostazioni (terminale, screen)
+siano ISO e *non* UTF-8.
+
+// TRANSLATION MISSING
+[[unicode_chars]]
+=== Some unicode chars are displayed in terminal but not in WeeChat, why?
+
+This may be caused by a libc bug in function _wcwidth_, which should be fixed
+in glibc 2.22 (maybe not yet available in your distribution).
+
+There is a workaround to use the fixed _wcwidth_ function:
+https://blog.nytsoi.net/2015/05/04/emoji-support-for-weechat[https://blog.nytsoi.net/2015/05/04/emoji-support-for-weechat ^↗^^].
+
+See this https://github.com/weechat/weechat/issues/79[bug report ^↗^^]
+for more information.
+
+[[bars_background]]
+=== Barre come quella del titolo e di stato non sono complete, il colore di sfondo si ferma dopo il testo, perché?
+
+Potrebbe essere causato da un valore errato della variabile TERM nella propria
+shell (consultare l'output di `echo $TERM` nel terminale).
+
+A seconda di dove viene eseguito WeeChat, si dovrebbe avere:
+
+// TRANSLATION MISSING
+* if WeeChat runs locally or on a remote machine without screen nor tmux, it
+  depends on the terminal used: _xterm_, _xterm-256color_, _rxvt-unicode_,
+  _rxvt-256color_, ...
+// TRANSLATION MISSING
+* if WeeChat runs under screen, you should have _screen_ or _screen-256color_,
+// TRANSLATION MISSING
+* if WeeChat runs under tmux, you should have _tmux_, _tmux-256color_,
+  _screen_ or _screen-256color_.
+
+Se necessario, correggere la variabile TERM: `export TERM="xxx"`.
+
+[[screen_weird_chars]]
+=== Quando uso weechat con screen/tmux, appaiono dei caratteri strani, come posso risolvere il problema?
+
+Potrebbe essere causato da un valore errato della variabile TERM nella propria
+shell (consultare l'output di `echo $TERM` nel terminale *al di fuori di
+screen/tmux*). +
+Per esempio, _xterm-color_ potrebbe visualizzare questo tipo di caratteri strani,
+è meglio utilizzare _xterm_ che funziona (come molti altri valori). +
+Se necessario, correggere la variabile TERM: `export TERM="xxx"`.
+
+// TRANSLATION MISSING
+If you are using gnome-terminal, check that the option
+"Ambiguous-width characters" in menu Preferences/Profile/Compatibility
+is set to `narrow`.
+
+[[macos_display_broken]]
+=== Ho compilato WeeChat su macOS, e vedo "(null)" dovunque sullo schermo, cosa non va?
+
+Se ncursesw è stato compilato manualmente, utilizzare ncurses standard (incluse
+col sistema).
+
+Inoltre, su macOS, si raccomanda di installare WeeChat con il gestore pacchetti
+Homebrew.
+
+[[buffer_vs_window]]
+=== Ho sentito parlare di "buffer" e "finestre", qual è la differenza?
+
+Un _buffer_ è composto da un numero, un nome, delle righe visualizzate (e
+qualche altro dato).
+
+Una _finestra_ (o window) è un'aread dello schermo in cui viene visualizzato
+un buffer. È possibile dividere lo schermo in più finestre.
+
+// TRANSLATION MISSING
+Each window displays one buffer, or a set of merged buffers.
+A buffer can be hidden (not displayed by a window) or displayed by one or more
+windows.
+
+// TRANSLATION MISSING
+[[buffers_list]]
+=== Come si può visualizzare la lista dei buffer sulla sinistra?
+
+The plugin link:weechat_user.it.html#buflist[buflist ^↗^^]
+is loaded and enabled by default.
+
+To limit size of bar:
+
+----
+/set weechat.bar.buflist.size_max 15
+----
+
+To move bar to bottom:
+
+----
+/set weechat.bar.buflist.position bottom
+----
+
+To scroll the bar: if mouse is enabled (key: kbd:[Alt+m]), you can scroll the
+bar with your mouse wheel.
+
+Default keys to scroll _buflist_ bar are kbd:[F1] (or kbd:[Ctrl+F1]), kbd:[F2]
+(or kbd:[Ctrl+F2]), kbd:[Alt+F1] and kbd:[Alt+F2].
+
+// TRANSLATION MISSING
+[[customize_buflist]]
+=== How can I customize the list of buffers list, like the color of the active buffer?
+
+You can browse all buflist options with the command:
+
+----
+/fset buflist
+----
+
+The background of the active buffer is blue by default, you can change it
+like this, for example to `red`:
+
+----
+/set buflist.format.buffer_current "${color:,red}${format_buffer}"
+----
+
+[NOTE]
+There's a comma before the color name "red" because it is used as the background,
+not the text color. +
+You can also use any numeric color instead of `red`,
+like `237` for dark gray.
+
+The buflist plugin provides lot of options that you can customize, please read
+the help on each option.
+
+There's also a https://github.com/weechat/weechat/wiki/buflist[wiki page ^↗^^]
+with examples of advanced buflist configuration.
+
+[[customize_prefix]]
+=== Come si può ridurre la lunghezza dei nick o rimuovere l'allineamento nella finestra di chat?
+
+Per ridurre la lunghezza massima dei nick nell'area di chat:
+
+----
+/set weechat.look.prefix_align_max 15
+----
+
+To remove nick alignment:
+Per rimuovere l'allineamento dei nick:
+
+----
+/set weechat.look.prefix_align none
+----
+
+// TRANSLATION MISSING
+[[status_hotlist]]
+=== What does the [H: 3(1,8), 2(4)] in status bar mean?
+
+This is called the "hotlist", a list of buffers with the number of unread
+messages, by order: highlights, private messages, messages, other messages
+(like join/part). +
+The number of "unread message" is the number of new messages displayed/received
+since you visited the buffer.
+
+In the example `[H: 3(1,8), 2(4)]`, there are:
+
+* 1 highlight and 8 unread messages on buffer #3,
+* 4 unread messages on buffer #2.
+
+The color of the buffer/counter depends on the type of message, default colors
+are:
+
+* highlight: `lightmagenta` / `magenta`
+* private message: `lightgreen` / `green`
+* message: `yellow` / `brown`
+* other message: `default` / `default` (color of text in terminal)
+
+These colors can be changed with the options __weechat.color.status_data_*__
+(buffers) and __weechat.color.status_count_*__ (counters). +
+Other hotlist options can be changed with the options __weechat.look.hotlist_*__.
+
+See link:weechat_user.it.html#screen_layout[User's guide / Screen layout ^↗^^]
+for more info about the hotlist.
+
+[[input_bar_size]]
+=== Come posso usare la riga di comando con più di una riga?
+
+L'opzione _size_ nella barra di input può essere impostata a un valore maggiore
+di uno (il valore predefinito per la dimensione fissa è 1) oppure 0 per la
+dimensione dinamica, e poi l'opzione _size_max_ imposta la dimensione massima (0
+= nessun limite).
+
+Esempio con la dimensione dinamica:
+
+----
+/set weechat.bar.input.size 0
+----
+
+Dimensione massima a 2:
+
+----
+/set weechat.bar.input.size_max 2
+----
+
+[[one_input_root_bar]]
+=== È possibile mostrare solo una barra di input per tutte le finestre (dopo lo split)?
+
+Sì, bisogna creare una barra con il tipo "root" (con un elemento per sapere in
+quale finestra ci si trova), poi eliminare la barra di input corrente.
+
+Ad esempio:
+
+----
+/bar add rootinput root bottom 1 0 [buffer_name]+[input_prompt]+(away),[input_search],[input_paste],input_text
+/bar del input
+----
+
+Se non si è soddisfatti del risultato, basta eliminare la nuova barra, WeeChat
+creerà automaticamente la barra predefinita "input" se l'elemento "input_text"
+non viene usato da un'altra barra:
+
+----
+/bar del rootinput
+----
+
+[[terminal_copy_paste]]
+=== Come posso copiare/incollare testo senza incollare la lista nick?
+
+// TRANSLATION MISSING
+You can use the bare display (default key: kbd:[Alt+l] (`L`)), which shows
+just the contents of the currently selected window, without any formatting.
+
+È possibile usare un terminale con la selezione rettangolare (come
+rxvt-unicode, konsole, gnome-terminal, ...). La combinazione tasti in
+generale è kbd:[Ctrl] + kbd:[Alt] + selezione mouse.
+
+// TRANSLATION MISSING
+You can toggle nicklist and make it visible only when needed, with key
+kbd:[Alt+Shift+N].
+
+Un'altra soluzione è spostare la lista nick in alto o in basso, per esempio:
+
+----
+/set weechat.bar.nicklist.position top
+/set weechat.bar.nicklist.size_max 8
+----
+
+[[urls]]
+=== Come posso cliccare su URL lunghi (più di una riga)?
+
+// TRANSLATION MISSING
+You can use the bare display (default key: kbd:[Alt+l] (`L`)).
+
+// TRANSLATION MISSING
+To make opening URLs easier, you can:
+
+// TRANSLATION MISSING
+* toggle nicklist and make it visible only when needed, with key kbd:[Alt+Shift+N]
+
+// TRANSLATION MISSING
+* move nicklist to top:
+
+----
+/set weechat.bar.nicklist.position top
+/set weechat.bar.nicklist.size_max 8
+----
+
+// TRANSLATION MISSING
+* disable alignment for multiline words:
+
+----
+/set weechat.look.align_multiline_words off
+----
+
+// TRANSLATION MISSING
+* or for all wrapped lines:
+
+----
+/set weechat.look.align_end_of_lines time
+----
+
+// TRANSLATION MISSING
+You can enable option "eat_newline_glitch", so that new line char is not added
+at the end of each line displayed (it will not break URL selection):
+
+----
+/set weechat.look.eat_newline_glitch on
+----
+
+[IMPORTANT]
+Questa opzione può causare bug di visualizzazione. Se si dovessero verificare
+tali problemi, è necessario disabilitare questa opzione.
+
+Una soluzione alternativa è usare uno script:
+
+----
+/script search url
+----
+
+[[change_locale_without_quit]]
+=== Voglio cambiare la lingua utilizzata da WeeChat per i messaggi, ma senza uscire da WeeChat, è possibile?
+
+// TRANSLATION MISSING
+Sure it is possible:
+
+----
+/set env LANG it_IT.UTF-8
+/upgrade
+----
+
+// TRANSLATION MISSING
+[[timezone]]
+=== How can I change the timezone?
+
+// TRANSLATION MISSING
+There is no option in WeeChat to change the timezone, the environment variable
+`TZ` must be set to the appropriate value.
+
+// TRANSLATION MISSING
+In your shell initialization file or on command line, before starting WeeChat:
+
+[source,shell]
+----
+export TZ=Europe/Rome
+----
+
+// TRANSLATION MISSING
+In WeeChat, the new value is immediately used:
+
+----
+/set env TZ Europe/Rome
+----
+
+[[use_256_colors]]
+=== Come posso usare 256 colori in WeeChat?
+
+Per prima cosa verificare che la variabile di ambiente _TERM_ sia corretta, i
+valori raccomandati sono:
+
+* con screen: _screen-256color_
+// TRANSLATION MISSING
+* under tmux: _screen-256color_ or _tmux-256color_
+// TRANSLATION MISSING
+* outside screen/tmux: _xterm-256color_, _rxvt-256color_, _putty-256color_, ...
+
+[NOTE]
+Potrebbe essere necessario installare il pacchetto "ncurses-term" per usare
+questi valori nella variabile _TERM_.
+
+Se si sta utilizzando screen, è possibile aggiungere questa riga al
+proprio _~/.screenrc_:
+
+----
+term screen-256color
+----
+
+// TRANSLATION MISSING
+If your _TERM_ variable has wrong value and that WeeChat is already running,
+you can change it with these two commands:
+
+----
+/set env TERM screen-256color
+/upgrade
+----
+
+// TRANSLATION MISSING
+You can use any color number in options (optional: you can add color aliases
+with command `/color`).
+
+// TRANSLATION MISSING
+Please read the link:weechat_user.it.html#colors[User's guide / Colors ^↗^^]
+for more information about colors management.
+
+[[search_text]]
+=== Come posso cercare testo nel buffer (come /lastlog con irssi)?
+
+Il tasto predefinito è kbd:[Ctrl+r] (il comando è: `+/input search_text_here+`).
+E per passare alle notifiche: kbd:[Alt+p] / kbd:[Alt+n].
+
+// TRANSLATION MISSING
+See link:weechat_user.it.html#key_bindings[User's guide / Key bindings ^↗^^]
+for more info about this feature.
+
+// TRANSLATION MISSING
+[[terminal_focus]]
+=== How can I execute commands when terminal gets/loses focus?
+
+You must enable the focus events with a special code sent to terminal.
+
+*Important*:
+
+* You must use a modern xterm-compatible terminal.
+* Additionally, it seems to be important that your value of the TERM variable
+  equals to _xterm_ or _xterm-256color_.
+* If you use tmux, you must additionally enable focus events by adding
+  `set -g focus-events on` to your _.tmux.conf_ file.
+* This does *not* work under screen.
+
+To send the code when WeeChat is starting:
+
+----
+/set weechat.startup.command_after_plugins "/print -stdout \033[?1004h\n"
+----
+
+And then you bind two keys for the focus (replace the `/print` commands by the
+commands of your choice):
+
+----
+/key bind meta-[I /print -core focus
+/key bind meta-[O /print -core unfocus
+----
+
+// TRANSLATION MISSING
+For example to mark buffers as read when the terminal loses the focus:
+
+----
+/key bind meta-[O /allbuf /buffer set unread
+----
+
+// TRANSLATION MISSING
+[[screen_paste]]
+=== When WeeChat is running in screen, pasting text in another screen window adds ~0 and ~1 around text, why?
+
+This is caused by the bracketed paste option which is enabled by default, and
+not properly handled by screen in other windows.
+
+You can just disable bracketed paste mode:
+
+----
+/set weechat.look.paste_bracketed off
+----
+
+// TRANSLATION MISSING
+[[small_terminal]]
+=== How can I customize display for very small terminal size (like 80x25), to not waste space?
+
+// TRANSLATION MISSING
+You can remove side bars (buflist and nicklist), change time format to display
+only hours and minutes, disable alignment of messages and set a char for nick
+prefix/suffix:
+
+----
+/set buflist.look.enabled off
+/bar hide nicklist
+/set weechat.look.buffer_time_format "%H:%M"
+/set weechat.look.prefix_align none
+/set weechat.look.align_end_of_lines prefix
+/set weechat.look.nick_suffix ">"
+/set weechat.look.nick_prefix "<"
+----
+
+// TRANSLATION MISSING
+Terminal 80x25, with default configuration:
+
+....
+┌────────────────────────────────────────────────────────────────────────────────┐
+│1.local     │Welcome on WeeChat channel!                                        │
+│  weechat   │16:27:16        --> | FlashCode (~flashcode@localhost)  │@FlashCode│
+│2.  #weechat│                    | has joined #weechat               │ bob      │
+│            │16:27:16         -- | Mode #weechat [+nt] by hades.arpa │          │
+│            │16:27:16         -- | Channel #weechat: 1 nick (1 op, 0 │          │
+│            │                    | voices, 0 normals)                │          │
+│            │16:27:18         -- | Channel created on Sun, 22 Mar    │          │
+│            │                    | 2020 16:27:16                     │          │
+│            │17:02:28        --> | bob (~bob_user@localhost) has     │          │
+│            │                    | joined #weechat                   │          │
+│            │17:03:12 @FlashCode | hi bob, you're the first user     │          │
+│            │                    | here, welcome on the WeeChat      │          │
+│            │                    | support channel!                  │          │
+│            │17:03:33        bob | hi FlashCode                      │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │                                                        │          │
+│            │[17:04] [2] [irc/local] 2:#weechat(+nt){2}                         │
+│            │[@FlashCode(i)] █                                                  │
+└────────────────────────────────────────────────────────────────────────────────┘
+....
+
+// TRANSLATION MISSING
+Terminal 80x25, after changes:
+
+....
+┌────────────────────────────────────────────────────────────────────────────────┐
+│Welcome on WeeChat channel!                                                     │
+│16:27 --> FlashCode (~flashcode@localhost) has joined #weechat                  │
+│16:27 -- Mode #weechat [+nt] by hades.arpa                                      │
+│16:27 -- Channel #weechat: 1 nick (1 op, 0 voices, 0 normals)                   │
+│16:27 -- Channel created on Sun, 22 Mar 2020 16:27:16                           │
+│17:02 --> bob (~bob_user@localhost) has joined #weechat                         │
+│17:03 <@FlashCode> hi bob, you're the first user here, welcome on the WeeChat   │
+│      support channel!                                                          │
+│17:03 <bob> hi FlashCode                                                        │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│[17:04] [2] [irc/local] 2:#weechat(+nt){2}                                      │
+│[@FlashCode(i)] █                                                               │
+└────────────────────────────────────────────────────────────────────────────────┘
+....
+
+[[key_bindings]]
+== Associazioni dei tasti
+
+[[meta_keys]]
+=== Alcuni tasti meta (alt + tasto) non funzionano, perché?
+
+Se si utilizzano terminali come xterm o uxterm, alcuni tasti meta non funzionano
+per default. È possibile aggiungere una riga nel file _~/.Xresources_:
+
+* per xterm:
+----
+XTerm*metaSendsEscape: true
+----
+* per uxterm:
+----
+UXTerm*metaSendsEscape: true
+----
+
+Al termine, ricaricare la configurazione (`xrdb -override ~/.Xresources`) o riavviare X.
+
+// TRANSLATION MISSING
+If you are using the macOS Terminal app, enable the option
+"Use option as meta key" in menu Settings/Keyboard. And then you can use the
+kbd:[Option] key as meta key.
+
+// TRANSLATION MISSING
+[[enter_key]]
+=== Some keys including Enter are not working, why?
+
+If you run a WeeChat < 4.0.0 with configuration files created by any
+version ≥ 4.0.0, the keys names become invalid and many keys won't work at all. +
+To repair them, exit WeeChat, remove all sections `[key*]` from weechat.conf
+and start WeeChat again: all default keys will be created.
+
+// TRANSLATION MISSING
+[[key_f11]]
+=== Key F11 maximizes the terminal window, how can I scroll up the nicklist?
+
+The key kbd:[F11] is commonly used by terminals to maximize the window, and
+kbd:[F11]/kbd:[F12] are the default keys in WeeChat to scroll the nicklist.
+
+You can bind other keys, for example kbd:[Shift+F11] and kbd:[Shift+F12],
+with WeeChat ≥ 4.0.0:
+
+----
+/key bind shift-f11 /bar scroll nicklist * -100%
+/key bind shift-f12 /bar scroll nicklist * +100%
+----
+
+Other solution is to enable mouse (key: kbd:[Alt+m]) and scroll with the mouse
+wheel (see also questions about <<mouse,mouse>>).
+
+[[customize_key_bindings]]
+=== Come posso personalizzare le associazioni dei tasti?
+
+Le associazioni dei tasti sono personalizzabili con il comando `/key`.
+
+Il tasto predefinito kbd:[Alt+k] consente di registrare il codice tasto ed
+inserirlo nella riga di comando.
+
+[[jump_to_buffer_11_or_higher]]
+=== Qual è il tasto per passare al buffer 11 (o superiore)?
+
+Il tasto è kbd:[Alt+j] seguito da due numeri, ad esempio kbd:[Alt+j], kbd:[1],
+kbd:[1] per passare al buffer 11.
+
+È possibile associare un tasto, ad esempio:
+
+----
+/key bind meta-q /buffer *11
+----
+
+// TRANSLATION MISSING
+List of default keys is in
+link:weechat_user.it.html#key_bindings[User's guide / Key bindings ^↗^^].
+
+// TRANSLATION MISSING
+To jump to buffers with number ≥ 100, you could define a trigger and then use
+commands like `/123` to jump to buffer #123:
+
+----
+/trigger add numberjump modifier "2000|input_text_for_buffer" "${tg_string} =~ ^/[0-9]+$" "=\/([0-9]+)=/buffer *${re:1}=" "" "" "none"
+----
+
+// TRANSLATION MISSING
+For an easy jump to buffers, you can also install the _go.py_ script:
+
+----
+/script install go.py
+----
+
+[[global_history]]
+=== Come si può usare la cronologia globale (invece di quella del buffer) con i tasti su e giù?
+
+È possibile associare i tasti su e giù alla cronologia globale (quelli predefiniti
+sono kbd:[Ctrl+↑] e kbd:[Ctrl+↓]).
+
+Esempio:
+
+----
+/key bind up /input history_global_previous
+/key bind down /input history_global_next
+----
+
+// TRANSLATION MISSING
+With WeeChat ≤ 3.8, you must use the raw key code (press kbd:[Alt+k] then key
+to display its code):
+
+----
+/key bind meta2-A /input history_global_previous
+/key bind meta2-B /input history_global_next
+----
+
+[[mouse]]
+== Mouse
+
+[[mouse_not_working]]
+=== Il mouse non funziona affatto, cosa posso fare?
+
+Per prima cosa provare ad abilitare il mouse:
+
+----
+/mouse enable
+----
+
+Se il mouse ancora non funziona, verificare la variabile TERM nella propria
+shell (consultare l'output di `echo $TERM` nel terminale).
+In base al terminale usato, il mouse potrebbe non essere supportato.
+
+È possibile testare il supporto al mouse nel terminale:
+
+[source,shell]
+----
+printf '\033[?1002h'
+----
+
+E poi cliccare sul primo carattere del terminale (in alto a sinistra. Dovrebbe
+essere possibile vedere  !!#!!".
+
+Per disabilitare il mouse nel terminale:
+
+[source,shell]
+----
+printf '\033[?1002l'
+----
+
+[[mouse_coords]]
+=== Il mouse non fa nulla per X o Y maggiori di 94 (o 222), perché?
+
+Alcuni terminale inviano solo caratteri ISO per le coordinate del mouse, per cui
+non funziona per X/Y maggiori di 94 (o 222).
+
+Bisogna utilizzare un terminale che supporti le coordinate UTF-8 per il mouse,
+come rxvt-unicode.
+
+[[mouse_select_paste]]
+=== Come posso selezionare o incollare del testo nel terminale quando il mouse è abilitato in WeeChat?
+
+Quando il mouse è abilitato in WeeChat, è possibile usare il modificatore
+kbd:[Shift] per selezionare o cliccare nel terminale, come se il mouse fosse
+disabilitato (in alcuni terminali come iTerm, bisogna usare kbd:[Alt] invece di
+kbd:[Shift]).
+
+[[irc]]
+== IRC
+
+[[irc_tls_connection]]
+=== Ho dei problemi nella connessione al server con TLS, cosa posso fare?
+
+// TRANSLATION MISSING
+If you are using macOS, you must install `openssl` from Homebrew.
+A CA file will be bootstrapped using certificates from the system keychain.
+
+Se si verificano problemi con l'handshake gnutls, si può cercare di
+usare una chiave Diffie-Hellman più piccola (la predefinita è 2048):
+
+----
+/set irc.server.example.tls_dhkey_size 1024
+----
+
+Se si verificano errori con i certificati, è possibile disabilitare "tls_verify"
+(attenzione, la connessione in questo modo sarà meno sicura):
+
+----
+/set irc.server.example.tls_verify off
+----
+
+// TRANSLATION MISSING
+If the server has an invalid certificate and you know what the certificate
+should be, you can specify the fingerprint (SHA-512, SHA-256 or SHA-1):
+
+----
+/set irc.server.example.tls_fingerprint 0c06e399d3c3597511dc8550848bfd2a502f0ce19883b728b73f6b7e8604243b
+----
+
+[[irc_tls_handshake_error]]
+=== Alla connessione al server con TLS ottengo solo l'errore "handshake TLS fallito", cosa posso fare?
+
+Provare una stringa di priorità diversa, sostituendo "xxx" con il nome del server:
+
+----
+/set irc.server.xxx.tls_priorities "NORMAL:%COMPAT"
+----
+
+[[irc_tls_libera]]
+=== Come ci si può connettere al server libera via TLS?
+
+// TRANSLATION MISSING
+Check that you have certificates installed on your system, this is commonly
+provided by the package "ca-certificates".
+
+Impostare la porta del server, TLS, poi riconnettersi:
+
+----
+/set irc.server.libera.addresses "irc.libera.chat/6697"
+/set irc.server.libera.tls on
+/connect libera
+----
+
+// TRANSLATION MISSING
+[[irc_oauth]]
+=== How to connect to a server that requires "oauth"?
+
+Some servers like _twitch_ require oauth to connect.
+
+The oauth is simply a password with the value "oauth:XXXX".
+
+You can add such server and connect with following commands (replace name
+and address by appropriate values):
+
+----
+/server add name irc.server.org -password=oauth:XXXX
+/connect name
+----
+
+[[irc_sasl]]
+=== Come posso essere identificato prima di entrare in un canale?
+
+Se il server supporta SASL, dovrebbe essere utilizzato invece di inviare il
+comando di autenticazione con nickserv, ad esempio:
+
+----
+/set irc.server.libera.sasl_username "mynick"
+/set irc.server.libera.sasl_password "xxxxxxx"
+----
+
+Se il server non supporta SASL, è possibile aggiungere un ritardo (tra il
+comando e l'ingresso nei canali):
+
+----
+/set irc.server.libera.command_delay 5
+----
+
+// TRANSLATION MISSING
+[[edit_autojoin]]
+=== How can I add/remove channels from autojoin option?
+
+// TRANSLATION MISSING
+With WeeChat ≥ 3.5, you can automatically record the channels you manually
+join and part in the "autojoin" server option.
+
+// TRANSLATION MISSING
+For all servers:
+
+----
+/set irc.server_default.autojoin_dynamic on
+----
+
+// TRANSLATION MISSING
+For a single server:
+
+----
+/set irc.server.libera.autojoin_dynamic on
+----
+
+// TRANSLATION MISSING
+You can also add the current channel in the "autojoin" server option using the
+`/autojoin` command:
+
+----
+/autojoin add
+----
+
+// TRANSLATION MISSING
+Or another channel:
+
+----
+/autojoin add #test
+----
+
+// TRANSLATION MISSING
+There are also scripts:
+
+----
+/script search autojoin
+----
+
+[[ignore_vs_filter]]
+=== Qual è la differenza tra i comandi /ignore e /filter?
+
+// TRANSLATION MISSING
+Il comando `/ignore` è un comando IRC, per cui è utile solo per i buffer
+IRC (server e canali).
+Consente di ignorare alcuni nick o nomi host di utenti per un server o per
+un canale (il comando non viene applicato sul contenuto dei messaggi).
+I messaggi corrispondenti vengono eliminati dal plugin IRC prima di
+essere visualizzati (so you'll never see them, and can't be recovered by removing
+the ignore).
+
+// TRANSLATION MISSING
+The `/filter` command is a WeeChat core command, so it applies to any buffer.
+Esso consente di filtrare alcune righe nei buffer mediante tag
+o espressioni regolari per il prefisso ed il contenuto delle righe.
+Le righe filtrate vengono solo nascoste, non eliminate, ed è possibile
+visualizzarle se i filtri vengono disabilitati (il comando predefinito
+kbd:[Alt+=] abilita/disabilita i filtri).
+
+// TRANSLATION MISSING
+[[filter_irc_join_part_quit]]
+=== How can I filter join/part/quit and other annoying messages on IRC channels?
+
+See link:weechat_user.it.html#irc_smart_filter[User's guide / IRC smart filter ^↗^^].
+
+[[filter_irc_join_channel_messages]]
+=== Come posso filtrare i messaggi visualizzati all'ingresso su un canale IRC?
+
+// TRANSLATION MISSING
+You can choose which messages are displayed when joining a channel with the
+option _irc.look.display_join_message_ (see `+/help irc.look.display_join_message+`
+for more info).
+
+// TRANSLATION MISSING
+To hide messages (but keep them in buffer), you can filter them using the tag
+(for example _irc_329_ for channel creation date). See `/help filter` for help
+with filters.
+
+[[filter_voice_messages]]
+=== Come posso filtrare i messaggi voice (ad esempio su server Bitlbee)?
+
+Non è semplice filtrare i messaggi voice, perché la modalità voice può essere
+impostata in altri modi nello stesso messaggio IRC.
+
+Se si vuole, è probabilmente perché Bitlbee utilizza il voice per visualizzare gli
+utenti assenti, e si viene tempestati di messaggi voice. Perciò, è possibile
+modificare questo comportamento e consentire a WeeChat di utilizzare un
+colore speciale per i nick assenti nella lista nick.
+
+Per versioni di Bitlbee ≥ 3, sul canale _&bitlbee_ digitare:
+
+----
+channel set show_users online,away
+----
+
+Per versioni precedenti di Bitlbee, sul canale _&bitlbee_ digitare:
+
+----
+set away_devoice false
+----
+
+Per verificare i nick assenti in WeeChat, consultare la domanda
+relativa a <<color_away_nicks,nick assenti>>.
+
+Se davvero di desidera filtrare i messaggi voice, è possibile usare questo
+comando, ma non funzionerà perfettamente (funziona se la prima modalità
+modificata è il voice):
+
+----
+/filter add hidevoices * irc_mode (\+|\-)v
+----
+
+[[color_away_nicks]]
+=== Come posso vedere i nick assenti nella lista nick?
+
+È necessario impostare l'opzione _irc.server_default.away_check_ su un valore
+positivo (minuti tra ogni controllo dei nick assenti).
+
+L'opzione _irc.server_default.away_check_max_nicks_ limita il controllo delle
+assenze solo sui canali più piccoli.
+
+Ad esempio, per controllare ogni 5 minuti per i nick assenti, sui canali con
+massimo 25 nick:
+
+----
+/set irc.server_default.away_check 5
+/set irc.server_default.away_check_max_nicks 25
+----
+
+[[highlight_notification]]
+=== Come posso essere avvisato quando qualcuno mi cerca in un canale?
+
+// TRANSLATION MISSING
+There is a default trigger "beep" which sends a _BEL_ to the terminal on
+a highlight or private message. Thus you can configure your terminal
+(or multiplexer like screen/tmux) to run a command or play a sound when
+a _BEL_ occurs.
+
+// TRANSLATION MISSING
+Or you can add a command in "beep" trigger:
+
+----
+/set trigger.trigger.beep.command "/print -beep;/exec -bg /path/del/comando argomenti"
+----
+
+// TRANSLATION MISSING
+With an older WeeChat, you can use a script like _beep.pl_ or _launcher.pl_.
+
+Per _launcher.pl_, bisogna impostare il comando:
+
+----
+/set plugins.var.perl.launcher.signal.weechat_highlight "/path/del/comando argomenti"
+----
+
+Altri script correlati:
+
+----
+/script search notify
+----
+
+// TRANSLATION MISSING
+[[disable_highlights_for_specific_nicks]]
+=== How can I disable highlights for specific nicks?
+
+You can use the
+link:weechat_user.it.html#max_hotlist_level_nicks[hotlist_max_level_nicks_add ^↗^^]
+buffer property to set the max hotlist level for some nicks, per buffer,
+or per group of buffers (like IRC servers).
+
+To only disable highlights, you'd have to set it to 2.
+
+For the current buffer:
+
+----
+/buffer setauto hotlist_max_level_nicks_add joe:2,mike:2
+----
+
+For all channels on server "libera":
+
+----
+/set weechat.buffer.irc.libera.*.hotlist_max_level_nicks_add joe:2,mike:2
+----
+
+[[irc_target_buffer]]
+=== Come si può modificare il buffer destinazione per i comandi sui buffer uniti (come i buffer con i server)?
+
+Il tasto predefinito è kbd:[Ctrl+x] (il comando è: `+/buffer switch+`).
+
+[[plugins_scripts]]
+== Plugin / script
+
+[[openbsd_plugins]]
+=== Uso OpenBSD e WeeChat non carica nessun plugin, cosa c'è che non va?
+
+In OpenBSD, i nomi file dei plugin finiscono con ".so.0.0" (".so" in Linux).
+
+Si deve impostare in questo modo:
+
+----
+/set weechat.plugin.extension ".so.0.0"
+/plugin autoload
+----
+
+// TRANSLATION MISSING
+[[install_scripts]]
+=== How can I install scripts? Are scripts compatible with other IRC clients?
+
+// TRANSLATION MISSING
+You can use the command `/script` to install and manage scripts (see `/help script`
+for help).
+
+Gli script non sono compatibili con altri client IRC.
+
+// TRANSLATION MISSING
+[[scripts_update]]
+=== The command "/script update" cannot read scripts, how to fix that?
+
+First check questions about TLS connection in this FAQ.
+
+If still not working, try to manually delete the scripts file (in your shell):
+
+[source,shell]
+----
+rm ~/.cache/weechat/script/plugins.xml.gz
+----
+
+// TRANSLATION MISSING
+[NOTE]
+If you are not using the XDG directories, the path could be: _~/.weechat/script/plugins.xml.gz_.
+
+And update scripts again in WeeChat:
+
+----
+/script update
+----
+
+If you still have an error, then you must disable the automatic update of file
+in WeeChat and download the file manually outside WeeChat (that means you'll
+have to update manually the file yourself to get updates):
+
+* in WeeChat:
+
+----
+/set script.scripts.cache_expire -1
+----
+
+* in your shell, with curl installed:
+
+[source,shell]
+----
+cd ~/.cache/weechat/script
+curl -O https://weechat.org/files/plugins.xml.gz
+----
+
+// TRANSLATION MISSING
+If you're running macOS and the downloaded file has a size of 0 bytes,
+try to set this variable in your shell initialization file or on command line,
+before starting WeeChat:
+
+[source,shell]
+----
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+----
+
+// TRANSLATION MISSING
+[[spell_dictionaries]]
+=== I installed aspell dictionaries on my system, how can I use them without restarting WeeChat?
+
+// TRANSLATION MISSING
+You have to reload the spell plugin:
+
+----
+/plugin reload spell
+----
+
+[[settings]]
+== Impostazioni
+
+// TRANSLATION MISSING
+[[editing_config_files]]
+=== Can I edit configuration files (*.conf) by hand?
+
+You can, but this is *NOT* recommended.
+
+Command `/set` in WeeChat is recommended:
+
+// TRANSLATION MISSING
+* You can complete the name and value of option with kbd:[Tab] key
+  (or kbd:[Shift+Tab] for partial completion, useful for the name).
+* the value is checked, a message is displayed in case of error
+* the value is used immediately, you don't need to restart anything
+
+If you still want to edit files by hand, you should be careful:
+
+* if you put an invalid value for an option, WeeChat will display an error
+  on load and discard the value (the default value for option will be used)
+* if WeeChat is running, you'll have to issue the command `/reload`, and if
+  some settings were changed but not saved with `/save`, you will lose them
+
+[[memory_usage]]
+=== Come posso ottimizzare WeeChat per poter utilizzare meno memoria?
+
+Esistono diversi trucchi per ottimizzare l'uso della memoria:
+
+* utilizzare l'ultima versione stabile (si suppone che abbia meno falle di memoria
+  rispetto le versioni precedenti)
+// TRANSLATION MISSING
+* non caricare alcuni plugin se non vengono utilizzati, ad esempio: buflist,
+  fifo, logger, perl, python, ruby, lua, tcl, guile, javascript, php, spell, xfer (usato per DCC).
+  See `/help weechat.plugin.autoload`.
+* caricare solo gli script veramente necessari
+// TRANSLATION MISSING
+* Do not load system certificates if TLS is *NOT* used: turn off this option:
+  _weechat.network.gnutls_ca_system_.
+* ridurre il valore dell'opzione _weechat.history.max_buffer_lines_number_  oppure
+  impostare il valore dell'opzione _weechat.history.max_buffer_lines_minutes_
+* ridurre il valore dell'opzione _weechat.history.max_commands_
+
+// TRANSLATION MISSING
+[[cpu_usage]]
+=== How can I tweak WeeChat to use less CPU?
+
+// TRANSLATION MISSING
+You can follow same tips as for <<memory_usage,memory>>, and these ones:
+
+// TRANSLATION MISSING
+* hide "nicklist" bar: `/bar hide nicklist` (key: kbd:[Alt+Shift+N]).
+// TRANSLATION MISSING
+* Disable "buflist": `/buflist disable` (key: kbd:[Alt+Shift+B]).
+* remove display of seconds in status bar time:
+  `+/set weechat.look.item_time_format "%H:%M"+` (this is the default value)
+// TRANSLATION MISSING
+* disable real time check of misspelled words in command line (if you enabled it):
+  `+/set spell.check.real_time off+`
+* set the _TZ_ variable (for example: `export TZ="Europe/Paris"`), to prevent
+  frequent access to file _/etc/localtime_
+
+// TRANSLATION MISSING
+[[security]]
+=== I am paranoid about security, which settings could I change to be even more secure?
+
+// TRANSLATION MISSING
+Disable IRC part and quit messages:
+
+----
+/set irc.server_default.msg_part ""
+/set irc.server_default.msg_quit ""
+----
+
+// TRANSLATION MISSING
+Disable answers to all CTCP queries:
+
+----
+/set irc.ctcp.clientinfo ""
+/set irc.ctcp.source ""
+/set irc.ctcp.time ""
+/set irc.ctcp.version ""
+/set irc.ctcp.ping ""
+----
+
+// TRANSLATION MISSING
+With WeeChat < 4.1.0, other CTCP queries were replied by default and must be
+disabled as well:
+
+----
+/set irc.ctcp.finger ""
+/set irc.ctcp.userinfo ""
+----
+
+// TRANSLATION MISSING
+Unload and disable auto-loading of "xfer" plugin (used for IRC DCC):
+
+----
+/plugin unload xfer
+/set weechat.plugin.autoload "*,!xfer"
+----
+
+// TRANSLATION MISSING
+Define a passphrase and use secured data wherever you can for sensitive data
+like passwords: see `/help secure` and `/help` on options
+(if you can use secured data, it is written in the help).
+See also link:weechat_user.it.html#secured_data[Guida per l’Utente / Secured data ^↗^^].
+
+For example:
+
+----
+/secure passphrase xxxxxxxxxx
+/secure set libera_username username
+/secure set libera_password xxxxxxxx
+/set irc.server.libera.sasl_username "${sec.data.libera_username}"
+/set irc.server.libera.sasl_password "${sec.data.libera_password}"
+----
+
+// TRANSLATION MISSING
+[[sharing_config_files]]
+=== I want to share my WeeChat configuration, what files should I share and what should I keep private?
+
+You can share configuration files _*.conf_ except the file _sec.conf_ which
+contains your passwords ciphered with your passphrase.
+
+Some other files may contain sensitive info like passwords (if they are not
+stored in _sec.conf_ with the `/secure` command).
+
+See the link:weechat_user.it.html#files_and_directories[User's guide / Files and directories ^↗^^]
+for more information about configuration files.
+
+// TRANSLATION MISSING
+[[move_to_another_device]]
+=== I want to move my WeeChat to another device and keep my config, what should I copy?
+
+First check directories used by WeeChat with this command: `/debug dirs`. +
+Directories home/config and home/data must be copied (all files and sub-directories).
+
+For example if you're using XDG directories (default with WeeChat ≥ 3.2),
+the directories should be `$HOME/.config/weechat` and `$HOME/.local/share/weechat`. +
+If you're using a single directory (default with WeeChat < 3.2), the directory
+should be `$HOME/.weechat`.
+
+[IMPORTANT]
+The WeeChat version on the new device must be greater than or equal to the version
+on the initial device. +
+Downgrading WeeChat configuration is *NOT SUPPORTED* and can break it,
+leading to unusable WeeChat.
+
+Steps:
+
+. Quit Weechat: `/quit` (or `/upgrade -quit` if you want to resume the session,
+  which includes content of all buffers).
+. Copy all directories, sub-directories and files to the new device, keeping
+  same names and permissions.
+. Optional: copy any file outside these directories that you refer to in your
+  configuration (it's not recommended to use files outside WeeChat directories).
+. Start WeeChat on the new device: `weechat` (or `weechat --upgrade` if you
+  saved the session).
+
+[[development]]
+== Sviluppo
+
+[[bug_task_patch]]
+=== Come posso segnalare bug, richiedere nuove funzionalità o inviare patch?
+
+// TRANSLATION MISSING
+See https://weechat.org/about/support/[this page ^↗^^].
+
+[[gdb_error_threads]]
+=== Quando eseguo WeeChat in gdb, c'è un errore riguardo ai thread, cosa posso fare?
+
+Quando viene eseguito WeeChat all'interno di gdb, potrebbe verificarsi
+questo errore:
+
+[source,shell]
+----
+$ gdb /path/to/weechat
+(gdb) run
+[Thread debugging using libthread_db enabled]
+Cannot find new threads: generic error
+----
+
+Per correggerlo, è possibile eseguire gdb con questo comando (sostituire il
+path di libpthread e WeeChat con i path del proprio sistema):
+
+[source,shell]
+----
+$ LD_PRELOAD=/lib/libpthread.so.0 gdb /path/to/weechat
+(gdb) run
+----
+
+[[supported_os]]
+=== Qual è la lista delle piattaforme supportate da WeeChat? Verrà effettuato il port su altri sistemi operativi?
+
+// TRANSLATION MISSING
+WeeChat runs fine on most Linux/BSD distributions, GNU/Hurd, macOS and Windows
+(Cygwin and Windows Subsystem for Linux).
+
+Facciamo del nostro meglio per portarlo su più piattaforme possibili. L'aiuto
+per gli OS che non abbiamo, e su cui testare WeeChat, è ben accetto.
+
+[[help_developers]]
+=== Voglio aiutare gli sviluppatori di WeeChat. Cosa posso fare?
+
+Ci sono molti compiti da fare (testing, scrittura del codice, documentazione, ...)
+
+// TRANSLATION MISSING
+Please contact us via IRC or mail, look at
+https://weechat.org/about/support/[support page ^↗^^].
+
+[[donate]]
+=== Posso donare denaro o altre cose agli sviluppatori di WeeChat?
+
+// TRANSLATION MISSING
+You can give us money to help development.
+Details on https://weechat.org/donate/[donation page ^↗^^].
