@@ -1876,7 +1876,7 @@ xmpp_stanza_t *omemo::get_bundle(xmpp_ctx_t *context, char *from, char *to)
     children[1] = NULL;
 
     children[0] = stanza__iq_pubsub_publish_item(
-            context, NULL, children, with_noop(nullptr));
+            context, NULL, children, with_noop("current"));
 
     std::string bundle_node_s = fmt::format("eu.siacs.conversations.axolotl.bundles:{}", omemo->device_id);
     children[0] = stanza__iq_pubsub_publish(
@@ -2411,9 +2411,25 @@ char *omemo::decode(weechat::account *account, struct t_gui_buffer *buffer,
     }
 
     if (!decrypted_ok) {
-        if (keys_for_this_device == 0)
+        if (keys_for_this_device == 0) {
             weechat_printf(buffer, "%somemo: message from %s not encrypted for our device %u (%d keys total)",
                            weechat_prefix("error"), jid, omemo->device_id, keys_found);
+            // Remote client has no session for us — republish our bundle and
+            // devicelist so it re-establishes a session on the next message.
+            std::string jid_str(account->jid());
+            xmpp_stanza_t *bundle_stanza = omemo->get_bundle(account->context, jid_str.data(), NULL);
+            if (bundle_stanza) {
+                account->connection.send(bundle_stanza);
+                xmpp_stanza_release(bundle_stanza);
+            }
+            xmpp_stanza_t *dl_stanza = account->get_devicelist();
+            if (dl_stanza) {
+                xmpp_string_guard dl_uuid_g(account->context, xmpp_uuid_gen(account->context));
+                xmpp_stanza_set_id(dl_stanza, dl_uuid_g.ptr);
+                account->connection.send(dl_stanza);
+                xmpp_stanza_release(dl_stanza);
+            }
+        }
         return NULL;
     }
 
