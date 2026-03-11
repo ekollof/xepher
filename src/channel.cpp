@@ -1054,23 +1054,30 @@ int weechat::channel::send_message(const char *to, const char *body)
 
     if (account.omemo && omemo.enabled)
     {
+        weechat_printf(buffer, "%sOMEMO send: attempting encrypted send to %s",
+                       weechat_prefix("network"), to);
         xmpp_stanza_t *encrypted = account.omemo.encode(&account, buffer, to, body);
         if (!encrypted)
         {
             weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
                                      weechat_prefix("error"), "OMEMO Encryption Error");
-            set_transport(weechat::channel::transport::PLAIN, 1);
+            weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
+                                     weechat_prefix("error"),
+                                     "Message not sent; OMEMO stays enabled for this channel");
             xmpp_stanza_release(message);
             return WEECHAT_RC_ERROR;
         }
         xmpp_stanza_add_child(message, encrypted);
         xmpp_stanza_release(encrypted);
 
+        weechat_printf(buffer, "%sOMEMO send: encrypted payload attached",
+                       weechat_prefix("network"));
+
         xmpp_stanza_t *message__encryption = xmpp_stanza_new(account.context);
         xmpp_stanza_set_name(message__encryption, "encryption");
         xmpp_stanza_set_ns(message__encryption, "urn:xmpp:eme:0");
         xmpp_stanza_set_attribute(message__encryption, "namespace",
-                "eu.siacs.conversations.axolotl");
+                "urn:xmpp:omemo:2");
         xmpp_stanza_set_attribute(message__encryption, "name", "OMEMO");
         xmpp_stanza_add_child(message, message__encryption);
         xmpp_stanza_release(message__encryption);
@@ -1231,7 +1238,15 @@ int weechat::channel::send_message(const char *to, const char *body)
     xmpp_stanza_add_child(message, message__store);
     xmpp_stanza_release(message__store);
 
-    account.connection.send( message);
+    char *out_xml = stanza_xml(message);
+    if (out_xml)
+    {
+        weechat_printf(buffer, "%sSEND message stanza: %s",
+                       weechat_prefix("network"), out_xml);
+        xmpp_free(account.context, out_xml);
+    }
+
+    account.connection.send(message);
     xmpp_stanza_release(message);
 
     // XEP-0511: Send outgoing link previews for URLs in the message body

@@ -223,14 +223,18 @@ namespace libsignal {
             return identity_key_pair(pointer);
         }
 
-        inline public_key get_public(auto &&...args) {
-            return call<decltype(ratchet_identity_key_pair_get_public),
-                        ratchet_identity_key_pair_get_public>(args...);
+        // Return non-owning borrowed pointers.
+        // WARNING: do NOT wrap these in owning RAII types (public_key / private_key);
+        // ratchet_identity_key_pair_get_public/private return borrowed pointers and
+        // the RAII destructor would SIGNAL_UNREF keys still owned by this pair.
+        inline ec_public_key* get_public() const noexcept {
+            auto *p = static_cast<ratchet_identity_key_pair*>(*const_cast<identity_key_pair*>(this));
+            return p ? ratchet_identity_key_pair_get_public(p) : nullptr;
         }
 
-        inline private_key get_private(auto &&...args) {
-            return call<decltype(ratchet_identity_key_pair_get_private),
-                        ratchet_identity_key_pair_get_private>(args...);
+        inline ec_private_key* get_private() const noexcept {
+            auto *p = static_cast<ratchet_identity_key_pair*>(*const_cast<identity_key_pair*>(this));
+            return p ? ratchet_identity_key_pair_get_private(p) : nullptr;
         }
     };
 

@@ -82,6 +82,23 @@ xmpp_stanza_t *stanza__iq_pubsub_items(xmpp_ctx_t *context, xmpp_stanza_t *base,
     return parent;
 }
 
+xmpp_stanza_t *stanza__iq_pubsub_items_item(xmpp_ctx_t *context, xmpp_stanza_t *base,
+                                            t_string id)
+{
+    xmpp_stanza_t *parent = base;
+
+    if (!parent)
+    {
+        parent = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(parent, "item");
+    }
+
+    if (!id.value.empty())
+        xmpp_stanza_set_id(parent, id.value.c_str());
+
+    return parent;
+}
+
 xmpp_stanza_t *stanza__iq_pubsub_subscribe(xmpp_ctx_t *context, xmpp_stanza_t *base,
                                            t_string node, t_string jid)
 {
@@ -155,7 +172,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item(xmpp_ctx_t *context, xmpp_stanza_t
 }
 
 xmpp_stanza_t *stanza__iq_pubsub_publish_item_list(xmpp_ctx_t *context, xmpp_stanza_t *base,
-                                                   xmpp_stanza_t **children, t_string ns)
+                                                    xmpp_stanza_t **children, t_string ns)
 {
     xmpp_stanza_t *parent = base;
     xmpp_stanza_t **child = children;
@@ -163,7 +180,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_list(xmpp_ctx_t *context, xmpp_sta
     if (!parent)
     {
         parent = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(parent, "list");
+        xmpp_stanza_set_name(parent, "devices");
     }
 
     if (!ns.value.empty())
@@ -231,11 +248,11 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_signedPreKeyPublic(
     if (!parent)
     {
         parent = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(parent, "signedPreKeyPublic");
+        xmpp_stanza_set_name(parent, "spk");
     }
 
     if (!signedPreKeyId.value.empty())
-        xmpp_stanza_set_attribute(parent, "signedPreKeyId", signedPreKeyId.value.c_str());
+        xmpp_stanza_set_attribute(parent, "id", signedPreKeyId.value.c_str());
 
     while (child && *child)
     {
@@ -255,7 +272,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_signedPreKeySignature(
     if (!parent)
     {
         parent = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(parent, "signedPreKeySignature");
+        xmpp_stanza_set_name(parent, "spks");
     }
 
     while (child && *child)
@@ -276,7 +293,7 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_identityKey(
     if (!parent)
     {
         parent = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(parent, "identityKey");
+        xmpp_stanza_set_name(parent, "ik");
     }
 
     while (child && *child)
@@ -318,11 +335,11 @@ xmpp_stanza_t *stanza__iq_pubsub_publish_item_bundle_prekeys_preKeyPublic(
     if (!parent)
     {
         parent = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(parent, "preKeyPublic");
+        xmpp_stanza_set_name(parent, "pk");
     }
 
     if (!preKeyId.value.empty())
-        xmpp_stanza_set_attribute(parent, "preKeyId", preKeyId.value.c_str());
+        xmpp_stanza_set_attribute(parent, "id", preKeyId.value.c_str());
 
     while (child && *child)
     {

@@ -118,29 +118,29 @@ xmpp_stanza_t *weechat::account::get_devicelist()
     account::device device;
 
     device.id = omemo.device_id;
-    device.name = fmt::format("%u", device.id);
+    device.name = fmt::format("{}", device.id);
     device.label = "weechat";
 
     std::vector<xmpp_stanza_t*> children_vec(devices.size() + 4, nullptr);
     xmpp_stanza_t **children = children_vec.data();
     children[i++] = stanza__iq_pubsub_publish_item_list_device(
-        context, NULL, with_noop(device.name.data()), with_noop(nullptr));
+        context, NULL, with_noop(device.name.c_str()), with_noop(nullptr));
 
     for (auto& device : devices)
     {
-        if (device.first != omemo.device_id)
+        if (device.first != omemo.device_id && device.first != 0 && device.second.name != "%u")
             children[i++] = stanza__iq_pubsub_publish_item_list_device(
                 context, NULL, with_noop(device.second.name.data()), with_noop(nullptr));
     }
 
     children[i] = NULL;
-    const char *node = "eu.siacs.conversations.axolotl";
+    const char *node = "urn:xmpp:omemo:2";
     children[0] = stanza__iq_pubsub_publish_item_list(
         context, NULL, children, with_noop(node));
     children[1] = NULL;
     children[0] = stanza__iq_pubsub_publish_item(
         context, NULL, children, with_noop("current"));
-    node = "eu.siacs.conversations.axolotl.devicelist";
+    node = "urn:xmpp:omemo:2:devices";
     children[0] = stanza__iq_pubsub_publish(context, NULL, children, with_noop(node));
     const char *ns = "http://jabber.org/protocol/pubsub";
     children[0] = stanza__iq_pubsub(context, NULL, children, with_noop(ns));
@@ -175,12 +175,14 @@ xmpp_stanza_t *weechat::account::get_devicelist()
 
         xmpp_stanza_t *f1 = make_field("FORM_TYPE",
             "http://jabber.org/protocol/pubsub#publish-options", "hidden");
-        xmpp_stanza_t *f2 = make_field("pubsub#persist_items", "true");
+        xmpp_stanza_t *f2 = make_field("pubsub#max_items", "max");
         xmpp_stanza_t *f3 = make_field("pubsub#access_model", "open");
+        xmpp_stanza_t *f4 = make_field("pubsub#persist_items", "true");
 
         xmpp_stanza_add_child(x, f1); xmpp_stanza_release(f1);
         xmpp_stanza_add_child(x, f2); xmpp_stanza_release(f2);
         xmpp_stanza_add_child(x, f3); xmpp_stanza_release(f3);
+        xmpp_stanza_add_child(x, f4); xmpp_stanza_release(f4);
 
         xmpp_stanza_t *publish_options = xmpp_stanza_new(context);
         xmpp_stanza_set_name(publish_options, "publish-options");

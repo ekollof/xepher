@@ -10,6 +10,7 @@
 #include <iterator>
 #include <regex>
 #include <exception>
+#include <filesystem>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <weechat/weechat-plugin.h>
@@ -60,9 +61,39 @@ std::vector<std::string> weechat_read_lines(std::vector<std::string_view> comman
     return output;
 }
 
+bool weechat_headless_available()
+{
+    const char *path_env = std::getenv("PATH");
+    if (!path_env)
+        return false;
+
+    std::string_view path(path_env);
+    std::size_t start = 0;
+    while (start <= path.size())
+    {
+        const std::size_t end = path.find(':', start);
+        const std::string_view segment = path.substr(start, end == std::string_view::npos
+                                                            ? path.size() - start
+                                                            : end - start);
+        if (!segment.empty())
+        {
+            std::filesystem::path candidate(segment);
+            candidate /= "weechat-headless";
+            if (std::filesystem::exists(candidate))
+                return true;
+        }
+
+        if (end == std::string_view::npos)
+            break;
+        start = end + 1;
+    }
+
+    return false;
+}
+
 TEST_CASE("weechat" * doctest::may_fail())
 {
-    std::string plugin_api_version("20250508-01");
+    const std::string plugin_api_version(WEECHAT_PLUGIN_API_VERSION);
 
     SUBCASE("plugin api match")
     {
@@ -71,6 +102,12 @@ TEST_CASE("weechat" * doctest::may_fail())
 
     SUBCASE("launches")
     {
+        if (!weechat_headless_available())
+        {
+            MESSAGE("Skipping weechat-headless launch test: binary not available in PATH");
+            return;
+        }
+
         std::vector<std::string> output = weechat_read_lines({
                 "/print -stdout -escape TEST_OK\\n",
                 }, true);
@@ -83,6 +120,12 @@ TEST_CASE("weechat" * doctest::may_fail())
 
     SUBCASE("plugin loads")
     {
+        if (!weechat_headless_available())
+        {
+            MESSAGE("Skipping weechat-headless plugin-load test: binary not available in PATH");
+            return;
+        }
+
         SUBCASE("without incursion")
         {
             const std::regex line_pattern("\\[[^\\]]*\\]\\s*line \\d*: (.*)");

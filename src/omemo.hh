@@ -68,6 +68,12 @@ namespace weechat {
             // recover the correct JID even when `from` is the server domain.
             std::unordered_map<std::string, std::string> pending_iq_jid;
 
+            // Maps configure-IQ id → node name for pending precondition-not-met
+            // recovery.  When a bundle or devicelist publish fails with
+            // <precondition-not-met/>, we send a node configure IQ and record
+            // the id here.  On the configure result we re-publish the node.
+            std::unordered_map<std::string, std::string> pending_configure_retry;
+
             class bundle_request
             {
             public:
@@ -125,6 +131,11 @@ namespace weechat {
             // SPK ID and age.  channel_name may be NULL.
             void show_status(struct t_gui_buffer *buffer, const char *account_name,
                              const char *channel_name, int channel_omemo_enabled);
+
+            // Proactively fetch the OMEMO devicelist for `jid` from the server.
+            // Safe to call even if a fetch is already in-flight (deduplication is
+            // handled in the IQ result handler via pending_iq_jid).
+            void request_devicelist(weechat::account &account, std::string_view jid);
         };
     }
 }

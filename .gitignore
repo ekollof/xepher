@@ -82,6 +82,9 @@ deps/diff/diffwords
 # Package build output
 packaging/build/
 
+# Legacy/archive files
+*.legacy
+
 # Stray source tarballs / extracted packages in repo root
 libstrophe*/
 libstrophe_*

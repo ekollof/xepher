@@ -12,7 +12,7 @@ SHELL = bash
 RM ?= rm -f
 FIND ?= find
 
-INCLUDES=-Ilibstrophe -Ideps -Isrc -I. -I/usr/include/omemo/ \
+INCLUDES=-Ilibstrophe -Ideps/lmdbxx -Ideps -Isrc -I. -I/usr/include/omemo/ \
 	 $(shell xml2-config --cflags) \
 	 $(shell pkg-config --cflags gpgme) \
 	 $(shell pkg-config --cflags libsignal-protocol-c)

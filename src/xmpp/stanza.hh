@@ -57,6 +57,9 @@ xmpp_stanza_t *stanza__iq_pubsub(xmpp_ctx_t *context, xmpp_stanza_t *base,
 
 xmpp_stanza_t *stanza__iq_pubsub_items(xmpp_ctx_t *context, xmpp_stanza_t *base, const char *node);
 
+xmpp_stanza_t *stanza__iq_pubsub_items_item(xmpp_ctx_t *context, xmpp_stanza_t *base,
+                                            t_string id);
+
 xmpp_stanza_t *stanza__iq_pubsub_subscribe(xmpp_ctx_t *context, xmpp_stanza_t *base,
                                            t_string node, t_string jid);
 

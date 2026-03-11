@@ -666,6 +666,11 @@ int command__open(const void *pointer, void *data,
                     std::make_pair(std::string(jid), weechat::channel {
                             *ptr_account, weechat::channel::chat_type::PM, jid, jid
                         })).first;
+
+                // Proactively fetch OMEMO devicelist for this contact so that
+                // sessions can be established before sending the first message.
+                if (ptr_account->omemo)
+                    ptr_account->omemo.request_devicelist(*ptr_account, jid);
             }
 
             if (argc > 2)
