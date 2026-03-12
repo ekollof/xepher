@@ -19,7 +19,17 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
 
     auto binding = xml::message(account.context, stanza);
     body = xmpp_stanza_get_child_by_name(stanza, "body");
-    if (body == NULL)
+    xmpp_stanza_t *encrypted_without_body = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "encrypted", "urn:xmpp:omemo:2");
+    if (!encrypted_without_body)
+    {
+        encrypted_without_body = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "encrypted", "eu.siacs.conversations.axolotl");
+    }
+    xmpp_stanza_t *pgp_without_body = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "x", "jabber:x:encrypted");
+
+    if (body == NULL && !encrypted_without_body && !pgp_without_body)
     {
         topic = xmpp_stanza_get_child_by_name(stanza, "subject");
         if (topic != NULL)
@@ -1012,7 +1022,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool /* top_lev
     const char *eme_namespace = eme ? xmpp_stanza_get_attribute(eme, "namespace") : NULL;
     const char *eme_name = eme ? xmpp_stanza_get_attribute(eme, "name") : NULL;
     
-    intext = xmpp_stanza_get_text(body);
+    intext = body ? xmpp_stanza_get_text(body) : nullptr;
 
     // XEP-0071: XHTML-IM — prefer <html><body> rich rendering over plain <body>.
     // We apply it whenever XHTML is present AND the message is not encrypted
