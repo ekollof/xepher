@@ -791,6 +791,11 @@ int weechat::channel::send_message(std::string to, std::string body,
                                    std::optional<std::string> oob,
                                    std::optional<file_metadata> file_meta)
 {
+    // Reuse the main send path for regular text messages so PM OMEMO logic
+    // (auto-enable, capability gating, encode/decode behavior) stays consistent.
+    if (!oob && !file_meta)
+        return send_message(to.c_str(), body.c_str());
+
     xmpp_stanza_t *message = xmpp_message_new(account.context,
                     type == weechat::channel::chat_type::MUC
                     ? "groupchat" : "chat",
@@ -1033,6 +1038,10 @@ int weechat::channel::send_message(const char *to, const char *body)
 {
     send_reads();
 
+    std::string peer_bare = to ? to : "";
+    if (const auto slash = peer_bare.find('/'); slash != std::string::npos)
+        peer_bare.resize(slash);
+
     xmpp_stanza_t *message = xmpp_message_new(account.context,
                     type == weechat::channel::chat_type::MUC
                     ? "groupchat" : "chat",
@@ -1056,9 +1065,41 @@ int weechat::channel::send_message(const char *to, const char *body)
     {
         weechat_printf(buffer, "%sOMEMO send: attempting encrypted send to %s",
                        weechat_prefix("network"), to);
+        
+        // Debug: check if we have device info
+        if (account.omemo.pending_bundle_fetch.empty())
+        {
+            weechat_printf(buffer, "%sOMEMO: no bundle fetches pending",
+                           weechat_prefix("network"));
+        }
+        else
+        {
+            weechat_printf(buffer, "%sOMEMO: %zu bundle fetch(es) still pending",
+                           weechat_prefix("network"), account.omemo.pending_bundle_fetch.size());
+        }
+        
         xmpp_stanza_t *encrypted = account.omemo.encode(&account, buffer, to, body);
         if (!encrypted)
         {
+            if (type == weechat::channel::chat_type::PM)
+            {
+                if (flushing_pending_omemo)
+                {
+                    // During flush we must signal "not ready" to stop this pass;
+                    // otherwise we'd requeue and loop forever in the same call.
+                    xmpp_stanza_release(message);
+                    return WEECHAT_RC_ERROR;
+                }
+
+                queue_pending_omemo_message(body ? body : "");
+                account.omemo.request_devicelist(account, peer_bare);
+                weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
+                                         weechat_prefix("network"),
+                                         "OMEMO not ready yet; queued message and requested device/bundle updates");
+                xmpp_stanza_release(message);
+                return WEECHAT_RC_OK;
+            }
+
             weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
                                      weechat_prefix("error"), "OMEMO Encryption Error");
             weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
@@ -1280,6 +1321,43 @@ int weechat::channel::send_message(const char *to, const char *body)
     }
 
     return WEECHAT_RC_OK;
+}
+
+void weechat::channel::queue_pending_omemo_message(const std::string& body)
+{
+    if (body.empty())
+        return;
+    pending_omemo_messages.push_back(body);
+}
+
+void weechat::channel::flush_pending_omemo_messages()
+{
+    if (type != weechat::channel::chat_type::PM)
+        return;
+
+    if (flushing_pending_omemo)
+        return;
+
+    if (pending_omemo_messages.empty())
+        return;
+
+    flushing_pending_omemo = true;
+
+    while (!pending_omemo_messages.empty())
+    {
+        std::string body = pending_omemo_messages.front();
+        pending_omemo_messages.pop_front();
+
+        const int rc = send_message(id.c_str(), body.c_str());
+        if (rc != WEECHAT_RC_OK)
+        {
+            // Put it back and stop; we'll retry on next session/bundle update.
+            pending_omemo_messages.push_front(std::move(body));
+            break;
+        }
+    }
+
+    flushing_pending_omemo = false;
 }
 
 void weechat::channel::send_link_preview(const std::string& to, const std::string& url)
