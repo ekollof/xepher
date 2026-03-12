@@ -62,13 +62,28 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
                                  xmpp_jid_bare(*account->context, account->jid().data()));
     const std::string own_bare_jid = own_bare_g ? own_bare_g.str() : std::string(account->jid());
 
+    // Detect legacy (eu.siacs.conversations.axolotl) format by presence of <iv> in header.
+    // Legacy uses AES-128-GCM with explicit IV; OMEMO:2 uses HKDF-derived keys.
+    xmpp_stanza_t *iv_stanza = xmpp_stanza_get_child_by_name(header, "iv");
+    const bool is_legacy_format = (iv_stanza != nullptr);
+    if (is_legacy_format)
+        print_info(buffer, "OMEMO decode: detected legacy (axolotl) format via <iv> element");
+
+    store_device_mode(*this,
+                      normalize_bare_jid(*account->context, jid),
+                      *sender_device_id,
+                      is_legacy_format ? peer_mode::legacy : peer_mode::omemo2);
+
+    // OMEMO:2 transport key: {key32, hmac16}
     std::optional<std::pair<std::array<std::uint8_t, 32>, std::array<std::uint8_t, 16>>> transport_key;
+    // Legacy transport key: {innerKey16, authTag16}
+    std::optional<std::pair<std::array<std::uint8_t, 16>, std::array<std::uint8_t, 16>>> legacy_transport_key;
     std::optional<std::uint32_t> used_prekey_id;
     bool found_keys_elem = false;
     bool found_keys_for_our_bare_jid = false;
     bool found_key_for_us = false;
     for (xmpp_stanza_t *child = xmpp_stanza_get_children(header);
-         child && !transport_key;
+         child && !transport_key && !legacy_transport_key;
          child = xmpp_stanza_get_next(child))
     {
         const char *name = xmpp_stanza_get_name(child);
@@ -102,7 +117,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
             found_keys_for_our_bare_jid = true;
 
         for (xmpp_stanza_t *key_stanza = xmpp_stanza_get_children(child);
-             key_stanza && !transport_key;
+             key_stanza && !transport_key && !legacy_transport_key;
              key_stanza = xmpp_stanza_get_next(key_stanza))
         {
             const char *key_name = xmpp_stanza_get_name(key_stanza);
@@ -139,32 +154,46 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
                 continue;
             }
 
-            transport_key = decrypt_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
-                                                  is_prekey ? &used_prekey_id : nullptr);
-            if (!transport_key)
-                print_error(buffer, "OMEMO Signal decryption of transport key failed.");
+            if (is_legacy_format)
+            {
+                legacy_transport_key = decrypt_legacy_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
+                                                                     is_prekey ? &used_prekey_id : nullptr);
+                if (!legacy_transport_key)
+                    print_error(buffer, "OMEMO (legacy) Signal decryption of transport key failed.");
+            }
+            else
+            {
+                transport_key = decrypt_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
+                                                      is_prekey ? &used_prekey_id : nullptr);
+                if (!transport_key)
+                    print_error(buffer, "OMEMO Signal decryption of transport key failed.");
+            }
         }
     }
 
     // Legacy compatibility: some OMEMO:1 payloads place <key/> elements
     // directly under <header> instead of wrapping them in <keys/>.
-    if (!transport_key && !found_keys_elem)
+    if (!transport_key && !legacy_transport_key && !found_keys_elem)
     {
         for (xmpp_stanza_t *key_stanza = xmpp_stanza_get_children(header);
-             key_stanza && !transport_key;
+             key_stanza && !transport_key && !legacy_transport_key;
              key_stanza = xmpp_stanza_get_next(key_stanza))
         {
             const char *key_name = xmpp_stanza_get_name(key_stanza);
             if (!key_name || weechat_strcasecmp(key_name, "key") != 0)
                 continue;
 
+            // Legacy OMEMO:1 layout: <header><key .../></header> has no
+            // intermediate <keys jid='...'> wrapper. Seeing at least one
+            // <key/> means keys are present for this (bare) peer.
+            found_keys_elem = true;
+            found_keys_for_our_bare_jid = true;
+
             const char *rid = xmpp_stanza_get_attribute(key_stanza, "rid");
             const auto rid_val = rid ? parse_uint32(rid).value_or(0) : 0;
             if (rid_val != device_id)
                 continue;
 
-            found_keys_elem = true;
-            found_keys_for_our_bare_jid = true;
             found_key_for_us = true;
 
             const char *kex_val = xmpp_stanza_get_attribute(key_stanza, "kex");
@@ -182,12 +211,20 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
 
             print_info(buffer,
                        "OMEMO decode: accepting legacy <header><key .../></header> layout.");
-            transport_key = decrypt_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
-                                                  is_prekey ? &used_prekey_id : nullptr);
+            if (is_legacy_format)
+            {
+                legacy_transport_key = decrypt_legacy_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
+                                                                     is_prekey ? &used_prekey_id : nullptr);
+            }
+            else
+            {
+                transport_key = decrypt_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
+                                                      is_prekey ? &used_prekey_id : nullptr);
+            }
         }
     }
 
-    if (!transport_key)
+    if (!transport_key && !legacy_transport_key)
     {
         if (!found_keys_elem)
             print_error(buffer, "OMEMO message has no <keys> element in header.");
@@ -206,15 +243,39 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
             // messages.  pending_key_transport is checked in handle_bundle().
             if (account && sender_device_id)
             {
-                const auto key = std::make_pair(std::string{jid}, *sender_device_id);
-                if (!pending_key_transport.count(key))
+                const std::string bare_jid = normalize_bare_jid(*account->context, jid);
+                const auto key = std::make_pair(bare_jid, *sender_device_id);
+
+                if (key_transport_bootstrap_attempted.count(key) != 0)
+                {
+                    print_info(buffer, fmt::format(
+                        "OMEMO: bootstrap for {}/{} already attempted this session; skipping repeat bundle fetch.",
+                        bare_jid, *sender_device_id));
+                }
+                else if (!pending_key_transport.count(key))
                 {
                     pending_key_transport.insert(key);
-                    request_bundle(*account, jid, *sender_device_id);
-                    print_info(buffer, fmt::format(
-                        "OMEMO: requested bundle for {}/{} to establish session "
-                        "and send key-transport.",
-                        jid, *sender_device_id));
+                    const auto stored_mode = load_device_mode(*this, bare_jid, *sender_device_id);
+                    const auto selected_mode = is_legacy_format
+                        ? peer_mode::legacy
+                        : stored_mode.value_or(peer_mode::omemo2);
+
+                    if (selected_mode == peer_mode::legacy)
+                    {
+                        request_legacy_bundle(*account, bare_jid, *sender_device_id);
+                        print_info(buffer, fmt::format(
+                            "OMEMO: selected legacy bundle fetch for {}/{} to establish session "
+                            "and send key-transport.",
+                            bare_jid, *sender_device_id));
+                    }
+                    else
+                    {
+                        request_bundle(*account, bare_jid, *sender_device_id);
+                        print_info(buffer, fmt::format(
+                            "OMEMO: selected OMEMO:2 bundle fetch for {}/{} to establish session "
+                            "and send key-transport.",
+                            bare_jid, *sender_device_id));
+                    }
                 }
             }
         }
@@ -229,6 +290,43 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
     {
         print_info(buffer, "OMEMO: received KeyTransportElement — session established.");
         return nullptr;
+    }
+
+    // Legacy format: AES-128-GCM decrypt path (no SCE wrapping)
+    if (is_legacy_format && legacy_transport_key)
+    {
+        const auto iv_text = stanza_text(iv_stanza);
+        const auto iv_vec = base64_decode(*account->context, iv_text);
+        if (iv_vec.size() != 12)
+        {
+            print_error(buffer, "OMEMO (legacy): IV element has wrong size (expected 12 bytes).");
+            return nullptr;
+        }
+        std::array<std::uint8_t, 12> iv {};
+        std::copy_n(iv_vec.begin(), 12, iv.begin());
+        const auto result = legacy_omemo_decrypt(legacy_transport_key->first, iv,
+                                                 legacy_transport_key->second, payload);
+        if (!result)
+        {
+            print_error(buffer, "OMEMO (legacy) payload decryption failed.");
+            return nullptr;
+        }
+        if (used_prekey_id && account)
+        {
+            if (replace_used_prekey(*this, *account->context, *used_prekey_id))
+            {
+                print_info(buffer, fmt::format(
+                    "OMEMO: replaced consumed pre-key {} — republishing bundle",
+                    *used_prekey_id));
+                xmpp_stanza_t *bundle_stanza = get_bundle(*account->context, nullptr, nullptr);
+                if (bundle_stanza)
+                {
+                    account->connection.send(bundle_stanza);
+                    xmpp_stanza_release(bundle_stanza);
+                }
+            }
+        }
+        return strdup(result->c_str());
     }
 
     const auto decrypted_xml = omemo2_decrypt(transport_key->first, transport_key->second, payload);
@@ -315,6 +413,8 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
                                     xmpp_jid_bare(*account->context, jid));
     if (target_bare_g.ptr && *target_bare_g.ptr)
         target_jid = target_bare_g.ptr;
+
+    note_peer_traffic(account->context, target_jid);
 
     const auto devicelist = load_string(*this, key_for_devicelist(target_jid));
     if (!devicelist || devicelist->empty())
@@ -527,4 +627,161 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
     return encrypted;
 
 }
+
+    xmpp_stanza_t *weechat::xmpp::omemo::encode_legacy(weechat::account *account,
+                                                        struct t_gui_buffer *buffer,
+                                                        const char *jid,
+                                                        const char *unencrypted)
+    {
+        OMEMO_ASSERT(account != nullptr, "OMEMO encode_legacy requires a valid account");
+        OMEMO_ASSERT(jid != nullptr, "OMEMO encode_legacy requires a peer jid");
+        OMEMO_ASSERT(unencrypted != nullptr, "OMEMO encode_legacy requires plaintext input");
+
+        if (!*this || !account || !jid || !unencrypted)
+            return nullptr;
+
+        ensure_local_identity(*this);
+        ensure_registration_id(*this);
+        ensure_prekeys(*this, *account->context);
+
+        std::string target_jid = jid;
+        xmpp_string_guard target_bare_g(*account->context, xmpp_jid_bare(*account->context, jid));
+        if (target_bare_g.ptr && *target_bare_g.ptr)
+            target_jid = target_bare_g.ptr;
+
+        note_peer_traffic(account->context, target_jid);
+
+        // Look up device list — stored under legacy key set by the legacy devicelist handler
+        const auto devicelist = load_string(*this, key_for_legacy_devicelist(target_jid));
+        if (!devicelist || devicelist->empty())
+        {
+            request_legacy_devicelist(*account, target_jid);
+            print_error(buffer, fmt::format(
+                "OMEMO (legacy): no device list cached for {}. Requested.", target_jid));
+            return nullptr;
+        }
+
+        // Legacy OMEMO uses AES-128-GCM on the raw message text (no SCE wrapping)
+        const auto ep = legacy_omemo_encrypt(std::string_view(unencrypted));
+        if (!ep)
+        {
+            print_error(buffer, "OMEMO (legacy): AES-128-GCM payload encryption failed.");
+            return nullptr;
+        }
+
+        xmpp_stanza_t *encrypted = xmpp_stanza_new(*account->context);
+        xmpp_stanza_set_name(encrypted, "encrypted");
+        xmpp_stanza_set_ns(encrypted, kLegacyOmemoNs.data());
+
+        xmpp_stanza_t *header = xmpp_stanza_new(*account->context);
+        xmpp_stanza_set_name(header, "header");
+        xmpp_stanza_set_attribute(header, "sid", fmt::format("{}", device_id).c_str());
+
+        xmpp_string_guard own_bare_g(*account->context,
+            xmpp_jid_bare(*account->context, account->jid().data()));
+        const std::string own_jid = own_bare_g ? own_bare_g.str() : std::string(account->jid());
+
+        bool added_any_key = false;
+
+        for (const auto &dev : split(*devicelist, ';'))
+        {
+            const auto remote_device_id = parse_uint32(dev);
+            if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
+            {
+                print_error(buffer, fmt::format(
+                    "OMEMO (legacy): skipping invalid device id '{}' for {}", dev, target_jid));
+                continue;
+            }
+
+            // Don't encrypt to our own current device in the remote-recipient pass
+            if (own_jid == target_jid && *remote_device_id == device_id)
+            {
+                print_info(buffer, fmt::format(
+                    "OMEMO (legacy): skipping own device {} (local-only)", *remote_device_id));
+                continue;
+            }
+
+            if (!has_session(target_jid.c_str(), *remote_device_id))
+            {
+                if (!establish_session_from_bundle(*this, *account->context, target_jid, *remote_device_id))
+                {
+                    request_legacy_bundle(*account, target_jid, *remote_device_id);
+                    print_info(buffer, fmt::format(
+                        "OMEMO (legacy): no session for {}/{}; requested bundle fetch.",
+                        target_jid, *remote_device_id));
+                    continue;
+                }
+                print_info(buffer, fmt::format(
+                    "OMEMO (legacy): established session from bundle for {}/{}", target_jid, *remote_device_id));
+            }
+
+            const auto transport = encrypt_legacy_transport_key(*this, target_jid, *remote_device_id, *ep);
+            if (!transport)
+            {
+                print_info(buffer, fmt::format(
+                    "OMEMO (legacy): failed to encrypt transport key for {}/{}", target_jid, *remote_device_id));
+                continue;
+            }
+
+            const auto encoded_transport = base64_encode(*account->context,
+                                                         transport->first.data(),
+                                                         transport->first.size());
+
+            // Legacy stanza: <key rid="..." prekey="true">base64</key>  (no <keys jid> wrapper)
+            xmpp_stanza_t *key_stanza = xmpp_stanza_new(*account->context);
+            xmpp_stanza_set_name(key_stanza, "key");
+            xmpp_stanza_set_attribute(key_stanza, "rid", fmt::format("{}", *remote_device_id).c_str());
+            if (transport->second)
+                xmpp_stanza_set_attribute(key_stanza, "prekey", "true");
+
+            xmpp_stanza_t *key_text = xmpp_stanza_new(*account->context);
+            xmpp_stanza_set_text(key_text, encoded_transport.c_str());
+            xmpp_stanza_add_child(key_stanza, key_text);
+            xmpp_stanza_release(key_text);
+
+            xmpp_stanza_add_child(header, key_stanza);
+            xmpp_stanza_release(key_stanza);
+            added_any_key = true;
+            print_info(buffer, fmt::format(
+                "OMEMO (legacy): added key for {}/{}", target_jid, *remote_device_id));
+        }
+
+        if (!added_any_key)
+        {
+            xmpp_stanza_release(header);
+            xmpp_stanza_release(encrypted);
+            print_error(buffer, fmt::format(
+                "OMEMO (legacy): could not encrypt for any known device of {}.", target_jid));
+            return nullptr;
+        }
+
+        // Legacy: include <iv>base64</iv> in the header (12-byte GCM nonce)
+        const auto encoded_iv = base64_encode(*account->context, ep->iv.data(), ep->iv.size());
+        xmpp_stanza_t *iv_stanza = xmpp_stanza_new(*account->context);
+        xmpp_stanza_set_name(iv_stanza, "iv");
+        xmpp_stanza_t *iv_text = xmpp_stanza_new(*account->context);
+        xmpp_stanza_set_text(iv_text, encoded_iv.c_str());
+        xmpp_stanza_add_child(iv_stanza, iv_text);
+        xmpp_stanza_release(iv_text);
+        xmpp_stanza_add_child(header, iv_stanza);
+        xmpp_stanza_release(iv_stanza);
+
+        xmpp_stanza_add_child(encrypted, header);
+        xmpp_stanza_release(header);
+
+        // Legacy: <payload>base64 AES-128-GCM ciphertext (auth tag stripped)</payload>
+        const auto encoded_payload = base64_encode(*account->context,
+                                                   ep->payload.data(),
+                                                   ep->payload.size());
+        xmpp_stanza_t *payload = xmpp_stanza_new(*account->context);
+        xmpp_stanza_set_name(payload, "payload");
+        xmpp_stanza_t *payload_text = xmpp_stanza_new(*account->context);
+        xmpp_stanza_set_text(payload_text, encoded_payload.c_str());
+        xmpp_stanza_add_child(payload, payload_text);
+        xmpp_stanza_release(payload_text);
+        xmpp_stanza_add_child(encrypted, payload);
+        xmpp_stanza_release(payload);
+
+        return encrypted;
+    }
 

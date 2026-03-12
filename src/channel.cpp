@@ -1078,7 +1078,21 @@ int weechat::channel::send_message(const char *to, const char *body)
                            weechat_prefix("network"), account.omemo.pending_bundle_fetch.size());
         }
         
-        xmpp_stanza_t *encrypted = account.omemo.encode(&account, buffer, to, body);
+        xmpp_stanza_t *encrypted = nullptr;
+        const auto peer_mode = account.omemo.select_peer_mode(account, peer_bare);
+        const char *eme_namespace = "urn:xmpp:omemo:2";
+
+        if (peer_mode == weechat::xmpp::omemo::peer_mode::legacy)
+        {
+            encrypted = account.omemo.encode_legacy(&account, buffer, to, body);
+            eme_namespace = "eu.siacs.conversations.axolotl";
+        }
+        else
+        {
+            // Prefer OMEMO:2 for unknown peers and when OMEMO:2 metadata exists.
+            encrypted = account.omemo.encode(&account, buffer, to, body);
+        }
+        
         if (!encrypted)
         {
             if (type == weechat::channel::chat_type::PM)
@@ -1118,7 +1132,7 @@ int weechat::channel::send_message(const char *to, const char *body)
         xmpp_stanza_set_name(message__encryption, "encryption");
         xmpp_stanza_set_ns(message__encryption, "urn:xmpp:eme:0");
         xmpp_stanza_set_attribute(message__encryption, "namespace",
-                "urn:xmpp:omemo:2");
+                eme_namespace);
         xmpp_stanza_set_attribute(message__encryption, "name", "OMEMO");
         xmpp_stanza_add_child(message, message__encryption);
         xmpp_stanza_release(message__encryption);

@@ -618,6 +618,231 @@ void crypto_unlock(void *user_data)
                          signal_buffer_len(buffer.get()));
 }
 
+// ---------------------------------------------------------------------------
+// Legacy OMEMO (eu.siacs.conversations.axolotl) crypto
+// Uses AES-128-GCM with explicit 12-byte IV (transmitted in <iv> element).
+// Transport key = AES-128 innerKey(16) || GCM authTag(16) = 32 bytes.
+// ---------------------------------------------------------------------------
+
+struct legacy_omemo_payload {
+    std::array<std::uint8_t, 16> key {};     // AES-128 key (Signal-encrypted alongside authtag)
+    std::array<std::uint8_t, 12> iv {};      // GCM nonce (transmitted in <iv> element in header)
+    std::array<std::uint8_t, 16> authtag {}; // GCM auth tag (packed into Signal key, not payload)
+    std::vector<std::uint8_t> payload;       // AES-128-GCM ciphertext (auth tag stripped)
+};
+
+[[nodiscard]] auto legacy_omemo_encrypt(std::string_view plaintext) -> std::optional<legacy_omemo_payload>
+{
+    if (plaintext.empty())
+        return std::nullopt;
+
+    legacy_omemo_payload result;
+    gcry_randomize(result.key.data(), result.key.size(), GCRY_STRONG_RANDOM);
+    gcry_randomize(result.iv.data(), result.iv.size(), GCRY_STRONG_RANDOM);
+
+    gcry_cipher_hd_t cipher_raw = nullptr;
+    // AES-128 = GCRY_CIPHER_AES (= GCRY_CIPHER_AES128)
+    if (gcry_cipher_open(&cipher_raw, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_GCM, 0) != 0)
+        return std::nullopt;
+    unique_gcry_cipher cipher {cipher_raw};
+
+    if (gcry_cipher_setkey(cipher.get(), result.key.data(), result.key.size()) != 0
+        || gcry_cipher_setiv(cipher.get(), result.iv.data(), result.iv.size()) != 0)
+    {
+        return std::nullopt;
+    }
+
+    std::vector<std::uint8_t> ciphertext(plaintext.size());
+    if (gcry_cipher_encrypt(cipher.get(), ciphertext.data(), ciphertext.size(),
+                            plaintext.data(), plaintext.size()) != 0)
+    {
+        return std::nullopt;
+    }
+
+    // Retrieve GCM authentication tag (16 bytes)
+    if (gcry_cipher_gettag(cipher.get(), result.authtag.data(), result.authtag.size()) != 0)
+        return std::nullopt;
+
+    result.payload = std::move(ciphertext);
+    return result;
+}
+
+// Decrypt a legacy OMEMO payload.  The auth tag is checked internally by GCM.
+[[nodiscard]] auto legacy_omemo_decrypt(const std::array<std::uint8_t, 16> &key,
+                                        const std::array<std::uint8_t, 12> &iv,
+                                        const std::array<std::uint8_t, 16> &authtag,
+                                        const std::vector<std::uint8_t> &ciphertext)
+    -> std::optional<std::string>
+{
+    if (ciphertext.empty())
+        return std::nullopt;
+
+    gcry_cipher_hd_t cipher_raw = nullptr;
+    if (gcry_cipher_open(&cipher_raw, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_GCM, 0) != 0)
+        return std::nullopt;
+    unique_gcry_cipher cipher {cipher_raw};
+
+    if (gcry_cipher_setkey(cipher.get(), key.data(), key.size()) != 0
+        || gcry_cipher_setiv(cipher.get(), iv.data(), iv.size()) != 0)
+    {
+        return std::nullopt;
+    }
+
+    std::vector<std::uint8_t> plaintext(ciphertext.size());
+    if (gcry_cipher_decrypt(cipher.get(), plaintext.data(), plaintext.size(),
+                            ciphertext.data(), ciphertext.size()) != 0)
+    {
+        return std::nullopt;
+    }
+
+    // Verify the GCM authentication tag
+    if (gcry_cipher_checktag(cipher.get(), authtag.data(), authtag.size()) != 0)
+    {
+        weechat_printf(nullptr, "%somemo: legacy OMEMO payload GCM authentication failed",
+                       weechat_prefix("error"));
+        return std::nullopt;
+    }
+
+    return std::string(plaintext.begin(), plaintext.end());
+}
+
+// Signal-encrypt the legacy transport key bundle: innerKey(16) || authTag(16) = 32 bytes.
+[[nodiscard]] auto encrypt_legacy_transport_key(omemo &self, std::string_view jid,
+                                                std::uint32_t remote_device_id,
+                                                const legacy_omemo_payload &ep)
+    -> std::optional<std::pair<std::vector<std::uint8_t>, bool>>
+{
+    OMEMO_ASSERT(self.context, "signal context must be initialized");
+    OMEMO_ASSERT(self.store_context, "signal store context must be initialized");
+    OMEMO_ASSERT(!jid.empty(), "peer jid must be non-empty");
+    OMEMO_ASSERT(remote_device_id != 0, "peer device id must be non-zero");
+
+    // Per Conversations: Signal-encrypt innerKey(16) || authTag(16) = 32 bytes
+    std::array<std::uint8_t, 32> bundle {};
+    std::copy_n(ep.key.begin(), 16, bundle.begin());
+    std::copy_n(ep.authtag.begin(), 16, bundle.begin() + 16);
+
+    auto address = make_signal_address(jid, static_cast<std::int32_t>(remote_device_id));
+
+    session_cipher *cipher_raw = nullptr;
+    if (session_cipher_create(&cipher_raw, self.store_context, &address.address, self.context) != 0)
+        return std::nullopt;
+    libsignal::unique_session_cipher cipher {cipher_raw};
+    session_cipher_set_version(cipher.get(), CIPHERTEXT_OMEMO_VERSION);
+
+    ciphertext_message *message_raw = nullptr;
+    if (session_cipher_encrypt(cipher.get(), bundle.data(), bundle.size(), &message_raw) != 0)
+        return std::nullopt;
+    libsignal::unique_ciphertext_message message {message_raw};
+
+    const signal_buffer *serialized = ciphertext_message_get_serialized(message.get());
+    if (!serialized)
+        return std::nullopt;
+
+    std::vector<std::uint8_t> output(signal_buffer_const_data(serialized),
+                                     signal_buffer_const_data(serialized) + signal_buffer_len(serialized));
+    return std::pair<std::vector<std::uint8_t>, bool> {
+        std::move(output),
+        ciphertext_message_get_type(message.get()) == CIPHERTEXT_PREKEY_TYPE,
+    };
+}
+
+// Signal-decrypt a legacy OMEMO transport key bundle → {innerKey(16), authTag(16)}.
+[[nodiscard]] auto decrypt_legacy_transport_key(omemo &self, std::string_view jid,
+                                                std::uint32_t remote_device_id,
+                                                const std::vector<std::uint8_t> &serialized,
+                                                bool is_prekey,
+                                                std::optional<std::uint32_t> *out_used_prekey_id = nullptr)
+    -> std::optional<std::pair<std::array<std::uint8_t, 16>, std::array<std::uint8_t, 16>>>
+{
+    OMEMO_ASSERT(self.context, "signal context required");
+    OMEMO_ASSERT(self.store_context, "signal store context required");
+    OMEMO_ASSERT(!jid.empty(), "peer jid required");
+    OMEMO_ASSERT(remote_device_id != 0, "peer device id required");
+    OMEMO_ASSERT(!serialized.empty(), "serialized message required");
+
+    auto address = make_signal_address(jid, static_cast<std::int32_t>(remote_device_id));
+
+    session_cipher *cipher_raw = nullptr;
+    if (int rc = session_cipher_create(&cipher_raw, self.store_context, &address.address, self.context); rc != 0)
+    {
+        weechat_printf(nullptr, "%somemo: (legacy) session_cipher_create failed for %.*s/%u: rc=%d",
+                       weechat_prefix("error"),
+                       static_cast<int>(jid.size()), jid.data(),
+                       remote_device_id, rc);
+        return std::nullopt;
+    }
+    libsignal::unique_session_cipher cipher {cipher_raw};
+    session_cipher_set_version(cipher.get(), CIPHERTEXT_OMEMO_VERSION);
+
+    std::uint32_t registration_id = 0;
+    signal_protocol_identity_get_local_registration_id(self.store_context, &registration_id);
+
+    signal_buffer *plaintext_raw = nullptr;
+    int result = SG_ERR_INVAL;
+    if (is_prekey)
+    {
+        pre_key_signal_message *message_raw = nullptr;
+        int rc = pre_key_signal_message_deserialize_omemo(
+            &message_raw, serialized.data(), serialized.size(), registration_id, self.context);
+        if (rc != 0)
+            rc = pre_key_signal_message_deserialize(&message_raw, serialized.data(), serialized.size(), self.context);
+        if (rc != 0)
+        {
+            weechat_printf(nullptr, "%somemo: (legacy) pre_key_signal_message_deserialize failed for %.*s/%u: rc=%d",
+                           weechat_prefix("error"),
+                           static_cast<int>(jid.size()), jid.data(),
+                           remote_device_id, rc);
+            return std::nullopt;
+        }
+        libsignal::object<pre_key_signal_message> message {message_raw};
+        if (out_used_prekey_id && pre_key_signal_message_has_pre_key_id(message.get()))
+            *out_used_prekey_id = pre_key_signal_message_get_pre_key_id(message.get());
+        result = session_cipher_decrypt_pre_key_signal_message(cipher.get(), message.get(), nullptr, &plaintext_raw);
+    }
+    else
+    {
+        signal_message *message_raw = nullptr;
+        int rc = signal_message_deserialize_omemo(&message_raw, serialized.data(), serialized.size(), self.context);
+        if (rc != 0)
+            rc = signal_message_deserialize(&message_raw, serialized.data(), serialized.size(), self.context);
+        if (rc != 0)
+        {
+            weechat_printf(nullptr, "%somemo: (legacy) signal_message_deserialize failed for %.*s/%u: rc=%d",
+                           weechat_prefix("error"),
+                           static_cast<int>(jid.size()), jid.data(),
+                           remote_device_id, rc);
+            return std::nullopt;
+        }
+        libsignal::object<signal_message> message {message_raw};
+        result = session_cipher_decrypt_signal_message(cipher.get(), message.get(), nullptr, &plaintext_raw);
+    }
+
+    if (result != 0 || !plaintext_raw)
+    {
+        weechat_printf(nullptr, "%somemo: (legacy) session_cipher_decrypt failed for %.*s/%u: rc=%d",
+                       weechat_prefix("error"),
+                       static_cast<int>(jid.size()), jid.data(),
+                       remote_device_id, result);
+        return std::nullopt;
+    }
+
+    std::unique_ptr<signal_buffer, decltype(&signal_buffer_bzero_free)> plaintext(
+        plaintext_raw, signal_buffer_bzero_free);
+    if (signal_buffer_len(plaintext.get()) != 32)
+    {
+        weechat_printf(nullptr, "%somemo: (legacy) decrypted transport key has wrong length %zu (expected 32)",
+                       weechat_prefix("error"), signal_buffer_len(plaintext.get()));
+        return std::nullopt;
+    }
+
+    std::array<std::uint8_t, 16> inner_key {};
+    std::array<std::uint8_t, 16> auth_tag {};
+    std::copy_n(signal_buffer_const_data(plaintext.get()), 16, inner_key.begin());
+    std::copy_n(signal_buffer_const_data(plaintext.get()) + 16, 16, auth_tag.begin());
+    return std::pair<std::array<std::uint8_t, 16>, std::array<std::uint8_t, 16>> {inner_key, auth_tag};
+}
+
 void store_bytes(omemo &self, std::string_view key, const std::uint8_t *data, std::size_t size)
 {
     auto transaction = lmdb::txn::begin(self.db_env);

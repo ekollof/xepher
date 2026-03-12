@@ -173,6 +173,8 @@ void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, const char *account
         pending_key_transport.clear();
         pending_iq_jid.clear();
         pending_configure_retry.clear();
+        missing_omemo2_devicelist.clear();
+        missing_legacy_devicelist.clear();
 
         gcrypt::check_version();
 

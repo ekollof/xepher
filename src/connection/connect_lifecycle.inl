@@ -274,27 +274,6 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             }
         }
 
-        // Proactively fetch OMEMO devicelists for all roster contacts so that
-        // sessions can be established before the first message is sent.  We
-        // iterate the roster (and any already-open PM channels) and call
-        // request_devicelist() for each bare JID.  Duplicates are harmless
-        // because request_devicelist() deduplicates in-flight IQs.
-        if (account.omemo)
-        {
-            // Roster contacts
-            for (const auto &[bare_jid, _roster_item] : account.roster)
-            {
-                account.omemo.request_devicelist(account, bare_jid);
-            }
-            // Also cover any open PM channels not yet in the roster map
-            // (e.g., channels opened in previous sessions that reconnected).
-            for (const auto &[chan_id, chan] : account.channels)
-            {
-                if (chan.type == weechat::channel::chat_type::PM)
-                    account.omemo.request_devicelist(account, chan_id);
-            }
-        }
-
         // Discover HTTP File Upload service (XEP-0363)
         weechat_printf(account.buffer, "%sDiscovering upload service...",
                       weechat_prefix("network"));
@@ -325,6 +304,9 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         const char *global_mam_id = global_mam_id_g.ptr;
         account.add_mam_query(global_mam_id, "",  // Empty 'with' means global query
                              std::optional<time_t>(start), std::optional<time_t>(now));
+        // Defer OMEMO key-transport sends until all archived messages are
+        // replayed (Conversations-style postponed session completion).
+        account.omemo.global_mam_catchup = true;
         
         // Build MAM query manually (global query - no 'with' field)
         xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", global_mam_id);

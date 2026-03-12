@@ -1,7 +1,10 @@
-bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool /* top_level */)
+bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level)
 {
     // SM counter incremented in libstrophe wrapper, not here
     // top_level parameter kept for nested/recursive calls
+
+    (void) top_level;
+    append_raw_xml_trace(account, "RECV", stanza);
 
     weechat::user *user;
     weechat::channel *channel;

@@ -5,6 +5,7 @@
 #include <optional>
 #include <charconv>
 #include <thread>
+#include <filesystem>
 #include <time.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -62,6 +63,63 @@ namespace {
     return parsed;
 }
 
+[[nodiscard]] auto raw_xml_trace_path(weechat::account &account) -> std::string
+{
+    std::shared_ptr<char> eval_path(
+        weechat_string_eval_expression(
+            fmt::format("${{weechat_data_dir}}/xmpp/raw_xml_{}.log", account.name).c_str(),
+            NULL, NULL, NULL),
+        &free);
+    return eval_path ? std::string(eval_path.get()) : std::string {};
+}
+
+void append_raw_xml_trace(weechat::account &account,
+                          const char *direction,
+                          xmpp_stanza_t *stanza)
+{
+    if (!stanza)
+        return;
+
+    const auto path = raw_xml_trace_path(account);
+    if (path.empty())
+        return;
+
+    try
+    {
+        std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    }
+    catch (...)
+    {
+        return;
+    }
+
+    char *xml = stanza_xml(stanza);
+    if (!xml)
+        return;
+
+    FILE *fp = fopen(path.c_str(), "a");
+    if (!fp)
+    {
+        xmpp_free(account.context, xml);
+        return;
+    }
+
+    time_t now = time(NULL);
+    struct tm local_tm = {0};
+    localtime_r(&now, &local_tm);
+    char timestamp[32] = {0};
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &local_tm);
+
+    const char *stanza_name = xmpp_stanza_get_name(stanza);
+    fprintf(fp, "[%s] %s %s\n%s\n\n",
+            timestamp,
+            direction ? direction : "XML",
+            stanza_name ? stanza_name : "(unknown)",
+            xml);
+    fclose(fp);
+    xmpp_free(account.context, xml);
+}
+
 }
 
 void weechat::connection::init()
@@ -72,24 +130,7 @@ void weechat::connection::init()
 
 void weechat::connection::send(xmpp_stanza_t *stanza)
 {
-    if (stanza)
-    {
-        const char *name = xmpp_stanza_get_name(stanza);
-        if (name && std::strcmp(name, "iq") == 0)
-        {
-            char *xml = stanza_xml(stanza);
-            if (xml)
-            {
-                if (std::strstr(xml, "urn:xmpp:omemo:2")
-                    || std::strstr(xml, "http://jabber.org/protocol/disco#items"))
-                {
-                    weechat_printf(account.buffer, "%sSEND IQ: %s",
-                                   weechat_prefix("network"), xml);
-                }
-                xmpp_free(account.context, xml);
-            }
-        }
-    }
+    append_raw_xml_trace(account, "SEND", stanza);
 
     // Increment outbound counter for actual stanzas (not SM elements)
     const char *name = xmpp_stanza_get_name(stanza);

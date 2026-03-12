@@ -4,6 +4,13 @@ using namespace weechat::xmpp;
 constexpr std::string_view kOmemoNs = "urn:xmpp:omemo:2";
 constexpr std::string_view kDevicesNode = "urn:xmpp:omemo:2:devices";
 constexpr std::string_view kBundlesNode = "urn:xmpp:omemo:2:bundles";
+
+// Legacy OMEMO (eu.siacs.conversations.axolotl / "OMEMO:1") constants
+constexpr std::string_view kLegacyOmemoNs = "eu.siacs.conversations.axolotl";
+constexpr std::string_view kLegacyDevicesNode = "eu.siacs.conversations.axolotl.devicelist";
+// Legacy bundles use per-device nodes: this prefix + deviceId
+constexpr std::string_view kLegacyBundlesNodePrefix = "eu.siacs.conversations.axolotl.bundles:";
+
 constexpr std::string_view kDeviceIdKey = "device_id";
 constexpr std::string_view kRegistrationIdKey = "registration_id";
 constexpr std::string_view kIdentityPublicKey = "identity:public";
@@ -140,6 +147,8 @@ using c_string = std::unique_ptr<char, free_deleter>;
 void request_devicelist(weechat::account &account, std::string_view jid)
 {
     const std::string target_jid = normalize_bare_jid(account.context, jid);
+    if (account.omemo.missing_omemo2_devicelist.count(target_jid) != 0)
+        return;
 
     xmpp_stanza_t *children[2] = {nullptr, nullptr};
     children[0] = stanza__iq_pubsub_items(*account.context, nullptr, kDevicesNode.data());
@@ -160,6 +169,14 @@ void request_devicelist(weechat::account &account, std::string_view jid)
 void request_bundle(weechat::account &account, std::string_view jid, std::uint32_t device_id)
 {
     const std::string target_jid = normalize_bare_jid(account.context, jid);
+    if (!account.omemo.has_peer_traffic(account.context, target_jid))
+    {
+        weechat_printf(account.buffer,
+                       "%somemo: deferring OMEMO:2 bundle request for %s/%u until PM/MAM traffic is observed",
+                       weechat_prefix("network"), target_jid.c_str(), device_id);
+        return;
+    }
+
     const auto key = std::make_pair(target_jid, device_id);
     if (account.omemo.pending_bundle_fetch.count(key))
     {
@@ -283,6 +300,75 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
     return fmt::format("bundle:{}:{}", jid, device_id);
 }
 
+// Legacy OMEMO uses separate LMDB keys so we can distinguish which protocol
+// version a peer advertises (they may have both, though unlikely).
+[[nodiscard]] auto key_for_legacy_devicelist(std::string_view jid) -> std::string
+{
+    return fmt::format("legacy_devicelist:{}", jid);
+}
+
+// Legacy bundles share the same Signal session store as OMEMO:2 bundles — the
+// Signal crypto is identical.  Only the XMPP stanza wrapping differs.
+// We use a separate LMDB key prefix so we can tell which namespace the bundle
+// came from when deciding which encode path to use.
+[[nodiscard]] auto key_for_legacy_bundle(std::string_view jid, std::uint32_t device_id) -> std::string
+{
+    return fmt::format("legacy_bundle:{}:{}", jid, device_id);
+}
+
+[[nodiscard]] auto key_for_device_mode(std::string_view jid, std::uint32_t device_id) -> std::string
+{
+    return fmt::format("device_mode:{}:{}", jid, device_id);
+}
+
+void store_device_mode(omemo &self,
+                       std::string_view jid,
+                       std::uint32_t device_id,
+                       omemo::peer_mode mode)
+{
+    if (jid.empty() || device_id == 0)
+        return;
+
+    const char *mode_value = nullptr;
+    if (mode == omemo::peer_mode::omemo2)
+        mode_value = "omemo2";
+    else if (mode == omemo::peer_mode::legacy)
+        mode_value = "legacy";
+    else
+        return;
+
+    if (!self.db_env)
+        return;
+
+    auto transaction = lmdb::txn::begin(self.db_env);
+    self.dbi.omemo.put(transaction, key_for_device_mode(jid, device_id), mode_value);
+    transaction.commit();
+}
+
+[[nodiscard]] auto load_device_mode(omemo &self,
+                                    std::string_view jid,
+                                    std::uint32_t device_id)
+    -> std::optional<omemo::peer_mode>
+{
+    if (jid.empty() || device_id == 0)
+        return std::nullopt;
+
+    if (!self.db_env)
+        return std::nullopt;
+
+    auto transaction = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+    std::string_view mode_value;
+    if (!self.dbi.omemo.get(transaction, key_for_device_mode(jid, device_id), mode_value))
+        return std::nullopt;
+
+    if (mode_value == "omemo2")
+        return omemo::peer_mode::omemo2;
+    if (mode_value == "legacy")
+        return omemo::peer_mode::legacy;
+
+    return std::nullopt;
+}
+
 [[nodiscard]] auto key_for_session(std::string_view jid, std::uint32_t device_id) -> std::string
 {
     return fmt::format("session:{}:{}", jid, device_id);
@@ -383,6 +469,82 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
         }
     }
     return escaped;
+}
+
+// Request the legacy OMEMO device list (eu.siacs.conversations.axolotl.devicelist) for jid.
+void request_legacy_devicelist(weechat::account &account, std::string_view jid)
+{
+    const std::string target_jid = normalize_bare_jid(account.context, jid);
+    if (account.omemo.missing_legacy_devicelist.count(target_jid) != 0)
+        return;
+
+    xmpp_stanza_t *children[2] = {nullptr, nullptr};
+    children[0] = stanza__iq_pubsub_items(*account.context, nullptr, kLegacyDevicesNode.data());
+    children[0] = stanza__iq_pubsub(*account.context, nullptr, children,
+                                    with_noop("http://jabber.org/protocol/pubsub"));
+
+    xmpp_string_guard uuid_g(*account.context, xmpp_uuid_gen(*account.context));
+    const char *uuid = uuid_g.ptr;
+    children[0] = stanza__iq(*account.context, nullptr, children, nullptr, uuid,
+                             account.jid().data(), target_jid.c_str(), "get");
+    if (uuid)
+        account.omemo.pending_iq_jid[uuid] = target_jid;
+
+    weechat_printf(account.buffer,
+                   "%somemo: requesting legacy device list for %s",
+                   weechat_prefix("network"), target_jid.c_str());
+
+    account.connection.send(children[0]);
+    xmpp_stanza_release(children[0]);
+}
+
+// Request a legacy OMEMO bundle (eu.siacs.conversations.axolotl.bundles:{device_id}) for jid.
+// Legacy bundles use a per-device node (device ID embedded in node name, not item ID).
+void request_legacy_bundle(weechat::account &account, std::string_view jid, std::uint32_t device_id)
+{
+    const std::string target_jid = normalize_bare_jid(account.context, jid);
+    if (!account.omemo.has_peer_traffic(account.context, target_jid))
+    {
+        weechat_printf(account.buffer,
+                       "%somemo: deferring legacy bundle request for %s/%u until PM/MAM traffic is observed",
+                       weechat_prefix("network"), target_jid.c_str(), device_id);
+        return;
+    }
+
+    const auto key = std::make_pair(target_jid, device_id);
+    if (account.omemo.pending_bundle_fetch.count(key))
+    {
+        weechat_printf(account.buffer,
+                       "%somemo: legacy bundle request for %s/%u already pending (skipping)",
+                       weechat_prefix("network"), target_jid.c_str(), device_id);
+        return;
+    }
+
+    // Per the Conversations protocol, bundle node = prefix + device_id (no separate item id)
+    const auto bundle_node = fmt::format("{}{}", kLegacyBundlesNodePrefix, device_id);
+    xmpp_stanza_t *items_stanza =
+        stanza__iq_pubsub_items(*account.context, nullptr, bundle_node.c_str());
+    xmpp_stanza_t *pubsub_children[] = {items_stanza, nullptr};
+    xmpp_stanza_t *pubsub_stanza =
+        stanza__iq_pubsub(*account.context, nullptr, pubsub_children,
+                          with_noop("http://jabber.org/protocol/pubsub"));
+
+    xmpp_string_guard uuid_g(*account.context, xmpp_uuid_gen(*account.context));
+    const char *uuid = uuid_g.ptr;
+    xmpp_stanza_t *iq_children[] = {pubsub_stanza, nullptr};
+    xmpp_stanza_t *iq_stanza =
+        stanza__iq(*account.context, nullptr, iq_children, nullptr, uuid,
+                   account.jid().data(), target_jid.c_str(), "get");
+    if (uuid)
+        account.omemo.pending_iq_jid[uuid] = target_jid;
+    account.omemo.pending_bundle_fetch.insert(key);
+
+    weechat_printf(account.buffer,
+                   "%somemo: requesting legacy bundle for %s/%u (node=%s)",
+                   weechat_prefix("network"), target_jid.c_str(), device_id, bundle_node.c_str());
+
+    account.connection.send(iq_stanza);
+    xmpp_stanza_release(iq_stanza);
 }
 
 [[nodiscard]] auto sce_wrap(xmpp_ctx_t *context, weechat::account &account,

@@ -1358,11 +1358,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
             }
 
-            // Keep OMEMO device lists warm for all roster contacts.
-            // Connect-time prefetch may run before roster results are populated,
-            // so refresh again as roster data arrives.
-            if (account.omemo)
-                account.omemo.request_devicelist(account, jid);
         }
     }
 
@@ -1417,10 +1412,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                        weechat_prefix("network"), jid,
                                        subscription ? subscription : "none");
 
-                    // Keep OMEMO device lists warm for all roster contacts on
-                    // roster push updates as well.
-                    if (account.omemo)
-                        account.omemo.request_devicelist(account, jid);
                 }
             }
         }
@@ -1635,10 +1626,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         }
     }
 
-    // OMEMO device list fetch error: when the server returns item-not-found,
-    // the contact has no OMEMO:2 device list published (likely using only legacy
-    // OMEMO or no OMEMO at all).  Clear any pending message queue for this JID
-    // so the user sees a visible error instead of messages being silently lost.
+    // OMEMO devicelist fetch error handling:
+    // - mark missing nodes to avoid request/error loops
+    // - on OMEMO:2 miss, try legacy once
     if (type && weechat_strcasecmp(type, "error") == 0 && id && account.omemo)
     {
         xmpp_stanza_t *dl_err_elem = xmpp_stanza_get_child_by_name(stanza, "error");
@@ -1646,7 +1636,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             stanza, "pubsub", "http://jabber.org/protocol/pubsub");
         bool is_item_not_found = dl_err_elem && xmpp_stanza_get_child_by_name_and_ns(
             dl_err_elem, "item-not-found", "urn:ietf:params:xml:ns:xmpp-stanzas");
-        bool is_devicelist_err = false;
+        bool is_omemo2_devicelist_err = false;
+        bool is_legacy_devicelist_err = false;
         if (dl_pubsub)
         {
             xmpp_stanza_t *dl_items = xmpp_stanza_get_child_by_name(dl_pubsub, "items");
@@ -1654,11 +1645,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 const char *dl_node = xmpp_stanza_get_attribute(dl_items, "node");
                 if (dl_node && strcmp(dl_node, "urn:xmpp:omemo:2:devices") == 0)
-                    is_devicelist_err = true;
+                    is_omemo2_devicelist_err = true;
+                if (dl_node && strcmp(dl_node, "eu.siacs.conversations.axolotl.devicelist") == 0)
+                    is_legacy_devicelist_err = true;
             }
         }
 
-        if (is_item_not_found && is_devicelist_err)
+        if (is_item_not_found && (is_omemo2_devicelist_err || is_legacy_devicelist_err))
         {
             // Resolve which JID this looked up — use pending_iq_jid first,
             // fall back to bare `from` of the error response.
@@ -1679,22 +1672,46 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
             if (!dl_target_jid.empty())
             {
+                bool first_omemo2_miss = false;
+                bool first_legacy_miss = false;
+                if (is_omemo2_devicelist_err)
+                {
+                    first_omemo2_miss = account.omemo.missing_omemo2_devicelist.insert(dl_target_jid).second;
+                }
+                if (is_legacy_devicelist_err)
+                {
+                    first_legacy_miss = account.omemo.missing_legacy_devicelist.insert(dl_target_jid).second;
+                }
+
                 auto dl_ch_it = account.channels.find(dl_target_jid);
                 if (dl_ch_it != account.channels.end())
                 {
                     auto &dl_ch = dl_ch_it->second;
                     if (!dl_ch.pending_omemo_messages.empty())
                     {
-                        weechat_printf(dl_ch.buffer,
-                            "%sOMEMO: %s has no OMEMO:2 device list (node not found). "
-                            "Dropping %zu queued message(s). "
-                            "Use /omemo off to send as plain text.",
-                            weechat_prefix("error"),
-                            dl_target_jid.c_str(),
-                            dl_ch.pending_omemo_messages.size());
-                        dl_ch.pending_omemo_messages.clear();
+                        if (is_omemo2_devicelist_err && first_omemo2_miss)
+                        {
+                            weechat_printf(dl_ch.buffer,
+                                "%sOMEMO: %s has no OMEMO:2 device list (node not found). "
+                                "Keeping %zu queued message(s) and requesting legacy device list.",
+                                weechat_prefix("error"),
+                                dl_target_jid.c_str(),
+                                dl_ch.pending_omemo_messages.size());
+                        }
+                        else if (is_legacy_devicelist_err && first_legacy_miss)
+                        {
+                            weechat_printf(dl_ch.buffer,
+                                "%sOMEMO: %s has no legacy OMEMO device list either. "
+                                "Keeping %zu queued message(s).",
+                                weechat_prefix("error"),
+                                dl_target_jid.c_str(),
+                                dl_ch.pending_omemo_messages.size());
+                        }
                     }
                 }
+
+                if (is_omemo2_devicelist_err)
+                    account.omemo.request_legacy_devicelist(account, dl_target_jid);
             }
         }
     }
@@ -2123,6 +2140,106 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                    weechat_prefix("error"), bundle_jid.c_str());
                 }
             }
+            else if (items_node
+                     && weechat_strcasecmp(items_node,
+                                           "eu.siacs.conversations.axolotl.devicelist") == 0)
+            {
+                // Recover the correct JID using the same logic as OMEMO:2.
+                std::string node_owner_str;
+                if (id)
+                {
+                    auto it = account.omemo.pending_iq_jid.find(id);
+                    if (it != account.omemo.pending_iq_jid.end())
+                    {
+                        node_owner_str = it->second;
+                        account.omemo.pending_iq_jid.erase(it);
+                    }
+                }
+                if (node_owner_str.empty())
+                {
+                    xmpp_string_guard from_bare_g(account.context,
+                        from ? xmpp_jid_bare(account.context, from) : nullptr);
+                    if (from_bare_g.ptr && *from_bare_g.ptr)
+                        node_owner_str = from_bare_g.ptr;
+                }
+                if (node_owner_str.empty())
+                {
+                    xmpp_string_guard to_bare_g(account.context,
+                        to ? xmpp_jid_bare(account.context, to) : nullptr);
+                    node_owner_str = (to_bare_g.ptr && *to_bare_g.ptr)
+                        ? to_bare_g.ptr : account.jid().data();
+                }
+
+                if (account.omemo)
+                    account.omemo.handle_legacy_devicelist(&account,
+                                                           node_owner_str.c_str(),
+                                                           items);
+            }
+            else if (items_node
+                     && std::string_view(items_node).starts_with(
+                         "eu.siacs.conversations.axolotl.bundles:"))
+            {
+                std::string bundle_jid;
+                if (account.omemo && id)
+                {
+                    auto it = account.omemo.pending_iq_jid.find(id);
+                    if (it != account.omemo.pending_iq_jid.end())
+                    {
+                        bundle_jid = it->second;
+                        account.omemo.pending_iq_jid.erase(it);
+                    }
+                }
+                if (bundle_jid.empty())
+                    bundle_jid = from ? from : account.jid().data();
+
+                const std::string_view node(items_node);
+                const auto pos = node.find_last_of(':');
+                std::uint32_t bundle_device_id = 0;
+                if (pos != std::string_view::npos && pos + 1 < node.size())
+                {
+                    const auto parsed_node_device_id =
+                        parse_omemo_device_id(std::string(node.substr(pos + 1)).c_str());
+                    if (parsed_node_device_id)
+                        bundle_device_id = *parsed_node_device_id;
+                }
+
+                if (bundle_device_id == 0)
+                {
+                    item = xmpp_stanza_get_child_by_name(items, "item");
+                    if (item)
+                    {
+                        const char *item_id = xmpp_stanza_get_id(item);
+                        const auto parsed_item_device_id = parse_omemo_device_id(item_id);
+                        if (parsed_item_device_id)
+                            bundle_device_id = *parsed_item_device_id;
+                    }
+                }
+
+                if (account.omemo && bundle_device_id != 0)
+                    account.omemo.pending_bundle_fetch.erase({bundle_jid, bundle_device_id});
+
+                if (type && weechat_strcasecmp(type, "result") == 0)
+                {
+                    if (account.omemo && bundle_device_id != 0)
+                        account.omemo.handle_legacy_bundle(&account,
+                                                           account.buffer,
+                                                           bundle_jid.c_str(),
+                                                           bundle_device_id,
+                                                           items);
+                    else
+                        weechat_printf(account.buffer,
+                                       "%somemo: legacy bundle result for %s has missing/invalid device id",
+                                       weechat_prefix("error"),
+                                       bundle_jid.c_str());
+                }
+                else if (type && weechat_strcasecmp(type, "error") == 0)
+                {
+                    weechat_printf(account.buffer,
+                                   "%somemo: legacy bundle fetch for %s/%u returned error",
+                                   weechat_prefix("error"),
+                                   bundle_jid.c_str(), bundle_device_id);
+                }
+            }
         }
     }
 
@@ -2253,6 +2370,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 {
                     // Global MAM query complete
                     account.mam_query_remove(mam_query.id);
+                        // MAM catchup done — fire deferred key transports now
+                        account.omemo.global_mam_catchup = false;
+                        account.omemo.process_postponed_key_transports(account);
                 }
             }
             else

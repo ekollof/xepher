@@ -8,6 +8,7 @@
 #include <functional>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 // RAII owner for malloc()/calloc()-allocated byte buffers.
@@ -34,6 +35,12 @@ namespace weechat {
 
         struct omemo
         {
+            enum class peer_mode {
+                unknown,
+                omemo2,
+                legacy,
+            };
+
             // IMPORTANT: C++ destroys members in reverse declaration order.
             // Desired destruction order: store_context first, context second, db_env last.
             // So declare in reverse: db_env first (destroyed last),
@@ -57,6 +64,23 @@ namespace weechat {
             // drained in handle_bundle() after bks_store_bundle().
             std::set<std::pair<std::string, std::uint32_t>> pending_key_transport;
 
+            // Tracks devices we already attempted to bootstrap in this session
+            // with a KeyTransportElement. Prevents repeated bundle/key-transport
+            // loops when replaying many archived encrypted messages from the same
+            // device that still doesn't encrypt to us.
+            std::set<std::pair<std::string, std::uint32_t>> key_transport_bootstrap_attempted;
+
+            // Set to true while the initial global MAM catchup query is in
+            // progress.  Key transports that would be sent during catchup are
+            // deferred to `postponed_key_transports` and sent all at once when
+            // the global MAM <fin> arrives, avoiding flooding contacts with
+            // key-transport messages for archived message replays.
+            bool global_mam_catchup = false;
+
+            // Key transports deferred during global MAM catchup.
+            // Each entry is {bare_jid, remote_device_id}.
+            std::set<std::pair<std::string, std::uint32_t>> postponed_key_transports;
+
             // Devices for which a bundle fetch IQ is currently in-flight.
             // Prevents duplicate fetches when repeated PEP devicelist events
             // arrive before the first IQ result returns.
@@ -68,11 +92,21 @@ namespace weechat {
             // recover the correct JID even when `from` is the server domain.
             std::unordered_map<std::string, std::string> pending_iq_jid;
 
+            // Peers for which the corresponding devicelist node returned
+            // <item-not-found/>. Used to avoid request/error loops.
+            std::unordered_set<std::string> missing_omemo2_devicelist;
+            std::unordered_set<std::string> missing_legacy_devicelist;
+
             // Maps configure-IQ id → node name for pending precondition-not-met
             // recovery.  When a bundle or devicelist publish fails with
             // <precondition-not-met/>, we send a node configure IQ and record
             // the id here.  On the configure result we re-publish the node.
             std::unordered_map<std::string, std::string> pending_configure_retry;
+
+            // Bare JIDs for which we observed actual PM/MAM traffic in this
+            // session. Bundle fetches are gated on this to avoid broad eager
+            // metadata/bundle probing for inactive contacts.
+            std::unordered_set<std::string> peers_with_observed_traffic;
 
             class bundle_request
             {
@@ -103,19 +137,41 @@ namespace weechat {
                                    const char *jid,
                                    xmpp_stanza_t *items);
 
-            void handle_bundle(weechat::account *account,
-                               struct t_gui_buffer *buffer,
-                               const char *jid, std::uint32_t device_id,
-                               xmpp_stanza_t *items);
+                        void handle_legacy_devicelist(weechat::account *account,
+                                                                                    const char *jid,
+                                                                                    xmpp_stanza_t *items);
 
-            // Returns true if a Signal session already exists for (jid, device_id).
-            bool has_session(const char *jid, std::uint32_t device_id);
+                        void handle_bundle(weechat::account *account,
+                                                             struct t_gui_buffer *buffer,
+                                                             const char *jid, std::uint32_t device_id,
+                                                             xmpp_stanza_t *items);
 
-            char *decode(weechat::account *account, struct t_gui_buffer *buffer,
-                         const char *jid, xmpp_stanza_t *encrypted);
+                        // Like handle_bundle() but parses the legacy Conversations
+                        // (eu.siacs.conversations.axolotl) bundle stanza format.
+                        void handle_legacy_bundle(weechat::account *account,
+                                                                            struct t_gui_buffer *buffer,
+                                                                            const char *jid, std::uint32_t device_id,
+                                                                            xmpp_stanza_t *items);
 
-            xmpp_stanza_t *encode(weechat::account *account, struct t_gui_buffer *buffer,
-                                  const char *jid, const char *unencrypted);
+                        // Check if a session exists with a particular remote device.
+                        bool has_session(const char *jid, std::uint32_t remote_device_id);
+
+                        // Decode an OMEMO-encrypted message returning cleartext (heap-allocated).
+                        // Returns nullptr if decryption fails; caller must free via free().
+                        char *decode(weechat::account *account,
+                                     struct t_gui_buffer *buffer,
+                                     const char *jid,
+                                     xmpp_stanza_t *encrypted);
+
+                        xmpp_stanza_t *encode(weechat::account *account, struct t_gui_buffer *buffer,
+                                              const char *jid, const char *unencrypted);
+
+                        // Encode using legacy OMEMO (eu.siacs.conversations.axolotl).
+                        // Produces AES-128-GCM ciphertext with explicit IV.
+                        // Used when the peer only publishes a legacy device list.
+                        xmpp_stanza_t *encode_legacy(weechat::account *account, struct t_gui_buffer *buffer,
+                                                                                 const char *jid, const char *unencrypted);
+
 
             // Key management helpers
             // Show fingerprint (hex of public identity key) for own key or a peer JID.
@@ -134,10 +190,31 @@ namespace weechat {
             void show_status(struct t_gui_buffer *buffer, const char *account_name,
                              const char *channel_name, int channel_omemo_enabled);
 
+            // Process all deferred key transports accumulated during global MAM
+            // catchup (see `postponed_key_transports`).  Called once the global
+            // MAM <fin> arrives and `global_mam_catchup` is cleared.
+            void process_postponed_key_transports(weechat::account &account);
+
             // Proactively fetch the OMEMO devicelist for `jid` from the server.
             // Safe to call even if a fetch is already in-flight (deduplication is
             // handled in the IQ result handler via pending_iq_jid).
             void request_devicelist(weechat::account &account, std::string_view jid);
+
+            // Request only the legacy OMEMO devicelist namespace.
+            void request_legacy_devicelist(weechat::account &account, std::string_view jid);
+
+            // Mark and query whether a peer has real PM/MAM traffic observed in
+            // this session. JIDs are normalized to bare form.
+            void note_peer_traffic(xmpp_ctx_t *context, std::string_view jid);
+            [[nodiscard]] auto has_peer_traffic(xmpp_ctx_t *context,
+                                                std::string_view jid) const -> bool;
+
+            // Determine which OMEMO namespace should be used for outgoing
+            // encryption to a peer. Returns OMEMO:2 when OMEMO:2 devices are
+            // known, legacy when only legacy devices are known, and unknown when
+            // no device metadata is available yet.
+            [[nodiscard]] auto select_peer_mode(weechat::account &account,
+                                                std::string_view jid) -> peer_mode;
 
             // Drop a cached bundle for a remote device after a fresh bundle fetch
             // proves the server no longer has usable OMEMO:2 data for it.

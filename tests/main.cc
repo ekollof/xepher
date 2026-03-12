@@ -3,3 +3,4 @@
 #include <doctest/doctest.h>
 
 #include "plugin.inl"
+#include "omemo_xep.inl"
