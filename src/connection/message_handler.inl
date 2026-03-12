@@ -189,15 +189,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                         partner_jid, partner_jid
                                     }));
 
-                            // Proactively fetch OMEMO devicelist for this contact.
-                            // Cross-server contacts may never push a PEP event; we
-                            // must request their devicelist explicitly so sessions
-                            // can be established before the first encrypted message.
-                            if (account.omemo)
-                            {
-                                account.omemo.note_peer_traffic(account.context, partner_jid);
-                                account.omemo.request_devicelist(account, partner_jid);
-                            }
                         }
                         
                         if (from_bare)
