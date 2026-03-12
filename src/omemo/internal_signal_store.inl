@@ -1,0 +1,960 @@
+        else if (line.rfind("spks=", 0) == 0)
+            bundle.signed_pre_key_signature = line.substr(5);
+        else if (line.rfind("ik=", 0) == 0)
+            bundle.identity_key = line.substr(3);
+        else if (line.rfind("pk=", 0) == 0)
+        {
+            const auto payload = line.substr(3);
+            const auto separator = payload.find(',');
+            if (separator != std::string::npos)
+            {
+                bundle.prekeys.emplace_back(payload.substr(0, separator),
+                                            payload.substr(separator + 1));
+            }
+        }
+    }
+
+    return bundle;
+}
+
+void ensure_db_open(omemo &self)
+{
+    if (self.db_path.empty())
+        throw std::runtime_error {"OMEMO database path is empty"};
+
+    std::filesystem::create_directories(std::filesystem::path {self.db_path}.parent_path());
+    if (!self.db_env)
+    {
+        self.db_env = lmdb::env::create();
+        self.db_env.set_max_dbs(4);
+        self.db_env.set_mapsize(32U * 1024U * 1024U);
+        self.db_env.open(self.db_path.c_str(), MDB_NOSUBDIR | MDB_CREATE, 0664);
+    }
+
+    auto transaction = lmdb::txn::begin(self.db_env);
+    self.dbi.omemo = lmdb::dbi::open(transaction, "omemo", MDB_CREATE);
+    transaction.commit();
+}
+
+void store_string(omemo &self, std::string_view key, std::string_view value)
+{
+    auto transaction = lmdb::txn::begin(self.db_env);
+    self.dbi.omemo.put(transaction, key, value);
+    transaction.commit();
+}
+
+[[nodiscard]] auto load_string(omemo &self, std::string_view key) -> std::optional<std::string>
+{
+    auto transaction = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+    std::string_view value;
+    if (!self.dbi.omemo.get(transaction, key, value))
+        return std::nullopt;
+    return std::string {value};
+}
+
+[[nodiscard]] auto load_bundle(omemo &self, std::string_view jid,
+                               std::uint32_t remote_device_id) -> std::optional<bundle_metadata>
+{
+    const auto serialized = load_string(self, key_for_bundle(jid, remote_device_id));
+    if (!serialized)
+        return std::nullopt;
+    return deserialize_bundle(*serialized);
+}
+
+void store_bundle(omemo &self, std::string_view jid, std::uint32_t remote_device_id,
+                  const bundle_metadata &bundle)
+{
+    store_string(self, key_for_bundle(jid, remote_device_id), serialize_bundle(bundle));
+}
+
+[[nodiscard]] auto make_local_bundle_metadata(omemo &self) -> std::optional<bundle_metadata>
+{
+    OMEMO_ASSERT(self.context, "signal context must exist before exporting the local bundle");
+
+    if (!self.identity)
+        return std::nullopt;
+
+    const auto signed_pre_key_id = load_string(self, kSignedPreKeyId);
+    const auto signed_pre_key_public = load_bytes(self, kSignedPreKeyPublic);
+    const auto signed_pre_key_signature = load_bytes(self, kSignedPreKeySignature);
+    const auto identity_public = load_bytes(self, kIdentityPublicKey);
+    const auto prekeys_serialized = load_string(self, kPrekeys);
+
+    if (!signed_pre_key_id || !signed_pre_key_public
+        || !signed_pre_key_signature || !identity_public || !prekeys_serialized)
+    {
+        return std::nullopt;
+    }
+
+    bundle_metadata bundle;
+    bundle.signed_pre_key_id = *signed_pre_key_id;
+    bundle.signed_pre_key = base64_encode_raw(signed_pre_key_public->data(),
+                                              signed_pre_key_public->size());
+    bundle.signed_pre_key_signature = base64_encode_raw(signed_pre_key_signature->data(),
+                                                        signed_pre_key_signature->size());
+    bundle.identity_key = base64_encode_raw(identity_public->data(),
+                                            identity_public->size());
+
+    if (!is_valid_omemo_device_id(parse_uint32(bundle.signed_pre_key_id).value_or(0)))
+    {
+        weechat_printf(nullptr,
+                       "%somemo: local bundle metadata has invalid signed prekey id '%s'",
+                       weechat_prefix("error"),
+                       bundle.signed_pre_key_id.c_str());
+        return std::nullopt;
+    }
+    if (bundle.signed_pre_key.empty() || bundle.signed_pre_key_signature.empty()
+        || bundle.identity_key.empty())
+    {
+        weechat_printf(nullptr,
+                       "%somemo: local bundle metadata is missing spk/spks/ik payloads",
+                       weechat_prefix("error"));
+        return std::nullopt;
+    }
+
+    for (const auto &entry : split(*prekeys_serialized, ';'))
+    {
+        const auto separator = entry.find(',');
+        if (separator == std::string::npos)
+            continue;
+
+        const auto id = entry.substr(0, separator);
+        const auto key = entry.substr(separator + 1);
+        const auto parsed_id = parse_uint32(id).value_or(0);
+        if (!is_valid_omemo_device_id(parsed_id) || key.empty())
+        {
+            weechat_printf(nullptr,
+                           "%somemo: local bundle metadata contains invalid prekey entry '%s'",
+                           weechat_prefix("error"),
+                           entry.c_str());
+            return std::nullopt;
+        }
+
+        const bool duplicate_id = std::ranges::any_of(
+            bundle.prekeys,
+            [&](const auto &prekey) {
+                return prekey.first == id;
+            });
+        if (duplicate_id)
+        {
+            weechat_printf(nullptr,
+                           "%somemo: local bundle metadata contains duplicate prekey id '%s'",
+                           weechat_prefix("error"),
+                           id.c_str());
+            return std::nullopt;
+        }
+
+        bundle.prekeys.emplace_back(id, key);
+    }
+
+    if (bundle.prekeys.empty())
+        return std::nullopt;
+
+    if (bundle.prekeys.size() < kMinPreKeyCount)
+    {
+        weechat_printf(nullptr,
+                       "%somemo: local bundle metadata has only %zu prekeys (XEP-0384 minimum is %u)",
+                       weechat_prefix("error"),
+                       bundle.prekeys.size(),
+                       kMinPreKeyCount);
+    }
+
+    store_bundle(self, "self", self.device_id, bundle);
+    return bundle;
+}
+
+void ensure_local_identity(omemo &self)
+{
+    if (!self.context)
+        return;
+
+    OMEMO_ASSERT(self.db_env, "LMDB environment must exist before generating local identity");
+
+    if (self.identity)
+        return;
+
+    const auto public_data = load_bytes(self, kIdentityPublicKey);
+    const auto private_data = load_bytes(self, kIdentityPrivateKey);
+    if (public_data && private_data && !public_data->empty() && !private_data->empty())
+    {
+        // Load via raw decode + explicit SIGNAL_UNREF, matching the legacy-safe
+        // ownership model: ratchet_identity_key_pair_create takes refs to keys.
+        ec_public_key *public_key_raw = nullptr;
+        ec_private_key *private_key_raw = nullptr;
+        if (curve_decode_point(&public_key_raw,
+                               public_data->data(), public_data->size(),
+                               self.context) == 0
+            && curve_decode_private_point(&private_key_raw,
+                                          private_data->data(), private_data->size(),
+                                          self.context) == 0
+            && public_key_raw && private_key_raw)
+        {
+            self.identity = libsignal::identity_key_pair(public_key_raw, private_key_raw);
+            SIGNAL_UNREF(public_key_raw);
+            SIGNAL_UNREF(private_key_raw);
+            return;
+        }
+
+        if (public_key_raw)
+            SIGNAL_UNREF(public_key_raw);
+        if (private_key_raw)
+            SIGNAL_UNREF(private_key_raw);
+    }
+
+    self.identity = libsignal::identity_key_pair::generate(self.context);
+
+    signal_buffer *serialized_public_raw = nullptr;
+    signal_buffer *serialized_private_raw = nullptr;
+
+    // ratchet_identity_key_pair_get_public/private return non-owning borrowed
+    // pointers — do NOT wrap in RAII (would SIGNAL_UNREF the key pair's
+    // internal EC keys, corrupting the identity key pair).
+    ec_public_key *public_key_raw = ratchet_identity_key_pair_get_public(self.identity);
+    ec_private_key *private_key_raw = ratchet_identity_key_pair_get_private(self.identity);
+    if (!public_key_raw || !private_key_raw)
+        return;
+    if (ec_public_key_serialize(&serialized_public_raw, public_key_raw) != 0)
+        return;
+    if (ec_private_key_serialize(&serialized_private_raw, private_key_raw) != 0)
+        return;
+
+    unique_signal_buffer serialized_public {serialized_public_raw};
+    unique_signal_buffer serialized_private {serialized_private_raw};
+
+    store_bytes(self,
+                kIdentityPublicKey,
+                signal_buffer_const_data(serialized_public.get()),
+                signal_buffer_len(serialized_public.get()));
+    store_bytes(self,
+                kIdentityPrivateKey,
+                signal_buffer_const_data(serialized_private.get()),
+                signal_buffer_len(serialized_private.get()));
+}
+
+void ensure_registration_id(omemo &self)
+{
+    OMEMO_ASSERT(self.context, "signal context must exist before generating registration id");
+
+    if (load_string(self, kRegistrationIdKey))
+        return;
+
+    std::uint32_t registration_id = 0;
+    if (signal_protocol_key_helper_generate_registration_id(&registration_id, 0, self.context) == 0)
+        store_string(self, kRegistrationIdKey, fmt::format("{}", registration_id));
+}
+
+void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
+{
+    OMEMO_ASSERT(self.context, "signal context must exist before generating prekeys");
+    OMEMO_ASSERT(context != nullptr, "xmpp context must exist before serializing prekeys");
+
+    if (load_string(self, kSignedPreKeyRecord) && load_string(self, kPrekeys))
+        return;
+
+    session_signed_pre_key *signed_pre_key_raw = nullptr;
+    const auto now_ms = static_cast<std::uint64_t>(std::time(nullptr)) * 1000ULL;
+    if (signal_protocol_key_helper_generate_signed_pre_key(
+            &signed_pre_key_raw, self.identity, 1, now_ms, self.context) != 0)
+    {
+        return;
+    }
+
+    libsignal::object<session_signed_pre_key> signed_pre_key {signed_pre_key_raw};
+    signal_buffer *signed_pre_key_record_raw = nullptr;
+    if (session_signed_pre_key_serialize(&signed_pre_key_record_raw, signed_pre_key.get()) != 0)
+        return;
+
+    unique_signal_buffer signed_pre_key_record {signed_pre_key_record_raw};
+    ec_key_pair *signed_pre_key_pair = session_signed_pre_key_get_key_pair(signed_pre_key.get());
+    ec_public_key *signed_pre_key_public = ec_key_pair_get_public(signed_pre_key_pair);
+
+    signal_buffer *signed_pre_key_public_raw = nullptr;
+    if (ec_public_key_serialize(&signed_pre_key_public_raw, signed_pre_key_public) != 0)
+        return;
+    unique_signal_buffer signed_pre_key_public_buffer {signed_pre_key_public_raw};
+
+    store_string(self, kSignedPreKeyId, "1");
+    store_bytes(self,
+                kSignedPreKeyRecord,
+                signal_buffer_const_data(signed_pre_key_record.get()),
+                signal_buffer_len(signed_pre_key_record.get()));
+    store_bytes(self,
+                key_for_signed_prekey_record(1),
+                signal_buffer_const_data(signed_pre_key_record.get()),
+                signal_buffer_len(signed_pre_key_record.get()));
+    store_bytes(self,
+                kSignedPreKeyPublic,
+                signal_buffer_const_data(signed_pre_key_public_buffer.get()),
+                signal_buffer_len(signed_pre_key_public_buffer.get()));
+    store_bytes(self,
+                kSignedPreKeySignature,
+                session_signed_pre_key_get_signature(signed_pre_key.get()),
+                session_signed_pre_key_get_signature_len(signed_pre_key.get()));
+
+    signal_protocol_key_helper_pre_key_list_node *pre_key_head_raw = nullptr;
+    if (signal_protocol_key_helper_generate_pre_keys(
+            &pre_key_head_raw, kPreKeyStart, kPreKeyCount, self.context) != 0)
+    {
+        return;
+    }
+
+    unique_pre_key_list pre_key_head {pre_key_head_raw};
+    std::vector<std::string> serialized_prekeys;
+    for (auto *node = pre_key_head.get(); node;
+         node = signal_protocol_key_helper_key_list_next(node))
+    {
+        session_pre_key *pre_key = signal_protocol_key_helper_key_list_element(node);
+        ec_key_pair *pre_key_pair = session_pre_key_get_key_pair(pre_key);
+        ec_public_key *pre_key_public = ec_key_pair_get_public(pre_key_pair);
+
+        signal_buffer *pre_key_record_raw = nullptr;
+        if (session_pre_key_serialize(&pre_key_record_raw, pre_key) != 0)
+            continue;
+        unique_signal_buffer pre_key_record {pre_key_record_raw};
+        store_bytes(self,
+                    key_for_prekey_record(session_pre_key_get_id(pre_key)),
+                    signal_buffer_const_data(pre_key_record.get()),
+                    signal_buffer_len(pre_key_record.get()));
+
+        serialized_prekeys.push_back(fmt::format(
+            "{},{}",
+            session_pre_key_get_id(pre_key),
+            serialize_public_key(context, pre_key_public)));
+    }
+
+    if (serialized_prekeys.size() < kMinPreKeyCount)
+    {
+        weechat_printf(nullptr,
+                       "%somemo: generated only %zu prekeys (XEP-0384 minimum is %u)",
+                       weechat_prefix("error"),
+                       serialized_prekeys.size(),
+                       kMinPreKeyCount);
+    }
+
+    store_string(self, kPrekeys, join(serialized_prekeys, ";"));
+}
+
+// Generate a fresh pre-key with the same ID as `used_id`, store it to LMDB,
+// and update the kPrekeys index so the bundle reflects the new public key.
+// Returns true if the replacement succeeded.
+[[nodiscard]] bool replace_used_prekey(omemo &self, xmpp_ctx_t *context, std::uint32_t used_id)
+{
+    OMEMO_ASSERT(self.context, "signal context required for pre-key replacement");
+    OMEMO_ASSERT(context != nullptr, "xmpp context required for pre-key replacement");
+
+    // Generate a single replacement pre-key with the same ID.
+    signal_protocol_key_helper_pre_key_list_node *node_raw = nullptr;
+    if (signal_protocol_key_helper_generate_pre_keys(
+            &node_raw, used_id, 1, self.context) != 0)
+        return false;
+    unique_pre_key_list node_head {node_raw};
+    signal_protocol_key_helper_pre_key_list_node *node = node_head.get();
+    if (!node) return false;
+
+    session_pre_key *new_pre_key = signal_protocol_key_helper_key_list_element(node);
+    ec_key_pair *new_pair = session_pre_key_get_key_pair(new_pre_key);
+    ec_public_key *new_public = ec_key_pair_get_public(new_pair);
+
+    signal_buffer *record_raw = nullptr;
+    if (session_pre_key_serialize(&record_raw, new_pre_key) != 0)
+        return false;
+    unique_signal_buffer record {record_raw};
+
+    // Store new record and update kPrekeys index.
+    store_bytes(self, key_for_prekey_record(used_id),
+                signal_buffer_const_data(record.get()),
+                signal_buffer_len(record.get()));
+
+    const auto new_public_b64 = serialize_public_key(context, new_public);
+    const auto entry = fmt::format("{},{}", used_id, new_public_b64);
+
+    // Replace the old entry (same id prefix) in kPrekeys.
+    const auto existing = load_string(self, kPrekeys).value_or(std::string {});
+    std::vector<std::string> parts = split(existing, ';');
+    bool found = false;
+    for (auto &p : parts)
+    {
+        auto comma = p.find(',');
+        if (comma != std::string::npos)
+        {
+            const auto id_str = p.substr(0, comma);
+            if (parse_uint32(id_str).value_or(0) == used_id)
+            {
+                p = entry;
+                found = true;
+                break;
+            }
+        }
+    }
+    if (!found) parts.push_back(entry);
+    store_string(self, kPrekeys, join(parts, ";"));
+    return true;
+}
+
+[[nodiscard]] auto signal_address_name(const signal_protocol_address *address) -> std::string
+{
+    return address ? std::string {address->name, address->name_len} : std::string {};
+}
+
+[[nodiscard]] auto make_signal_address(std::string_view jid, std::int32_t device_id)
+    -> signal_address_view
+{
+    signal_address_view view;
+    view.name = std::string {jid};
+    view.address.name = view.name.c_str();
+    view.address.name_len = view.name.size();
+    view.address.device_id = device_id;
+    return view;
+}
+
+[[nodiscard]] auto deserialize_public_key(std::string_view encoded, xmpp_ctx_t *context,
+                                          signal_context *signal_context_ptr)
+    -> std::optional<libsignal::public_key>
+{
+    unsigned char *decoded = nullptr;
+    size_t decoded_size = 0;
+    xmpp_base64_decode_bin(context, encoded.data(), encoded.size(), &decoded, &decoded_size);
+    if (!decoded || decoded_size == 0)
+        return std::nullopt;
+
+    struct xmpp_bin_guard {
+        xmpp_ctx_t *context;
+        unsigned char *data;
+        ~xmpp_bin_guard() { if (data) xmpp_free(context, data); }
+    } guard {context, decoded};
+
+    return libsignal::public_key(decoded, decoded_size, signal_context_ptr);
+}
+
+[[nodiscard]] auto establish_session_from_bundle(omemo &self, xmpp_ctx_t *context,
+                                                 std::string_view jid,
+                                                 std::uint32_t remote_device_id)
+    -> bool
+{
+    OMEMO_ASSERT(self.context, "signal context must exist before building a session from a bundle");
+    OMEMO_ASSERT(self.store_context, "signal store context must exist before building a session from a bundle");
+    OMEMO_ASSERT(context != nullptr, "xmpp context must exist before decoding bundle keys");
+    OMEMO_ASSERT(!jid.empty(), "peer jid must be present when building a session from a bundle");
+    OMEMO_ASSERT(remote_device_id != 0, "peer device id must be non-zero when building a session from a bundle");
+
+    const auto bundle = load_bundle(self, jid, remote_device_id);
+    if (!bundle || bundle->prekeys.empty())
+    {
+        weechat_printf(nullptr,
+                       "%somemo: session bootstrap failed for %.*s/%u: no cached bundle or bundle has no prekeys",
+                       weechat_prefix("error"),
+                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        return false;
+    }
+
+    const auto signed_pre_key_id = parse_uint32(bundle->signed_pre_key_id).value_or(0);
+    const auto pre_key_id = parse_uint32(bundle->prekeys.front().first).value_or(0);
+    if (signed_pre_key_id == 0 || pre_key_id == 0)
+    {
+        weechat_printf(nullptr,
+                       "%somemo: session bootstrap failed for %.*s/%u: invalid signed-prekey id %u or prekey id %u",
+                       weechat_prefix("error"),
+                       static_cast<int>(jid.size()), jid.data(), remote_device_id,
+                       signed_pre_key_id, pre_key_id);
+        return false;
+    }
+
+    auto identity_key = deserialize_public_key(bundle->identity_key, context, self.context);
+    auto signed_pre_key = deserialize_public_key(bundle->signed_pre_key, context, self.context);
+    auto one_time_pre_key = deserialize_public_key(bundle->prekeys.front().second, context, self.context);
+    if (!identity_key || !signed_pre_key || !one_time_pre_key)
+    {
+        weechat_printf(nullptr,
+                       "%somemo: session bootstrap failed for %.*s/%u: could not deserialize identity/signed-prekey/prekey public keys",
+                       weechat_prefix("error"),
+                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        return false;
+    }
+
+    auto signature = base64_decode(context, bundle->signed_pre_key_signature);
+    if (signature.empty())
+    {
+        weechat_printf(nullptr,
+                       "%somemo: session bootstrap failed for %.*s/%u: signed prekey signature is empty/invalid base64",
+                       weechat_prefix("error"),
+                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        return false;
+    }
+
+    const auto signed_pre_key_raw = base64_decode(context, bundle->signed_pre_key);
+    if (signed_pre_key_raw.empty())
+    {
+        weechat_printf(nullptr,
+                       "%somemo: session bootstrap failed for %.*s/%u: signed prekey payload is empty/invalid base64",
+                       weechat_prefix("error"),
+                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        return false;
+    }
+
+    // Validate bundle signature before invoking libsignal session setup.
+    // Some broken bundles trigger signature failures; rejecting them here keeps
+    // the failure explicit and avoids pushing invalid material further.
+    if (curve_verify_signature(*(*identity_key),
+                               signed_pre_key_raw.data(), signed_pre_key_raw.size(),
+                               signature.data(), signature.size()) <= 0)
+    {
+        weechat_printf(nullptr,
+                       "%somemo: session bootstrap rejected invalid signed-prekey signature for %.*s/%u",
+                       weechat_prefix("error"),
+                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        return false;
+    }
+
+    weechat_printf(nullptr,
+                   "%somemo: building session for %.*s/%u using spk=%u pk=%u (bundle prekeys=%zu)",
+                   weechat_prefix("network"),
+                   static_cast<int>(jid.size()), jid.data(), remote_device_id,
+                   signed_pre_key_id, pre_key_id, bundle->prekeys.size());
+
+    auto address = make_signal_address(jid, static_cast<std::int32_t>(remote_device_id));
+    const std::uint32_t bundle_registration_id = remote_device_id;
+    libsignal::pre_key_bundle pre_key_bundle(
+        bundle_registration_id,
+        static_cast<int>(remote_device_id),
+        pre_key_id,
+        *(*one_time_pre_key),
+        signed_pre_key_id,
+        *(*signed_pre_key),
+        signature.data(),
+        signature.size(),
+        *(*identity_key));
+
+    libsignal::session_builder builder(self.store_context, &address.address, self.context);
+    try
+    {
+        builder.process_pre_key_bundle(pre_key_bundle);
+    }
+    catch (const std::exception &ex)
+    {
+        weechat_printf(nullptr,
+                       "%somemo: session bootstrap failed for %.*s/%u during process_pre_key_bundle: %s",
+                       weechat_prefix("error"),
+                       static_cast<int>(jid.size()), jid.data(), remote_device_id,
+                       ex.what());
+        return false;
+    }
+    weechat_printf(nullptr,
+                   "%somemo: session bootstrap succeeded for %.*s/%u",
+                   weechat_prefix("network"),
+                   static_cast<int>(jid.size()), jid.data(), remote_device_id);
+    return true;
+}
+
+int identity_get_key_pair(signal_buffer **public_data, signal_buffer **private_data, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self)
+        return SG_ERR_INVAL;
+
+    const auto public_bytes = load_bytes(*self, kIdentityPublicKey);
+    const auto private_bytes = load_bytes(*self, kIdentityPrivateKey);
+    if (!public_bytes || !private_bytes)
+        return SG_ERR_INVALID_KEY;
+
+    *public_data = signal_buffer_create(public_bytes->data(), public_bytes->size());
+    *private_data = signal_buffer_create(private_bytes->data(), private_bytes->size());
+    return (*public_data && *private_data) ? SG_SUCCESS : SG_ERR_NOMEM;
+}
+
+int identity_get_local_registration_id(void *user_data, std::uint32_t *registration_id)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !registration_id)
+        return SG_ERR_INVAL;
+
+    const auto stored = load_string(*self, kRegistrationIdKey);
+    if (!stored)
+        return SG_ERR_INVALID_KEY_ID;
+
+    *registration_id = parse_uint32(*stored).value_or(0);
+    return *registration_id != 0 ? SG_SUCCESS : SG_ERR_INVALID_KEY_ID;
+}
+
+int identity_save(const signal_protocol_address *address, std::uint8_t *key_data,
+                  std::size_t key_len, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !address || !key_data)
+        return SG_ERR_INVAL;
+
+    store_bytes(*self, key_for_identity(signal_address_name(address), address->device_id), key_data, key_len);
+    return SG_SUCCESS;
+}
+
+int identity_is_trusted(const signal_protocol_address *address, std::uint8_t *key_data,
+                        std::size_t key_len, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !address || !key_data)
+        return SG_ERR_INVAL;
+
+    const auto stored = load_bytes(*self, key_for_identity(signal_address_name(address), address->device_id));
+    if (!stored)
+        return 1;
+
+    const std::vector<std::uint8_t> incoming {key_data, key_data + key_len};
+    return *stored == incoming ? 1 : 0;
+}
+
+int pre_key_load(signal_buffer **record, std::uint32_t pre_key_id, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !record)
+        return SG_ERR_INVAL;
+
+    const auto stored = load_bytes(*self, key_for_prekey_record(pre_key_id));
+    if (!stored)
+        return SG_ERR_INVALID_KEY_ID;
+
+    *record = signal_buffer_create(stored->data(), stored->size());
+    return *record ? SG_SUCCESS : SG_ERR_NOMEM;
+}
+
+int pre_key_store_record(std::uint32_t pre_key_id, std::uint8_t *record, std::size_t record_len, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !record)
+        return SG_ERR_INVAL;
+
+    store_bytes(*self, key_for_prekey_record(pre_key_id), record, record_len);
+    return SG_SUCCESS;
+}
+
+int pre_key_contains(std::uint32_t pre_key_id, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    return self && load_bytes(*self, key_for_prekey_record(pre_key_id)) ? 1 : 0;
+}
+
+int pre_key_remove(std::uint32_t pre_key_id, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self)
+        return SG_ERR_INVAL;
+
+    auto transaction = lmdb::txn::begin(self->db_env);
+    if (self->dbi.omemo.del(transaction, key_for_prekey_record(pre_key_id)))
+    {
+        transaction.commit();
+        return SG_SUCCESS;
+    }
+
+    return SG_SUCCESS;
+}
+
+int signed_pre_key_load(signal_buffer **record, std::uint32_t signed_pre_key_id, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !record)
+        return SG_ERR_INVAL;
+
+    const auto stored = load_bytes(*self, key_for_signed_prekey_record(signed_pre_key_id));
+    if (!stored)
+        return SG_ERR_INVALID_KEY_ID;
+
+    *record = signal_buffer_create(stored->data(), stored->size());
+    return *record ? SG_SUCCESS : SG_ERR_NOMEM;
+}
+
+int signed_pre_key_store_record(std::uint32_t signed_pre_key_id, std::uint8_t *record,
+                                std::size_t record_len, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !record)
+        return SG_ERR_INVAL;
+
+    store_bytes(*self, key_for_signed_prekey_record(signed_pre_key_id), record, record_len);
+    return SG_SUCCESS;
+}
+
+int signed_pre_key_contains(std::uint32_t signed_pre_key_id, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    return self && load_bytes(*self, key_for_signed_prekey_record(signed_pre_key_id)) ? 1 : 0;
+}
+
+int signed_pre_key_remove(std::uint32_t signed_pre_key_id, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self)
+        return SG_ERR_INVAL;
+
+    auto transaction = lmdb::txn::begin(self->db_env);
+    if (self->dbi.omemo.del(transaction, key_for_signed_prekey_record(signed_pre_key_id)))
+        transaction.commit();
+    return SG_SUCCESS;
+}
+
+int session_load(signal_buffer **record, signal_buffer **user_record,
+                 const signal_protocol_address *address, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !record || !address)
+        return SG_ERR_INVAL;
+
+    const auto stored = load_bytes(*self, key_for_session(signal_address_name(address), address->device_id));
+    if (!stored)
+        return 0;
+
+    *record = signal_buffer_create(stored->data(), stored->size());
+    if (user_record)
+        *user_record = nullptr;
+    return *record ? 1 : SG_ERR_NOMEM;
+}
+
+int session_get_sub_devices(signal_int_list **sessions, const char *name,
+                            std::size_t name_len, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !sessions || !name)
+        return SG_ERR_INVAL;
+
+    *sessions = signal_int_list_alloc();
+    if (!*sessions)
+        return SG_ERR_NOMEM;
+
+    const auto prefix = fmt::format("session:{}:", std::string_view {name, name_len});
+    auto transaction = lmdb::txn::begin(self->db_env, nullptr, MDB_RDONLY);
+    auto cursor = lmdb::cursor::open(transaction, self->dbi.omemo);
+    std::string_view key;
+    std::string_view value;
+    int count = 0;
+
+    for (bool found = cursor.get(key, value, MDB_FIRST); found;
+         found = cursor.get(key, value, MDB_NEXT))
+    {
+        if (!key.starts_with(prefix))
+            continue;
+
+        const auto device_part = key.substr(prefix.size());
+        if (const auto device_id = parse_uint32(device_part))
+        {
+            signal_int_list_push_back(*sessions, static_cast<int>(*device_id));
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+int session_store_record(const signal_protocol_address *address, std::uint8_t *record,
+                         std::size_t record_len, std::uint8_t *user_record,
+                         std::size_t user_record_len, void *user_data)
+{
+    (void) user_record;
+    (void) user_record_len;
+
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !address || !record)
+        return SG_ERR_INVAL;
+
+    store_bytes(*self, key_for_session(signal_address_name(address), address->device_id), record, record_len);
+    return SG_SUCCESS;
+}
+
+int session_contains(const signal_protocol_address *address, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !address)
+        return 0;
+
+    return load_bytes(*self, key_for_session(signal_address_name(address), address->device_id)) ? 1 : 0;
+}
+
+int session_delete(const signal_protocol_address *address, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !address)
+        return SG_ERR_INVAL;
+
+    auto transaction = lmdb::txn::begin(self->db_env);
+    const bool deleted = self->dbi.omemo.del(transaction,
+                                             key_for_session(signal_address_name(address), address->device_id));
+    if (deleted)
+        transaction.commit();
+    return deleted ? 1 : 0;
+}
+
+int session_delete_all(const char *name, std::size_t name_len, void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !name)
+        return SG_ERR_INVAL;
+
+    const auto prefix = fmt::format("session:{}:", std::string_view {name, name_len});
+    auto transaction = lmdb::txn::begin(self->db_env);
+    auto cursor = lmdb::cursor::open(transaction, self->dbi.omemo);
+    std::string_view key;
+    std::string_view value;
+    int deleted = 0;
+
+    for (bool found = cursor.get(key, value, MDB_FIRST); found;
+         found = cursor.get(key, value, MDB_NEXT))
+    {
+        if (!key.starts_with(prefix))
+            continue;
+        cursor.del();
+        ++deleted;
+    }
+
+    transaction.commit();
+    return deleted;
+}
+
+int sender_key_store_record(const signal_protocol_sender_key_name *sender_key_name,
+                            std::uint8_t *record, std::size_t record_len,
+                            std::uint8_t *user_record, std::size_t user_record_len,
+                            void *user_data)
+{
+    (void) user_record;
+    (void) user_record_len;
+
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !sender_key_name || !record)
+        return SG_ERR_INVAL;
+
+    store_bytes(*self,
+                key_for_sender_key(std::string_view {sender_key_name->group_id, sender_key_name->group_id_len},
+                                   signal_address_name(&sender_key_name->sender),
+                                   sender_key_name->sender.device_id),
+                record,
+                record_len);
+    return SG_SUCCESS;
+}
+
+int sender_key_load(signal_buffer **record, signal_buffer **user_record,
+                    const signal_protocol_sender_key_name *sender_key_name,
+                    void *user_data)
+{
+    auto *self = static_cast<omemo *>(user_data);
+    if (!self || !record || !sender_key_name)
+        return SG_ERR_INVAL;
+
+    const auto stored = load_bytes(
+        *self,
+        key_for_sender_key(std::string_view {sender_key_name->group_id, sender_key_name->group_id_len},
+                           signal_address_name(&sender_key_name->sender),
+                           sender_key_name->sender.device_id));
+    if (!stored)
+        return 0;
+
+    *record = signal_buffer_create(stored->data(), stored->size());
+    if (user_record)
+        *user_record = nullptr;
+    return *record ? 1 : SG_SUCCESS;
+}
+
+void remove_prefixed_keys(omemo &self, std::string_view prefix)
+{
+    auto transaction = lmdb::txn::begin(self.db_env);
+    auto cursor = lmdb::cursor::open(transaction, self.dbi.omemo);
+    std::string_view key;
+    std::string_view value;
+
+    for (bool found = cursor.get(key, value, MDB_FIRST); found;
+         found = cursor.get(key, value, MDB_NEXT))
+    {
+        if (key.starts_with(prefix))
+            cursor.del();
+    }
+
+    transaction.commit();
+}
+
+[[nodiscard]] auto extract_devices_from_items(xmpp_stanza_t *items) -> std::vector<std::string>
+{
+    std::vector<std::string> device_ids;
+    if (!items)
+    {
+        weechat_printf(nullptr, "%somemo: extract_devices: items stanza is NULL", weechat_prefix("error"));
+        return device_ids;
+    }
+
+    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items, "item");
+    if (!item)
+    {
+        weechat_printf(nullptr, "%somemo: extract_devices: no <item> child in items", weechat_prefix("error"));
+        return device_ids;
+    }
+
+    xmpp_stanza_t *devices = xmpp_stanza_get_child_by_name_and_ns(
+        item, "devices", kOmemoNs.data());
+    if (!devices)
+    {
+        weechat_printf(nullptr, "%somemo: extract_devices: no <devices> with namespace %s in item", 
+                       weechat_prefix("error"), kOmemoNs.data());
+        return device_ids;
+    }
+
+    int total_children = 0;
+    int valid_devices = 0;
+    
+    for (xmpp_stanza_t *device = xmpp_stanza_get_children(devices);
+         device;
+         device = xmpp_stanza_get_next(device))
+    {
+        total_children++;
+        const char *name = xmpp_stanza_get_name(device);
+        if (!name || weechat_strcasecmp(name, "device") != 0)
+        {
+            weechat_printf(nullptr, "%somemo: child %d has name '%s' (skipping, expected 'device')",
+                           weechat_prefix("network"), total_children, name ? name : "(null)");
+            continue;
+        }
+
+        const char *id = xmpp_stanza_get_id(device);
+        if (!id || !*id)
+        {
+            weechat_printf(nullptr, "%somemo: child %d is <device> but has no id attribute",
+                           weechat_prefix("network"), total_children);
+            continue;
+        }
+
+        const auto parsed_id = parse_uint32(id);
+        if (!parsed_id || !is_valid_omemo_device_id(*parsed_id))
+        {
+            weechat_printf(nullptr,
+                           "%somemo: ignoring invalid device id '%s' in devicelist",
+                           weechat_prefix("error"),
+                           id);
+            continue;
+        }
+
+        valid_devices++;
+        weechat_printf(nullptr, "%somemo: extracted device %s (valid_count=%d)",
+                       weechat_prefix("network"), id, valid_devices);
+        device_ids.emplace_back(id);
+    }
+
+    weechat_printf(nullptr, "%somemo: stanza had %d total children, %d valid devices extracted",
+                   weechat_prefix("network"), total_children, valid_devices);
+
+    std::sort(device_ids.begin(), device_ids.end());
+    device_ids.erase(std::unique(device_ids.begin(), device_ids.end()), device_ids.end());
+    return device_ids;
+}
+
+[[nodiscard]] auto extract_bundle_from_items(xmpp_stanza_t *items) -> std::optional<bundle_metadata>
+{
+    if (!items)
+        return std::nullopt;
+
+    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items, "item");
+    if (!item)
+        return std::nullopt;
+
+    xmpp_stanza_t *bundle_stanza = xmpp_stanza_get_child_by_name_and_ns(item, "bundle", kOmemoNs.data());
+    if (!bundle_stanza)
+        return std::nullopt;
+
+    bundle_metadata bundle;
+
+    for (xmpp_stanza_t *child = xmpp_stanza_get_children(bundle_stanza);
+         child;
+         child = xmpp_stanza_get_next(child))
+    {
