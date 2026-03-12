@@ -1,7 +1,10 @@
-bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */)
+bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 {
     // SM counter incremented in libstrophe wrapper, not here
     // top_level parameter kept for nested/recursive calls
+
+    (void) top_level;
+    append_raw_xml_trace(account, "RECV", stanza);
 
     xmpp_stanza_t *reply, *query, *text, *fin;
     xmpp_stanza_t         *pubsub, *items, *item, *list, *bundle, *device;
@@ -1627,6 +1630,70 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool /* top_level */
 
                     account.connection.send(cfg_iq);
                     xmpp_stanza_release(cfg_iq);
+                }
+            }
+        }
+    }
+
+    // OMEMO device list fetch error: when the server returns item-not-found,
+    // the contact has no OMEMO:2 device list published (likely using only legacy
+    // OMEMO or no OMEMO at all).  Clear any pending message queue for this JID
+    // so the user sees a visible error instead of messages being silently lost.
+    if (type && weechat_strcasecmp(type, "error") == 0 && id && account.omemo)
+    {
+        xmpp_stanza_t *dl_err_elem = xmpp_stanza_get_child_by_name(stanza, "error");
+        xmpp_stanza_t *dl_pubsub = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "pubsub", "http://jabber.org/protocol/pubsub");
+        bool is_item_not_found = dl_err_elem && xmpp_stanza_get_child_by_name_and_ns(
+            dl_err_elem, "item-not-found", "urn:ietf:params:xml:ns:xmpp-stanzas");
+        bool is_devicelist_err = false;
+        if (dl_pubsub)
+        {
+            xmpp_stanza_t *dl_items = xmpp_stanza_get_child_by_name(dl_pubsub, "items");
+            if (dl_items)
+            {
+                const char *dl_node = xmpp_stanza_get_attribute(dl_items, "node");
+                if (dl_node && strcmp(dl_node, "urn:xmpp:omemo:2:devices") == 0)
+                    is_devicelist_err = true;
+            }
+        }
+
+        if (is_item_not_found && is_devicelist_err)
+        {
+            // Resolve which JID this looked up — use pending_iq_jid first,
+            // fall back to bare `from` of the error response.
+            std::string dl_target_jid;
+            auto dl_jid_it = account.omemo.pending_iq_jid.find(id);
+            if (dl_jid_it != account.omemo.pending_iq_jid.end())
+            {
+                dl_target_jid = dl_jid_it->second;
+                account.omemo.pending_iq_jid.erase(dl_jid_it);
+            }
+            else if (from)
+            {
+                xmpp_string_guard dl_from_bare_g(account.context,
+                    xmpp_jid_bare(account.context, from));
+                if (dl_from_bare_g.ptr && *dl_from_bare_g.ptr)
+                    dl_target_jid = dl_from_bare_g.ptr;
+            }
+
+            if (!dl_target_jid.empty())
+            {
+                auto dl_ch_it = account.channels.find(dl_target_jid);
+                if (dl_ch_it != account.channels.end())
+                {
+                    auto &dl_ch = dl_ch_it->second;
+                    if (!dl_ch.pending_omemo_messages.empty())
+                    {
+                        weechat_printf(dl_ch.buffer,
+                            "%sOMEMO: %s has no OMEMO:2 device list (node not found). "
+                            "Dropping %zu queued message(s). "
+                            "Use /omemo off to send as plain text.",
+                            weechat_prefix("error"),
+                            dl_target_jid.c_str(),
+                            dl_ch.pending_omemo_messages.size());
+                        dl_ch.pending_omemo_messages.clear();
+                    }
                 }
             }
         }
