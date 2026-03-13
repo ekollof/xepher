@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <functional>
+#include <optional>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -209,6 +210,21 @@ namespace weechat {
 
             // Request only the legacy OMEMO devicelist namespace.
             void request_legacy_devicelist(weechat::account &account, std::string_view jid);
+
+            // Force a metadata refresh for a peer: always requests OMEMO:2 +
+            // legacy devicelists, and optionally requests bundle(s).
+            void force_fetch(weechat::account &account,
+                             struct t_gui_buffer *buffer,
+                             std::string_view jid,
+                             std::optional<std::uint32_t> device_id = std::nullopt);
+
+            // Force outbound KeyTransportElement send for one or all known
+            // devices of a peer. If no session exists yet, queue KEX and
+            // trigger bundle fetch to complete bootstrap.
+            void force_kex(weechat::account &account,
+                           struct t_gui_buffer *buffer,
+                           std::string_view jid,
+                           std::optional<std::uint32_t> device_id = std::nullopt);
 
             // Mark and query whether a peer has real PM/MAM traffic observed in
             // this session. JIDs are normalized to bare form.

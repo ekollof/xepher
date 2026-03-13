@@ -660,7 +660,7 @@
 
     *Usage:*
     #+begin_src
-    /omemo [check | republish | status | reset-keys]
+    /omemo [check | republish | status | reset-keys | fetch [<jid>] [<device-id>] | kex [<jid>] [<device-id>]]
     #+end_src
 
     *Subcommands:*
@@ -669,6 +669,8 @@
     - =republish=: Republish OMEMO:2 and legacy OMEMO:1 devicelist/bundle nodes (fixes missing device keys)
     - =status=: Show OMEMO status and device ID
     - =reset-keys=: Reset OMEMO key database to force key renegotiation
+    - =fetch [<jid>] [<device-id>]=: Force devicelist refresh; optionally force bundle fetch for one device
+    - =kex [<jid>] [<device-id>]=: Force OMEMO key transport now (or queue after bundle fetch)
 
     *Examples:*
     #+begin_src
@@ -677,6 +679,10 @@
     /omemo republish          # Republish OMEMO:2 + legacy nodes
     /omemo status             # Show device ID and status
     /omemo reset-keys         # Reset keys (forces renegotiation)
+    /omemo fetch alice@example.com      # Force metadata refresh for peer
+    /omemo fetch alice@example.com 42   # Force fetch for a single device ID
+    /omemo kex alice@example.com        # Force KEX to all known peer devices
+    /omemo kex alice@example.com 42     # Force KEX for one peer device ID
     #+end_src
 
     *Note:* OMEMO provides end-to-end encryption. Keys are automatically

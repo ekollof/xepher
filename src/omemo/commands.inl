@@ -2,11 +2,30 @@ void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const c
 {
     if (jid)
     {
-        const auto devicelist = db_env ? load_string(*this, key_for_devicelist(jid)) : std::nullopt;
-        const auto device_count = devicelist ? split(*devicelist, ';').size() : 0U;
+        std::vector<std::uint32_t> devices;
+        auto append_devices = [&](const std::optional<std::string> &device_list)
+        {
+            if (!device_list || device_list->empty())
+                return;
+            for (const auto &device : split(*device_list, ';'))
+            {
+                const auto parsed = parse_uint32(device);
+                if (parsed && is_valid_omemo_device_id(*parsed))
+                    devices.push_back(*parsed);
+            }
+        };
+
+        if (db_env)
+        {
+            append_devices(load_string(*this, key_for_devicelist(jid)));
+            append_devices(load_string(*this, key_for_legacy_devicelist(jid)));
+        }
+
+        std::sort(devices.begin(), devices.end());
+        devices.erase(std::unique(devices.begin(), devices.end()), devices.end());
         print_info(buffer, fmt::format(
             "OMEMO: {} known device(s) for {}; peer fingerprints are not implemented yet.",
-            device_count, jid));
+            devices.size(), jid));
         return;
     }
 
@@ -40,15 +59,33 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
         return;
     }
 
-    const auto value = load_string(*this, key_for_devicelist(jid));
-    if (!value || value->empty())
+    std::vector<std::uint32_t> devices;
+    auto append_devices = [&](const std::optional<std::string> &device_list)
+    {
+        if (!device_list || device_list->empty())
+            return;
+        for (const auto &device : split(*device_list, ';'))
+        {
+            const auto parsed = parse_uint32(device);
+            if (parsed && is_valid_omemo_device_id(*parsed))
+                devices.push_back(*parsed);
+        }
+    };
+
+    append_devices(load_string(*this, key_for_devicelist(jid)));
+    append_devices(load_string(*this, key_for_legacy_devicelist(jid)));
+
+    std::sort(devices.begin(), devices.end());
+    devices.erase(std::unique(devices.begin(), devices.end()), devices.end());
+
+    if (devices.empty())
     {
         print_info(buffer, fmt::format("No OMEMO devices known for {}.", jid));
         return;
     }
 
     print_info(buffer, fmt::format("OMEMO devices for {}:", jid));
-    for (const auto &device : split(*value, ';'))
+    for (const auto device : devices)
         print_info(buffer, fmt::format("  {}", device));
 }
 

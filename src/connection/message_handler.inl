@@ -2087,17 +2087,22 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         display_text = final_text.c_str();
     }
 
+    const char *encrypted_glyph = (encrypted || x) ? "🔒 " : "";
+
     if (channel_id == from_bare && to == channel->id)
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t[to %s]: %s",
+        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t[to %s]: %s%s",
                                  edit, display_prefix.data(),
-                                 to, display_text ? display_text : "");
+                                 to, encrypted_glyph,
+                                 display_text ? display_text : "");
     else if (weechat_string_match(text, "/me *", 0))
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s %s",
+        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s %s%s",
                                  edit, weechat_prefix("action"), display_prefix.data(),
+                                 encrypted_glyph,
                                  difftext ? difftext+4 : display_text ? display_text+4 : "");
     else
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s",
+        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s%s",
                                  edit, display_prefix.data(),
+                                 encrypted_glyph,
                                  display_text ? display_text : "");
 
     // Smart filter: record that this nick spoke, so future presence lines are shown.

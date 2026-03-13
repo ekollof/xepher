@@ -241,6 +241,27 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         this->send(children[0]);
         xmpp_stanza_release(children[0]);
 
+        // Query our own legacy (OMEMO:1/axolotl) devicelist as well.
+        // Some sibling clients still publish only this namespace.
+        children[1] = NULL;
+        children[0] =
+        stanza__iq_pubsub_items(account.context, NULL,
+                                "eu.siacs.conversations.axolotl.devicelist");
+        children[0] =
+        stanza__iq_pubsub(account.context, NULL, children.get(),
+                          with_noop("http://jabber.org/protocol/pubsub"));
+        xmpp_string_guard legacy_uuid_g(account.context, xmpp_uuid_gen(account.context));
+        const char *legacy_uuid = legacy_uuid_g.ptr;
+        children[0] =
+        stanza__iq(account.context, NULL, children.get(), NULL, legacy_uuid,
+                   account.jid().data(), account.jid().data(),
+                   "get");
+        if (legacy_uuid && account.omemo)
+            account.omemo.pending_iq_jid[legacy_uuid] = std::string(account.jid());
+
+        this->send(children[0]);
+        xmpp_stanza_release(children[0]);
+
         account.omemo.init(account.buffer, account.name.data());
 
         if (account.omemo)

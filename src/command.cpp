@@ -12,6 +12,7 @@
 #include <sstream>
 #include <utility>
 #include <algorithm>
+#include <optional>
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
@@ -753,7 +754,6 @@ int command__me(const void *pointer, void *data,
 {
     weechat::account *ptr_account = NULL;
     weechat::channel *ptr_channel = NULL;
-    xmpp_stanza_t *message;
 
     (void) pointer;
     (void) data;
@@ -784,25 +784,7 @@ int command__me(const void *pointer, void *data,
     if (argc > 1)
     {
         std::string me_text = std::string("/me ") + argv_eol[1];
-
-        message = xmpp_message_new(ptr_account->context,
-                                   ptr_channel->type == weechat::channel::chat_type::MUC ? "groupchat" : "chat",
-                                   ptr_channel->name.data(), NULL);
-        xmpp_message_set_body(message, me_text.data());
-        ptr_account->connection.send( message);
-        xmpp_stanza_release(message);
-        if (ptr_channel->type != weechat::channel::chat_type::MUC)
-        {
-            auto display_prefix = weechat::user::as_prefix_raw(ptr_account, ptr_account->jid().data());
-            if (display_prefix.empty())
-                display_prefix = ptr_account->jid();
-            weechat_printf_date_tags(ptr_channel->buffer, 0,
-                                     "xmpp_message,message,action,private,notify_none,self_msg,log1",
-                                     "%s%s %s",
-                                     weechat_prefix("action"),
-                                     display_prefix.data(),
-                                     argv_eol[1]);
-        }
+        return ptr_channel->send_message(ptr_channel->name.data(), me_text.data());
     }
 
     return WEECHAT_RC_OK;
@@ -1169,6 +1151,94 @@ int command__omemo(const void *pointer, void *data,
                 return WEECHAT_RC_OK;
             }
             ptr_account->omemo.show_devices(buffer, jid);
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "fetch") == 0)
+        {
+            if (!ptr_account->omemo)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: OMEMO not initialized for this account"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+
+            const char *jid = nullptr;
+            if (argc > 2)
+                jid = argv[2];
+            else if (ptr_channel)
+                jid = ptr_channel->name.data();
+
+            if (!jid)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: usage: /omemo fetch [<jid>] [<device-id>]"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+
+            std::optional<std::uint32_t> device_id;
+            if (argc > 3)
+            {
+                char *end = nullptr;
+                errno = 0;
+                const auto parsed = strtoul(argv[3], &end, 10);
+                if (errno != 0 || !end || *end != '\0' || parsed > UINT32_MAX)
+                {
+                    weechat_printf(buffer,
+                                   _("%s%s: invalid device id '%s'"),
+                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[3]);
+                    return WEECHAT_RC_OK;
+                }
+                device_id = static_cast<std::uint32_t>(parsed);
+            }
+
+            ptr_account->omemo.force_fetch(*ptr_account, buffer, jid, device_id);
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "kex") == 0)
+        {
+            if (!ptr_account->omemo)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: OMEMO not initialized for this account"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+
+            const char *jid = nullptr;
+            if (argc > 2)
+                jid = argv[2];
+            else if (ptr_channel)
+                jid = ptr_channel->name.data();
+
+            if (!jid)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: usage: /omemo kex [<jid>] [<device-id>]"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+
+            std::optional<std::uint32_t> device_id;
+            if (argc > 3)
+            {
+                char *end = nullptr;
+                errno = 0;
+                const auto parsed = strtoul(argv[3], &end, 10);
+                if (errno != 0 || !end || *end != '\0' || parsed > UINT32_MAX)
+                {
+                    weechat_printf(buffer,
+                                   _("%s%s: invalid device id '%s'"),
+                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[3]);
+                    return WEECHAT_RC_OK;
+                }
+                device_id = static_cast<std::uint32_t>(parsed);
+            }
+
+            ptr_account->omemo.force_kex(*ptr_account, buffer, jid, device_id);
             return WEECHAT_RC_OK;
         }
 
@@ -4614,14 +4684,16 @@ void command__init()
     hook = weechat_hook_command(
         "omemo",
         N_("manage omemo encryption for current buffer or account"),
-        N_("[check|republish|status|reset-keys|fingerprint [<jid>]|trust <jid>|devices [<jid>]]"),
+          N_("[check|republish|status|reset-keys|fingerprint [<jid>]|trust <jid>|devices [<jid>]|fetch [<jid>] [<device-id>]|kex [<jid>] [<device-id>]]"),
         N_("       check: query server for published OMEMO devicelist and bundle\n"
            "   republish: republish OMEMO devicelist and bundle to server\n"
            "      status: show OMEMO status and device ID\n"
            "  reset-keys: reset OMEMO key database to force renegotiation\n"
            " fingerprint: show hex fingerprint of own identity key, or of a peer JID\n"
            "       trust: remove stored identity key for <jid> to re-accept on next contact\n"
-           "     devices: show known device IDs for <jid>\n"
+              "     devices: show known device IDs for <jid>\n"
+              "       fetch: force devicelist refresh and optional bundle fetch\n"
+              "         kex: force key transport now (or queue after bundle fetch)\n"
            "\n"
            "Without arguments on a channel buffer: enable OMEMO encryption\n"
            "\n"
@@ -4634,14 +4706,19 @@ void command__init()
            "  /omemo fingerprint       : show own identity key fingerprint\n"
            "  /omemo fingerprint alice@example.com : show peer fingerprints\n"
            "  /omemo trust alice@example.com       : re-accept changed keys from alice\n"
-           "  /omemo devices alice@example.com     : show alice's known devices"),
+              "  /omemo devices alice@example.com     : show alice's known devices\n"
+              "  /omemo fetch alice@example.com       : force refresh OMEMO metadata\n"
+              "  /omemo kex alice@example.com         : force key transport to all known devices\n"
+              "  /omemo kex alice@example.com 1234    : force key transport to one device"),
         "check"
         " || republish"
         " || status"
         " || reset-keys"
         " || fingerprint %(jabber_jids)"
         " || trust %(jabber_jids)"
-        " || devices %(jabber_jids)", &command__omemo, NULL, NULL);
+          " || devices %(jabber_jids)"
+          " || fetch %(jabber_jids)"
+          " || kex %(jabber_jids)", &command__omemo, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /omemo");
 

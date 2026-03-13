@@ -57,6 +57,12 @@ namespace {
 
 }
 
+static void send_key_transport(omemo &self,
+                               weechat::account &account,
+                               struct t_gui_buffer *buffer,
+                               const char *peer_jid,
+                               std::uint32_t remote_device_id);
+
 void weechat::xmpp::omemo::request_devicelist(weechat::account &account, std::string_view jid)
 {
     const std::string bare_jid = normalize_bare_jid(account.context, jid);
@@ -69,6 +75,166 @@ void weechat::xmpp::omemo::request_devicelist(weechat::account &account, std::st
 void weechat::xmpp::omemo::request_legacy_devicelist(weechat::account &account, std::string_view jid)
 {
     ::request_legacy_devicelist(account, jid);
+}
+
+void weechat::xmpp::omemo::force_fetch(weechat::account &account,
+                                       struct t_gui_buffer *buffer,
+                                       std::string_view jid,
+                                       std::optional<std::uint32_t> device_id)
+{
+    const std::string bare_jid = normalize_bare_jid(account.context, jid);
+    if (bare_jid.empty())
+    {
+        print_error(buffer ? buffer : account.buffer,
+                    "OMEMO: force-fetch requires a valid JID.");
+        return;
+    }
+
+    request_devicelist(account, bare_jid);
+
+    if (device_id)
+    {
+        if (!is_valid_omemo_device_id(*device_id))
+        {
+            print_error(buffer ? buffer : account.buffer,
+                        fmt::format("OMEMO: invalid device id {}.", *device_id));
+            return;
+        }
+
+        request_bundle(account, bare_jid, *device_id);
+        request_legacy_bundle(account, bare_jid, *device_id);
+        print_info(buffer ? buffer : account.buffer,
+                   fmt::format("OMEMO: forced devicelist + bundle refresh for {}/{}.",
+                               bare_jid, *device_id));
+        return;
+    }
+
+    std::set<std::uint32_t> known_devices;
+    auto collect_devices = [&](const std::optional<std::string> &list)
+    {
+        if (!list || list->empty())
+            return;
+        for (const auto &dev : split(*list, ';'))
+        {
+            const auto parsed = parse_uint32(dev);
+            if (parsed && is_valid_omemo_device_id(*parsed))
+                known_devices.insert(*parsed);
+        }
+    };
+
+    collect_devices(load_string(*this, key_for_devicelist(bare_jid)));
+    collect_devices(load_string(*this, key_for_legacy_devicelist(bare_jid)));
+
+    for (const auto known_device_id : known_devices)
+    {
+        request_bundle(account, bare_jid, known_device_id);
+        request_legacy_bundle(account, bare_jid, known_device_id);
+    }
+
+    if (known_devices.empty())
+    {
+        print_info(buffer ? buffer : account.buffer,
+                   fmt::format("OMEMO: forced devicelist refresh for {} (no cached device ids yet).",
+                               bare_jid));
+        return;
+    }
+
+    print_info(buffer ? buffer : account.buffer,
+               fmt::format("OMEMO: forced devicelist + bundle refresh for {} ({} device(s)).",
+                           bare_jid, known_devices.size()));
+}
+
+void weechat::xmpp::omemo::force_kex(weechat::account &account,
+                                     struct t_gui_buffer *buffer,
+                                     std::string_view jid,
+                                     std::optional<std::uint32_t> device_id)
+{
+    const std::string bare_jid = normalize_bare_jid(account.context, jid);
+    if (bare_jid.empty())
+    {
+        print_error(buffer ? buffer : account.buffer,
+                    "OMEMO: force-kex requires a valid JID.");
+        return;
+    }
+
+    std::set<std::uint32_t> target_devices;
+    if (device_id)
+    {
+        if (!is_valid_omemo_device_id(*device_id))
+        {
+            print_error(buffer ? buffer : account.buffer,
+                        fmt::format("OMEMO: invalid device id {}.", *device_id));
+            return;
+        }
+        target_devices.insert(*device_id);
+    }
+    else
+    {
+        auto collect_devices = [&](const std::optional<std::string> &list)
+        {
+            if (!list || list->empty())
+                return;
+            for (const auto &dev : split(*list, ';'))
+            {
+                const auto parsed = parse_uint32(dev);
+                if (parsed && is_valid_omemo_device_id(*parsed))
+                    target_devices.insert(*parsed);
+            }
+        };
+
+        collect_devices(load_string(*this, key_for_devicelist(bare_jid)));
+        collect_devices(load_string(*this, key_for_legacy_devicelist(bare_jid)));
+    }
+
+    if (target_devices.empty())
+    {
+        request_devicelist(account, bare_jid);
+        print_info(buffer ? buffer : account.buffer,
+                   fmt::format("OMEMO: no known devices for {}; requested devicelist refresh.",
+                               bare_jid));
+        return;
+    }
+
+    std::size_t sent_now = 0;
+    std::size_t queued = 0;
+    for (const auto remote_device_id : target_devices)
+    {
+        failed_session_bootstrap.erase({bare_jid, remote_device_id});
+
+        bool have_session = has_session(bare_jid.c_str(), remote_device_id);
+        if (!have_session)
+        {
+            try
+            {
+                have_session = establish_session_from_bundle(
+                    *this, *account.context, bare_jid, remote_device_id);
+            }
+            catch (const std::exception &ex)
+            {
+                print_error(buffer ? buffer : account.buffer,
+                            fmt::format("OMEMO: session bootstrap error for {}/{}: {}",
+                                        bare_jid, remote_device_id, ex.what()));
+                have_session = false;
+            }
+        }
+
+        if (have_session)
+        {
+            send_key_transport(*this, account, buffer ? buffer : account.buffer,
+                               bare_jid.c_str(), remote_device_id);
+            ++sent_now;
+            continue;
+        }
+
+        pending_key_transport.insert({bare_jid, remote_device_id});
+        request_bundle(account, bare_jid, remote_device_id);
+        request_legacy_bundle(account, bare_jid, remote_device_id);
+        ++queued;
+    }
+
+    print_info(buffer ? buffer : account.buffer,
+               fmt::format("OMEMO: force-kex for {}: sent now={}, queued after bundle fetch={}",
+                           bare_jid, sent_now, queued));
 }
 
 void weechat::xmpp::omemo::note_peer_traffic(xmpp_ctx_t *context, std::string_view jid)
@@ -357,19 +523,6 @@ static void send_omemo2_key_transport(omemo &self,
         return;
     }
 
-    const auto transport = encrypt_transport_key(self, peer_jid, remote_device_id, *ep);
-    if (!transport)
-    {
-        print_error(buffer, fmt::format(
-            "OMEMO: key-transport encrypt failed for {}/{}",
-            peer_jid, remote_device_id));
-        return;
-    }
-
-    const auto encoded_transport = base64_encode(*account.context,
-                                                 transport->first.data(),
-                                                 transport->first.size());
-
     // Build <encrypted xmlns='urn:xmpp:omemo:2'>
     xmpp_stanza_t *encrypted = xmpp_stanza_new(*account.context);
     xmpp_stanza_set_name(encrypted, "encrypted");
@@ -380,26 +533,86 @@ static void send_omemo2_key_transport(omemo &self,
     xmpp_stanza_set_name(header, "header");
     xmpp_stanza_set_attribute(header, "sid", fmt::format("{}", self.device_id).c_str());
 
-    // <keys jid='peer_jid'><key rid='remote_device_id' [kex='true']>...</key></keys>
-    xmpp_stanza_t *keys = xmpp_stanza_new(*account.context);
-    xmpp_stanza_set_name(keys, "keys");
-    xmpp_stanza_set_attribute(keys, "jid", peer_jid);
+    auto add_omemo2_key = [&](const std::string &target_jid,
+                              std::uint32_t target_device_id) -> bool
+    {
+        if (!is_valid_omemo_device_id(target_device_id))
+            return false;
 
-    xmpp_stanza_t *key_elem = xmpp_stanza_new(*account.context);
-    xmpp_stanza_set_name(key_elem, "key");
-    xmpp_stanza_set_attribute(key_elem, "rid", fmt::format("{}", remote_device_id).c_str());
-    if (transport->second)
-        xmpp_stanza_set_attribute(key_elem, "kex", "true");
+        const auto target_transport = encrypt_transport_key(self, target_jid.c_str(), target_device_id, *ep);
+        if (!target_transport)
+            return false;
 
-    xmpp_stanza_t *key_text = xmpp_stanza_new(*account.context);
-    xmpp_stanza_set_text(key_text, encoded_transport.c_str());
-    xmpp_stanza_add_child(key_elem, key_text);
-    xmpp_stanza_release(key_text);
+        const auto target_encoded_transport = base64_encode(*account.context,
+                                                            target_transport->first.data(),
+                                                            target_transport->first.size());
 
-    xmpp_stanza_add_child(keys, key_elem);
-    xmpp_stanza_release(key_elem);
-    xmpp_stanza_add_child(header, keys);
-    xmpp_stanza_release(keys);
+        xmpp_stanza_t *keys = xmpp_stanza_new(*account.context);
+        xmpp_stanza_set_name(keys, "keys");
+        xmpp_stanza_set_attribute(keys, "jid", target_jid.c_str());
+
+        xmpp_stanza_t *key_elem = xmpp_stanza_new(*account.context);
+        xmpp_stanza_set_name(key_elem, "key");
+        xmpp_stanza_set_attribute(key_elem, "rid", fmt::format("{}", target_device_id).c_str());
+        if (target_transport->second)
+            xmpp_stanza_set_attribute(key_elem, "kex", "true");
+
+        xmpp_stanza_t *key_text = xmpp_stanza_new(*account.context);
+        xmpp_stanza_set_text(key_text, target_encoded_transport.c_str());
+        xmpp_stanza_add_child(key_elem, key_text);
+        xmpp_stanza_release(key_text);
+
+        xmpp_stanza_add_child(keys, key_elem);
+        xmpp_stanza_release(key_elem);
+        xmpp_stanza_add_child(header, keys);
+        xmpp_stanza_release(keys);
+        return true;
+    };
+
+    // Recipient-side key transport target.
+    bool added_any_key = add_omemo2_key(peer_jid, remote_device_id);
+
+    // Also include our other own devices so carbon-copied stanzas can be
+    // decrypted on sibling clients (e.g., Gajim), avoiding spurious warnings.
+    xmpp_string_guard own_bare_g(*account.context,
+                                 xmpp_jid_bare(*account.context, account.jid().data()));
+    const std::string own_bare_jid = own_bare_g.ptr && *own_bare_g.ptr
+        ? own_bare_g.ptr
+        : std::string(account.jid());
+    const auto own_devicelist = load_string(self, key_for_devicelist(own_bare_jid));
+    if (own_devicelist)
+    {
+        for (const auto &dev : split(*own_devicelist, ';'))
+        {
+            const auto own_device = parse_uint32(dev);
+            if (!own_device || *own_device == self.device_id)
+                continue;
+
+            if (self.failed_session_bootstrap.count({own_bare_jid, *own_device}) > 0)
+                continue;
+
+            if (!self.has_session(own_bare_jid.c_str(), *own_device)
+                && !establish_session_from_bundle(self, *account.context, own_bare_jid, *own_device))
+            {
+                request_bundle(account, own_bare_jid, *own_device);
+                continue;
+            }
+
+            if (add_omemo2_key(own_bare_jid, *own_device))
+                added_any_key = true;
+        }
+    }
+
+    if (!added_any_key)
+    {
+        xmpp_stanza_release(header);
+        xmpp_stanza_release(encrypted);
+        print_error(buffer, fmt::format(
+            "OMEMO: key-transport encrypt failed for {}/{}",
+            peer_jid, remote_device_id));
+        return;
+    }
+
     xmpp_stanza_add_child(encrypted, header);
     xmpp_stanza_release(header);
 
@@ -418,7 +631,7 @@ static void send_omemo2_key_transport(omemo &self,
 
     print_info(buffer, fmt::format(
         "OMEMO: sending key-transport to {}/{} (kex={})",
-        peer_jid, remote_device_id, transport->second ? "true" : "false"));
+        peer_jid, remote_device_id, "mixed"));
 
     account.connection.send(message);
     xmpp_stanza_release(message);
@@ -442,18 +655,6 @@ static void send_legacy_key_transport(omemo &self,
         return;
     }
 
-    const auto transport = encrypt_legacy_transport_key(self, peer_jid, remote_device_id, *ep);
-    if (!transport)
-    {
-        print_error(buffer, fmt::format(
-            "OMEMO (legacy): key-transport encrypt failed for {}/{}",
-            peer_jid, remote_device_id));
-        return;
-    }
-
-    const auto encoded_transport = base64_encode(*account.context,
-                                                 transport->first.data(),
-                                                 transport->first.size());
     const auto encoded_iv = base64_encode(*account.context,
                                           ep->iv.data(),
                                           ep->iv.size());
@@ -466,18 +667,87 @@ static void send_legacy_key_transport(omemo &self,
     xmpp_stanza_set_name(header, "header");
     xmpp_stanza_set_attribute(header, "sid", fmt::format("{}", self.device_id).c_str());
 
-    xmpp_stanza_t *key_elem = xmpp_stanza_new(*account.context);
-    xmpp_stanza_set_name(key_elem, "key");
-    xmpp_stanza_set_attribute(key_elem, "rid", fmt::format("{}", remote_device_id).c_str());
-    if (transport->second)
-        xmpp_stanza_set_attribute(key_elem, "prekey", "true");
+    auto add_legacy_key = [&](const std::string &target_jid,
+                              std::uint32_t target_device_id) -> bool
+    {
+        if (!is_valid_omemo_device_id(target_device_id))
+            return false;
 
-    xmpp_stanza_t *key_text = xmpp_stanza_new(*account.context);
-    xmpp_stanza_set_text(key_text, encoded_transport.c_str());
-    xmpp_stanza_add_child(key_elem, key_text);
-    xmpp_stanza_release(key_text);
-    xmpp_stanza_add_child(header, key_elem);
-    xmpp_stanza_release(key_elem);
+        const auto target_transport = encrypt_legacy_transport_key(self, target_jid, target_device_id, *ep);
+        if (!target_transport)
+            return false;
+
+        const auto target_encoded_transport = base64_encode(*account.context,
+                                                            target_transport->first.data(),
+                                                            target_transport->first.size());
+
+        xmpp_stanza_t *key_elem = xmpp_stanza_new(*account.context);
+        xmpp_stanza_set_name(key_elem, "key");
+        xmpp_stanza_set_attribute(key_elem, "rid", fmt::format("{}", target_device_id).c_str());
+        if (target_transport->second)
+            xmpp_stanza_set_attribute(key_elem, "prekey", "true");
+
+        xmpp_stanza_t *key_text = xmpp_stanza_new(*account.context);
+        xmpp_stanza_set_text(key_text, target_encoded_transport.c_str());
+        xmpp_stanza_add_child(key_elem, key_text);
+        xmpp_stanza_release(key_text);
+        xmpp_stanza_add_child(header, key_elem);
+        xmpp_stanza_release(key_elem);
+        return true;
+    };
+
+    bool added_any_key = add_legacy_key(peer_jid, remote_device_id);
+
+    xmpp_string_guard own_bare_g(*account.context,
+                                 xmpp_jid_bare(*account.context, account.jid().data()));
+    const std::string own_bare_jid = own_bare_g.ptr && *own_bare_g.ptr
+        ? own_bare_g.ptr
+        : std::string(account.jid());
+
+    auto add_own_legacy_targets = [&](const std::string &device_list_str)
+    {
+        for (const auto &dev : split(device_list_str, ';'))
+        {
+            const auto own_device = parse_uint32(dev);
+            if (!own_device || *own_device == self.device_id)
+                continue;
+
+            if (self.failed_session_bootstrap.count({own_bare_jid, *own_device}) > 0)
+                continue;
+
+            if (!self.has_session(own_bare_jid.c_str(), *own_device)
+                && !establish_session_from_bundle(self, *account.context, own_bare_jid, *own_device))
+            {
+                request_legacy_bundle(account, own_bare_jid, *own_device);
+                continue;
+            }
+
+            if (add_legacy_key(own_bare_jid, *own_device))
+                added_any_key = true;
+        }
+    };
+
+    const auto own_legacy_devicelist = load_string(self, key_for_legacy_devicelist(own_bare_jid));
+    if (own_legacy_devicelist && !own_legacy_devicelist->empty())
+    {
+        add_own_legacy_targets(*own_legacy_devicelist);
+    }
+    else
+    {
+        const auto own_omemo2_devicelist = load_string(self, key_for_devicelist(own_bare_jid));
+        if (own_omemo2_devicelist && !own_omemo2_devicelist->empty())
+            add_own_legacy_targets(*own_omemo2_devicelist);
+    }
+
+    if (!added_any_key)
+    {
+        xmpp_stanza_release(header);
+        xmpp_stanza_release(encrypted);
+        print_error(buffer, fmt::format(
+            "OMEMO (legacy): key-transport encrypt failed for {}/{}",
+            peer_jid, remote_device_id));
+        return;
+    }
 
     xmpp_stanza_t *iv_stanza = xmpp_stanza_new(*account.context);
     xmpp_stanza_set_name(iv_stanza, "iv");
@@ -503,7 +773,7 @@ static void send_legacy_key_transport(omemo &self,
 
     print_info(buffer, fmt::format(
         "OMEMO (legacy): sending key-transport to {}/{} (prekey={})",
-        peer_jid, remote_device_id, transport->second ? "true" : "false"));
+        peer_jid, remote_device_id, "mixed"));
 
     account.connection.send(message);
     xmpp_stanza_release(message);
