@@ -161,6 +161,165 @@ xmpp_stanza_t *weechat::xmpp::omemo::get_bundle(xmpp_ctx_t *context, char *from,
     return iq;
 }
 
+xmpp_stanza_t *weechat::xmpp::omemo::get_legacy_bundle(xmpp_ctx_t *context, char *from, char *to)
+{
+    (void) from;
+    (void) to;
+
+    OMEMO_ASSERT(context != nullptr, "xmpp context must be present when publishing our legacy OMEMO bundle");
+
+    if (!*this)
+        return nullptr;
+
+    ensure_local_identity(*this);
+    ensure_registration_id(*this);
+    ensure_prekeys(*this, context);
+
+    const auto bundle = make_local_bundle_metadata(*this);
+    if (!bundle)
+        return nullptr;
+
+    const auto signed_pre_key_id = parse_uint32(bundle->signed_pre_key_id).value_or(0);
+    if (!is_valid_omemo_device_id(device_id))
+    {
+        weechat_printf(nullptr,
+                       "%somemo: refusing to publish legacy bundle: invalid local device id %u",
+                       weechat_prefix("error"), device_id);
+        return nullptr;
+    }
+    if (signed_pre_key_id == 0)
+    {
+        weechat_printf(nullptr,
+                       "%somemo: refusing to publish legacy bundle for device %u: invalid signed prekey id '%s'",
+                       weechat_prefix("error"), device_id, bundle->signed_pre_key_id.c_str());
+        return nullptr;
+    }
+    if (bundle->prekeys.size() < kMinPreKeyCount)
+    {
+        weechat_printf(nullptr,
+                       "%somemo: refusing to publish legacy bundle for device %u: only %zu prekeys available (minimum %u required by XEP-0384)",
+                       weechat_prefix("error"),
+                       device_id,
+                       bundle->prekeys.size(),
+                       kMinPreKeyCount);
+        return nullptr;
+    }
+
+    weechat_printf(nullptr,
+                   "%somemo: publishing legacy bundle for device %u with %zu prekeys",
+                   weechat_prefix("network"), device_id, bundle->prekeys.size());
+
+    auto make_text_node = [&](const char *name, const std::string &text,
+                              const char *attr_name = nullptr,
+                              const std::string *attr_value = nullptr) {
+        xmpp_stanza_t *node = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(node, name);
+        if (attr_name && attr_value)
+            xmpp_stanza_set_attribute(node, attr_name, attr_value->c_str());
+
+        xmpp_stanza_t *txt = xmpp_stanza_new(context);
+        xmpp_stanza_set_text(txt, text.c_str());
+        xmpp_stanza_add_child(node, txt);
+        xmpp_stanza_release(txt);
+        return node;
+    };
+
+    xmpp_stanza_t *bundle_stanza = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(bundle_stanza, "bundle");
+    xmpp_stanza_set_ns(bundle_stanza, kLegacyOmemoNs.data());
+
+    xmpp_stanza_t *spk = make_text_node("signedPreKeyPublic",
+                                        bundle->signed_pre_key,
+                                        "signedPreKeyId",
+                                        &bundle->signed_pre_key_id);
+    xmpp_stanza_add_child(bundle_stanza, spk);
+    xmpp_stanza_release(spk);
+
+    xmpp_stanza_t *spks = make_text_node("signedPreKeySignature",
+                                         bundle->signed_pre_key_signature);
+    xmpp_stanza_add_child(bundle_stanza, spks);
+    xmpp_stanza_release(spks);
+
+    xmpp_stanza_t *ik = make_text_node("identityKey", bundle->identity_key);
+    xmpp_stanza_add_child(bundle_stanza, ik);
+    xmpp_stanza_release(ik);
+
+    xmpp_stanza_t *prekeys = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(prekeys, "prekeys");
+    xmpp_stanza_set_ns(prekeys, kLegacyOmemoNs.data());
+    for (const auto &[id, key] : bundle->prekeys)
+    {
+        xmpp_stanza_t *pk = make_text_node("preKeyPublic", key, "preKeyId", &id);
+        xmpp_stanza_add_child(prekeys, pk);
+        xmpp_stanza_release(pk);
+    }
+    xmpp_stanza_add_child(bundle_stanza, prekeys);
+    xmpp_stanza_release(prekeys);
+
+    xmpp_stanza_t *item_children[] = {bundle_stanza, nullptr};
+    const auto item_id = fmt::format("{}", device_id);
+    xmpp_stanza_t *item = stanza__iq_pubsub_publish_item(
+        context, nullptr, item_children, with_noop(item_id.c_str()));
+
+    const auto node = fmt::format("{}{}", kLegacyBundlesNodePrefix, device_id);
+    xmpp_stanza_t *publish_children[] = {item, nullptr};
+    xmpp_stanza_t *publish = stanza__iq_pubsub_publish(
+        context, nullptr, publish_children, with_noop(node.c_str()));
+
+    xmpp_stanza_t *pubsub_children[] = {publish, nullptr};
+    xmpp_stanza_t *pubsub = stanza__iq_pubsub(
+        context, nullptr, pubsub_children, with_noop("http://jabber.org/protocol/pubsub"));
+
+    // Keep legacy bundle node readable to interop clients.
+    {
+        auto make_field = [&](const char *var, const char *val, const char *type_attr = nullptr) {
+            xmpp_stanza_t *field = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(field, "field");
+            xmpp_stanza_set_attribute(field, "var", var);
+            if (type_attr) xmpp_stanza_set_attribute(field, "type", type_attr);
+            xmpp_stanza_t *value = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(value, "value");
+            xmpp_stanza_t *txt = xmpp_stanza_new(context);
+            xmpp_stanza_set_text(txt, val);
+            xmpp_stanza_add_child(value, txt);
+            xmpp_stanza_release(txt);
+            xmpp_stanza_add_child(field, value);
+            xmpp_stanza_release(value);
+            return field;
+        };
+
+        xmpp_stanza_t *x = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(x, "x");
+        xmpp_stanza_set_ns(x, "jabber:x:data");
+        xmpp_stanza_set_attribute(x, "type", "submit");
+
+        xmpp_stanza_t *f1 = make_field("FORM_TYPE",
+            "http://jabber.org/protocol/pubsub#publish-options", "hidden");
+        xmpp_stanza_t *f2 = make_field("pubsub#max_items", "max");
+        xmpp_stanza_t *f3 = make_field("pubsub#access_model", "open");
+        xmpp_stanza_t *f4 = make_field("pubsub#persist_items", "true");
+
+        xmpp_stanza_add_child(x, f1); xmpp_stanza_release(f1);
+        xmpp_stanza_add_child(x, f2); xmpp_stanza_release(f2);
+        xmpp_stanza_add_child(x, f3); xmpp_stanza_release(f3);
+        xmpp_stanza_add_child(x, f4); xmpp_stanza_release(f4);
+
+        xmpp_stanza_t *publish_options = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(publish_options, "publish-options");
+        xmpp_stanza_add_child(publish_options, x);
+        xmpp_stanza_release(x);
+
+        xmpp_stanza_add_child(pubsub, publish_options);
+        xmpp_stanza_release(publish_options);
+    }
+
+    xmpp_stanza_t *iq_children[] = {pubsub, nullptr};
+    xmpp_stanza_t *iq = stanza__iq(context, nullptr, iq_children,
+                                   nullptr, "omemo-legacy-bundle", from, to, "set");
+
+    return iq;
+}
+
 void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, const char *account_name)
 {
     try
@@ -168,13 +327,18 @@ void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, const char *account
         OMEMO_ASSERT(account_name != nullptr, "OMEMO init requires a non-null account name");
 
         // Clear in-flight state from any previous session to prevent stale
-        // pending_bundle_fetch entries blocking bundle re-fetches on reconnect.
+        // pending_* entries blocking retries on reconnect.
         pending_bundle_fetch.clear();
         pending_key_transport.clear();
         pending_iq_jid.clear();
         pending_configure_retry.clear();
         missing_omemo2_devicelist.clear();
         missing_legacy_devicelist.clear();
+        postponed_key_transports.clear();
+        key_transport_bootstrap_attempted.clear();
+        failed_session_bootstrap.clear();
+        peers_with_observed_traffic.clear();
+        global_mam_catchup = false;
 
         gcrypt::check_version();
 

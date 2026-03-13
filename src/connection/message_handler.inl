@@ -32,6 +32,51 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     xmpp_stanza_t *pgp_without_body = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "x", "jabber:x:encrypted");
 
+    auto stanza_has_user_message_payload = [](xmpp_stanza_t *msg) -> bool
+    {
+        if (!msg)
+            return false;
+
+        xmpp_stanza_t *msg_body = xmpp_stanza_get_child_by_name(msg, "body");
+        if (msg_body)
+        {
+            const char *body_text = xmpp_stanza_get_text_ptr(msg_body);
+            if (body_text && *body_text)
+                return true;
+        }
+
+        xmpp_stanza_t *msg_encrypted = xmpp_stanza_get_child_by_name_and_ns(
+            msg, "encrypted", "urn:xmpp:omemo:2");
+        if (!msg_encrypted)
+        {
+            msg_encrypted = xmpp_stanza_get_child_by_name_and_ns(
+                msg, "encrypted", "eu.siacs.conversations.axolotl");
+        }
+        if (msg_encrypted)
+        {
+            xmpp_stanza_t *payload = xmpp_stanza_get_child_by_name(msg_encrypted, "payload");
+            const char *payload_text = payload ? xmpp_stanza_get_text_ptr(payload) : nullptr;
+            if (payload_text && *payload_text)
+                return true;
+        }
+
+        xmpp_stanza_t *msg_pgp = xmpp_stanza_get_child_by_name_and_ns(
+            msg, "x", "jabber:x:encrypted");
+        if (msg_pgp)
+        {
+            const char *pgp_text = xmpp_stanza_get_text_ptr(msg_pgp);
+            if (pgp_text && *pgp_text)
+                return true;
+        }
+
+        return false;
+    };
+
+    // Payloadless OMEMO stanzas are control/key-transport messages and must
+    // not create PM buffers for inactive roster contacts.
+    if (body == NULL && encrypted_without_body && !stanza_has_user_message_payload(stanza))
+        return 1;
+
     if (body == NULL && !encrypted_without_body && !pgp_without_body)
     {
         topic = xmpp_stanza_get_child_by_name(stanza, "subject");
@@ -165,7 +210,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     // For global MAM queries, create PM channels based on conversation partners
                     // Since we can't reliably get the query ID from individual result messages,
                     // we'll create channels for all 1-on-1 conversations (non-MUC)
-                    if (!debug_type || weechat_strcasecmp(debug_type, "groupchat") != 0)
+                    if ((!debug_type || weechat_strcasecmp(debug_type, "groupchat") != 0)
+                        && stanza_has_user_message_payload(message))
                     {
                         const char *from_bare = debug_from ? xmpp_jid_bare(account.context, debug_from) : NULL;
                         const char *to_bare = debug_to ? xmpp_jid_bare(account.context, debug_to) : NULL;
@@ -776,6 +822,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         to = account.jid().data();
     to_bare = to ? xmpp_jid_bare(account.context, to) : NULL;
     xmpp_string_guard to_bare_main_g { account.context, const_cast<char*>(to_bare) };
+    const bool is_self_outbound_copy = from_bare && to_bare
+        && weechat_strcasecmp(from_bare, account.jid().data()) == 0
+        && weechat_strcasecmp(to_bare, account.jid().data()) != 0;
     id = xmpp_stanza_get_id(stanza);
     thread = xmpp_stanza_get_attribute(stanza, "thread");
     
@@ -933,6 +982,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     
     intext = body ? xmpp_stanza_get_text(body) : nullptr;
 
+    if (encrypted && is_self_outbound_copy)
+    {
+        if (intext)
+            xmpp_free(account.context, intext);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        intext = xmpp_strdup(account.context, OMEMO_ADVICE);
+#pragma GCC diagnostic pop
+    }
+
     // XEP-0071: XHTML-IM — prefer <html><body> rich rendering over plain <body>.
     // We apply it whenever XHTML is present AND the message is not encrypted
     // (encrypted messages have no usable XHTML anyway).
@@ -971,7 +1030,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     }
     
     // Auto-enable OMEMO for PM channels when receiving encrypted messages
-    if (encrypted && channel && channel->type == weechat::channel::chat_type::PM && !channel->omemo.enabled)
+    if (encrypted && !is_self_outbound_copy
+        && channel && channel->type == weechat::channel::chat_type::PM && !channel->omemo.enabled)
     {
         weechat_printf(channel->buffer, "%sAuto-enabling OMEMO (received encrypted message)",
                        weechat_prefix("network"));
@@ -989,11 +1049,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         channel->set_transport(weechat::channel::transport::PGP, 0);
     }
     
-    if (encrypted && account.omemo)
+    if (encrypted && account.omemo && !is_self_outbound_copy)
     {
         cleartext = account.omemo.decode(&account, channel->buffer, from_bare, encrypted);
         if (!cleartext)
         {
+            xmpp_stanza_t *payload = xmpp_stanza_get_child_by_name(encrypted, "payload");
+            const char *payload_text = payload ? xmpp_stanza_get_text_ptr(payload) : nullptr;
+            if (!payload || !payload_text || !*payload_text)
+                return 1;
+
             weechat_printf_date_tags(channel->buffer, 0, "notify_none", "%s%s (%s)",
                                      weechat_prefix("error"), "OMEMO Decryption Error", from);
             return 1;
@@ -1001,7 +1066,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     }
     else
     {
-        if (encrypted)
+        if (encrypted && !is_self_outbound_copy)
             weechat_printf(NULL, "%sOMEMO: encrypted message but account.omemo is NULL/false",
                            weechat_prefix("error"));
     }
@@ -1639,7 +1704,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                  weechat_prefix("network"), weechat_color("gray"),
                                  channel::transport_name(channel->transport));
     }
-    else if (!x && text == intext && channel->transport != weechat::channel::transport::PLAIN)
+    else if (!x && !encrypted && text == intext && channel->transport != weechat::channel::transport::PLAIN)
     {
         channel->transport = weechat::channel::transport::PLAIN;
         weechat_printf_date_tags(channel->buffer, date, NULL, "%s%sTransport: %s",

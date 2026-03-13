@@ -1063,21 +1063,7 @@ int weechat::channel::send_message(const char *to, const char *body)
 
     if (account.omemo && omemo.enabled)
     {
-        weechat_printf(buffer, "%sOMEMO send: attempting encrypted send to %s",
-                       weechat_prefix("network"), to);
-        
-        // Debug: check if we have device info
-        if (account.omemo.pending_bundle_fetch.empty())
-        {
-            weechat_printf(buffer, "%sOMEMO: no bundle fetches pending",
-                           weechat_prefix("network"));
-        }
-        else
-        {
-            weechat_printf(buffer, "%sOMEMO: %zu bundle fetch(es) still pending",
-                           weechat_prefix("network"), account.omemo.pending_bundle_fetch.size());
-        }
-        
+
         xmpp_stanza_t *encrypted = nullptr;
         const auto peer_mode = account.omemo.select_peer_mode(account, peer_bare);
         const char *eme_namespace = "urn:xmpp:omemo:2";
@@ -1124,9 +1110,6 @@ int weechat::channel::send_message(const char *to, const char *body)
         }
         xmpp_stanza_add_child(message, encrypted);
         xmpp_stanza_release(encrypted);
-
-        weechat_printf(buffer, "%sOMEMO send: encrypted payload attached",
-                       weechat_prefix("network"));
 
         xmpp_stanza_t *message__encryption = xmpp_stanza_new(account.context);
         xmpp_stanza_set_name(message__encryption, "encryption");
@@ -1292,14 +1275,6 @@ int weechat::channel::send_message(const char *to, const char *body)
     xmpp_stanza_set_ns(message__store, "urn:xmpp:hints");
     xmpp_stanza_add_child(message, message__store);
     xmpp_stanza_release(message__store);
-
-    char *out_xml = stanza_xml(message);
-    if (out_xml)
-    {
-        weechat_printf(buffer, "%sSEND message stanza: %s",
-                       weechat_prefix("network"), out_xml);
-        xmpp_free(account.context, out_xml);
-    }
 
     account.connection.send(message);
     xmpp_stanza_release(message);

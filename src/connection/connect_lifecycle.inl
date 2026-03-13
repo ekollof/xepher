@@ -257,6 +257,16 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 xmpp_stanza_release(children[0]);
             }
 
+            // Also publish the legacy bundle node so OMEMO:1 clients can
+            // target our current device id during first-contact bootstrap.
+            children[0] =
+            account.omemo.get_legacy_bundle(account.context, jid_str.data(), NULL);
+            if (children[0])
+            {
+                this->send(children[0]);
+                xmpp_stanza_release(children[0]);
+            }
+
             // Publish our devicelist with our device_id included.  This runs
             // before we receive the server's existing list.  We MUST clear
             // account.devices first to flush any stale entries carried over from
@@ -271,6 +281,12 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 xmpp_stanza_set_id(dl_stanza, dl_uuid_g.ptr);
                 this->send(dl_stanza);
                 xmpp_stanza_release(dl_stanza);
+
+                xmpp_stanza_t *legacy_dl_stanza = account.get_legacy_devicelist();
+                xmpp_string_guard legacy_dl_uuid_g(account.context, xmpp_uuid_gen(account.context));
+                xmpp_stanza_set_id(legacy_dl_stanza, legacy_dl_uuid_g.ptr);
+                this->send(legacy_dl_stanza);
+                xmpp_stanza_release(legacy_dl_stanza);
             }
         }
 

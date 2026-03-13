@@ -58,7 +58,13 @@
     - Encryption status indicator - visual indicator in status bar showing OMEMO/PGP/plaintext
     - Message styling (XEP-0393) - renders *bold*, _italic_, `code`, ~strikethrough~, quotes
   - *Reduced logging noise*: Disabled debug-level logging for cleaner output
+  - *OMEMO PM noise cleanup*: Removed high-frequency per-device OMEMO status spam in PM buffers while preserving actionable queue/error messages
   - *Channel type detection*: Fixed PM vs MUC detection for proper message handling
+  - *OMEMO interoperability improvements*:
+    - Publishes both OMEMO:2 and legacy OMEMO:1 (axolotl) devicelist/bundle nodes on connect and republish
+    - Uses per-device mode resolution (OMEMO:2 vs legacy) for bundle bootstrap and key transport
+    - Avoids repeated "no key for our device" spam once bootstrap is pending/already attempted
+    - Prevents payloadless OMEMO key-transport control stanzas from creating PM buffers
    - *New features implemented*:
     - Stream Management (XEP-0198) - reliable message delivery and session resumption
     - Blocking Command (XEP-0191) - /block, /unblock, /blocklist for privacy
@@ -660,7 +666,7 @@
     *Subcommands:*
     - (no args): Enable OMEMO for current channel
     - =check=: Verify OMEMO bundle is published on server
-    - =republish=: Republish bundle (fixes missing device keys)
+    - =republish=: Republish OMEMO:2 and legacy OMEMO:1 devicelist/bundle nodes (fixes missing device keys)
     - =status=: Show OMEMO status and device ID
     - =reset-keys=: Reset OMEMO key database to force key renegotiation
 
@@ -668,14 +674,15 @@
     #+begin_src
     /omemo                    # Enable OMEMO for current channel
     /omemo check              # Check bundle on server
-    /omemo republish          # Republish bundle
+    /omemo republish          # Republish OMEMO:2 + legacy nodes
     /omemo status             # Show device ID and status
     /omemo reset-keys         # Reset keys (forces renegotiation)
     #+end_src
 
     *Note:* OMEMO provides end-to-end encryption. Keys are automatically
-    generated and managed by the plugin. Use =reset-keys= if you're having
-    key exchange issues.
+    generated and managed by the plugin. This fork publishes both OMEMO:2
+    and legacy OMEMO:1 compatibility nodes for broader client interoperability.
+    Use =reset-keys= if you're having key exchange issues.
 
 *** /pgp
     Manage PGP encryption for the current buffer
@@ -875,6 +882,17 @@
 
 ** Network & Debugging
 
+*** OMEMO Log Correlation
+  Correlate WeeChat OMEMO event logs with raw XML traces:
+
+  #+begin_src sh
+  tools/correlate_omemo_xml.sh --account <account>
+  #+end_src
+
+  This helper is useful when diagnosing key transport/session bootstrap
+  behavior, because it lines up high-level OMEMO events with raw IQ/message
+  stanzas by timestamp.
+
 *** /ping
     Send an XMPP ping (XEP-0199: XMPP Ping)
 
@@ -1035,11 +1053,12 @@
 * Building
 
   #+begin_src sh
-  git clone --depth 1 https://github.com/bqv/weechat-xmpp.git
+  git clone --depth 1 git@git.hackerheaven.org:ekollof/weechat-xmpp-fixed.git
   cd weechat-xmpp
-  make install-deps              # Install system dependencies (requires sudo)
   git submodule update --init --recursive
+  make install-deps              # Install system dependencies (requires sudo)
   make
+  make test
   make install
   #+end_src
 

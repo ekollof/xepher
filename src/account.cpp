@@ -243,6 +243,121 @@ xmpp_stanza_t *weechat::account::get_devicelist()
     return parent;
 }
 
+xmpp_stanza_t *weechat::account::get_legacy_devicelist()
+{
+    if (omemo.device_id == 0 || omemo.device_id > 0x7fffffffU)
+    {
+        weechat_printf(buffer,
+                       "%somemo: refusing to publish legacy devicelist: invalid local device id %u",
+                       weechat_prefix("error"), omemo.device_id);
+        return nullptr;
+    }
+
+    xmpp_stanza_t *list = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(list, "list");
+    xmpp_stanza_set_ns(list, "eu.siacs.conversations.axolotl");
+
+    auto add_device = [&](const std::string &id) {
+        xmpp_stanza_t *dev = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(dev, "device");
+        xmpp_stanza_set_attribute(dev, "id", id.c_str());
+        xmpp_stanza_add_child(list, dev);
+        xmpp_stanza_release(dev);
+    };
+
+    add_device(fmt::format("{}", omemo.device_id));
+
+    for (auto &device : devices)
+    {
+        if (device.first == omemo.device_id || device.first == 0 || device.first > 0x7fffffffU)
+            continue;
+
+        if (device.second.name == "%u")
+            continue;
+
+        const auto expected_device_name = fmt::format("{}", device.first);
+        if (device.second.name != expected_device_name)
+        {
+            weechat_printf(buffer,
+                           "%somemo: skipping cached device entry %u with mismatched published id '%s' (legacy devicelist)",
+                           weechat_prefix("error"),
+                           device.first,
+                           device.second.name.c_str());
+            continue;
+        }
+
+        add_device(device.second.name);
+    }
+
+    xmpp_stanza_t *item_children[] = {list, nullptr};
+    xmpp_stanza_t *item = stanza__iq_pubsub_publish_item(
+        context, nullptr, item_children, with_noop("current"));
+
+    xmpp_stanza_t *publish_children[] = {item, nullptr};
+    xmpp_stanza_t *publish = stanza__iq_pubsub_publish(
+        context, nullptr, publish_children,
+        with_noop("eu.siacs.conversations.axolotl.devicelist"));
+
+    xmpp_stanza_t *pubsub_children[] = {publish, nullptr};
+    xmpp_stanza_t *pubsub = stanza__iq_pubsub(
+        context, nullptr, pubsub_children, with_noop("http://jabber.org/protocol/pubsub"));
+
+    // Keep legacy node public/persistent as well so clients still using
+    // OMEMO:1 can reliably discover this device.
+    {
+        auto make_field = [&](const char *var, const char *val, const char *type = nullptr) {
+            xmpp_stanza_t *field = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(field, "field");
+            xmpp_stanza_set_attribute(field, "var", var);
+            if (type) xmpp_stanza_set_attribute(field, "type", type);
+            xmpp_stanza_t *value = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(value, "value");
+            xmpp_stanza_t *text = xmpp_stanza_new(context);
+            xmpp_stanza_set_text(text, val);
+            xmpp_stanza_add_child(value, text);
+            xmpp_stanza_release(text);
+            xmpp_stanza_add_child(field, value);
+            xmpp_stanza_release(value);
+            return field;
+        };
+
+        xmpp_stanza_t *x = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(x, "x");
+        xmpp_stanza_set_ns(x, "jabber:x:data");
+        xmpp_stanza_set_attribute(x, "type", "submit");
+
+        xmpp_stanza_t *f1 = make_field("FORM_TYPE",
+            "http://jabber.org/protocol/pubsub#publish-options", "hidden");
+        xmpp_stanza_t *f2 = make_field("pubsub#max_items", "max");
+        xmpp_stanza_t *f3 = make_field("pubsub#access_model", "open");
+        xmpp_stanza_t *f4 = make_field("pubsub#persist_items", "true");
+
+        xmpp_stanza_add_child(x, f1); xmpp_stanza_release(f1);
+        xmpp_stanza_add_child(x, f2); xmpp_stanza_release(f2);
+        xmpp_stanza_add_child(x, f3); xmpp_stanza_release(f3);
+        xmpp_stanza_add_child(x, f4); xmpp_stanza_release(f4);
+
+        xmpp_stanza_t *publish_options = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(publish_options, "publish-options");
+        xmpp_stanza_add_child(publish_options, x);
+        xmpp_stanza_release(x);
+
+        xmpp_stanza_add_child(pubsub, publish_options);
+        xmpp_stanza_release(publish_options);
+    }
+
+    xmpp_stanza_t *iq_children[] = {pubsub, nullptr};
+    xmpp_stanza_t *parent = stanza__iq(context, nullptr,
+                                       iq_children, nullptr, "announce-legacy1",
+                                       nullptr, nullptr, "set");
+
+    weechat_printf(buffer,
+                   "%somemo: publishing legacy devicelist for device %u with open access model",
+                   weechat_prefix("network"), omemo.device_id);
+
+    return parent;
+}
+
 void weechat::account::add_mam_query(const std::string id, const std::string with,
                                      std::optional<time_t> start, std::optional<time_t> end)
 {

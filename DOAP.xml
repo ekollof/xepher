@@ -340,7 +340,7 @@
         <xmpp:version>0.8.3</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >OMEMO Encryption with auto-detection</xmpp:note>
+                >OMEMO Encryption with auto-detection, OMEMO:2 + legacy OMEMO:1 (axolotl) interoperability, per-device bundle/bootstrap mode selection, and key-transport based session recovery</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

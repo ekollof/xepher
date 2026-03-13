@@ -16,3 +16,5 @@ That file is the authoritative source for:
 - Git commit conventions
 
 Before making any changes, read `.github/copilot-instructions.md` in full.
+
+For OMEMO troubleshooting tasks, agents may use `tools/correlate_omemo_xml.sh --account <account>` as a convenience helper to correlate WeeChat log events with raw XML.

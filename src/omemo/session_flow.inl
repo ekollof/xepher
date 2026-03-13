@@ -1,18 +1,69 @@
+namespace {
+
+[[nodiscard]] static bool devicelist_contains_device(omemo &self,
+                                                     std::string_view key,
+                                                     std::uint32_t device_id)
+{
+    const auto list = load_string(self, key);
+    if (!list || list->empty())
+        return false;
+
+    for (const auto &dev : split(*list, ';'))
+    {
+        const auto parsed_device_id = parse_uint32(dev);
+        if (parsed_device_id && *parsed_device_id == device_id)
+            return true;
+    }
+
+    return false;
+}
+
+[[nodiscard]] static auto resolve_device_mode(omemo &self,
+                                              weechat::account &account,
+                                              std::string_view jid,
+                                              std::uint32_t device_id,
+                                              omemo::peer_mode preferred = omemo::peer_mode::unknown)
+    -> omemo::peer_mode
+{
+    if (jid.empty() || device_id == 0)
+        return preferred;
+
+    const std::string bare_jid = normalize_bare_jid(account.context, jid);
+    const auto stored_mode = load_device_mode(self, bare_jid, device_id);
+    const bool in_omemo2_list = devicelist_contains_device(self, key_for_devicelist(bare_jid), device_id);
+    const bool in_legacy_list = devicelist_contains_device(self, key_for_legacy_devicelist(bare_jid), device_id);
+
+    if (in_omemo2_list && !in_legacy_list)
+        return omemo::peer_mode::omemo2;
+    if (in_legacy_list && !in_omemo2_list)
+        return omemo::peer_mode::legacy;
+
+    if (preferred != omemo::peer_mode::unknown)
+        return preferred;
+
+    if (stored_mode)
+        return *stored_mode;
+
+    if (account.peer_has_legacy_axolotl_only(bare_jid))
+        return omemo::peer_mode::legacy;
+
+    if (in_omemo2_list)
+        return omemo::peer_mode::omemo2;
+    if (in_legacy_list)
+        return omemo::peer_mode::legacy;
+
+    return omemo::peer_mode::unknown;
+}
+
+}
+
 void weechat::xmpp::omemo::request_devicelist(weechat::account &account, std::string_view jid)
 {
     const std::string bare_jid = normalize_bare_jid(account.context, jid);
-    const auto mode = select_peer_mode(account, bare_jid);
-
-    if (mode == peer_mode::legacy)
-    {
-        ::request_legacy_devicelist(account, bare_jid);
-        return;
-    }
-
-    // Selection-first behavior: prefer OMEMO:2 probing by default.
-    // Legacy devicelist is requested only when legacy is selected or when an
-    // OMEMO:2 item-not-found error path explicitly triggers it.
+    // Probe both namespaces up front. Device support is resolved per-device
+    // during bundle bootstrap rather than assumed peer-wide.
     ::request_devicelist(account, bare_jid);
+    ::request_legacy_devicelist(account, bare_jid);
 }
 
 void weechat::xmpp::omemo::request_legacy_devicelist(weechat::account &account, std::string_view jid)
@@ -48,11 +99,8 @@ auto weechat::xmpp::omemo::select_peer_mode(weechat::account &account,
     const auto omemo2_list = load_string(*this, key_for_devicelist(bare_jid));
     const auto legacy_list = load_string(*this, key_for_legacy_devicelist(bare_jid));
 
-    std::size_t known_omemo2_devices = 0;
-    std::size_t known_legacy_devices = 0;
-
-    auto account_devices = [&](const std::optional<std::string> &list,
-                               peer_mode list_mode)
+    std::unordered_set<std::uint32_t> all_devices;
+    auto collect_devices = [&](const std::optional<std::string> &list)
     {
         if (!list || list->empty())
             return;
@@ -60,20 +108,24 @@ auto weechat::xmpp::omemo::select_peer_mode(weechat::account &account,
         for (const auto &dev : split(*list, ';'))
         {
             const auto device_id = parse_uint32(dev);
-            if (!device_id || !is_valid_omemo_device_id(*device_id))
-                continue;
-
-            const auto stored_mode = load_device_mode(*this, bare_jid, *device_id);
-            const auto resolved_mode = stored_mode.value_or(list_mode);
-            if (resolved_mode == peer_mode::omemo2)
-                ++known_omemo2_devices;
-            else if (resolved_mode == peer_mode::legacy)
-                ++known_legacy_devices;
+            if (device_id && is_valid_omemo_device_id(*device_id))
+                all_devices.insert(*device_id);
         }
     };
 
-    account_devices(omemo2_list, peer_mode::omemo2);
-    account_devices(legacy_list, peer_mode::legacy);
+    collect_devices(omemo2_list);
+    collect_devices(legacy_list);
+
+    std::size_t known_omemo2_devices = 0;
+    std::size_t known_legacy_devices = 0;
+    for (const auto device_id : all_devices)
+    {
+        const auto resolved_mode = resolve_device_mode(*this, account, bare_jid, device_id);
+        if (resolved_mode == peer_mode::omemo2)
+            ++known_omemo2_devices;
+        else if (resolved_mode == peer_mode::legacy)
+            ++known_legacy_devices;
+    }
 
     if (known_omemo2_devices != 0 && known_legacy_devices == 0)
         return peer_mode::omemo2;
@@ -284,11 +336,11 @@ void weechat::xmpp::omemo::handle_legacy_devicelist(weechat::account *account,
 // carrying <encrypted> with a <header> (keys) but NO <payload> element.
 // This allows the remote party to learn our device_id and start encrypting
 // future messages to us.
-static void send_key_transport(omemo &self,
-                               weechat::account &account,
-                               struct t_gui_buffer *buffer,
-                               const char *peer_jid,
-                               std::uint32_t remote_device_id)
+static void send_omemo2_key_transport(omemo &self,
+                                      weechat::account &account,
+                                      struct t_gui_buffer *buffer,
+                                      const char *peer_jid,
+                                      std::uint32_t remote_device_id)
 {
     if (!self || !peer_jid)
         return;
@@ -372,6 +424,113 @@ static void send_key_transport(omemo &self,
     xmpp_stanza_release(message);
 }
 
+static void send_legacy_key_transport(omemo &self,
+                                      weechat::account &account,
+                                      struct t_gui_buffer *buffer,
+                                      const char *peer_jid,
+                                      std::uint32_t remote_device_id)
+{
+    if (!self || !peer_jid)
+        return;
+
+    const auto ep = legacy_omemo_encrypt(std::string_view("\x00", 1));
+    if (!ep)
+    {
+        print_error(buffer, fmt::format(
+            "OMEMO (legacy): key-transport key generation failed for {}/{}",
+            peer_jid, remote_device_id));
+        return;
+    }
+
+    const auto transport = encrypt_legacy_transport_key(self, peer_jid, remote_device_id, *ep);
+    if (!transport)
+    {
+        print_error(buffer, fmt::format(
+            "OMEMO (legacy): key-transport encrypt failed for {}/{}",
+            peer_jid, remote_device_id));
+        return;
+    }
+
+    const auto encoded_transport = base64_encode(*account.context,
+                                                 transport->first.data(),
+                                                 transport->first.size());
+    const auto encoded_iv = base64_encode(*account.context,
+                                          ep->iv.data(),
+                                          ep->iv.size());
+
+    xmpp_stanza_t *encrypted = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_name(encrypted, "encrypted");
+    xmpp_stanza_set_ns(encrypted, kLegacyOmemoNs.data());
+
+    xmpp_stanza_t *header = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_name(header, "header");
+    xmpp_stanza_set_attribute(header, "sid", fmt::format("{}", self.device_id).c_str());
+
+    xmpp_stanza_t *key_elem = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_name(key_elem, "key");
+    xmpp_stanza_set_attribute(key_elem, "rid", fmt::format("{}", remote_device_id).c_str());
+    if (transport->second)
+        xmpp_stanza_set_attribute(key_elem, "prekey", "true");
+
+    xmpp_stanza_t *key_text = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_text(key_text, encoded_transport.c_str());
+    xmpp_stanza_add_child(key_elem, key_text);
+    xmpp_stanza_release(key_text);
+    xmpp_stanza_add_child(header, key_elem);
+    xmpp_stanza_release(key_elem);
+
+    xmpp_stanza_t *iv_stanza = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_name(iv_stanza, "iv");
+    xmpp_stanza_t *iv_text = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_text(iv_text, encoded_iv.c_str());
+    xmpp_stanza_add_child(iv_stanza, iv_text);
+    xmpp_stanza_release(iv_text);
+    xmpp_stanza_add_child(header, iv_stanza);
+    xmpp_stanza_release(iv_stanza);
+
+    xmpp_stanza_add_child(encrypted, header);
+    xmpp_stanza_release(header);
+
+    xmpp_stanza_t *message = xmpp_message_new(*account.context, "chat", peer_jid, nullptr);
+    xmpp_stanza_add_child(message, encrypted);
+    xmpp_stanza_release(encrypted);
+
+    xmpp_stanza_t *store_hint = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_name(store_hint, "store");
+    xmpp_stanza_set_ns(store_hint, "urn:xmpp:hints");
+    xmpp_stanza_add_child(message, store_hint);
+    xmpp_stanza_release(store_hint);
+
+    print_info(buffer, fmt::format(
+        "OMEMO (legacy): sending key-transport to {}/{} (prekey={})",
+        peer_jid, remote_device_id, transport->second ? "true" : "false"));
+
+    account.connection.send(message);
+    xmpp_stanza_release(message);
+}
+
+static void send_key_transport(omemo &self,
+                               weechat::account &account,
+                               struct t_gui_buffer *buffer,
+                               const char *peer_jid,
+                               std::uint32_t remote_device_id)
+{
+    if (!self || !peer_jid)
+        return;
+
+    const std::string bare_jid = normalize_bare_jid(*account.context, peer_jid);
+    const auto mode = resolve_device_mode(self, account, bare_jid, remote_device_id,
+                                          omemo::peer_mode::omemo2);
+
+    if (mode == omemo::peer_mode::legacy)
+    {
+        send_legacy_key_transport(self, account, buffer, peer_jid, remote_device_id);
+        return;
+    }
+
+    send_omemo2_key_transport(self, account, buffer, peer_jid, remote_device_id);
+}
+
 void weechat::xmpp::omemo::handle_bundle(weechat::account *account,
                                          struct t_gui_buffer *buffer,
                                          const char *jid,
@@ -413,6 +572,7 @@ void weechat::xmpp::omemo::handle_bundle(weechat::account *account,
             store_device_mode(*this, bare_jid, remote_device_id, peer_mode::omemo2);
             if (!is_own_device)
             {
+                failed_session_bootstrap.erase({bare_jid, remote_device_id});
                 const bool had_session_before = has_session(bare_jid.c_str(), remote_device_id);
                 try
                 {
@@ -426,6 +586,8 @@ void weechat::xmpp::omemo::handle_bundle(weechat::account *account,
                             "OMEMO session setup failed for {}/{}: {}",
                             jid, remote_device_id, ex.what()));
                 }
+                if (!has_session(bare_jid.c_str(), remote_device_id))
+                    failed_session_bootstrap.insert({bare_jid, remote_device_id});
                 const bool session_is_fresh = !had_session_before
                     && has_session(bare_jid.c_str(), remote_device_id);
                 if ((session_is_fresh || needs_key_transport) && account && buffer)
@@ -535,6 +697,7 @@ void weechat::xmpp::omemo::handle_bundle(weechat::account *account,
 
                 if (!is_own_device)
                 {
+                    failed_session_bootstrap.erase({bare_jid, remote_device_id});
                     const bool had_session_before = has_session(bare_jid.c_str(), remote_device_id);
                     try
                     {
@@ -548,6 +711,8 @@ void weechat::xmpp::omemo::handle_bundle(weechat::account *account,
                                 "OMEMO (legacy) session setup failed for {}/{}: {}",
                                 jid, remote_device_id, ex.what()));
                     }
+                    if (!has_session(bare_jid.c_str(), remote_device_id))
+                        failed_session_bootstrap.insert({bare_jid, remote_device_id});
                     const bool session_is_fresh = !had_session_before
                         && has_session(bare_jid.c_str(), remote_device_id);
                     if ((session_is_fresh || needs_key_transport) && account && buffer)

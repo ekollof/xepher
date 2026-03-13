@@ -708,6 +708,23 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     // XEP-0363: HTTP File Upload - handle upload slot errors
     if (id && type && weechat_strcasecmp(type, "error") == 0)
     {
+        weechat::account::mam_query failed_mam_query;
+        if (account.mam_query_search(&failed_mam_query, id))
+        {
+            const bool is_global_query = failed_mam_query.with.empty();
+            weechat_printf(account.buffer,
+                           "%sMAM query %s failed (IQ error) — ending catchup%s",
+                           weechat_prefix("error"),
+                           failed_mam_query.id.c_str(),
+                           is_global_query ? " and flushing deferred OMEMO key-transports" : "");
+            account.mam_query_remove(failed_mam_query.id);
+            if (is_global_query)
+            {
+                account.omemo.global_mam_catchup = false;
+                account.omemo.process_postponed_key_transports(account);
+            }
+        }
+
         auto req_it = account.upload_requests.find(id);
         if (req_it != account.upload_requests.end())
         {
@@ -1548,8 +1565,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 {
                     if (strcmp(id, "omemo-bundle") == 0)
                         target_node = "urn:xmpp:omemo:2:bundles";
+                    else if (strcmp(id, "omemo-legacy-bundle") == 0)
+                        target_node = fmt::format("eu.siacs.conversations.axolotl.bundles:{}",
+                                                  account.omemo.device_id);
                     else if (strcmp(id, "announce1") == 0)
                         target_node = "urn:xmpp:omemo:2:devices";
+                    else if (strcmp(id, "announce-legacy1") == 0)
+                        target_node = "eu.siacs.conversations.axolotl.devicelist";
                 }
 
                 if (!target_node.empty())
@@ -1748,6 +1770,26 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 xmpp_stanza_set_id(dl_stanza, dl_uuid_g.ptr);
                 account.connection.send(dl_stanza);
                 xmpp_stanza_release(dl_stanza);
+            }
+            else if (retry_node == "eu.siacs.conversations.axolotl.devicelist")
+            {
+                xmpp_stanza_t *dl_stanza = account.get_legacy_devicelist();
+                xmpp_string_guard dl_uuid_g(account.context, xmpp_uuid_gen(account.context));
+                xmpp_stanza_set_id(dl_stanza, dl_uuid_g.ptr);
+                account.connection.send(dl_stanza);
+                xmpp_stanza_release(dl_stanza);
+            }
+            else if (std::string_view(retry_node).starts_with(
+                         "eu.siacs.conversations.axolotl.bundles:"))
+            {
+                std::string jid_str(account.jid());
+                xmpp_stanza_t *bundle_stanza =
+                    account.omemo.get_legacy_bundle(account.context, jid_str.data(), nullptr);
+                if (bundle_stanza)
+                {
+                    account.connection.send(bundle_stanza);
+                    xmpp_stanza_release(bundle_stanza);
+                }
             }
         }
     }
@@ -2170,10 +2212,56 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         ? to_bare_g.ptr : account.jid().data();
                 }
 
+                xmpp_string_guard account_bare_g(account.context,
+                    xmpp_jid_bare(account.context, account.jid().data()));
+                const std::string account_bare = (account_bare_g.ptr && *account_bare_g.ptr)
+                    ? std::string(account_bare_g.ptr)
+                    : std::string(account.jid());
+                const bool is_own_devicelist = (account_bare == node_owner_str);
+
                 if (account.omemo)
                     account.omemo.handle_legacy_devicelist(&account,
                                                            node_owner_str.c_str(),
                                                            items);
+
+                if (is_own_devicelist)
+                {
+                    bool found_self = false;
+                    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items, "item");
+                    xmpp_stanza_t *list = item
+                        ? xmpp_stanza_get_child_by_name_and_ns(
+                            item, "list", "eu.siacs.conversations.axolotl")
+                        : nullptr;
+
+                    for (xmpp_stanza_t *device = list ? xmpp_stanza_get_children(list) : nullptr;
+                         device; device = xmpp_stanza_get_next(device))
+                    {
+                        const char *name = xmpp_stanza_get_name(device);
+                        if (!name || weechat_strcasecmp(name, "device") != 0)
+                            continue;
+
+                        const char *did = xmpp_stanza_get_attribute(device, "id");
+                        const auto parsed_did = parse_omemo_device_id(did);
+                        if (parsed_did && *parsed_did == account.omemo.device_id)
+                        {
+                            found_self = true;
+                            break;
+                        }
+                    }
+
+                    if (!found_self)
+                    {
+                        weechat_printf(account.buffer,
+                            "%somemo: our device %u missing from server legacy devicelist — re-publishing",
+                            weechat_prefix("network"), account.omemo.device_id);
+
+                        xmpp_stanza_t *reply = account.get_legacy_devicelist();
+                        xmpp_string_guard uuid_g(account.context, xmpp_uuid_gen(account.context));
+                        xmpp_stanza_set_id(reply, uuid_g.ptr);
+                        account.connection.send(reply);
+                        xmpp_stanza_release(reply);
+                    }
+                }
             }
             else if (items_node
                      && std::string_view(items_node).starts_with(
@@ -2252,12 +2340,36 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         char *&set__last__text = set__last__text_g.ptr;
         weechat::account::mam_query mam_query;
 
+        const char *fin_complete = xmpp_stanza_get_attribute(fin, "complete");
+        const char *fin_stable = xmpp_stanza_get_attribute(fin, "stable");
+        const char *fin_abort = xmpp_stanza_get_attribute(fin, "abort");
+        const bool fin_has_abort = fin_abort
+            && (weechat_strcasecmp(fin_abort, "true") == 0
+                || weechat_strcasecmp(fin_abort, "1") == 0);
+
         set = xmpp_stanza_get_child_by_name_and_ns(
             fin, "set", "http://jabber.org/protocol/rsm");
         if (id && account.mam_query_search(&mam_query, id))
         {
             // Check if this is a global MAM query (empty 'with')
             bool is_global_query = mam_query.with.empty();
+
+            if (fin_has_abort)
+            {
+                weechat_printf(account.buffer,
+                               "%sMAM query %s aborted by server (complete=%s stable=%s)",
+                               weechat_prefix("error"),
+                               mam_query.id.c_str(),
+                               fin_complete ? fin_complete : "(unset)",
+                               fin_stable ? fin_stable : "(unset)");
+                account.mam_query_remove(mam_query.id);
+                if (is_global_query)
+                {
+                    account.omemo.global_mam_catchup = false;
+                    account.omemo.process_postponed_key_transports(account);
+                }
+                return true;
+            }
             
             auto channel = account.channels.find(mam_query.with.data());
 

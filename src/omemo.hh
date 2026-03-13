@@ -87,6 +87,12 @@ namespace weechat {
             // Populated before sending the bundle IQ; cleared in handle_bundle().
             std::set<std::pair<std::string, std::uint32_t>> pending_bundle_fetch;
 
+            // Devices whose latest freshly fetched bundle still failed to yield
+            // a usable libsignal session. These are skipped for outgoing
+            // coverage so a stale/broken advertised device does not block all
+            // queued sends forever.
+            std::set<std::pair<std::string, std::uint32_t>> failed_session_bootstrap;
+
             // Maps outgoing IQ id → target JID for bundle/devicelist PubSub
             // fetches directed at a contact. Used in the IQ result handler to
             // recover the correct JID even when `from` is the server domain.
@@ -130,6 +136,7 @@ namespace weechat {
                     this->identity && this->device_id != 0; }
 
             xmpp_stanza_t *get_bundle(xmpp_ctx_t *context, char *from, char *to);
+            xmpp_stanza_t *get_legacy_bundle(xmpp_ctx_t *context, char *from, char *to);
 
             void init(struct t_gui_buffer *buffer, const char *account_name);
 

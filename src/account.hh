@@ -238,6 +238,7 @@ namespace weechat
         void add_device(device *device);
         void device_free_all();
         xmpp_stanza_t *get_devicelist();
+        xmpp_stanza_t *get_legacy_devicelist();
 
         void add_mam_query(const std::string id, const std::string with,
                            std::optional<time_t> start, std::optional<time_t> end);

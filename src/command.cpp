@@ -1026,6 +1026,34 @@ int command__omemo(const void *pointer, void *data,
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
             }
 
+            // Publish legacy OMEMO nodes for OMEMO:1 interoperability.
+            xmpp_stanza_t *legacy_devicelist_stanza = ptr_account->get_legacy_devicelist();
+            if (legacy_devicelist_stanza)
+            {
+                ptr_account->connection.send(legacy_devicelist_stanza);
+                xmpp_stanza_release(legacy_devicelist_stanza);
+                weechat_printf(buffer,
+                               _("%sLegacy devicelist published (device ID: %u)"),
+                               weechat_prefix("network"), ptr_account->omemo.device_id);
+            }
+
+            xmpp_stanza_t *legacy_bundle_stanza = ptr_account->omemo.get_legacy_bundle(
+                ptr_account->context, from_s.data(), NULL);
+            if (legacy_bundle_stanza)
+            {
+                ptr_account->connection.send(legacy_bundle_stanza);
+                xmpp_stanza_release(legacy_bundle_stanza);
+                weechat_printf(buffer,
+                               _("%sLegacy bundle published for device %u"),
+                               weechat_prefix("network"), ptr_account->omemo.device_id);
+            }
+            else
+            {
+                weechat_printf(buffer,
+                               _("%s%s: failed to generate legacy OMEMO bundle"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            }
+
             return WEECHAT_RC_OK;
         }
 
