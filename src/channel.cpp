@@ -1191,17 +1191,28 @@ int weechat::channel::send_message(const char *to, const char *body)
                 std::string to;
                 std::string body;
                 std::string url;
+                std::string output;
             };
             auto *task = new message_task { *this, to, body, url };
             auto callback = [](const void *pointer, void *,
                     const char *, int ret, const char *out, const char * /*err*/) {
-                auto task = static_cast<const message_task*>(pointer);
+                auto *task = static_cast<message_task*>(const_cast<void*>(pointer));
                 if (!task) return WEECHAT_RC_ERROR;
+
+                if (ret == WEECHAT_HOOK_PROCESS_RUNNING)
+                {
+                    if (out && *out)
+                        task->output += out;
+                    return WEECHAT_RC_OK;
+                }
+
+                if (out && *out)
+                    task->output += out;
 
                 if (ret == 0)
                 {
                     const std::string_view prefix = "content-type: ";
-                    std::istringstream ss(out ? out : "");
+                    std::istringstream ss(task->output);
                     std::string line, mime;
                     while (std::getline(ss, line)) {
                         std::transform(line.begin(), line.end(), line.begin(),
@@ -1379,19 +1390,30 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
         weechat::channel& channel;
         std::string to;
         std::string url;
+        std::string output;
     };
     auto *task = new link_preview_task { *this, to, url };
 
     auto callback = [](const void *pointer, void *,
             const char *, int ret, const char *out, const char * /*err*/) {
-        auto *task = static_cast<const link_preview_task*>(pointer);
+        auto *task = static_cast<link_preview_task*>(const_cast<void*>(pointer));
         if (!task) return WEECHAT_RC_ERROR;
 
-        if (ret == 0 && out && *out)
+        if (ret == WEECHAT_HOOK_PROCESS_RUNNING)
+        {
+            if (out && *out)
+                task->output += out;
+            return WEECHAT_RC_OK;
+        }
+
+        if (out && *out)
+            task->output += out;
+
+        if (ret == 0 && !task->output.empty())
         {
             // Parse OpenGraph meta tags from HTML response.
             // We extract <meta property="og:PROP" content="VALUE"> from <head>.
-            std::string html(out);
+            std::string html(task->output);
             std::string head_html;
             {
                 auto head_end = html.find("</head>");
