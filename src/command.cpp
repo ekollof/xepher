@@ -3483,8 +3483,6 @@ int command__bookmark(const void *pointer, void *data,
 // XEP-0433: Extended Channel Search
 // Send a search IQ to the given service JID with optional keywords.
 // Two steps: first request the form (type=get <search/>), then submit it.
-// Here we go straight to submitting a minimal form (the form request step
-// is optional per the spec and search.jabber.network accepts direct submits).
 static void xep0433_send_search(weechat::account *account,
                                 struct t_gui_buffer *buffer,
                                 const char *service_jid,
@@ -3497,84 +3495,17 @@ static void xep0433_send_search(weechat::account *account,
     info.service_jid = service_jid;
     info.keywords    = keywords ? keywords : "";
     info.buffer      = buffer;
-    info.form_requested = false;
+    info.form_requested = true;
     account->channel_search_queries[search_id] = info;
 
-    // Build: <iq type='get' to='service' id='...'><search xmlns='urn:xmpp:channel-search:0:search'>
-    //          <x xmlns='jabber:x:data' type='submit'>
-    //            <field type='hidden' var='FORM_TYPE'><value>urn:xmpp:channel-search:0:search-params</value></field>
-    //            [<field var='q'><value>keywords</value></field>]
-    //            <field var='key' type='list-single'><value>{urn:xmpp:channel-search:0:order}nusers</value></field>
-    //          </x>
-    //        </search></iq>
+    // Build: <iq type='get' to='service' id='...'><search xmlns='urn:xmpp:channel-search:0:search'/></iq>
+    // and let iq_handler submit the actual form query based on this response.
     xmpp_stanza_t *iq = xmpp_iq_new(account->context, "get", search_id);
     xmpp_stanza_set_to(iq, service_jid);
 
     xmpp_stanza_t *search_el = xmpp_stanza_new(account->context);
     xmpp_stanza_set_name(search_el, "search");
     xmpp_stanza_set_ns(search_el, "urn:xmpp:channel-search:0:search");
-
-    xmpp_stanza_t *x_form = xmpp_stanza_new(account->context);
-    xmpp_stanza_set_name(x_form, "x");
-    xmpp_stanza_set_ns(x_form, "jabber:x:data");
-    xmpp_stanza_set_attribute(x_form, "type", "submit");
-
-    // FORM_TYPE field
-    {
-        xmpp_stanza_t *field = xmpp_stanza_new(account->context);
-        xmpp_stanza_set_name(field, "field");
-        xmpp_stanza_set_attribute(field, "type", "hidden");
-        xmpp_stanza_set_attribute(field, "var", "FORM_TYPE");
-        xmpp_stanza_t *value = xmpp_stanza_new(account->context);
-        xmpp_stanza_set_name(value, "value");
-        xmpp_stanza_t *text = xmpp_stanza_new(account->context);
-        xmpp_stanza_set_text(text, "urn:xmpp:channel-search:0:search-params");
-        xmpp_stanza_add_child(value, text);
-        xmpp_stanza_release(text);
-        xmpp_stanza_add_child(field, value);
-        xmpp_stanza_release(value);
-        xmpp_stanza_add_child(x_form, field);
-        xmpp_stanza_release(field);
-    }
-
-    // Optional keyword search field
-    if (keywords && keywords[0])
-    {
-        xmpp_stanza_t *field = xmpp_stanza_new(account->context);
-        xmpp_stanza_set_name(field, "field");
-        xmpp_stanza_set_attribute(field, "var", "q");
-        xmpp_stanza_t *value = xmpp_stanza_new(account->context);
-        xmpp_stanza_set_name(value, "value");
-        xmpp_stanza_t *text = xmpp_stanza_new(account->context);
-        xmpp_stanza_set_text(text, keywords);
-        xmpp_stanza_add_child(value, text);
-        xmpp_stanza_release(text);
-        xmpp_stanza_add_child(field, value);
-        xmpp_stanza_release(value);
-        xmpp_stanza_add_child(x_form, field);
-        xmpp_stanza_release(field);
-    }
-
-    // Sort key field — order by number of users descending
-    {
-        xmpp_stanza_t *field = xmpp_stanza_new(account->context);
-        xmpp_stanza_set_name(field, "field");
-        xmpp_stanza_set_attribute(field, "var", "key");
-        xmpp_stanza_set_attribute(field, "type", "list-single");
-        xmpp_stanza_t *value = xmpp_stanza_new(account->context);
-        xmpp_stanza_set_name(value, "value");
-        xmpp_stanza_t *text = xmpp_stanza_new(account->context);
-        xmpp_stanza_set_text(text, "{urn:xmpp:channel-search:0:order}nusers");
-        xmpp_stanza_add_child(value, text);
-        xmpp_stanza_release(text);
-        xmpp_stanza_add_child(field, value);
-        xmpp_stanza_release(value);
-        xmpp_stanza_add_child(x_form, field);
-        xmpp_stanza_release(field);
-    }
-
-    xmpp_stanza_add_child(search_el, x_form);
-    xmpp_stanza_release(x_form);
     xmpp_stanza_add_child(iq, search_el);
     xmpp_stanza_release(search_el);
 
@@ -3610,7 +3541,7 @@ int command__list(const void *pointer, void *data,
     // Determine service JID and keywords.
     // If argv[1] contains a dot (looks like a domain/JID), treat it as the service.
     // Otherwise treat all args as keywords and use the default public directory.
-    const char *service_jid = "search.jabber.network";
+    const char *service_jid = "api@search.jabber.network";
     const char *keywords = "";
 
     if (argc >= 2)
@@ -3628,6 +3559,10 @@ int command__list(const void *pointer, void *data,
             keywords = argv_eol[1];
         }
     }
+
+    // search.jabber.network exposes the XMPP API on api@search.jabber.network.
+    if (weechat_strcasecmp(service_jid, "search.jabber.network") == 0)
+        service_jid = "api@search.jabber.network";
 
     weechat_printf(buffer, "");
     if (keywords[0])
@@ -4953,7 +4888,7 @@ void command__init()
         "list",
         N_("search for public MUC rooms (XEP-0433)"),
         N_("[[<service>] [keywords]]"),
-        N_("service  : search service JID (default: search.jabber.network)\n"
+        N_("service  : search service JID (default: api@search.jabber.network)\n"
            "keywords : search keywords (optional)\n"
            "\n"
            "Search for public MUC rooms using XEP-0433 Extended Channel Search.\n"
@@ -4963,7 +4898,7 @@ void command__init()
            "  /list                            : list popular rooms\n"
            "  /list xmpp                       : search for rooms about XMPP\n"
            "  /list linux gaming               : search for linux gaming rooms\n"
-           "  /list search.jabber.network xmpp : use specific search service"),
+           "  /list api@search.jabber.network xmpp : use specific search service"),
         NULL, &command__list, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /list");

@@ -185,6 +185,13 @@ namespace weechat
         };
         std::unordered_map<std::string, channel_search_query_info> channel_search_queries;  // iq_id -> info
 
+        // Follow-up disco#info queries for /list result enrichment.
+        struct channel_search_disco_query_info {
+            struct t_gui_buffer *buffer;    // buffer to print enriched info into
+            std::string room_jid;           // room JID queried via disco#info
+        };
+        std::unordered_map<std::string, channel_search_disco_query_info> channel_search_disco_queries;  // iq_id -> info
+
         // XEP-0054 / XEP-0292 vCard query tracking
         struct whois_query_info {
             struct t_gui_buffer *buffer;  // buffer to print vCard results into

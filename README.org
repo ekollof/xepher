@@ -92,7 +92,7 @@
     - Encryption status bar item (xmpp_encryption) - shows current buffer's encryption mode
     - Roster management - /roster command to display, add, and remove contacts
     - Bookmark management - /bookmark command to add, delete, list, and toggle autojoin for MUC rooms
-    - Room explorer - /list command to search public MUC rooms via XEP-0433 Extended Channel Search (default service: search.jabber.network)
+    - Room explorer - /list command to search public MUC rooms via XEP-0433 Extended Channel Search (default service: api@search.jabber.network)
     - Entity capability caching (XEP-0115) - caches disco#info results to reduce network queries
     - User Avatar (XEP-0084) - automatic avatar fetching, caching, and display as colored Unicode symbols
     - MUC status code handling (XEP-0045) - displays kick/ban/nick-change/affiliation events
@@ -102,7 +102,7 @@
     - References (XEP-0372) - renders @mentions and URI references inline
     - Message status glyphs - sent messages show ⌛ (pending), ✓ (delivered), ✓✓ (read) inline
     - Link Metadata (XEP-0511) - renders inline link previews (title, description, URL) from OpenGraph metadata in received messages; automatically fetches and sends OpenGraph previews for URLs in outgoing messages
-    - Extended Channel Search (XEP-0433) - /list command queries XEP-0433-capable search services (default: search.jabber.network) for public MUC rooms by keyword
+    - Extended Channel Search (XEP-0433) - /list command queries XEP-0433-capable search services (default: api@search.jabber.network) for public MUC rooms by keyword
 
   See the *XMPP Compliance* section below for a comprehensive list of implemented XEPs.
 
@@ -849,11 +849,11 @@
     /list                              # List popular public rooms
     /list xmpp                         # Search for rooms about XMPP
     /list linux gaming                 # Search for linux gaming rooms
-    /list search.jabber.network xmpp   # Use a specific search service
+    /list api@search.jabber.network xmpp   # Use a specific search service
     #+end_src
 
     *Note:* This command sends a XEP-0433 IQ search request. The default
-    service is =search.jabber.network=. Results show room address, name, user
+    service is =api@search.jabber.network=. Results show room address, name, user
     count, and description. Use =/enter <address>= to join a room from the list.
     If the first argument contains a dot it is treated as the service JID; otherwise
     all arguments are treated as keywords.
@@ -1177,7 +1177,7 @@
        * [X] Add contacts with /roster add
        * [X] Remove contacts with /roster del
    * [ ] [#D] OTR (libotr)
-    * [X] [#C] Room Explorer (XEP-0433 Extended Channel Search, default: search.jabber.network)
+    * [X] [#C] Room Explorer (XEP-0433 Extended Channel Search, default: api@search.jabber.network)
    * [X] [#C] DOAP
    * [ ] [#C] Link sniffing for oob
 ** TODO [#C] Adhere to CCS2022 (XEP-459) (milestone v0.3)
