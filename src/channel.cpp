@@ -1031,10 +1031,26 @@ int weechat::channel::send_message(std::string to, std::string body,
             if (mention_jid.empty())
                 continue;
 
-            // Byte offsets in body string: begin = position of '@', end = after nick
+            // XEP-0372 §4: begin/end are Unicode code point offsets, NOT byte
+            // offsets. Count code points in the UTF-8 body up to the byte
+            // positions returned by std::regex (which operates on bytes).
+            auto utf8_codepoints = [](const std::string& s, size_t byte_end) -> size_t {
+                size_t cp = 0;
+                for (size_t b = 0; b < byte_end && b < s.size(); ) {
+                    unsigned char c = static_cast<unsigned char>(s[b]);
+                    if      (c < 0x80)  b += 1;
+                    else if (c < 0xE0)  b += 2;
+                    else if (c < 0xF0)  b += 3;
+                    else                b += 4;
+                    ++cp;
+                }
+                return cp;
+            };
             std::string uri = "xmpp:" + mention_jid;
-            size_t ref_begin = static_cast<size_t>(m.position(0));   // '@' position
-            size_t ref_end   = ref_begin + static_cast<size_t>(m.length(0)); // exclusive end
+            size_t byte_begin = static_cast<size_t>(m.position(0));
+            size_t byte_end   = byte_begin + static_cast<size_t>(m.length(0));
+            size_t ref_begin  = utf8_codepoints(body, byte_begin);
+            size_t ref_end    = utf8_codepoints(body, byte_end);
 
             xmpp_stanza_t *ref = xmpp_stanza_new(account.context);
             xmpp_stanza_set_name(ref, "reference");
