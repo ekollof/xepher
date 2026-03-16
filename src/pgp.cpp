@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <memory>
 #include <numeric>
@@ -108,103 +110,82 @@ weechat::xmpp::pgp::~pgp()
     gpgme_release(this->gpgme);
 }
 
-char *weechat::xmpp::pgp::encrypt(struct t_gui_buffer *buffer, const char *source, std::vector<std::string>&& targets, const char *message)
+std::optional<std::string> weechat::xmpp::pgp::encrypt(struct t_gui_buffer *buffer, const char *source, std::vector<std::string>&& targets, const char *message)
 {
+    struct data_guard {
+        gpgme_data_t h = nullptr;
+        ~data_guard() { if (h) gpgme_data_release(h); }
+    } in_g, out_g;
+
     std::string encrypted;
-    gpgme_key_t keys[3] = {NULL,NULL,NULL};
-    char *           result = NULL;
-
-    int ret;
+    gpgme_key_t keys[3] = {nullptr, nullptr, nullptr};
     gpgme_error_t err;
-    gpgme_data_t in, out;
 
-    /* Initialize input buffer. */
-    err = gpgme_data_new_from_mem(&in, message, strlen(message), false);
-    if (err) {
-        goto encrypt_finish;
-    }
+    err = gpgme_data_new_from_mem(&in_g.h, message, strlen(message), false);
+    if (err) goto encrypt_finish;
 
-    /* Initialize output buffer. */
-    err = gpgme_data_new(&out);
-    if (err) {
-        goto encrypt_finish;
-    }
+    err = gpgme_data_new(&out_g.h);
+    if (err) goto encrypt_finish;
 
-    /* Encrypt data. */
     for (const std::string& target : targets)
     {
         err = gpgme_get_key(this->gpgme, target.data(), &keys[0], false);
-        if (err) {
-            goto encrypt_finish;
-        }
+        if (err) goto encrypt_finish;
     }
     err = gpgme_get_key(this->gpgme, source, &keys[1], false);
-    if (err) {
-        goto encrypt_finish;
-    }
-    err = gpgme_op_encrypt(this->gpgme, keys, GPGME_ENCRYPT_ALWAYS_TRUST, in, out);
-    if (err) {
-        goto encrypt_finish;
-    }
+    if (err) goto encrypt_finish;
+
+    err = gpgme_op_encrypt(this->gpgme, keys, GPGME_ENCRYPT_ALWAYS_TRUST, in_g.h, out_g.h);
+    if (err) goto encrypt_finish;
+
     if (gpgme_encrypt_result_t enc_result = gpgme_op_encrypt_result(this->gpgme);
             enc_result->invalid_recipients)
-    {
         goto encrypt_finish;
-    }
-    gpgme_data_seek(out, 0, SEEK_SET);
-    char data[512 + 1];
-    while ((ret = gpgme_data_read(out, data, 512)) > 0)
+
     {
-        encrypted += std::string_view(data, ret);
+        gpgme_data_seek(out_g.h, 0, SEEK_SET);
+        char data[512 + 1];
+        int ret;
+        while ((ret = gpgme_data_read(out_g.h, data, 512)) > 0)
+            encrypted += std::string_view(data, ret);
     }
 
-    gpgme_data_release(in);
-    gpgme_data_release(out);
-
-    result = strndup(encrypted.data() + strlen(PGP_MESSAGE_HEADER),
-                     encrypted.size() - strlen(PGP_MESSAGE_HEADER) - strlen(PGP_MESSAGE_FOOTER));
 encrypt_finish:
     if (err) {
         weechat_printf(buffer, "[PGP]\t%s - %s",
                 gpgme_strsource(err), gpgme_strerror(err));
+        return std::nullopt;
     }
-    return result;
+    if (encrypted.size() <= strlen(PGP_MESSAGE_HEADER) + strlen(PGP_MESSAGE_FOOTER))
+        return std::nullopt;
+    return std::string(encrypted.data() + strlen(PGP_MESSAGE_HEADER),
+                       encrypted.size() - strlen(PGP_MESSAGE_HEADER) - strlen(PGP_MESSAGE_FOOTER));
 }
 
 //"hQIMAzlgcSFDGLKEAQ//cGG3DFughC5xBF7xeXz1RdayOfhBAPfoZIq62MVuSnfS\nMfig65Zxz1LtAnnFq90TZY7hiHPBtVlYqg47AbSoYweMdpXsKgbUrd3NNf6k2nsZ\nUkChCtyGuHi8pTzclfle7gT0nNXJ1WcLCZ4ORZCrg3D5A+YTO9tdmE8GQsTT6TdV\nbbxF5yR4JF5SzFhuFL3ZoXPXrWylcwKXarYfoOTa6M2vSsCwApVIXQgJ/FI46sLT\nb0B/EVCjFvcvjkNr7+K7mQtth+x0a0pC4BtEhRvnIRAe/sdGp8NY+DP76clx4U+k\nIDG4H92F632pR6eEIoZttnBoaj0O4sTVAJCao5AoecR4w2FDqBWWtIyQp5vbo17/\nMtzungkk5vQP6Jhu36wa+JKpbHoxomVpHPZfAtIoyaY6pzQ0bUomIlSVpbZDvF68\nZKTlFd89Pm5x0JO5gsVYvf+N9Ed33d34n/0CFz5K5Tgu4Bk0v4LWEy3wtNsuQB4p\nkBSZJk7I2BakcRwP0zwld6rRHFIX1pb7zqThBPZGB9RkWPltiktUTibOII12tWhi\nksFpQJ8l1A8h9vM5kUXIeD6H2yP0CBUEIZF3Sf+jiSRZ/1/n3KoUrKEzkf/y4xgv\n1LA4pMjNLEr6J2fqGyYRFv4Bxv3PIvF17V5CwOtguxGRJHJXdIzm1BSHSqXxHezS\nYAFXMUb9fw3QX7Ed23KiyZjzd/LRsQBqMs9RsYyZB2PqF9x84lQYYbE8lErrryvK\nUEtmJKPw3Hvb7kgGox5vl5+KCg9q64EU9TgQpufYNShKtDz7Fsvc+ncgZoshDUeo\npw==\n=euIB"
-char *weechat::xmpp::pgp::decrypt(struct t_gui_buffer *buffer, const char *ciphertext)
+std::optional<std::string> weechat::xmpp::pgp::decrypt(struct t_gui_buffer *buffer, const char *ciphertext)
 {
+    struct data_guard {
+        gpgme_data_t h = nullptr;
+        ~data_guard() { if (h) gpgme_data_release(h); }
+    } in_g, out_g;
+
     std::string decrypted;
-    std::unique_ptr<char[]> buf;
-    size_t buf_len = 0;
-    char * result = NULL;
-
-    int ret;
-
-    buf_len = strlen(PGP_MESSAGE_HEADER) + strlen(ciphertext) + strlen(PGP_MESSAGE_FOOTER) + 1;
-    buf = std::unique_ptr<char[]>(new char[buf_len]);
-    buf_len = snprintf(buf.get(), buf_len, PGP_MESSAGE_HEADER "%s" PGP_MESSAGE_FOOTER, ciphertext);
-
     std::string keyids;
     gpgme_error_t err;
-    gpgme_data_t in, out;
 
-    /* Initialize input buffer. */
-    err = gpgme_data_new_from_mem(&in, buf.get(), buf_len, false);
-    if (err) {
-        goto decrypt_finish;
-    }
+    size_t buf_len = strlen(PGP_MESSAGE_HEADER) + strlen(ciphertext) + strlen(PGP_MESSAGE_FOOTER) + 1;
+    auto buf = std::make_unique<char[]>(buf_len);
+    buf_len = snprintf(buf.get(), buf_len, PGP_MESSAGE_HEADER "%s" PGP_MESSAGE_FOOTER, ciphertext);
 
-    /* Initialize output buffer. */
-    err = gpgme_data_new(&out);
-    if (err) {
-        goto decrypt_finish;
-    }
+    err = gpgme_data_new_from_mem(&in_g.h, buf.get(), buf_len, false);
+    if (err) goto decrypt_finish;
 
-    /* Decrypt data. */
-    err = gpgme_op_decrypt(this->gpgme, in, out);
-    if (gpgme_decrypt_result_t dec_result = gpgme_op_decrypt_result(this->gpgme);
-            dec_result)
+    err = gpgme_data_new(&out_g.h);
+    if (err) goto decrypt_finish;
+
+    err = gpgme_op_decrypt(this->gpgme, in_g.h, out_g.h);
+    if (gpgme_decrypt_result_t dec_result = gpgme_op_decrypt_result(this->gpgme); dec_result)
     {
         for (auto recip = dec_result->recipients; recip; recip = recip->next)
         {
@@ -212,157 +193,143 @@ char *weechat::xmpp::pgp::decrypt(struct t_gui_buffer *buffer, const char *ciphe
             keyids += format_key(*this, recip->keyid);
         }
         if (dec_result->unsupported_algorithm)
-        {
             goto decrypt_finish;
-        }
     }
-    if (err) {
-        goto decrypt_finish;
-    }
-    gpgme_data_seek(out, 0, SEEK_SET);
-    char data[512 + 1];
-    while ((ret = gpgme_data_read(out, data, 512)) > 0)
+    if (err) goto decrypt_finish;
+
     {
-        decrypted += std::string_view(data, ret);
+        gpgme_data_seek(out_g.h, 0, SEEK_SET);
+        char data[512 + 1];
+        int ret;
+        while ((ret = gpgme_data_read(out_g.h, data, 512)) > 0)
+            decrypted += std::string_view(data, ret);
     }
 
-    gpgme_data_release(in);
-    gpgme_data_release(out);
-
-    result = strndup(decrypted.data(), decrypted.size());
 decrypt_finish:
     if (err) {
         weechat_printf(buffer, "[PGP]\t%s - %s (%s)",
                 gpgme_strsource(err), gpgme_strerror(err), keyids.data());
+        return std::nullopt;
     }
-    return result;
+    return decrypted;
 }
 
-char *weechat::xmpp::pgp::verify(struct t_gui_buffer *buffer, const char *certificate)
+std::optional<std::string> weechat::xmpp::pgp::verify(struct t_gui_buffer *buffer, const char *certificate)
 {
-    std::unique_ptr<char[]> buf;
-    size_t buf_len = 0;
-    char * result = NULL;
+    struct data_guard {
+        gpgme_data_t h = nullptr;
+        ~data_guard() { if (h) gpgme_data_release(h); }
+    } in_g, out_g;
 
-    buf_len = strlen(PGP_SIGNATURE_HEADER) + strlen(certificate) + strlen(PGP_SIGNATURE_FOOTER) + 1;
-    buf = std::unique_ptr<char[]>(new char[buf_len]);
+    std::optional<std::string> result;
+    gpgme_verify_result_t vrf_result = nullptr;
+    gpgme_error_t err;
+
+    size_t buf_len = strlen(PGP_SIGNATURE_HEADER) + strlen(certificate) + strlen(PGP_SIGNATURE_FOOTER) + 1;
+    auto buf = std::make_unique<char[]>(buf_len);
     buf_len = snprintf(buf.get(), buf_len, PGP_SIGNATURE_HEADER "%s" PGP_SIGNATURE_FOOTER, certificate);
 
-    gpgme_verify_result_t vrf_result;
-    gpgme_error_t err;
-    gpgme_data_t in, out;
-    gpgme_key_t key;
+    err = gpgme_data_new_from_mem(&in_g.h, buf.get(), buf_len, false);
+    if (err) goto verify_finish;
 
-    /* Initialize input buffer. */
-    err = gpgme_data_new_from_mem(&in, buf.get(), buf_len, false);
-    if (err) {
-        goto verify_finish;
-    }
+    err = gpgme_data_new(&out_g.h);
+    if (err) goto verify_finish;
 
-    /* Initialize output buffer. */
-    err = gpgme_data_new(&out);
-    if (err) {
-        goto verify_finish;
-    }
+    err = gpgme_op_verify(this->gpgme, in_g.h, out_g.h, nullptr);
+    if (err) goto verify_finish;
 
-    /* Verify data. */
-    err = gpgme_op_verify(this->gpgme, in, out, nullptr);
-    if (err) {
-        goto verify_finish;
-    }
     if (vrf_result = gpgme_op_verify_result(this->gpgme);
             !(vrf_result->signatures->summary & GPGME_SIGSUM_VALID))
     {
       //goto verify_finish;
     }
 
-    result = strdup(vrf_result->signatures->fpr);
+    result = std::string(vrf_result->signatures->fpr);
 
-    err = gpgme_get_key(this->gpgme, result, &key, false);
-    if (err) {
-        const char *keyids[2] = { result, nullptr };
-        err = gpgme_op_receive_keys(this->gpgme, keyids);
+    {
+        gpgme_key_t key = nullptr;
+        err = gpgme_get_key(this->gpgme, result->c_str(), &key, false);
+        if (err) {
+            const char *keyids[2] = { result->c_str(), nullptr };
+            err = gpgme_op_receive_keys(this->gpgme, keyids);
+        } else {
+            gpgme_key_release(key);
+        }
     }
 
 verify_finish:
     if (err) {
         weechat_printf(buffer, "[PGP]\t%s - %s",
                 gpgme_strsource(err), gpgme_strerror(err));
+        return std::nullopt;
     }
     return result;
 }
 
-char *weechat::xmpp::pgp::sign(struct t_gui_buffer *buffer, const char *source, const char *message)
+std::optional<std::string> weechat::xmpp::pgp::sign(struct t_gui_buffer *buffer, const char *source, const char *message)
 {
+    struct data_guard {
+        gpgme_data_t h = nullptr;
+        ~data_guard() { if (h) gpgme_data_release(h); }
+    } in_g, out_g;
+    struct key_guard {
+        gpgme_key_t k = nullptr;
+        ~key_guard() { if (k) gpgme_key_release(k); }
+    } key_g;
+
     std::string signature;
-    char *           result = NULL;
-    int ret;
-
     gpgme_error_t err;
-    gpgme_data_t in, out;
-    gpgme_key_t key;
 
-    /* Initialize input buffer. */
-    err = gpgme_data_new_from_mem(&in, (char *)message, strlen(message), false);
-    if (err) {
-        goto sign_finish;
-    }
+    err = gpgme_data_new_from_mem(&in_g.h, (char *)message, strlen(message), false);
+    if (err) goto sign_finish;
 
-    /* Initialize output buffer. */
-    err = gpgme_data_new(&out);
-    if (err) {
-        goto sign_finish;
-    }
+    err = gpgme_data_new(&out_g.h);
+    if (err) goto sign_finish;
 
-    /* Include signature within key. */
     {
         gpgme_keylist_mode_t kmode = gpgme_get_keylist_mode(this->gpgme);
         kmode |= GPGME_KEYLIST_MODE_LOCATE;
         kmode |= GPGME_KEYLIST_MODE_SIGS;
         err = gpgme_set_keylist_mode(this->gpgme, kmode);
     }
-    if (err) {
-        goto sign_finish;
-    }
+    if (err) goto sign_finish;
 
-    err = gpgme_get_key(this->gpgme, source, &key, false);
+    err = gpgme_get_key(this->gpgme, source, &key_g.k, false);
     if (err) {
         weechat_printf(nullptr, "(gpg) get key fail for %s", source);
         goto sign_finish;
     }
-    err = gpgme_signers_add(this->gpgme, key);
+    err = gpgme_signers_add(this->gpgme, key_g.k);
     if (err) {
         weechat_printf(nullptr, "(gpg) add key fail for %s", source);
         goto sign_finish;
     }
 
-    /* Sign data. */
-    err = gpgme_op_sign(this->gpgme, in, out, GPGME_SIG_MODE_DETACH);
+    err = gpgme_op_sign(this->gpgme, in_g.h, out_g.h, GPGME_SIG_MODE_DETACH);
     if (err) {
         weechat_printf(nullptr, "(gpg) sign fail for %s", source);
         goto sign_finish;
     }
     if (gpgme_sign_result_t sgn_result = gpgme_op_sign_result(this->gpgme);
             !sgn_result->signatures)
-    {
         weechat_printf(nullptr, "(gpg) signature fail for %s", source);
-    }
-    gpgme_data_seek(out, 0, SEEK_SET);
-    char data[512 + 1];
-    while ((ret = gpgme_data_read(out, data, 512)) > 0)
+
     {
-        signature += std::string_view(data, ret);
+        gpgme_data_seek(out_g.h, 0, SEEK_SET);
+        char data[512 + 1];
+        int ret;
+        while ((ret = gpgme_data_read(out_g.h, data, 512)) > 0)
+            signature += std::string_view(data, ret);
     }
 
-    gpgme_data_release(in);
-    gpgme_data_release(out);
-
-    result = strndup(signature.data() + strlen(PGP_SIGNATURE_HEADER),
-                     signature.size() - strlen(PGP_SIGNATURE_HEADER) - strlen(PGP_SIGNATURE_FOOTER));
 sign_finish:
     if (err) {
         weechat_printf(buffer, "[PGP]\t%s - %s",
                 gpgme_strsource(err), gpgme_strerror(err));
+        return std::nullopt;
     }
-    return result;
+    if (signature.size() <= strlen(PGP_SIGNATURE_HEADER) + strlen(PGP_SIGNATURE_FOOTER))
+        return std::nullopt;
+    return std::string(signature.data() + strlen(PGP_SIGNATURE_HEADER),
+                       signature.size() - strlen(PGP_SIGNATURE_HEADER) - strlen(PGP_SIGNATURE_FOOTER));
 }

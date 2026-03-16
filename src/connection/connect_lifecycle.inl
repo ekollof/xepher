@@ -187,9 +187,8 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             xmpp_stanza_set_ns(pres__x, "jabber:x:signed");
 
             pres__x__text = xmpp_stanza_new(account.context);
-            char *signature = account.pgp.sign(account.buffer, account.pgp_keyid().data(), account.status().data());
-            xmpp_stanza_set_text(pres__x__text, signature ? signature : "");
-            free(signature);
+            auto signature = account.pgp.sign(account.buffer, account.pgp_keyid().data(), account.status().data());
+            xmpp_stanza_set_text(pres__x__text, signature ? signature->c_str() : "");
             xmpp_stanza_add_child(pres__x, pres__x__text);
             xmpp_stanza_release(pres__x__text);
 

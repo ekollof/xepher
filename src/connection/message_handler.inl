@@ -1165,7 +1165,8 @@ message_handler_after_omemo:
     if (x)
     {
         char *ciphertext = xmpp_stanza_get_text(x);
-        cleartext = account.pgp.decrypt(channel->buffer, ciphertext);
+        if (auto decrypted = account.pgp.decrypt(channel->buffer, ciphertext))
+            cleartext = strdup(decrypted->c_str());
         xmpp_free(account.context, ciphertext);
     }
     text = cleartext ? cleartext : intext;

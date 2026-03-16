@@ -217,9 +217,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             {
                 if (auto signature = binding.signature())
                 {
-                    char *pgp_raw = account.pgp.verify(channel->buffer, signature->data());
-                    user->profile.pgp_id = pgp_raw ? std::optional<std::string>(pgp_raw) : std::nullopt;
-                    free(pgp_raw);
+                    user->profile.pgp_id = account.pgp.verify(channel->buffer, signature->data());
                     if (user->profile.pgp_id.has_value() && channel->type != weechat::channel::chat_type::MUC)
                         channel->pgp.ids.emplace(user->profile.pgp_id.value());
                 }
@@ -338,9 +336,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         {
             if (auto signature = binding.signature(); signature)
             {
-                char *pgp_raw = account.pgp.verify(channel->buffer, signature->data());
-                user->profile.pgp_id = pgp_raw ? std::optional<std::string>(pgp_raw) : std::nullopt;
-                free(pgp_raw);
+                user->profile.pgp_id = account.pgp.verify(channel->buffer, signature->data());
                 if (user->profile.pgp_id.has_value() && channel->type != weechat::channel::chat_type::MUC)
                     channel->pgp.ids.emplace(user->profile.pgp_id.value());
             }

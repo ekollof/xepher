@@ -1179,9 +1179,9 @@ int weechat::channel::send_message(const char *to, const char *body)
         xmpp_stanza_set_ns(message__x, "jabber:x:encrypted");
 
         xmpp_stanza_t *message__x__text = xmpp_stanza_new(account.context);
-        char *ciphertext = account.pgp.encrypt(buffer, account.pgp_keyid().data(), std::vector(pgp.ids.begin(), pgp.ids.end()), body);
+        auto ciphertext = account.pgp.encrypt(buffer, account.pgp_keyid().data(), std::vector(pgp.ids.begin(), pgp.ids.end()), body);
         if (ciphertext)
-            xmpp_stanza_set_text(message__x__text, ciphertext);
+            xmpp_stanza_set_text(message__x__text, ciphertext->c_str());
         else
         {
             weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
@@ -1192,7 +1192,6 @@ int weechat::channel::send_message(const char *to, const char *body)
             xmpp_stanza_release(message);
             return WEECHAT_RC_ERROR;
         }
-        ::free(ciphertext);
 
         xmpp_stanza_add_child(message__x, message__x__text);
         xmpp_stanza_release(message__x__text);

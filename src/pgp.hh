@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -22,12 +23,12 @@ namespace weechat::xmpp
 
         ~pgp();
 
-        char *decrypt(struct t_gui_buffer *buffer, const char *ciphertext);
+        std::optional<std::string> decrypt(struct t_gui_buffer *buffer, const char *ciphertext);
 
-        char *encrypt(struct t_gui_buffer *buffer, const char *source, std::vector<std::string>&& target, const char *message);
+        std::optional<std::string> encrypt(struct t_gui_buffer *buffer, const char *source, std::vector<std::string>&& target, const char *message);
 
-        char *verify(struct t_gui_buffer *buffer, const char *certificate);
+        std::optional<std::string> verify(struct t_gui_buffer *buffer, const char *certificate);
 
-        char *sign(struct t_gui_buffer *buffer, const char *source, const char *message);
+        std::optional<std::string> sign(struct t_gui_buffer *buffer, const char *source, const char *message);
     };
 }
