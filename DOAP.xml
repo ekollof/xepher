@@ -702,13 +702,22 @@
       </xmpp:SupportedXep>
     </implements>
 
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0077.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>2.4.0</xmpp:version>
+        <xmpp:note xml:lang='en'>In-Band Registration — /account register &lt;name&gt; &lt;jid&gt; &lt;password&gt; registers a new account on the server before authentication; supports username/password fields, already-registered and OOB-redirect detection</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
     <release>
       <Version>
         <revision>0.4.0-fork</revision>
         <created>2026-03-09</created>
         <xmpp:note
                     xml:lang='en'
-                >Outgoing link previews (XEP-0511 send), Ad-Hoc Commands (XEP-0050), Data Forms (XEP-0004), XHTML-IM (XEP-0071), References (XEP-0372), Message Displayed Synchronization (XEP-0490), Message Fastening (XEP-0422), Fallback Indication (XEP-0428), Spoiler Messages (XEP-0382), Attention (XEP-0224), Moved (XEP-0283), Consistent Color Generation (XEP-0392), Extended Channel Search (XEP-0433), MUC /kick /ban /topic /nick commands (XEP-0045), XEP-0198 stanza retransmit queue, non-blocking HTTP upload (XEP-0363), own nickname publishing (XEP-0172), MDS read flush on buffer switch (XEP-0490), and further bug fixes</xmpp:note>
+                >Outgoing link previews (XEP-0511 send), Ad-Hoc Commands (XEP-0050), Data Forms (XEP-0004), XHTML-IM (XEP-0071), References (XEP-0372), Message Displayed Synchronization (XEP-0490), Message Fastening (XEP-0422), Fallback Indication (XEP-0428), Spoiler Messages (XEP-0382), Attention (XEP-0224), Moved (XEP-0283), Consistent Color Generation (XEP-0392), Extended Channel Search (XEP-0433), MUC /kick /ban /topic /nick commands (XEP-0045), XEP-0198 stanza retransmit queue, non-blocking HTTP upload (XEP-0363), own nickname publishing (XEP-0172), MDS read flush on buffer switch (XEP-0490), In-Band Registration (XEP-0077), and further bug fixes</xmpp:note>
       </Version>
     </release>
   </Project>
