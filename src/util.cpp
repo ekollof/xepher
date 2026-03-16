@@ -143,10 +143,11 @@ std::string apply_xep393_styling(const std::string& text)
             if (ch == '*' && !isspace(text[i+1]))
             {
                 size_t end = i + 1;
-                while (end < text.length() && text[end] != '*')
+                // XEP-0393: spans MUST NOT cross line boundaries
+                while (end < text.length() && text[end] != '*' && text[end] != '\n')
                     end++;
                 
-                if (end < text.length() && !isspace(text[end-1]) &&
+                if (end < text.length() && text[end] == '*' && !isspace(text[end-1]) &&
                     (end + 1 >= text.length() || isspace(text[end+1]) || ispunct(text[end+1])))
                 {
                     result += weechat_color("bold");
@@ -163,10 +164,11 @@ std::string apply_xep393_styling(const std::string& text)
             else if (ch == '_' && !isspace(text[i+1]))
             {
                 size_t end = i + 1;
-                while (end < text.length() && text[end] != '_')
+                // XEP-0393: spans MUST NOT cross line boundaries
+                while (end < text.length() && text[end] != '_' && text[end] != '\n')
                     end++;
                 
-                if (end < text.length() && !isspace(text[end-1]) &&
+                if (end < text.length() && text[end] == '_' && !isspace(text[end-1]) &&
                     (end + 1 >= text.length() || isspace(text[end+1]) || ispunct(text[end+1])))
                 {
                     result += weechat_color("underline");
@@ -183,10 +185,11 @@ std::string apply_xep393_styling(const std::string& text)
             else if (ch == '`' && !isspace(text[i+1]))
             {
                 size_t end = i + 1;
-                while (end < text.length() && text[end] != '`')
+                // XEP-0393: spans MUST NOT cross line boundaries
+                while (end < text.length() && text[end] != '`' && text[end] != '\n')
                     end++;
                 
-                if (end < text.length() && !isspace(text[end-1]) &&
+                if (end < text.length() && text[end] == '`' && !isspace(text[end-1]) &&
                     (end + 1 >= text.length() || isspace(text[end+1]) || ispunct(text[end+1])))
                 {
                     result += weechat_color("gray");
@@ -199,22 +202,26 @@ std::string apply_xep393_styling(const std::string& text)
                 }
             }
             
-            // ~strikethrough~
-            else if (ch == '~' && !isspace(text[i+1]))
+            // ~~strikethrough~~ (XEP-0393 uses double-tilde)
+            else if (ch == '~' && i + 2 < text.length() && text[i+1] == '~' && !isspace(text[i+2]))
             {
-                size_t end = i + 1;
-                while (end < text.length() && text[end] != '~')
+                size_t end = i + 2;
+                // XEP-0393: spans MUST NOT cross line boundaries; look for ~~
+                while (end + 1 < text.length() &&
+                       !(text[end] == '~' && text[end+1] == '~') &&
+                       text[end] != '\n')
                     end++;
                 
-                if (end < text.length() && !isspace(text[end-1]) &&
-                    (end + 1 >= text.length() || isspace(text[end+1]) || ispunct(text[end+1])))
+                if (end + 1 < text.length() && text[end] == '~' && text[end+1] == '~' &&
+                    !isspace(text[end-1]) &&
+                    (end + 2 >= text.length() || isspace(text[end+2]) || ispunct(text[end+2])))
                 {
                     result += weechat_color("red");
-                    i++;
+                    i += 2; // Skip opening ~~
                     while (i < end)
                         result += text[i++];
                     result += weechat_color("resetcolor");
-                    i++; // Skip closing ~
+                    i += 2; // Skip closing ~~
                     continue;
                 }
             }
