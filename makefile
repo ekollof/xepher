@@ -2,6 +2,7 @@
 # vim: set noexpandtab:
 
 UNAME_S := $(shell uname -s)
+IS_CLANG := $(shell $(CXX) --version 2>/dev/null | grep -i clang)
 
 ifdef DEBUG
 	DBGCFLAGS=-DDEBUG -fno-omit-frame-pointer -fsanitize=address #-fsanitize=undefined -fsanitize=leak
@@ -19,6 +20,7 @@ FIND ?= find
 INCLUDES=-Ilibstrophe -Ideps/lmdbxx -Ideps -Isrc -I. -I/usr/include/omemo/ \
 	 $(shell xml2-config --cflags) \
 	 $(shell pkg-config --cflags gpgme) \
+	 $(shell pkg-config --cflags libsignal-protocol-c) \
 		 $(shell pkg-config --cflags libomemo-c)
 CFLAGS+=$(DBGCFLAGS) \
 	-fno-omit-frame-pointer -fPIC \
@@ -41,8 +43,12 @@ CPPFLAGS+=$(DBGCFLAGS) \
 	  -std=c++23 -gdwarf-4 \
 	  -Wall -Wextra -pedantic -Werror \
 	  -Wno-missing-field-initializers \
+	  -Wno-variadic-macros \
 	  $(INCLUDES)
 # -DDOCTEST_CONFIG_DISABLE
+ifneq ($(IS_CLANG),)
+	CPPFLAGS+=-Wno-gnu-zero-variadic-macro-arguments
+endif
 ifeq ($(CXX),clang)
 	CPPFLAGS+=
 else
@@ -162,7 +168,7 @@ sexp/sexp.a: sexp/parser.o sexp/lexer.o sexp/driver.o
 
 sexp/parser.o: sexp/parser.yy
 	cd sexp && bison -t -d -v parser.yy
-	$(CXX) $(CPPFLAGS) -fvisibility=default -c sexp/parser.tab.cc -o $@
+	$(CXX) $(CPPFLAGS) -fvisibility=default -Wno-unused-but-set-variable -c sexp/parser.tab.cc -o $@
 
 sexp/lexer.o: sexp/lexer.l
 	cd sexp && flex -d --outfile=lexer.yy.cc lexer.l

@@ -11,16 +11,16 @@ depend: $(DEPS) $(SRCS) $(HDRS)
 		*.cpp) \
 			objdir="$$(echo $$dir | sed 's|src|obj|')"; \
 			obj="$$(echo $$base | sed 's|\.cpp|\.o|')"; \
-			echo "$(CXX) $(CPPFLAGS) -MM -MMD -MP -MF - \
+			echo "$(CXX) $(CPPFLAGS) -MM -MF - \
 				-MT $$objdir/$$obj $$dir/$$base >> ./.depend"; \
-			$(CXX) $(CPPFLAGS) -MM -MMD -MP -MF - \
+			$(CXX) $(CPPFLAGS) -MM -MF - \
 				-MT $$objdir/$$obj $$dir/$$base >> ./.depend || true ;; \
 		*.c) \
 			objdir="$$(echo $$dir | sed 's|src|obj|')"; \
 			obj="$$(echo $$base | sed 's|\.c|\.o|')"; \
-			echo "$(CC) $(CFLAGS) -MM -MMD -MP -MF - \
+			echo "$(CC) $(CFLAGS) -MM -MF - \
 				-MT $$objdir/$$obj $$dir/$$base >> ./.depend"; \
-			$(CC) $(CFLAGS) -MM -MMD -MP -MF - \
+			$(CC) $(CFLAGS) -MM -MF - \
 				-MT $$objdir/$$obj $$dir/$$base >> ./.depend || true ;; \
 		*) \
 			continue ;; \

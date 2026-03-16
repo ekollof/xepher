@@ -26,9 +26,9 @@
 #include <key_helper.h>
 #include <lmdb++.h>
 #include <signal_protocol.h>
-#include <protocol.h>
-#include <session_builder.h>
-#include <session_cipher.h>
+#include <omemo/protocol.h>
+#include <omemo/session_builder.h>
+#include <omemo/session_cipher.h>
 #include <session_record.h>
 #include <session_pre_key.h>
 #include <strophe.h>
