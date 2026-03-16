@@ -705,9 +705,9 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0077.html' />
-        <xmpp:status>partial</xmpp:status>
+        <xmpp:status>complete</xmpp:status>
         <xmpp:version>2.4.0</xmpp:version>
-        <xmpp:note xml:lang='en'>In-Band Registration — /account register &lt;name&gt; &lt;jid&gt; &lt;password&gt; registers a new account on the server before authentication; supports username/password fields, already-registered and OOB-redirect detection</xmpp:note>
+        <xmpp:note xml:lang='en'>In-Band Registration — §3.1 /account register &lt;name&gt; &lt;jid&gt; &lt;password&gt;: new account registration before authentication; supports username/password flat fields, already-registered detection, OOB-redirect, and x:data form detection with helpful abort message. §3.2 /account unregister &lt;account&gt;: cancels the account on the server while authenticated. §3.3 /account password &lt;account&gt; &lt;new-password&gt;: in-band password change while authenticated (TLS required). §10: advertises jabber:iq:register in disco#info.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

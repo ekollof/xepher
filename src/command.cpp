@@ -263,6 +263,90 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
         return 1;
     }
 
+    // XEP-0077 §6: x:data form takes precedence over flat fields.
+    // A terminal client cannot fill in arbitrary form fields interactively,
+    // so we detect this, print the form instructions and field list, and abort
+    // with a helpful message directing the user to the server's web registration.
+    xmpp_stanza_t *xdata = xmpp_stanza_get_child_by_ns(query, "jabber:x:data");
+    if (xdata) {
+        weechat_printf(st->buffer,
+                       _("%s%s: IBR: server requires a data form for registration"
+                         " — web registration required"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+
+        // Print the form title/instructions if present
+        xmpp_stanza_t *title_el = xmpp_stanza_get_child_by_name(xdata, "title");
+        if (title_el) {
+            char *title_txt = xmpp_stanza_get_text(title_el);
+            if (title_txt) {
+                weechat_printf(st->buffer, _("%s%s: IBR form title: %s"),
+                               weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
+                               title_txt);
+                xmpp_free(st->ctx, title_txt);
+            }
+        }
+        xmpp_stanza_t *instr_el = xmpp_stanza_get_child_by_name(xdata, "instructions");
+        if (instr_el) {
+            char *instr_txt = xmpp_stanza_get_text(instr_el);
+            if (instr_txt) {
+                weechat_printf(st->buffer, _("%s%s: IBR form instructions: %s"),
+                               weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
+                               instr_txt);
+                xmpp_free(st->ctx, instr_txt);
+            }
+        }
+
+        // Print each field's var and label so the user can identify what's needed
+        for (xmpp_stanza_t *field = xmpp_stanza_get_children(xdata);
+             field; field = xmpp_stanza_get_next(field)) {
+            if (!xmpp_stanza_get_name(field) ||
+                strcmp(xmpp_stanza_get_name(field), "field") != 0) continue;
+            const char *var   = xmpp_stanza_get_attribute(field, "var");
+            const char *label = xmpp_stanza_get_attribute(field, "label");
+            if (var) {
+                if (label)
+                    weechat_printf(st->buffer, _("%s%s: IBR form field: %s (%s)"),
+                                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
+                                   var, label);
+                else
+                    weechat_printf(st->buffer, _("%s%s: IBR form field: %s"),
+                                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
+                                   var);
+            }
+        }
+
+        weechat_printf(st->buffer,
+                       _("%s%s: IBR: use the server's web interface to register an account"),
+                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        xmpp_disconnect(conn);
+        st->done = true;
+        return 1;
+    }
+
+    // Warn about required fields beyond username+password that we cannot fill
+    {
+        static const char *const known_fields[] = { "username", "password", nullptr };
+        for (xmpp_stanza_t *child = xmpp_stanza_get_children(query);
+             child; child = xmpp_stanza_get_next(child)) {
+            const char *cname = xmpp_stanza_get_name(child);
+            if (!cname) continue;
+            bool is_known = false;
+            for (int i = 0; known_fields[i]; ++i) {
+                if (strcmp(cname, known_fields[i]) == 0) { is_known = true; break; }
+            }
+            // Skip housekeeping elements
+            if (strcmp(cname, "registered") == 0 || strcmp(cname, "instructions") == 0 ||
+                strcmp(cname, "x") == 0) continue;
+            if (!is_known) {
+                weechat_printf(st->buffer,
+                               _("%s%s: IBR: server requires unknown field <%s/>"
+                                 " — registration may fail"),
+                               weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
+                               cname);
+            }
+        }
+    }
+
     // OOB redirect?
     xmpp_stanza_t *oob = xmpp_stanza_get_child_by_ns(stanza, "jabber:x:oob");
     if (!oob) oob = xmpp_stanza_get_child_by_ns(query, "jabber:x:oob");
@@ -695,6 +779,230 @@ int command__account_reconnect(struct t_gui_buffer *buffer, int argc, char **arg
     return command__account_connect(buffer, argc, argv);
 }
 
+// ---------------------------------------------------------------------------
+// XEP-0077 §3.2: Account cancellation (/account unregister <account>)
+// ---------------------------------------------------------------------------
+
+struct ibr_unregister_context {
+    weechat::account *account;
+    struct t_gui_buffer *buffer;
+};
+
+static int ibr_unregister_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *stanza, void *userdata)
+{
+    auto *ctx = reinterpret_cast<ibr_unregister_context *>(userdata);
+    if (!ctx) return 0;
+
+    const char *type = xmpp_stanza_get_type(stanza);
+    if (type && strcmp(type, "result") == 0) {
+        weechat_printf(ctx->buffer,
+                       _("%s%s: account cancelled on server — deleting local account"),
+                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        std::string name = ctx->account->name;
+        ctx->account->disconnect(0);
+        weechat::accounts.erase(name);
+        weechat::config::write();
+    } else {
+        const char *condition = "unknown";
+        xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
+        if (err) {
+            static const char *const error_names[] = {
+                "forbidden", "not-allowed", "service-unavailable",
+                "feature-not-implemented", "bad-request", nullptr
+            };
+            for (int i = 0; error_names[i]; ++i) {
+                xmpp_stanza_t *c = xmpp_stanza_get_child_by_name(err, error_names[i]);
+                if (c) { condition = xmpp_stanza_get_name(c); break; }
+            }
+        }
+        weechat_printf(ctx->buffer,
+                       _("%s%s: IBR unregister failed: %s"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, condition);
+    }
+
+    delete ctx;
+    return 1; // consume
+}
+
+void command__account_unregister(struct t_gui_buffer *buffer, int argc, char **argv)
+{
+    if (argc < 3) {
+        weechat_printf(buffer,
+                       _("%s%s: usage: /account unregister <account>"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return;
+    }
+
+    weechat::account *account = nullptr;
+    if (!weechat::account::search(account, argv[2])) {
+        weechat_printf(buffer,
+                       _("%s%s: account \"%s\" not found"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[2]);
+        return;
+    }
+
+    if (!account->connected()) {
+        weechat_printf(buffer,
+                       _("%s%s: account \"%s\" is not connected"
+                         " — connect first with /account connect %s"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                       argv[2], argv[2]);
+        return;
+    }
+
+    xmpp_ctx_t *ctx = account->context;
+
+    xmpp_stanza_t *iq = xmpp_iq_new(ctx, "set", "ibr-unregister");
+    xmpp_string_guard domain_g(ctx, xmpp_jid_domain(ctx, account->jid().data()));
+    if (domain_g.c_str())
+        xmpp_stanza_set_to(iq, domain_g.c_str());
+
+    xmpp_stanza_t *query = xmpp_stanza_new(ctx);
+    xmpp_stanza_set_name(query, "query");
+    xmpp_stanza_set_ns(query, "jabber:iq:register");
+
+    xmpp_stanza_t *remove_el = xmpp_stanza_new(ctx);
+    xmpp_stanza_set_name(remove_el, "remove");
+    xmpp_stanza_add_child(query, remove_el);
+    xmpp_stanza_release(remove_el);
+
+    xmpp_stanza_add_child(iq, query);
+    xmpp_stanza_release(query);
+
+    auto *uctx = new ibr_unregister_context{ account, buffer };
+    xmpp_id_handler_add(account->connection, ibr_unregister_result_handler,
+                        "ibr-unregister", uctx);
+    account->connection.send(iq);
+    xmpp_stanza_release(iq);
+
+    weechat_printf(buffer,
+                   _("%s%s: IBR: sending account cancellation request..."),
+                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+}
+
+// ---------------------------------------------------------------------------
+// XEP-0077 §3.3: In-band password change (/account password <account> <newpw>)
+// ---------------------------------------------------------------------------
+
+struct ibr_passwd_context {
+    weechat::account *account;
+    struct t_gui_buffer *buffer;
+    std::string new_password;
+};
+
+static int ibr_passwd_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *stanza, void *userdata)
+{
+    auto *ctx = reinterpret_cast<ibr_passwd_context *>(userdata);
+    if (!ctx) return 0;
+
+    const char *type = xmpp_stanza_get_type(stanza);
+    if (type && strcmp(type, "result") == 0) {
+        ctx->account->password(ctx->new_password);
+        weechat::config::write();
+        weechat_printf(ctx->buffer,
+                       _("%s%s: password changed successfully"),
+                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+    } else {
+        const char *condition = "unknown";
+        xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
+        if (err) {
+            static const char *const error_names[] = {
+                "not-authorized", "forbidden", "not-allowed",
+                "bad-request", "not-acceptable", nullptr
+            };
+            for (int i = 0; error_names[i]; ++i) {
+                xmpp_stanza_t *c = xmpp_stanza_get_child_by_name(err, error_names[i]);
+                if (c) { condition = xmpp_stanza_get_name(c); break; }
+            }
+        }
+        weechat_printf(ctx->buffer,
+                       _("%s%s: IBR password change failed: %s"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, condition);
+    }
+
+    delete ctx;
+    return 1; // consume
+}
+
+void command__account_passwd(struct t_gui_buffer *buffer, int argc, char **argv)
+{
+    if (argc < 4) {
+        weechat_printf(buffer,
+                       _("%s%s: usage: /account password <account> <new-password>"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return;
+    }
+
+    weechat::account *account = nullptr;
+    if (!weechat::account::search(account, argv[2])) {
+        weechat_printf(buffer,
+                       _("%s%s: account \"%s\" not found"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[2]);
+        return;
+    }
+
+    if (!account->connected()) {
+        weechat_printf(buffer,
+                       _("%s%s: account \"%s\" is not connected"
+                         " — connect first with /account connect %s"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                       argv[2], argv[2]);
+        return;
+    }
+
+    if (!xmpp_conn_is_secured(account->connection)) {
+        weechat_printf(buffer,
+                       _("%s%s: password change requires an encrypted (TLS) connection"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return;
+    }
+
+    xmpp_ctx_t *ctx = account->context;
+    xmpp_string_guard node_g(ctx, xmpp_jid_node(ctx, account->jid().data()));
+    xmpp_string_guard domain_g(ctx, xmpp_jid_domain(ctx, account->jid().data()));
+
+    xmpp_stanza_t *iq = xmpp_iq_new(ctx, "set", "ibr-passwd");
+    if (domain_g.c_str())
+        xmpp_stanza_set_to(iq, domain_g.c_str());
+
+    xmpp_stanza_t *query = xmpp_stanza_new(ctx);
+    xmpp_stanza_set_name(query, "query");
+    xmpp_stanza_set_ns(query, "jabber:iq:register");
+
+    // <username>
+    xmpp_stanza_t *username_el = xmpp_stanza_new(ctx);
+    xmpp_stanza_set_name(username_el, "username");
+    xmpp_stanza_t *username_txt = xmpp_stanza_new(ctx);
+    xmpp_stanza_set_text(username_txt, node_g.c_str() ? node_g.c_str() : account->jid().data());
+    xmpp_stanza_add_child(username_el, username_txt);
+    xmpp_stanza_release(username_txt);
+    xmpp_stanza_add_child(query, username_el);
+    xmpp_stanza_release(username_el);
+
+    // <password>
+    xmpp_stanza_t *password_el = xmpp_stanza_new(ctx);
+    xmpp_stanza_set_name(password_el, "password");
+    xmpp_stanza_t *password_txt = xmpp_stanza_new(ctx);
+    xmpp_stanza_set_text(password_txt, argv[3]);
+    xmpp_stanza_add_child(password_el, password_txt);
+    xmpp_stanza_release(password_txt);
+    xmpp_stanza_add_child(query, password_el);
+    xmpp_stanza_release(password_el);
+
+    xmpp_stanza_add_child(iq, query);
+    xmpp_stanza_release(query);
+
+    auto *pctx = new ibr_passwd_context{ account, buffer, std::string(argv[3]) };
+    xmpp_id_handler_add(account->connection, ibr_passwd_result_handler,
+                        "ibr-passwd", pctx);
+    account->connection.send(iq);
+    xmpp_stanza_release(iq);
+
+    weechat_printf(buffer,
+                   _("%s%s: IBR: sending password change request..."),
+                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+}
+
 void command__account_delete(struct t_gui_buffer *buffer, int argc, char **argv)
 {
     (void) buffer;
@@ -769,6 +1077,18 @@ int command__account(const void *pointer, void *data,
         if (weechat_strcasecmp(argv[1], "register") == 0)
         {
             command__account_register(buffer, argc, argv);
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "unregister") == 0)
+        {
+            command__account_unregister(buffer, argc, argv);
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "password") == 0)
+        {
+            command__account_passwd(buffer, argc, argv);
             return WEECHAT_RC_OK;
         }
 
@@ -4983,6 +5303,8 @@ void command__init()
         N_("list"
            " || add <name> <jid> <password>"
            " || register <name> <jid> <password>"
+           " || unregister <account>"
+           " || password <account> <new-password>"
            " || connect <account>"
            " || disconnect <account>"
            " || reconnect <account>"
@@ -4990,6 +5312,8 @@ void command__init()
         N_("         list: list accounts\n"
            "          add: add a xmpp account\n"
            "     register: register a new account via in-band registration (XEP-0077)\n"
+           "   unregister: cancel account registration on the server (XEP-0077)\n"
+           "     password: change account password on the server (XEP-0077)\n"
            "      connect: connect to a xmpp account\n"
            "   disconnect: disconnect from a xmpp account\n"
            "    reconnect: reconnect an xmpp account\n"
@@ -4997,6 +5321,8 @@ void command__init()
         "list"
         " || add %(xmpp_account)"
         " || register %(xmpp_account)"
+        " || unregister %(xmpp_account)"
+        " || password %(xmpp_account)"
         " || connect %(xmpp_account)"
         " || disconnect %(xmpp_account)"
         " || reconnect %(xmpp_account)"
