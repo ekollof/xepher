@@ -93,16 +93,19 @@ void append_raw_xml_trace(weechat::account &account,
         return;
     }
 
-    char *xml = stanza_xml(stanza);
+    char *xml = nullptr;
+    size_t xml_len = 0;
+    xmpp_stanza_to_text(stanza, &xml, &xml_len);
     if (!xml)
         return;
+    struct xmpp_string_cleanup {
+        xmpp_conn_t *conn; char *ptr;
+        ~xmpp_string_cleanup() { if (ptr) xmpp_free(xmpp_conn_get_context(conn), ptr); }
+    } xml_guard{ account.connection, xml };
 
     FILE *fp = fopen(path.c_str(), "a");
     if (!fp)
-    {
-        xmpp_free(account.context, xml);
         return;
-    }
 
     time_t now = time(NULL);
     struct tm local_tm = {0};
@@ -117,7 +120,6 @@ void append_raw_xml_trace(weechat::account &account,
             stanza_name ? stanza_name : "(unknown)",
             xml);
     fclose(fp);
-    xmpp_free(account.context, xml);
 }
 
 }

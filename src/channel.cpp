@@ -1187,6 +1187,8 @@ int weechat::channel::send_message(const char *to, const char *body)
             weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
                                      weechat_prefix("error"), "PGP Error");
             set_transport(weechat::channel::transport::PLAIN, 1);
+            xmpp_stanza_release(message__x__text);
+            xmpp_stanza_release(message__x);
             xmpp_stanza_release(message);
             return WEECHAT_RC_ERROR;
         }

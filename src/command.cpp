@@ -141,6 +141,9 @@ struct ibr_state {
     struct t_gui_buffer *buffer;  // WeeChat buffer to print messages into
     struct t_hook   *timer_hook;  // the periodic xmpp_run_once hook
 
+    // Stored inline so its lifetime is tied to this struct.
+    // xmpp_ctx_new holds a pointer to this — it must outlive ctx.
+    xmpp_log_t  logger;
     xmpp_ctx_t  *ctx;
     xmpp_conn_t *conn;
     bool         done;            // set to true once we are finished
@@ -149,13 +152,25 @@ struct ibr_state {
               std::string srv, struct t_gui_buffer *buf)
         : account_name(std::move(n)), jid(std::move(j)), password(std::move(p)),
           server(std::move(srv)), buffer(buf),
-          timer_hook(nullptr), ctx(nullptr), conn(nullptr), done(false)
+          timer_hook(nullptr),
+          logger{
+              [](void * /*userdata*/, xmpp_log_level_t level,
+                 const char *area, const char *msg) {
+                  if (level >= XMPP_LEVEL_WARN)
+                      weechat_printf(nullptr, _("%s%s (IBR/%s): %s"),
+                                     weechat_prefix("network"),
+                                     WEECHAT_XMPP_PLUGIN_NAME, area, msg);
+              },
+              nullptr
+          },
+          ctx(nullptr), conn(nullptr), done(false)
     {}
 
     ~ibr_state() {
         if (timer_hook) { weechat_unhook(timer_hook); timer_hook = nullptr; }
         if (conn)       { xmpp_conn_release(conn);    conn = nullptr; }
         if (ctx)        { xmpp_ctx_free(ctx);         ctx = nullptr; }
+        // logger is a value member — destroyed automatically after the body.
     }
 };
 
@@ -487,26 +502,15 @@ static void ibr_register(const char *account_name, const char *jid, const char *
         return;
     }
 
-    // Allocate IBR state (owned by timer callback, deleted on completion)
+    // Allocate IBR state (owned by timer callback, deleted on completion).
+    // The logger is a value member of ibr_state, so no separate heap allocation needed.
     auto *st = new ibr_state(account_name, jid, password, server, buffer);
 
-    // Create a dedicated xmpp context with minimal logging
-    xmpp_log_t *log_ref = new xmpp_log_t{
-        [](void *userdata, xmpp_log_level_t level, const char *area, const char *msg) {
-            (void) userdata;
-            if (level >= XMPP_LEVEL_WARN)
-                weechat_printf(nullptr, _("%s%s (IBR/%s): %s"),
-                               weechat_prefix("network"),
-                               WEECHAT_XMPP_PLUGIN_NAME, area, msg);
-        },
-        nullptr
-    };
-    st->ctx = xmpp_ctx_new(nullptr, log_ref);
+    st->ctx = xmpp_ctx_new(nullptr, &st->logger);
     if (!st->ctx) {
         weechat_printf(buffer,
                        _("%s%s: IBR: failed to create xmpp context"),
                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-        delete log_ref;
         delete st;
         return;
     }
@@ -516,7 +520,6 @@ static void ibr_register(const char *account_name, const char *jid, const char *
         weechat_printf(buffer,
                        _("%s%s: IBR: failed to create xmpp connection"),
                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-        delete log_ref;
         delete st;
         return;
     }
@@ -539,7 +542,6 @@ static void ibr_register(const char *account_name, const char *jid, const char *
         weechat_printf(buffer,
                        _("%s%s: IBR: xmpp_connect_raw failed (rc=%d)"),
                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, rc);
-        delete log_ref;
         delete st;
         return;
     }
@@ -550,16 +552,9 @@ static void ibr_register(const char *account_name, const char *jid, const char *
         weechat_printf(buffer,
                        _("%s%s: IBR: failed to register timer hook"),
                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-        delete log_ref;
         delete st;
         return;
     }
-
-    // Note: log_ref is intentionally leaked here (lives for the duration of ctx).
-    // It will be cleaned up when xmpp_ctx_free is called in ~ibr_state, but
-    // xmpp_ctx_free does not call the log destructor.  This is a very small
-    // fixed-size allocation and is acceptable for a one-shot registration flow.
-    (void) log_ref;
 }
 
 void command__account_register(struct t_gui_buffer *buffer, int argc, char **argv)
