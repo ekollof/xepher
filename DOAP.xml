@@ -18,16 +18,16 @@
         >Weechat plugin for accessing XMPP, written in C++. This fork includes bug fixes and feature enhancements.</description>
 
     <homepage
-            rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed'
+            rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-improved'
         />
     <bug-database
-            rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed/issues'
+            rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-improved/issues'
         />
     <developer-forum rdf:resource='xmpp:weechat@muc.xa0.uk?join' />
     <support-forum rdf:resource='xmpp:weechat@muc.xa0.uk?join' />
 
     <license
-            rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed/src/branch/master/LICENSE'
+            rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-improved/src/branch/master/LICENSE'
         />
 
     <language>en</language>
@@ -43,10 +43,10 @@
     <repository>
       <GitRepository>
         <browse
-                    rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed'
+                    rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-improved'
                 />
         <location
-                    rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-fixed.git'
+                    rdf:resource='https://git.hackerheaven.org/ekollof/weechat-xmpp-improved.git'
                 />
       </GitRepository>
     </repository>
