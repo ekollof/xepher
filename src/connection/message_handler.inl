@@ -295,7 +295,67 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     
                     if (msg_text)
                         xmpp_free(account.context, msg_text);
-                    
+
+                    // XEP-0313: Dedup MAM results against already-displayed live messages.
+                    // The <result id='...'> archive ID equals the server-assigned stanza-id
+                    // that live delivery tags each buffer line with ("stanza_id_<id>").
+                    // If a line with that tag already exists, the message was already shown.
+                    const char *archive_id = xmpp_stanza_get_attribute(result, "id");
+                    if (archive_id && *archive_id)
+                    {
+                        // Resolve channel JID from the forwarded message addresses
+                        const char *chk_from = msg_from
+                            ? xmpp_jid_bare(account.context, msg_from) : nullptr;
+                        const char *chk_to   = msg_to
+                            ? xmpp_jid_bare(account.context, msg_to)   : nullptr;
+
+                        const char *channel_jid_chk = chk_from;
+                        if (chk_to && weechat_strcasecmp(chk_to, account.jid().data()) != 0)
+                            channel_jid_chk = chk_to;
+
+                        struct t_gui_buffer *chk_buf = nullptr;
+                        if (channel_jid_chk && account.channels.contains(channel_jid_chk))
+                            chk_buf = account.channels.at(channel_jid_chk).buffer;
+
+                        bool already_displayed = false;
+                        if (chk_buf)
+                        {
+                            // Build the tag we're looking for
+                            std::string needle = std::string("stanza_id_") + archive_id;
+
+                            struct t_hdata *hdata_line      = weechat_hdata_get("line");
+                            struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+                            struct t_gui_lines *own_lines = (struct t_gui_lines*)
+                                weechat_hdata_pointer(weechat_hdata_get("buffer"),
+                                                      chk_buf, "own_lines");
+                            if (own_lines)
+                            {
+                                struct t_gui_line *ln = (struct t_gui_line*)
+                                    weechat_hdata_pointer(hdata_line, own_lines, "last_line");
+                                while (ln && !already_displayed)
+                                {
+                                    struct t_gui_line_data *ld = (struct t_gui_line_data*)
+                                        weechat_hdata_pointer(hdata_line, ln, "data");
+                                    if (ld)
+                                    {
+                                        const char *tags = (const char*)
+                                            weechat_hdata_string(hdata_line_data, ld, "tags");
+                                        if (tags && strstr(tags, needle.c_str()))
+                                            already_displayed = true;
+                                    }
+                                    ln = (struct t_gui_line*)
+                                        weechat_hdata_move(hdata_line, ln, -1);
+                                }
+                            }
+                        }
+
+                        if (chk_from) xmpp_free(account.context, (void*)chk_from);
+                        if (chk_to)   xmpp_free(account.context, (void*)chk_to);
+
+                        if (already_displayed)
+                            return 1;
+                    }
+
                     message = xmpp_stanza_copy(message);
                     if (delay != NULL)
                         xmpp_stanza_add_child_ex(message, xmpp_stanza_copy(delay), 0);
