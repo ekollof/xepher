@@ -1591,20 +1591,35 @@ int command__edit(const void *pointer, void *data,
             // Check if this is our message (has self_msg tag and id_ tag)
             if (tags && strstr(tags, "self_msg") && strstr(tags, "id_"))
             {
-                // Extract the message ID from tags
+                // Extract message ID and (for MUC) stanza-id from tags
+                // XEP-0308: correction uses the *original* message id, not any
+                // intermediate correction id — the buffer line stores the
+                // original origin-id (or stanza-id for MUC).
+                std::string msg_id;
+                std::string sid;
+                std::string sid_by;
                 char **tag_array = weechat_string_split(tags, ",", NULL, 0, 0, NULL);
                 if (tag_array)
                 {
                     for (int i = 0; tag_array[i]; i++)
                     {
-                        if (strncmp(tag_array[i], "id_", 3) == 0)
-                        {
-                            last_msg_id = tag_array[i] + 3;
-                            break;
-                        }
+                        if (strncmp(tag_array[i], "id_", 3) == 0 && msg_id.empty())
+                            msg_id = tag_array[i] + 3;
+                        else if (strncmp(tag_array[i], "stanza_id_by_", 13) == 0)
+                            sid_by = tag_array[i] + 13;
+                        else if (strncmp(tag_array[i], "stanza_id_", 10) == 0)
+                            sid = tag_array[i] + 10;
                     }
                     weechat_string_free_split(tag_array);
                 }
+                // For MUC use stanza-id (the stable server-assigned ID the room
+                // expects for corrections); for PM use the client-generated id.
+                if (ptr_channel->type == weechat::channel::chat_type::MUC
+                        && !sid.empty()
+                        && weechat_strcasecmp(sid_by.c_str(), ptr_channel->id.c_str()) == 0)
+                    last_msg_id = sid;
+                else
+                    last_msg_id = msg_id;
                 break;
             }
         }
@@ -1732,20 +1747,31 @@ int command__retract(const void *pointer, void *data,
             // Check if this is our message (has self_msg tag and id_ tag)
             if (tags && strstr(tags, "self_msg") && strstr(tags, "id_"))
             {
-                // Extract the message ID from tags
+                // Extract message ID and (for MUC) stanza-id from tags
+                std::string msg_id;
+                std::string sid;
+                std::string sid_by;
                 char **tag_array = weechat_string_split(tags, ",", NULL, 0, 0, NULL);
                 if (tag_array)
                 {
                     for (int i = 0; tag_array[i]; i++)
                     {
-                        if (strncmp(tag_array[i], "id_", 3) == 0)
-                        {
-                            last_msg_id = tag_array[i] + 3;
-                            break;
-                        }
+                        if (strncmp(tag_array[i], "id_", 3) == 0 && msg_id.empty())
+                            msg_id = tag_array[i] + 3;
+                        else if (strncmp(tag_array[i], "stanza_id_by_", 13) == 0)
+                            sid_by = tag_array[i] + 13;
+                        else if (strncmp(tag_array[i], "stanza_id_", 10) == 0)
+                            sid = tag_array[i] + 10;
                     }
                     weechat_string_free_split(tag_array);
                 }
+                // XEP-0424: For groupchat, MUST use MUC-assigned stanza-id.
+                if (ptr_channel->type == weechat::channel::chat_type::MUC
+                        && !sid.empty()
+                        && weechat_strcasecmp(sid_by.c_str(), ptr_channel->id.c_str()) == 0)
+                    last_msg_id = sid;
+                else
+                    last_msg_id = msg_id;
                 break;
             }
         }
@@ -1780,10 +1806,11 @@ int command__retract(const void *pointer, void *data,
     xmpp_stanza_release(retract);
 
     // Add fallback body for clients that don't support XEP-0424
+    // XEP-0424 §3.3: fallback body SHOULD be "/me retracted a previous message..."
     xmpp_stanza_t *body = xmpp_stanza_new(ptr_account->context);
     xmpp_stanza_set_name(body, "body");
     xmpp_stanza_t *body_text = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_text(body_text, "This message was deleted");
+    xmpp_stanza_set_text(body_text, "/me retracted a previous message, but it's unsupported by your client.");
     xmpp_stanza_add_child(body, body_text);
     xmpp_stanza_release(body_text);
     xmpp_stanza_add_child(message, body);
@@ -1892,19 +1919,33 @@ int command__react(const void *pointer, void *data,
             // Look for messages with ID that aren't from us
             if (tags && strstr(tags, "id_") && !strstr(tags, "self_msg"))
             {
-                // Extract the message ID from tags
+                // Extract the message ID and (for MUC) stanza-id from tags
+                std::string msg_id;
+                std::string sid;
+                std::string sid_by;
                 char **tag_array = weechat_string_split(tags, ",", NULL, 0, 0, NULL);
                 if (tag_array)
                 {
                     for (int i = 0; tag_array[i]; i++)
                     {
-                        if (strncmp(tag_array[i], "id_", 3) == 0)
-                        {
-                            target_msg_id = tag_array[i] + 3;
-                            break;
-                        }
+                        if (strncmp(tag_array[i], "id_", 3) == 0 && msg_id.empty())
+                            msg_id = tag_array[i] + 3;
+                        else if (strncmp(tag_array[i], "stanza_id_by_", 13) == 0)
+                            sid_by = tag_array[i] + 13;
+                        else if (strncmp(tag_array[i], "stanza_id_", 10) == 0)
+                            sid = tag_array[i] + 10;
                     }
                     weechat_string_free_split(tag_array);
+                }
+                // XEP-0444 §4.2: For groupchat, MUST use the MUC-assigned stanza-id.
+                if (!msg_id.empty())
+                {
+                    if (ptr_channel->type == weechat::channel::chat_type::MUC
+                            && !sid.empty()
+                            && weechat_strcasecmp(sid_by.c_str(), ptr_channel->id.c_str()) == 0)
+                        target_msg_id = sid;
+                    else
+                        target_msg_id = msg_id;
                 }
                 break;
             }
@@ -2020,6 +2061,7 @@ int command__reply(const void *pointer, void *data,
     void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
                                             lines, "last_line");
     const char *target_id = NULL;
+    std::string target_id_storage;  // owns the string when using stanza-id
     std::string target_sender_nick;  // nick_ tag of the message being replied to
     std::string own_nick = std::string(ptr_account->jid());
 
@@ -2056,28 +2098,39 @@ int command__reply(const void *pointer, void *data,
             
             if (!from_self)
             {
-                // Found a message not from us - extract its ID and sender nick
+                // Found a message not from us - extract its ID, stanza-id, and sender nick
+                std::string msg_id_str;
+                std::string sid_str;
+                std::string sid_by_str;
                 for (int n_tag = 0; n_tag < tags_count; n_tag++)
                 {
                     snprintf(str_tag, sizeof(str_tag), "%d|tags_array", n_tag);
                     const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                            line_data, str_tag);
-                    if (strlen(tag) > strlen("id_") &&
-                        strncmp(tag, "id_", strlen("id_")) == 0)
-                    {
-                        target_id = tag + strlen("id_");
-                    }
+                    if (!tag) continue;
+                    if (strncmp(tag, "id_", 3) == 0 && msg_id_str.empty())
+                        msg_id_str = tag + 3;
+                    else if (strncmp(tag, "stanza_id_by_", 13) == 0)
+                        sid_by_str = tag + 13;
+                    else if (strncmp(tag, "stanza_id_", 10) == 0)
+                        sid_str = tag + 10;
                     // Capture the sender nick for building the reply-to JID
-                    if (strlen(tag) > strlen("nick_") &&
-                        strncmp(tag, "nick_", strlen("nick_")) == 0 &&
-                        target_sender_nick.empty())
-                    {
-                        target_sender_nick = tag + strlen("nick_");
-                    }
+                    if (strncmp(tag, "nick_", 5) == 0 && target_sender_nick.empty())
+                        target_sender_nick = tag + 5;
                 }
-                
-                if (target_id)
+
+                if (!msg_id_str.empty())
+                {
+                    // XEP-0461 §4.1: For groupchat, MUST use MUC-assigned stanza-id.
+                    if (ptr_channel->type == weechat::channel::chat_type::MUC
+                            && !sid_str.empty()
+                            && weechat_strcasecmp(sid_by_str.c_str(), ptr_channel->id.c_str()) == 0)
+                        target_id_storage = sid_str;
+                    else
+                        target_id_storage = msg_id_str;
+                    target_id = target_id_storage.c_str();
                     break;
+                }
             }
         }
 
