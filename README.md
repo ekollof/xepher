@@ -201,6 +201,22 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 | doctest | test |
 | WeeChat >= 3.0 | runtime |
 
+### Supported platforms
+
+The plugin is developed and tested on **Linux** (Arch, Debian/Ubuntu, Fedora).
+
+**FreeBSD, OpenBSD, and NetBSD** receive best-effort support: the build system
+and scripts have been ported to POSIX sh and BSD-compatible make, but these
+platforms are **not routinely tested**. Known considerations:
+
+- Use `gmake` instead of `make` on BSD (BSD make has different syntax).
+- `libsignal-protocol-c` and `libfmt` may not be available in base package
+  repositories on OpenBSD/NetBSD and may need to be built from ports/pkgsrc.
+- The `DEBUG=1` address-sanitizer flags (`-lasan -lrt`) are Linux-only and are
+  automatically skipped on other platforms.
+- `objcopy` is Linux-specific; the `.source` section embedding step is silently
+  skipped when `objcopy`/`llvm-objcopy` is not found.
+
 ### Build
 
 ```sh
@@ -212,9 +228,11 @@ make test
 make install        # installs to ~/.local/share/weechat/plugins/ — do NOT run as root
 ```
 
+On BSD, replace `make` with `gmake` throughout.
+
 `make install-deps` automatically detects your distribution (Debian/Ubuntu,
-Fedora/RHEL, Arch, openSUSE, Void, Alpine, Gentoo) and installs the required
-packages.
+Fedora/RHEL, Arch, openSUSE, Void, Alpine, Gentoo, FreeBSD, OpenBSD, NetBSD)
+and installs the required packages.
 
 ### WeeChat version compatibility
 
