@@ -1761,33 +1761,18 @@ void weechat::channel::send_reads()
     }
 }
 
-void weechat::channel::send_active(weechat::user *user)
+void weechat::channel::send_chat_state(weechat::user *user, const char *state)
 {
-    if (!weechat::config::instance
-            || !weechat::config::instance->look.send_chat_states.boolean())
-        return;
-
-    // XEP-0085 §5.1: only send to contacts that have indicated support
-    std::string to_jid = user ? std::string(user->id) : id;
-    if (!is_chat_state_supported(to_jid))
-        return;
-
-    // XEP-0085 §5.2: don't send the same state twice in a row
-    auto &last = last_sent_chat_state[to_jid];
-    if (last == "active") return;
-    last = "active";
-
     xmpp_stanza_t *message = xmpp_message_new(account.context,
                                               type == weechat::channel::chat_type::MUC
                                               ? "groupchat" : "chat",
                                               (user ? user->id : id).data(), NULL);
 
-    xmpp_stanza_t *message__active = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(message__active, "active");
-    xmpp_stanza_set_ns(message__active, "http://jabber.org/protocol/chatstates");
-
-    xmpp_stanza_add_child(message, message__active);
-    xmpp_stanza_release(message__active);
+    xmpp_stanza_t *state_stanza = xmpp_stanza_new(account.context);
+    xmpp_stanza_set_name(state_stanza, state);
+    xmpp_stanza_set_ns(state_stanza, "http://jabber.org/protocol/chatstates");
+    xmpp_stanza_add_child(message, state_stanza);
+    xmpp_stanza_release(state_stanza);
 
     // XEP-0334: Don't store chat state notifications
     xmpp_stanza_t *no_store = xmpp_stanza_new(account.context);
@@ -1796,8 +1781,24 @@ void weechat::channel::send_active(weechat::user *user)
     xmpp_stanza_add_child(message, no_store);
     xmpp_stanza_release(no_store);
 
-    account.connection.send( message);
+    account.connection.send(message);
     xmpp_stanza_release(message);
+}
+
+void weechat::channel::send_active(weechat::user *user)
+{
+    if (!weechat::config::instance
+            || !weechat::config::instance->look.send_chat_states.boolean())
+        return;
+
+    std::string to_jid = user ? std::string(user->id) : id;
+    if (!is_chat_state_supported(to_jid)) return;
+
+    auto &last = last_sent_chat_state[to_jid];
+    if (last == "active") return;
+    last = "active";
+
+    send_chat_state(user, "active");
 }
 
 void weechat::channel::send_typing(weechat::user *user)
@@ -1812,28 +1813,7 @@ void weechat::channel::send_typing(weechat::user *user)
         // Update dedup tracker: composing clears prior state so subsequent
         // active/paused/inactive sends are not suppressed.
         last_sent_chat_state[to_jid] = "composing";
-
-        xmpp_stanza_t *message = xmpp_message_new(account.context,
-                                                  type == weechat::channel::chat_type::MUC
-                                                  ? "groupchat" : "chat",
-                                                  (user ? user->id : id).data(), NULL);
-
-        xmpp_stanza_t *message__composing = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(message__composing, "composing");
-        xmpp_stanza_set_ns(message__composing, "http://jabber.org/protocol/chatstates");
-
-        xmpp_stanza_add_child(message, message__composing);
-        xmpp_stanza_release(message__composing);
-        
-        // XEP-0334: Don't store typing notifications
-        xmpp_stanza_t *no_store = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(no_store, "no-store");
-        xmpp_stanza_set_ns(no_store, "urn:xmpp:hints");
-        xmpp_stanza_add_child(message, no_store);
-        xmpp_stanza_release(no_store);
-
-        account.connection.send( message);
-        xmpp_stanza_release(message);
+        send_chat_state(user, "composing");
     }
 }
 
@@ -1843,37 +1823,14 @@ void weechat::channel::send_paused(weechat::user *user)
             || !weechat::config::instance->look.send_chat_states.boolean())
         return;
 
-    // XEP-0085 §5.1: only send to contacts that have indicated support
     std::string to_jid = user ? std::string(user->id) : id;
-    if (!is_chat_state_supported(to_jid))
-        return;
+    if (!is_chat_state_supported(to_jid)) return;
 
-    // XEP-0085 §5.2: don't send the same state twice in a row
     auto &last = last_sent_chat_state[to_jid];
     if (last == "paused") return;
     last = "paused";
 
-    xmpp_stanza_t *message = xmpp_message_new(account.context,
-                                              type == weechat::channel::chat_type::MUC
-                                              ? "groupchat" : "chat",
-                                              (user ? user->id : id).data(), NULL);
-
-    xmpp_stanza_t *message__paused = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(message__paused, "paused");
-    xmpp_stanza_set_ns(message__paused, "http://jabber.org/protocol/chatstates");
-
-    xmpp_stanza_add_child(message, message__paused);
-    xmpp_stanza_release(message__paused);
-    
-    // XEP-0334: Don't store chat state notifications
-    xmpp_stanza_t *no_store = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(no_store, "no-store");
-    xmpp_stanza_set_ns(no_store, "urn:xmpp:hints");
-    xmpp_stanza_add_child(message, no_store);
-    xmpp_stanza_release(no_store);
-
-    account.connection.send( message);
-    xmpp_stanza_release(message);
+    send_chat_state(user, "paused");
 }
 
 void weechat::channel::send_inactive(weechat::user *user)
@@ -1882,37 +1839,14 @@ void weechat::channel::send_inactive(weechat::user *user)
             || !weechat::config::instance->look.send_chat_states.boolean())
         return;
 
-    // XEP-0085 §5.1: only send to contacts that have indicated support
     std::string to_jid = user ? std::string(user->id) : id;
-    if (!is_chat_state_supported(to_jid))
-        return;
+    if (!is_chat_state_supported(to_jid)) return;
 
-    // XEP-0085 §5.2: don't send the same state twice in a row
     auto &last = last_sent_chat_state[to_jid];
     if (last == "inactive") return;
     last = "inactive";
 
-    xmpp_stanza_t *message = xmpp_message_new(account.context,
-                                              type == weechat::channel::chat_type::MUC
-                                              ? "groupchat" : "chat",
-                                              (user ? user->id : id).data(), NULL);
-
-    xmpp_stanza_t *message__inactive = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(message__inactive, "inactive");
-    xmpp_stanza_set_ns(message__inactive, "http://jabber.org/protocol/chatstates");
-
-    xmpp_stanza_add_child(message, message__inactive);
-    xmpp_stanza_release(message__inactive);
-    
-    // XEP-0334: Don't store chat state notifications
-    xmpp_stanza_t *no_store = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(no_store, "no-store");
-    xmpp_stanza_set_ns(no_store, "urn:xmpp:hints");
-    xmpp_stanza_add_child(message, no_store);
-    xmpp_stanza_release(no_store);
-
-    account.connection.send( message);
-    xmpp_stanza_release(message);
+    send_chat_state(user, "inactive");
 }
 
 void weechat::channel::send_gone(weechat::user *user)
@@ -1921,10 +1855,8 @@ void weechat::channel::send_gone(weechat::user *user)
             || !weechat::config::instance->look.send_chat_states.boolean())
         return;
 
-    // XEP-0085 §5.1: only send to contacts that have indicated support
     std::string to_jid = user ? std::string(user->id) : id;
-    if (!is_chat_state_supported(to_jid))
-        return;
+    if (!is_chat_state_supported(to_jid)) return;
 
     // XEP-0085 §5.2: don't send the same state twice in a row
     // Also clear tracking on 'gone' since the conversation ends — next
@@ -1933,27 +1865,7 @@ void weechat::channel::send_gone(weechat::user *user)
     if (last == "gone") return;
     last_sent_chat_state.erase(to_jid);  // reset: conversation ended
 
-    xmpp_stanza_t *message = xmpp_message_new(account.context,
-                                              type == weechat::channel::chat_type::MUC
-                                              ? "groupchat" : "chat",
-                                              (user ? user->id : id).data(), NULL);
-
-    xmpp_stanza_t *message__gone = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(message__gone, "gone");
-    xmpp_stanza_set_ns(message__gone, "http://jabber.org/protocol/chatstates");
-
-    xmpp_stanza_add_child(message, message__gone);
-    xmpp_stanza_release(message__gone);
-    
-    // XEP-0334: Don't store chat state notifications
-    xmpp_stanza_t *no_store = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(no_store, "no-store");
-    xmpp_stanza_set_ns(no_store, "urn:xmpp:hints");
-    xmpp_stanza_add_child(message, no_store);
-    xmpp_stanza_release(no_store);
-
-    account.connection.send( message);
-    xmpp_stanza_release(message);
+    send_chat_state(user, "gone");
 }
 
 void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, const char* after)

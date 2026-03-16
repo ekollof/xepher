@@ -169,6 +169,7 @@ namespace weechat
 
     private:
         int set_typing_state(weechat::user *user, const char *state);
+        void send_chat_state(weechat::user *user, const char *state);
 
     public:
 
