@@ -555,7 +555,6 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         }
 
         account.disconnect(1);
-      //xmpp_stop(account.context); //keep context?
     }
 
     return true;

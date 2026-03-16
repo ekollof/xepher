@@ -38,8 +38,8 @@ void command__display_account(weechat::account *account)
 
     if (account->connected())
     {
-        num_channels = 0;//xmpp_account_get_channel_count(account);
-        num_pv = 0;//xmpp_account_get_pv_count(account);
+        num_channels = 0;
+        num_pv = 0;
         weechat_printf(
             NULL,
             " %s %s%s%s %s(%s%s%s) [%s%s%s]%s, %d %s, %d pv",

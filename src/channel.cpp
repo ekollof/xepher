@@ -238,9 +238,6 @@ weechat::channel::channel(weechat::account& account,
     if (!id || !name || !name[0])
         throw std::invalid_argument("channel()");
 
-    //if (weechat::channel::search(&account, id))
-    //    throw std::invalid_argument("duplicate");
-
     buffer = weechat::channel::create_buffer(type, name);
     if (!buffer)
         throw std::invalid_argument("buffer fail");

@@ -464,14 +464,6 @@ weechat::account::~account()
     channels.clear();
 
     mam_cache_cleanup();
-        
-    /*
-     * Don't close the buffer explicitly - let weechat handle cleanup
-     * Closing it here causes segfaults because channels are destroyed
-     * while their hooks are still active
-     */
-    // if (buffer)
-    //     weechat_buffer_close(buffer);
 }
 
 void weechat::account::disconnect(int reconnect)
@@ -549,7 +541,6 @@ void weechat::account::disconnect(int reconnect)
          * remove all nicks and write disconnection message on each
          * channel/private buffer
          */
-      //user::free_all(this); // TOFIX
         if (buffer)
             weechat_nicklist_remove_all(buffer);
         for (auto& ptr_channel : channels)
@@ -563,8 +554,6 @@ void weechat::account::disconnect(int reconnect)
                     weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
             }
         }
-        /* remove away status on account buffer */
-        //weechat_buffer_set(buffer, "localvar_del_away", "");
     }
 
     reset();
@@ -592,17 +581,6 @@ void weechat::account::disconnect(int reconnect)
         reconnect_delay = 0;
         reconnect_start = 0;
     }
-
-    /*
-    lag = 0;
-    lag_displayed = -1;
-    lag_check_time.tv_sec = 0;
-    lag_check_time.tv_usec = 0;
-    lag_next_check = time(NULL) +
-        weechat_config_integer(xmpp_config_network_lag_check);
-    lag_last_refresh = 0;
-    account__set_lag(account);
-    */ // lag based on xmpp ping
 
     disconnected = !reconnect;
 
