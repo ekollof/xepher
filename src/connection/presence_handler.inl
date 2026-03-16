@@ -699,11 +699,24 @@ static std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote = 
             std::string link_text = xhtml_to_weechat(child, in_blockquote);
             if (href && *href)
             {
+                // XEP-0071: sanitize URL — strip control bytes that WeeChat
+                // interprets as color/attribute escape codes (0x00–0x1F except
+                // tab 0x09 and newline 0x0A) to prevent injection attacks.
+                auto sanitize_url = [](const char *url) -> std::string {
+                    std::string out;
+                    for (const char *p = url; *p; ++p) {
+                        unsigned char c = static_cast<unsigned char>(*p);
+                        if (c >= 0x20 || c == 0x09 || c == 0x0A)
+                            out += static_cast<char>(c);
+                    }
+                    return out;
+                };
+                std::string safe_href = sanitize_url(href);
                 // If link text equals the URL, just show it in blue
-                if (link_text == href)
+                if (link_text == safe_href)
                 {
                     result += weechat_color("blue");
-                    result += href;
+                    result += safe_href;
                     result += weechat_color("resetcolor");
                 }
                 else
@@ -712,7 +725,7 @@ static std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote = 
                     result += ' ';
                     result += weechat_color("blue");
                     result += '(';
-                    result += href;
+                    result += safe_href;
                     result += ')';
                     result += weechat_color("resetcolor");
                 }
@@ -726,12 +739,12 @@ static std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote = 
 
         if (strcmp(name, "img") == 0)
         {
-            // Show alt text, or a placeholder
+            // Show alt text, or a placeholder; do NOT display raw src URL to
+            // avoid injecting WeeChat escape codes embedded in a malicious src.
             const char *alt = xmpp_stanza_get_attribute(child, "alt");
-            const char *src = xmpp_stanza_get_attribute(child, "src");
             result += weechat_color("darkgray");
             result += '[';
-            result += (alt && *alt) ? alt : (src ? src : "image");
+            result += (alt && *alt) ? alt : "image";
             result += ']';
             result += weechat_color("resetcolor");
             continue;
