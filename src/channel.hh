@@ -78,6 +78,10 @@ namespace weechat
         {
             std::string id;
             std::optional<std::string> thread;
+            // XEP-0490: server-assigned stanza-id and its `by` JID so the MDS
+            // PEP publish correctly references the archiver's stanza-id.
+            std::optional<std::string> stanza_id;
+            std::optional<std::string> stanza_id_by;
         };
 
     private:

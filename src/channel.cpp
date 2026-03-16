@@ -957,6 +957,10 @@ int weechat::channel::send_message(std::string to, std::string body,
     xmpp_stanza_add_child(message, message__active);
     xmpp_stanza_release(message__active);
 
+    // XEP-0184 §5.4: MUST NOT include <request/> in groupchat messages.
+    // XEP-0333 §4.1: MUST NOT include <markable/> in groupchat messages.
+    if (type != weechat::channel::chat_type::MUC)
+    {
     xmpp_stanza_t *message__request = xmpp_stanza_new(account.context);
     xmpp_stanza_set_name(message__request, "request");
     xmpp_stanza_set_ns(message__request, "urn:xmpp:receipts");
@@ -968,6 +972,7 @@ int weechat::channel::send_message(std::string to, std::string body,
     xmpp_stanza_set_ns(message__markable, "urn:xmpp:chat-markers:0");
     xmpp_stanza_add_child(message, message__markable);
     xmpp_stanza_release(message__markable);
+    }
 
     xmpp_stanza_t *message__store = xmpp_stanza_new(account.context);
     xmpp_stanza_set_name(message__store, "store");
@@ -976,8 +981,6 @@ int weechat::channel::send_message(std::string to, std::string body,
     xmpp_stanza_release(message__store);
 
     // XEP-0372: References — add <reference type="mention"> for each @nick in body
-    {
-        // Scan body for @word tokens and resolve them to JIDs
         // Member keys for MUC are "room@service/nick"; for PM they are bare JIDs.
         static const std::regex at_re("@([\\w.\\-]+)", std::regex::ECMAScript);
         auto begin_it = std::sregex_iterator(body.begin(), body.end(), at_re);
@@ -1040,7 +1043,6 @@ int weechat::channel::send_message(std::string to, std::string body,
             xmpp_stanza_add_child(message, ref);
             xmpp_stanza_release(ref);
         }
-    }
 
     account.connection.send( message);
     xmpp_stanza_release(message);
@@ -1294,6 +1296,10 @@ int weechat::channel::send_message(const char *to, const char *body)
     xmpp_stanza_add_child(message, message__active);
     xmpp_stanza_release(message__active);
 
+    // XEP-0184 §5.4: MUST NOT include <request/> in groupchat messages.
+    // XEP-0333 §4.1: MUST NOT include <markable/> in groupchat messages.
+    if (type != weechat::channel::chat_type::MUC)
+    {
     xmpp_stanza_t *message__request = xmpp_stanza_new(account.context);
     xmpp_stanza_set_name(message__request, "request");
     xmpp_stanza_set_ns(message__request, "urn:xmpp:receipts");
@@ -1305,6 +1311,7 @@ int weechat::channel::send_message(const char *to, const char *body)
     xmpp_stanza_set_ns(message__markable, "urn:xmpp:chat-markers:0");
     xmpp_stanza_add_child(message, message__markable);
     xmpp_stanza_release(message__markable);
+    }
 
     xmpp_stanza_t *message__store = xmpp_stanza_new(account.context);
     xmpp_stanza_set_name(message__store, "store");
@@ -1502,9 +1509,13 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
             xmpp_free(ctx, preview_id);
 
             // <rdf:Description xmlns:rdf="..." xmlns:og="..." rdf:about="URL">
+            // NOTE: xmpp_stanza_set_ns() sets the *default* namespace (xmlns=""),
+            // which does NOT bind a prefix.  We must use explicit xmlns:rdf= and
+            // xmlns:og= attributes so that Expat on the receiving end can resolve
+            // the rdf: and og: prefixes used in element/attribute names.
             xmpp_stanza_t *rdf = xmpp_stanza_new(ctx);
             xmpp_stanza_set_name(rdf, "rdf:Description");
-            xmpp_stanza_set_ns(rdf, "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+            xmpp_stanza_set_attribute(rdf, "xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
             xmpp_stanza_set_attribute(rdf, "xmlns:og", "https://ogp.me/ns#");
             xmpp_stanza_set_attribute(rdf, "rdf:about", task->url.data());
 
@@ -1561,10 +1572,19 @@ void weechat::channel::send_reads()
 {
     auto i = std::begin(unreads);
 
-    // Capture the last unread id for XEP-0490 MDS PEP publish below
+    // Capture the last unread entry for XEP-0490 MDS PEP publish below
     std::string last_unread_id;
+    std::string last_unread_stanza_id;
+    std::string last_unread_stanza_id_by;
     if (!unreads.empty())
-        last_unread_id = unreads.back().id;
+    {
+        const auto &back = unreads.back();
+        last_unread_id = back.id;
+        if (back.stanza_id.has_value())
+            last_unread_stanza_id = *back.stanza_id;
+        if (back.stanza_id_by.has_value())
+            last_unread_stanza_id_by = *back.stanza_id_by;
+    }
 
     while (i != std::end(unreads))
     {
@@ -1618,12 +1638,28 @@ void weechat::channel::send_reads()
     // </iq>
     if (!last_unread_id.empty())
     {
+        // XEP-0490: the <stanza-id> element in the MDS PEP publish MUST use:
+        //   id  = server-assigned stanza-id (fall back to client id if unavailable)
+        //   by  = the JID of the archiver (server domain or MUC JID) that
+        //         assigned that stanza-id, NOT the peer's bare JID.
+        // Derive server domain from account JID as fallback for `by`.
+        xmpp_string_guard server_domain_g {
+            account.context,
+            xmpp_jid_domain(account.context, account.jid().data())
+        };
+        const char *mds_by  = !last_unread_stanza_id_by.empty()
+                                  ? last_unread_stanza_id_by.c_str()
+                                  : (server_domain_g.ptr ? server_domain_g.ptr : id.c_str());
+        const char *mds_sid = !last_unread_stanza_id.empty()
+                                  ? last_unread_stanza_id.c_str()
+                                  : last_unread_id.c_str();
+
         // Build <stanza-id xmlns='urn:xmpp:sid:0' by='...' id='...'/>
         xmpp_stanza_t *sid = xmpp_stanza_new(account.context);
         xmpp_stanza_set_name(sid, "stanza-id");
         xmpp_stanza_set_ns(sid, "urn:xmpp:sid:0");
-        xmpp_stanza_set_attribute(sid, "by", id.c_str());
-        xmpp_stanza_set_id(sid, last_unread_id.c_str());
+        xmpp_stanza_set_attribute(sid, "by", mds_by);
+        xmpp_stanza_set_id(sid, mds_sid);
 
         // Build <displayed xmlns='urn:xmpp:mds:displayed:0'>…</displayed>
         xmpp_stanza_t *mds_displayed = xmpp_stanza_new(account.context);

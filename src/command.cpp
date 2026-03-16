@@ -2227,10 +2227,12 @@ int command__moderate(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    // Send XEP-0425 moderation request (IQ stanza to the MUC service)
+    // XEP-0425 §3.1: moderation request MUST be a <message type='groupchat'>
+    // addressed to the room, NOT an IQ stanza.
     const char *room_jid = ptr_channel->id.data();
-    
-    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", NULL);
+
+    xmpp_stanza_t *iq = xmpp_message_new(ptr_account->context, "groupchat",
+                                         room_jid, NULL);
     xmpp_stanza_set_to(iq, room_jid);
     
     // <apply-to xmlns='urn:xmpp:fasten:0' id='target-message-id'>

@@ -186,6 +186,17 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 received, "forwarded", "urn:xmpp:forward:0");
         if ((sent || received) && forwarded != NULL)
         {
+            // XEP-0280 §8.5: MUST verify the outer stanza's `from` is the
+            // account's own bare JID (server-stamped). Drop spoofed carbons.
+            const char *carbon_from = xmpp_stanza_get_from(stanza);
+            if (!carbon_from)
+                return 1;
+            xmpp_string_guard carbon_from_bare_g { account.context,
+                xmpp_jid_bare(account.context, carbon_from) };
+            if (!carbon_from_bare_g.ptr ||
+                weechat_strcasecmp(carbon_from_bare_g.ptr, account.jid().data()) != 0)
+                return 1;
+
             xmpp_stanza_t *message = xmpp_stanza_get_child_by_name(forwarded, "message");
             if (message)
                 return message_handler(message, false);  // Don't double-count nested stanza
@@ -882,6 +893,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         weechat::channel::unread unread_val;
         unread_val.id = id;
         unread_val.thread = thread ? std::optional<std::string>(thread) : std::nullopt;
+        // XEP-0490: preserve server stanza-id for correct MDS PEP publish
+        unread_val.stanza_id = stanza_id ? std::optional<std::string>(stanza_id) : std::nullopt;
+        unread_val.stanza_id_by = stanza_id_by ? std::optional<std::string>(stanza_id_by) : std::nullopt;
         auto unread = &unread_val;
 
         xmpp_stanza_t *message = xmpp_message_new(account.context, NULL,
@@ -1137,6 +1151,33 @@ message_handler_after_omemo:
                         if (strlen(tag) > strlen("id_") &&
                             weechat_strcasecmp(tag+strlen("id_"), replace_id) == 0)
                         {
+                            // XEP-0308 §3: Verify the correcting sender matches
+                            // the original message author before applying the edit.
+                            // Compute expected nick tag value (same logic as display path).
+                            const char *corr_nick = from;
+                            xmpp_string_guard corr_resource_g { account.context,
+                                (channel && channel->type == weechat::channel::chat_type::MUC)
+                                    ? xmpp_jid_resource(account.context, from)
+                                    : nullptr };
+                            if (corr_resource_g.ptr)
+                                corr_nick = corr_resource_g.ptr;
+
+                            bool sender_matches = false;
+                            for (int chk = 0; chk < tags_count; chk++)
+                            {
+                                snprintf(str_tag, sizeof(str_tag), "%d|tags_array", chk);
+                                const char *chk_tag = weechat_hdata_string(
+                                    weechat_hdata_get("line_data"), line_data, str_tag);
+                                if (strlen(chk_tag) > strlen("nick_") &&
+                                    weechat_strcasecmp(chk_tag + strlen("nick_"), corr_nick) == 0)
+                                {
+                                    sender_matches = true;
+                                    break;
+                                }
+                            }
+                            if (!sender_matches)
+                                break;  // Silently drop spoofed correction
+
                             auto arraylist_deleter = [](struct t_arraylist *al) {
                                 weechat_arraylist_free(al);
                             };
