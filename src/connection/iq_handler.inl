@@ -1610,6 +1610,26 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     // Handle roster (RFC 6121)
     query = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "query", "jabber:iq:roster");
+
+    // Parse <group> children of a roster <item> into account.roster[jid].groups
+    auto parse_roster_groups = [&](xmpp_stanza_t *item, const char *jid) {
+        account.roster[jid].groups.clear();
+        for (xmpp_stanza_t *g = xmpp_stanza_get_children(item);
+             g; g = xmpp_stanza_get_next(g))
+        {
+            if (weechat_strcasecmp(xmpp_stanza_get_name(g), "group") != 0)
+                continue;
+            xmpp_stanza_t *gtxt = xmpp_stanza_get_children(g);
+            if (gtxt) {
+                char *text = xmpp_stanza_get_text(gtxt);
+                if (text) {
+                    account.roster[jid].groups.push_back(text);
+                    xmpp_free(account.context, text);
+                }
+            }
+        }
+    };
+
     if (query && type && weechat_strcasecmp(type, "result") == 0)
     {
         xmpp_stanza_t *item;
@@ -1623,35 +1643,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             const char *jid = xmpp_stanza_get_attribute(item, "jid");
             const char *roster_name = xmpp_stanza_get_attribute(item, "name");
             const char *subscription = xmpp_stanza_get_attribute(item, "subscription");
-            
+
             if (!jid)
                 continue;
 
             account.roster[jid].jid = jid;
             account.roster[jid].name = roster_name ? roster_name : "";
             account.roster[jid].subscription = subscription ? subscription : "none";
-            account.roster[jid].groups.clear();
-
-            xmpp_stanza_t *group;
-            for (group = xmpp_stanza_get_children(item);
-                 group; group = xmpp_stanza_get_next(group))
-            {
-                const char *group_name = xmpp_stanza_get_name(group);
-                if (weechat_strcasecmp(group_name, "group") != 0)
-                    continue;
-
-                xmpp_stanza_t *group_text = xmpp_stanza_get_children(group);
-                if (group_text)
-                {
-                    char *text = xmpp_stanza_get_text(group_text);
-                    if (text)
-                    {
-                        account.roster[jid].groups.push_back(text);
-                        xmpp_free(account.context, text);
-                    }
-                }
-            }
-
+            parse_roster_groups(item, jid);
         }
     }
 
@@ -1679,23 +1678,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     account.roster[jid].jid = jid;
                     account.roster[jid].name = roster_name ? roster_name : "";
                     account.roster[jid].subscription = subscription ? subscription : "none";
-                    account.roster[jid].groups.clear();
-
-                    xmpp_stanza_t *group;
-                    for (group = xmpp_stanza_get_children(item);
-                         group; group = xmpp_stanza_get_next(group))
-                    {
-                        const char *gname = xmpp_stanza_get_name(group);
-                        if (weechat_strcasecmp(gname, "group") != 0) continue;
-                        xmpp_stanza_t *gtxt = xmpp_stanza_get_children(group);
-                        if (gtxt) {
-                            char *text = xmpp_stanza_get_text(gtxt);
-                            if (text) {
-                                account.roster[jid].groups.push_back(text);
-                                xmpp_free(account.context, text);
-                            }
-                        }
-                    }
+                    parse_roster_groups(item, jid);
 
                     if (is_new)
                         weechat_printf(account.buffer, "%sRoster: %s added (%s)",
