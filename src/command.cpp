@@ -1471,7 +1471,7 @@ int command__me(const void *pointer, void *data,
     if (argc > 1)
     {
         std::string me_text = std::string("/me ") + argv_eol[1];
-        return ptr_channel->send_message(ptr_channel->name.data(), me_text.data());
+        return ptr_channel->send_message(ptr_channel->name, me_text);
     }
 
     return WEECHAT_RC_OK;

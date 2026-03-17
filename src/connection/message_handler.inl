@@ -1304,7 +1304,7 @@ message_handler_after_omemo:
                                                           (const char*)weechat_arraylist_get(orig_lines, i),
                                                           -1);
                             orig = *orig_message;
-                            weechat_string_dyn_free(orig_message, 1); // transfers ownership of *orig_message to orig
+                            weechat_string_dyn_free(orig_message, 0); // free_string=0: keep buffer, transfer ownership to orig
                             break;
                         }
                     }

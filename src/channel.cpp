@@ -792,7 +792,7 @@ int weechat::channel::send_message(std::string to, std::string body,
     // Reuse the main send path for regular text messages so PM OMEMO logic
     // (auto-enable, capability gating, encode/decode behavior) stays consistent.
     if (!oob && !file_meta)
-        return send_message(to.c_str(), body.c_str());
+        return send_message(std::string_view(to), std::string_view(body), /*skip_probe=*/false);
 
     xmpp_stanza_t *message = xmpp_message_new(account.context,
                     type == weechat::channel::chat_type::MUC
@@ -1056,18 +1056,21 @@ int weechat::channel::send_message(std::string to, std::string body,
     return WEECHAT_RC_OK;
 }
 
-int weechat::channel::send_message(const char *to, const char *body)
+int weechat::channel::send_message(std::string_view to, std::string_view body, bool skip_probe)
 {
     send_reads();
 
-    std::string peer_bare = to ? to : "";
+    std::string peer_bare(to);
     if (const auto slash = peer_bare.find('/'); slash != std::string::npos)
         peer_bare.resize(slash);
+
+    std::string to_str(to);
+    std::string body_str(body);
 
     xmpp_stanza_t *message = xmpp_message_new(account.context,
                     type == weechat::channel::chat_type::MUC
                     ? "groupchat" : "chat",
-                    to, NULL);
+                    to_str.c_str(), NULL);
 
     char *id = xmpp_uuid_gen(account.context);
     xmpp_stanza_set_id(message, id);
@@ -1092,13 +1095,13 @@ int weechat::channel::send_message(const char *to, const char *body)
 
         if (peer_mode == weechat::xmpp::omemo::peer_mode::legacy)
         {
-            encrypted = account.omemo.encode_legacy(&account, buffer, to, body);
+            encrypted = account.omemo.encode_legacy(&account, buffer, to_str.c_str(), body_str.c_str());
             eme_namespace = "eu.siacs.conversations.axolotl";
         }
         else
         {
             // Prefer OMEMO:2 for unknown peers and when OMEMO:2 metadata exists.
-            encrypted = account.omemo.encode(&account, buffer, to, body);
+            encrypted = account.omemo.encode(&account, buffer, to_str.c_str(), body_str.c_str());
         }
         
         if (!encrypted)
@@ -1113,7 +1116,7 @@ int weechat::channel::send_message(const char *to, const char *body)
                     return WEECHAT_RC_ERROR;
                 }
 
-                queue_pending_omemo_message(body ? body : "");
+                queue_pending_omemo_message(body_str);
                 account.omemo.request_devicelist(account, peer_bare);
                 weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
                                          weechat_prefix("network"),
@@ -1153,7 +1156,7 @@ int weechat::channel::send_message(const char *to, const char *body)
         xmpp_stanza_set_ns(message__x, "jabber:x:encrypted");
 
         xmpp_stanza_t *message__x__text = xmpp_stanza_new(account.context);
-        auto ciphertext = account.pgp.encrypt(buffer, account.pgp_keyid().data(), std::vector(pgp.ids.begin(), pgp.ids.end()), body);
+        auto ciphertext = account.pgp.encrypt(buffer, account.pgp_keyid().data(), std::vector(pgp.ids.begin(), pgp.ids.end()), body_str.c_str());
         if (ciphertext)
             xmpp_stanza_set_text(message__x__text, ciphertext->c_str());
         else
@@ -1190,15 +1193,16 @@ int weechat::channel::send_message(const char *to, const char *body)
     }
     else
     {
-        xmpp_message_set_body(message, body);
+        xmpp_message_set_body(message, body_str.c_str());
 
         set_transport(weechat::channel::transport::PLAIN, 0);
     }
 
     static const std::regex pattern("https?:[^ ]*");
-    std::cmatch match;
-    if (transport == weechat::channel::transport::PLAIN &&
-            std::regex_search(body, match, pattern)
+    std::smatch match;
+    if (!skip_probe &&
+            transport == weechat::channel::transport::PLAIN &&
+            std::regex_search(body_str, match, pattern)
             && match[0].matched && !match.prefix().length())
     {
         std::string url { &*match[0].first, static_cast<size_t>(match[0].length()) };
@@ -1219,7 +1223,7 @@ int weechat::channel::send_message(const char *to, const char *body)
                 std::string url;
                 std::string output;
             };
-            auto *task = new message_task { *this, to, body, url };
+            auto *task = new message_task { *this, to_str, body_str, url };
             auto callback = [](const void *pointer, void *,
                     const char *, int ret, const char *out, const char * /*err*/) {
                 auto *task = static_cast<message_task*>(const_cast<void*>(pointer));
@@ -1257,18 +1261,18 @@ int weechat::channel::send_message(const char *to, const char *body)
                     }
                     else
                     {
-                        weechat_printf_date_tags(task->channel.buffer, 0,
-                                "notify_none,no_log", "[oob]\t%s%s",
-                                weechat_color("gray"), mime.data());
-                        // Use std::string overload to avoid re-triggering the OOB probe
-                        task->channel.send_message(task->to, task->body, std::nullopt);
+                        // Non-media URL: send plain message, skip the OOB probe
+                        task->channel.send_message(
+                                std::string_view(task->to), std::string_view(task->body),
+                                /*skip_probe=*/true);
                     }
                 }
                 else
                 {
-                    // curl failed — send plain message via std::string overload
-                    // to avoid re-triggering the OOB probe
-                    task->channel.send_message(task->to, task->body, std::nullopt);
+                    // curl failed: send plain message, skip the OOB probe
+                    task->channel.send_message(
+                            std::string_view(task->to), std::string_view(task->body),
+                            /*skip_probe=*/true);
                 }
                 // XEP-0511: send link preview now that the message stanza is sent
                 if (weechat::config::instance
@@ -1327,12 +1331,12 @@ int weechat::channel::send_message(const char *to, const char *body)
             && weechat::config::instance->look.outgoing_link_preview.boolean())
     {
         static const std::regex url_pattern("https?://[^ ]+");
-        std::cregex_iterator it(body, body + std::strlen(body), url_pattern);
-        std::cregex_iterator end;
+        std::sregex_iterator it(body_str.begin(), body_str.end(), url_pattern);
+        std::sregex_iterator end;
         for (; it != end; ++it)
         {
             std::string url = (*it)[0].str();
-            send_link_preview(to, url);
+            send_link_preview(to_str, url);
         }
     }
 
@@ -1340,7 +1344,7 @@ int weechat::channel::send_message(const char *to, const char *body)
     {
         auto *self_user = user::search(&account, account.jid().data());
         auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
-        const bool is_action = weechat_string_match(body, "/me *", 0);
+        const bool is_action = weechat_string_match(body_str.c_str(), "/me *", 0);
         std::string tag = std::string("xmpp_message,message,")
             + (is_action ? "action," : "")
             + "private,notify_none,self_msg,log1,id_" + saved_id;
@@ -1354,7 +1358,7 @@ int weechat::channel::send_message(const char *to, const char *body)
                                      weechat_prefix("action"),
                                      prefix.data(),
                                      encrypted ? "🔒 " : "",
-                                     body + 4);
+                                     body_str.c_str() + 4);
         }
         else
         {
@@ -1363,7 +1367,7 @@ int weechat::channel::send_message(const char *to, const char *body)
                                      "%s\t%s%s ⌛",
                                      prefix.data(),
                                      encrypted ? "🔒 " : "",
-                                     body);
+                                     body_str.c_str());
         }
     }
 
@@ -1395,7 +1399,7 @@ void weechat::channel::flush_pending_omemo_messages()
         std::string body = pending_omemo_messages.front();
         pending_omemo_messages.pop_front();
 
-        const int rc = send_message(id.c_str(), body.c_str());
+        const int rc = send_message(std::string_view(id), std::string_view(body), /*skip_probe=*/true);
         if (rc != WEECHAT_RC_OK)
         {
             // Put it back and stop; we'll retry on next session/bundle update.

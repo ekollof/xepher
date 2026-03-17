@@ -7,6 +7,7 @@
 #include <ctime>
 #include <deque>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -199,7 +200,9 @@ namespace weechat
         int send_message(std::string to, std::string body,
                          std::optional<std::string> oob = {},
                          std::optional<file_metadata> file_meta = {});
-        int send_message(const char *to, const char *body);
+        // Low-level overload: skip_probe must be supplied explicitly to avoid
+        // ambiguity with the std::string overload above.
+        int send_message(std::string_view to, std::string_view body, bool skip_probe);
 
         void queue_pending_omemo_message(const std::string& body);
         void flush_pending_omemo_messages();
