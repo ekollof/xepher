@@ -2364,6 +2364,189 @@ int command__edit(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+// ---------------------------------------------------------------------------
+// msg_entry — one buffer line's worth of message metadata, used by the
+// Tier 3 message-history pickers (/retract, /reply, /moderate).
+// ---------------------------------------------------------------------------
+struct msg_entry {
+    std::string id;           // origin-id / message id
+    std::string stanza_id;    // MUC stanza-id (XEP-0359)
+    std::string stanza_id_by; // JID that assigned stanza_id
+    std::string nick;         // nick_ tag value
+    std::string body;         // displayed message text (may have colour codes)
+    bool        from_self = false;
+    bool        retracted = false;
+};
+
+// Walk up to `max` buffer lines backwards, newest first.
+// Returns entries with a non-empty id only.
+static std::vector<msg_entry>
+collect_buffer_messages(struct t_gui_buffer *buffer, int max)
+{
+    std::vector<msg_entry> result;
+
+    void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
+                                        buffer, "lines");
+    if (!lines) return result;
+
+    void *cur = weechat_hdata_pointer(weechat_hdata_get("lines"),
+                                      lines, "last_line");
+
+    struct t_hdata *hd_line      = weechat_hdata_get("line");
+    struct t_hdata *hd_line_data = weechat_hdata_get("line_data");
+
+    while (cur && static_cast<int>(result.size()) < max)
+    {
+        void *line_data = weechat_hdata_pointer(hd_line, cur, "data");
+        if (line_data)
+        {
+            int tags_count = weechat_hdata_integer(hd_line_data, line_data, "tags_count");
+
+            msg_entry e;
+            for (int n = 0; n < tags_count; ++n)
+            {
+                std::string key = fmt::format("{}|tags_array", n);
+                const char *tag = weechat_hdata_string(hd_line_data, line_data, key.c_str());
+                if (!tag) continue;
+
+                if (strcmp(tag, "self_msg") == 0)
+                    e.from_self = true;
+                else if (strcmp(tag, "xmpp_retracted") == 0)
+                    e.retracted = true;
+                else if (strncmp(tag, "id_", 3) == 0 && e.id.empty())
+                    e.id = tag + 3;
+                else if (strncmp(tag, "stanza_id_by_", 13) == 0)
+                    e.stanza_id_by = tag + 13;
+                else if (strncmp(tag, "stanza_id_", 10) == 0 && e.stanza_id.empty())
+                    e.stanza_id = tag + 10;
+                else if (strncmp(tag, "nick_", 5) == 0 && e.nick.empty())
+                    e.nick = tag + 5;
+            }
+
+            if (!e.id.empty())
+            {
+                const char *msg = weechat_hdata_string(hd_line_data, line_data, "message");
+                if (msg) e.body = msg;
+                result.push_back(std::move(e));
+            }
+        }
+
+        cur = weechat_hdata_pointer(hd_line, cur, "prev_line");
+    }
+
+    return result;
+}
+
+// Send a XEP-0424 message retraction for `msg_id` on `account`/`channel`.
+static void
+do_retract_send(weechat::account *account, weechat::channel *channel,
+                struct t_gui_buffer *buffer, const std::string &msg_id)
+{
+    xmpp_stanza_t *message = xmpp_message_new(account->context,
+                    channel->type == weechat::channel::chat_type::MUC
+                    ? "groupchat" : "chat",
+                    channel->id.data(), NULL);
+
+    xmpp_string_guard id_g(account->context, xmpp_uuid_gen(account->context));
+    const char *id = id_g.ptr;
+    xmpp_stanza_set_id(message, id);
+
+    xmpp_stanza_t *retract = xmpp_stanza_new(account->context);
+    xmpp_stanza_set_name(retract, "retract");
+    xmpp_stanza_set_ns(retract, "urn:xmpp:message-retract:1");
+    xmpp_stanza_set_attribute(retract, "id", msg_id.c_str());
+    xmpp_stanza_add_child(message, retract);
+    xmpp_stanza_release(retract);
+
+    xmpp_stanza_t *body = xmpp_stanza_new(account->context);
+    xmpp_stanza_set_name(body, "body");
+    xmpp_stanza_t *body_text = xmpp_stanza_new(account->context);
+    xmpp_stanza_set_text(body_text,
+        "/me retracted a previous message, but it's unsupported by your client.");
+    xmpp_stanza_add_child(body, body_text);
+    xmpp_stanza_release(body_text);
+    xmpp_stanza_add_child(message, body);
+    xmpp_stanza_release(body);
+
+    xmpp_stanza_t *fallback = xmpp_stanza_new(account->context);
+    xmpp_stanza_set_name(fallback, "fallback");
+    xmpp_stanza_set_ns(fallback, "urn:xmpp:fallback:0");
+    xmpp_stanza_set_attribute(fallback, "for", "urn:xmpp:message-retract:1");
+    xmpp_stanza_add_child(message, fallback);
+    xmpp_stanza_release(fallback);
+
+    xmpp_stanza_t *store = xmpp_stanza_new(account->context);
+    xmpp_stanza_set_name(store, "store");
+    xmpp_stanza_set_ns(store, "urn:xmpp:hints");
+    xmpp_stanza_add_child(message, store);
+    xmpp_stanza_release(store);
+
+    xmpp_stanza_t *origin_id = xmpp_stanza_new(account->context);
+    xmpp_stanza_set_name(origin_id, "origin-id");
+    xmpp_stanza_set_ns(origin_id, "urn:xmpp:sid:0");
+    xmpp_stanza_set_attribute(origin_id, "id", id);
+    xmpp_stanza_add_child(message, origin_id);
+    xmpp_stanza_release(origin_id);
+
+    account->connection.send(message);
+    xmpp_stanza_release(message);
+
+    weechat_printf(buffer, "%sxmpp: message retraction sent",
+                  weechat_prefix("network"));
+}
+
+// Send a XEP-0425 moderation request for `msg_id` on `account`/`channel`.
+static void
+do_moderate_send(weechat::account *account, weechat::channel *channel,
+                 struct t_gui_buffer *buffer, const std::string &msg_id,
+                 const char *reason)
+{
+    const char *room_jid = channel->id.data();
+    xmpp_stanza_t *iq = xmpp_message_new(account->context, "groupchat",
+                                         room_jid, NULL);
+    xmpp_stanza_set_to(iq, room_jid);
+
+    xmpp_stanza_t *apply_to = xmpp_stanza_new(account->context);
+    xmpp_stanza_set_name(apply_to, "apply-to");
+    xmpp_stanza_set_ns(apply_to, "urn:xmpp:fasten:0");
+    xmpp_stanza_set_attribute(apply_to, "id", msg_id.c_str());
+
+    xmpp_stanza_t *moderate = xmpp_stanza_new(account->context);
+    xmpp_stanza_set_name(moderate, "moderate");
+    xmpp_stanza_set_ns(moderate, "urn:xmpp:message-moderate:1");
+
+    xmpp_stanza_t *retract = xmpp_stanza_new(account->context);
+    xmpp_stanza_set_name(retract, "retract");
+    xmpp_stanza_set_ns(retract, "urn:xmpp:message-retract:1");
+    xmpp_stanza_add_child(moderate, retract);
+
+    if (reason)
+    {
+        xmpp_stanza_t *reason_elem = xmpp_stanza_new(account->context);
+        xmpp_stanza_set_name(reason_elem, "reason");
+        xmpp_stanza_t *reason_text = xmpp_stanza_new(account->context);
+        xmpp_stanza_set_text(reason_text, reason);
+        xmpp_stanza_add_child(reason_elem, reason_text);
+        xmpp_stanza_add_child(moderate, reason_elem);
+        xmpp_stanza_release(reason_text);
+        xmpp_stanza_release(reason_elem);
+    }
+
+    xmpp_stanza_add_child(apply_to, moderate);
+    xmpp_stanza_add_child(iq, apply_to);
+
+    account->connection.send(iq);
+
+    xmpp_stanza_release(retract);
+    xmpp_stanza_release(moderate);
+    xmpp_stanza_release(apply_to);
+    xmpp_stanza_release(iq);
+
+    weechat_printf(buffer, "%sxmpp: moderation request sent%s",
+                  weechat_prefix("network"),
+                  reason ? " with reason" : "");
+}
+
 int command__retract(const void *pointer, void *data,
                      struct t_gui_buffer *buffer, int argc,
                      char **argv, char **argv_eol)
@@ -2402,136 +2585,52 @@ int command__retract(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    // Find the last message sent by us
-    struct t_hdata *hdata_line = weechat_hdata_get("line");
-    struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
-    struct t_gui_lines *own_lines = (struct t_gui_lines*)weechat_hdata_pointer(
-        weechat_hdata_get("buffer"), buffer, "own_lines");
-    
-    if (!own_lines)
+    // Collect last 20 own messages for picker
+    auto messages = collect_buffer_messages(buffer, 200);
+    std::vector<msg_entry> own_messages;
+    for (auto &m : messages)
     {
-        weechat_printf(buffer, "%sxmpp: cannot access buffer lines",
-                      weechat_prefix("error"));
-        return WEECHAT_RC_OK;
+        if (m.from_self && !m.retracted)
+            own_messages.push_back(m);
+        if (static_cast<int>(own_messages.size()) >= 20)
+            break;
     }
 
-    struct t_gui_line *line = (struct t_gui_line*)weechat_hdata_pointer(
-        hdata_line, own_lines, "last_line");
-    
-    std::string last_msg_id;
-    
-    // Search backwards for our last sent message
-    while (line && last_msg_id.empty())
-    {
-        struct t_gui_line_data *line_data = (struct t_gui_line_data*)weechat_hdata_pointer(
-            hdata_line, line, "data");
-        
-        if (line_data)
-        {
-            const char *tags = (const char*)weechat_hdata_string(hdata_line_data, line_data, "tags");
-            
-            // Check if this is our message (has self_msg tag and id_ tag)
-            if (tags && strstr(tags, "self_msg") && strstr(tags, "id_"))
-            {
-                // Extract message ID and (for MUC) stanza-id from tags
-                std::string msg_id;
-                std::string sid;
-                std::string sid_by;
-                char **tag_array = weechat_string_split(tags, ",", NULL, 0, 0, NULL);
-                if (tag_array)
-                {
-                    for (int i = 0; tag_array[i]; i++)
-                    {
-                        if (strncmp(tag_array[i], "id_", 3) == 0 && msg_id.empty())
-                            msg_id = tag_array[i] + 3;
-                        else if (strncmp(tag_array[i], "stanza_id_by_", 13) == 0)
-                            sid_by = tag_array[i] + 13;
-                        else if (strncmp(tag_array[i], "stanza_id_", 10) == 0)
-                            sid = tag_array[i] + 10;
-                    }
-                    weechat_string_free_split(tag_array);
-                }
-                // XEP-0424: For groupchat, MUST use MUC-assigned stanza-id.
-                if (ptr_channel->type == weechat::channel::chat_type::MUC
-                        && !sid.empty()
-                        && weechat_strcasecmp(sid_by.c_str(), ptr_channel->id.c_str()) == 0)
-                    last_msg_id = sid;
-                else
-                    last_msg_id = msg_id;
-                break;
-            }
-        }
-        
-        line = (struct t_gui_line*)weechat_hdata_move(hdata_line, line, -1);
-    }
-    
-    if (last_msg_id.empty())
+    if (own_messages.empty())
     {
         weechat_printf(buffer, "%sxmpp: no message found to retract",
                       weechat_prefix("error"));
         return WEECHAT_RC_OK;
     }
 
-    // Send message retraction (XEP-0424)
-    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
-                    ptr_channel->type == weechat::channel::chat_type::MUC
-                    ? "groupchat" : "chat",
-                    ptr_channel->id.data(), NULL);
+    using picker_t = weechat::ui::picker<std::string>;
+    std::vector<picker_t::entry> entries;
+    for (auto &m : own_messages)
+    {
+        // Resolve ID: prefer MUC stanza-id when applicable
+        std::string resolved_id;
+        if (ptr_channel->type == weechat::channel::chat_type::MUC
+                && !m.stanza_id.empty()
+                && weechat_strcasecmp(m.stanza_id_by.c_str(),
+                                     ptr_channel->id.c_str()) == 0)
+            resolved_id = m.stanza_id;
+        else
+            resolved_id = m.id;
 
-    xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    const char *id = id_g.ptr;
-    xmpp_stanza_set_id(message, id);
-    // freed by id_g
+        std::string label = m.body.empty() ? m.id : m.body;
+        entries.push_back({resolved_id, label, {}});
+    }
 
-    // Add retract element with original message ID
-    xmpp_stanza_t *retract = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(retract, "retract");
-    xmpp_stanza_set_ns(retract, "urn:xmpp:message-retract:1");
-    xmpp_stanza_set_attribute(retract, "id", last_msg_id.c_str());
-    xmpp_stanza_add_child(message, retract);
-    xmpp_stanza_release(retract);
-
-    // Add fallback body for clients that don't support XEP-0424
-    // XEP-0424 §3.3: fallback body SHOULD be "/me retracted a previous message..."
-    xmpp_stanza_t *body = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(body, "body");
-    xmpp_stanza_t *body_text = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_text(body_text, "/me retracted a previous message, but it's unsupported by your client.");
-    xmpp_stanza_add_child(body, body_text);
-    xmpp_stanza_release(body_text);
-    xmpp_stanza_add_child(message, body);
-    xmpp_stanza_release(body);
-
-    // Add fallback element to indicate body is fallback
-    xmpp_stanza_t *fallback = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(fallback, "fallback");
-    xmpp_stanza_set_ns(fallback, "urn:xmpp:fallback:0");
-    xmpp_stanza_set_attribute(fallback, "for", "urn:xmpp:message-retract:1");
-    xmpp_stanza_add_child(message, fallback);
-    xmpp_stanza_release(fallback);
-
-    // Add store hint for MAM
-    xmpp_stanza_t *message__store = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(message__store, "store");
-    xmpp_stanza_set_ns(message__store, "urn:xmpp:hints");
-    xmpp_stanza_add_child(message, message__store);
-    xmpp_stanza_release(message__store);
-
-    // XEP-0359: origin-id so the sender can correlate the retraction in MAM
-    xmpp_stanza_t *retract_origin_id = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(retract_origin_id, "origin-id");
-    xmpp_stanza_set_ns(retract_origin_id, "urn:xmpp:sid:0");
-    xmpp_stanza_set_attribute(retract_origin_id, "id", id);
-    xmpp_stanza_add_child(message, retract_origin_id);
-    xmpp_stanza_release(retract_origin_id);
-
-    ptr_account->connection.send(message);
-    xmpp_stanza_release(message);
-    // last_msg_id freed by std::string destructor
-
-    weechat_printf(buffer, "%sxmpp: message retraction sent",
-                  weechat_prefix("network"));
-
+    auto *p = new picker_t(
+        "xmpp.picker.retract",
+        "Retract message  (XEP-0424)",
+        std::move(entries),
+        [ptr_account, ptr_channel, buf = buffer](const std::string &selected) {
+            do_retract_send(ptr_account, ptr_channel, buf, selected);
+        },
+        {},
+        buffer);
+    (void) p;
     return WEECHAT_RC_OK;
 }
 
@@ -2727,8 +2826,57 @@ int command__reply(const void *pointer, void *data,
 
     if (argc < 2)
     {
-        weechat_printf(buffer, "%sxmpp: missing reply message",
-                      weechat_prefix("error"));
+        // No reply text given — open a picker over the last 20 non-own messages.
+        // On selection, pre-fill the input bar with /reply <id> so the user
+        // can type the reply body.  We encode the resolved ID into the command
+        // so the argc>=2 path can do the actual send without another hdata walk.
+        auto messages = collect_buffer_messages(buffer, 200);
+
+        using picker_t = weechat::ui::picker<std::string>;
+        std::vector<picker_t::entry> entries;
+        for (auto &m : messages)
+        {
+            if (m.from_self || m.id.empty()) continue;
+
+            // Resolve ID: prefer MUC stanza-id when applicable (XEP-0461 §4.1)
+            std::string resolved_id;
+            if (ptr_channel->type == weechat::channel::chat_type::MUC
+                    && !m.stanza_id.empty()
+                    && weechat_strcasecmp(m.stanza_id_by.c_str(),
+                                         ptr_channel->id.c_str()) == 0)
+                resolved_id = m.stanza_id;
+            else
+                resolved_id = m.id;
+
+            std::string label = m.body.empty() ? m.id : m.body;
+            std::string sublabel = m.nick.empty() ? "" : "from: " + m.nick;
+            entries.push_back({resolved_id, label, sublabel});
+            if (static_cast<int>(entries.size()) >= 20)
+                break;
+        }
+
+        if (entries.empty())
+        {
+            weechat_printf(buffer, "%sxmpp: no message found to reply to",
+                          weechat_prefix("error"));
+            return WEECHAT_RC_OK;
+        }
+
+        auto *p = new picker_t(
+            "xmpp.picker.reply",
+            "Reply to message  (XEP-0461)",
+            std::move(entries),
+            [buf = buffer](const std::string &selected) {
+                // Pre-fill input bar: user types the reply body after this
+                std::string input = fmt::format("/reply-to {} ", selected);
+                weechat_buffer_set(buf, "input", input.c_str());
+                weechat_buffer_set(buf, "input_pos",
+                    std::to_string(input.size()).c_str());
+                weechat_buffer_set(buf, "display", "1");
+            },
+            {},
+            buffer);
+        (void) p;
         return WEECHAT_RC_OK;
     }
 
@@ -2909,6 +3057,104 @@ int command__reply(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+// /reply-to <id> <message> — explicit-ID reply generated by the picker.
+int command__reply_to(const void *pointer, void *data,
+                      struct t_gui_buffer *buffer, int argc,
+                      char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = NULL;
+    weechat::channel *ptr_channel = NULL;
+
+    (void) pointer;
+    (void) data;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel)
+    {
+        weechat_printf(buffer, "%sxmpp: you must be in a channel to reply to messages",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%sxmpp: you are not connected to server",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 3)
+    {
+        weechat_printf(buffer, "%sxmpp: usage: /reply-to <message-id> <text>",
+                      weechat_prefix("error"));
+        return WEECHAT_RC_OK;
+    }
+
+    const char *target_id   = argv[1];
+    const char *reply_text  = argv_eol[2];
+
+    // Build reply-to JID: for PM it's the peer bare JID; for MUC we don't know
+    // the exact occupant JID from the ID alone, so use the room JID as fallback.
+    std::string reply_to_jid = ptr_channel->name;
+
+    const char *to   = ptr_channel->name.c_str();
+    const char *type = (ptr_channel->type == weechat::channel::chat_type::MUC)
+                        ? "groupchat" : "chat";
+
+    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, type, to, NULL);
+    xmpp_string_guard uuid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
+    xmpp_stanza_set_id(message, uuid_g.ptr);
+
+    xmpp_stanza_t *body = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(body, "body");
+    xmpp_stanza_t *body_text = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_text(body_text, reply_text);
+    xmpp_stanza_add_child(body, body_text);
+    xmpp_stanza_add_child(message, body);
+
+    xmpp_stanza_t *reply_elem = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(reply_elem, "reply");
+    xmpp_stanza_set_ns(reply_elem, "urn:xmpp:reply:0");
+    xmpp_stanza_set_attribute(reply_elem, "id", target_id);
+    xmpp_stanza_set_attribute(reply_elem, "to", reply_to_jid.c_str());
+    xmpp_stanza_add_child(message, reply_elem);
+
+    xmpp_stanza_t *fallback_elem = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(fallback_elem, "fallback");
+    xmpp_stanza_set_ns(fallback_elem, "urn:xmpp:fallback:0");
+    xmpp_stanza_set_attribute(fallback_elem, "for", "urn:xmpp:reply:0");
+    xmpp_stanza_add_child(message, fallback_elem);
+    xmpp_stanza_release(fallback_elem);
+
+    xmpp_stanza_t *store_hint = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(store_hint, "store");
+    xmpp_stanza_set_ns(store_hint, "urn:xmpp:hints");
+    xmpp_stanza_add_child(message, store_hint);
+
+    xmpp_stanza_t *origin_id = xmpp_stanza_new(ptr_account->context);
+    xmpp_stanza_set_name(origin_id, "origin-id");
+    xmpp_stanza_set_ns(origin_id, "urn:xmpp:sid:0");
+    xmpp_string_guard origin_uuid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
+    xmpp_stanza_set_attribute(origin_id, "id", origin_uuid_g.ptr);
+    xmpp_stanza_add_child(message, origin_id);
+
+    ptr_account->connection.send(message);
+
+    xmpp_stanza_release(body_text);
+    xmpp_stanza_release(body);
+    xmpp_stanza_release(reply_elem);
+    xmpp_stanza_release(store_hint);
+    xmpp_stanza_release(origin_id);
+    xmpp_stanza_release(message);
+
+    weechat_printf(buffer, "%sxmpp: reply sent", weechat_prefix("network"));
+    return WEECHAT_RC_OK;
+}
+
 int command__moderate(const void *pointer, void *data,
                       struct t_gui_buffer *buffer, int argc,
                       char **argv, char **argv_eol)
@@ -2948,118 +3194,43 @@ int command__moderate(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    // Optional: reason for moderation
-    const char *reason = (argc > 1) ? argv_eol[1] : NULL;
+    // Optional: reason for moderation (argc > 1)
+    const char *reason = (argc > 1) ? argv_eol[1] : nullptr;
 
-    // Find the last message in buffer (from anyone, including self)
-    void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
-                                        buffer, "lines");
-    if (!lines)
+    // Open picker over last 20 messages (any sender, skip retracted)
+    auto messages = collect_buffer_messages(buffer, 200);
+
+    using picker_t = weechat::ui::picker<std::string>;
+    std::vector<picker_t::entry> entries;
+    for (auto &m : messages)
     {
-        weechat_printf(buffer, "%sxmpp: no lines found in buffer",
-                      weechat_prefix("error"));
-        return WEECHAT_RC_OK;
+        if (m.retracted || m.id.empty()) continue;
+        std::string label = m.body.empty() ? m.id : m.body;
+        std::string sublabel = m.nick.empty() ? "" : "from: " + m.nick;
+        entries.push_back({m.id, label, sublabel});
+        if (static_cast<int>(entries.size()) >= 20)
+            break;
     }
 
-    void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
-                                            lines, "last_line");
-    const char *target_id = NULL;
-
-    while (last_line)
-    {
-        void *line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
-                                                last_line, "data");
-        if (line_data)
-        {
-            // Extract message ID from tags
-            int tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
-                                                   line_data, "tags_count");
-            std::string str_tag;
-            for (int n_tag = 0; n_tag < tags_count; n_tag++)
-            {
-                str_tag = fmt::format("{}|tags_array", n_tag);
-                const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
-                                                       line_data, str_tag.c_str());
-                
-                // Skip retracted messages
-                if (weechat_strcasecmp(tag, "xmpp_retracted") == 0)
-                    break;
-                
-                if (strlen(tag) > strlen("id_") &&
-                    strncmp(tag, "id_", strlen("id_")) == 0)
-                {
-                    target_id = tag + strlen("id_");
-                    break;
-                }
-            }
-            
-            if (target_id)
-                break;
-        }
-
-        last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
-                                          last_line, "prev_line");
-    }
-
-    if (!target_id)
+    if (entries.empty())
     {
         weechat_printf(buffer, "%sxmpp: no message found to moderate",
                       weechat_prefix("error"));
         return WEECHAT_RC_OK;
     }
 
-    // XEP-0425 §3.1: moderation request MUST be a <message type='groupchat'>
-    // addressed to the room, NOT an IQ stanza.
-    const char *room_jid = ptr_channel->id.data();
-
-    xmpp_stanza_t *iq = xmpp_message_new(ptr_account->context, "groupchat",
-                                         room_jid, NULL);
-    xmpp_stanza_set_to(iq, room_jid);
-    
-    // <apply-to xmlns='urn:xmpp:fasten:0' id='target-message-id'>
-    xmpp_stanza_t *apply_to = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(apply_to, "apply-to");
-    xmpp_stanza_set_ns(apply_to, "urn:xmpp:fasten:0");
-    xmpp_stanza_set_attribute(apply_to, "id", target_id);
-    
-    // <moderate xmlns='urn:xmpp:message-moderate:1'>
-    xmpp_stanza_t *moderate = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(moderate, "moderate");
-    xmpp_stanza_set_ns(moderate, "urn:xmpp:message-moderate:1");
-    
-    // <retract xmlns='urn:xmpp:message-retract:1'/>
-    xmpp_stanza_t *retract = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(retract, "retract");
-    xmpp_stanza_set_ns(retract, "urn:xmpp:message-retract:1");
-    xmpp_stanza_add_child(moderate, retract);
-    
-    // Optional: <reason>text</reason>
-    if (reason)
-    {
-        xmpp_stanza_t *reason_elem = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(reason_elem, "reason");
-        xmpp_stanza_t *reason_text = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_text(reason_text, reason);
-        xmpp_stanza_add_child(reason_elem, reason_text);
-        xmpp_stanza_add_child(moderate, reason_elem);
-        xmpp_stanza_release(reason_text);
-        xmpp_stanza_release(reason_elem);
-    }
-    
-    xmpp_stanza_add_child(apply_to, moderate);
-    xmpp_stanza_add_child(iq, apply_to);
-    
-    ptr_account->connection.send(iq);
-    
-    xmpp_stanza_release(retract);
-    xmpp_stanza_release(moderate);
-    xmpp_stanza_release(apply_to);
-    xmpp_stanza_release(iq);
-
-    weechat_printf(buffer, "%sxmpp: moderation request sent%s",
-                  weechat_prefix("network"),
-                  reason ? " with reason" : "");
-
+    std::string reason_str = reason ? reason : "";
+    auto *p = new picker_t(
+        "xmpp.picker.moderate",
+        "Moderate message  (XEP-0425)",
+        std::move(entries),
+        [ptr_account, ptr_channel, buf = buffer, reason_str](const std::string &selected) {
+            do_moderate_send(ptr_account, ptr_channel, buf, selected,
+                             reason_str.empty() ? nullptr : reason_str.c_str());
+        },
+        {},
+        buffer);
+    (void) p;
     return WEECHAT_RC_OK;
 }
 
@@ -5645,24 +5816,39 @@ void command__init()
 
     hook = weechat_hook_command(
         "reply",
-        N_("reply to the last message (XEP-0461)"),
-        N_("<message>"),
-        N_("message: your reply text\n\n"
-           "Replies to the last message (not yours) in the buffer with context.\n"
-           "The reply includes a reference to the original message.\n"
+        N_("pick a message to reply to (XEP-0461)"),
+        N_("[message]"),
+        N_("message: your reply text (optional)\n\n"
+           "Without arguments: opens an interactive picker of the last 20 messages.\n"
+           "Select a message with arrows, press Enter, then type your reply.\n"
+           "With arguments: replies immediately to the last non-own message.\n"
            "Examples:\n"
-           "  /reply Thanks for the info!\n"
+           "  /reply                : open picker\n"
+           "  /reply Thanks!\n"
            "  /reply I agree with that"),
         NULL, &command__reply, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /reply");
 
     hook = weechat_hook_command(
+        "reply-to",
+        N_("reply to a specific message by ID (XEP-0461)"),
+        N_("<id> <message>"),
+        N_("id     : message id to reply to\n"
+           "message: your reply text\n\n"
+           "This command is used internally by the /reply picker.\n"
+           "You can also use it directly if you know the message ID."),
+        NULL, &command__reply_to, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /reply-to");
+
+    hook = weechat_hook_command(
         "moderate",
-        N_("moderate (retract) the last message in MUC (XEP-0425)"),
+        N_("pick a message to moderate in MUC (XEP-0425)"),
         N_("[reason]"),
         N_("reason: optional reason for moderation\n\n"
-           "Moderates (retracts) the last message in the current MUC room.\n"
+           "Opens an interactive picker of the last 20 messages in the MUC.\n"
+           "Select the message to retract, press Enter to send the moderation request.\n"
            "This command is for MUC moderators to remove messages from other users.\n"
            "Use /retract to delete your own messages.\n"
            "Examples:\n"

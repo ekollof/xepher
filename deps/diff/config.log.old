@@ -1,0 +1,180 @@
+configure.local: reading...
+HAVE___PROGNAME=1
+
+arc4random: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_ARC4RANDOM  -o test-arc4random tests.c 
+arc4random: cc succeeded
+arc4random: yes
+
+capsicum: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_CAPSICUM  -o test-capsicum tests.c 
+tests.c:20:10: fatale fout: sys/capsicum.h: Bestand of map bestaat niet
+   20 | #include <sys/capsicum.h>
+      |          ^~~~~~~~~~~~~~~~
+compilatie is beëindigd.
+capsicum: cc failed with 1
+
+err: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_ERR  -o test-err tests.c 
+err: cc succeeded
+test-err: 1. warnx
+test-err: 2. warn: Success
+test-err: 3. err: Success
+err: yes
+
+explicit_bzero: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_EXPLICIT_BZERO  -o test-explicit_bzero tests.c 
+explicit_bzero: cc succeeded
+explicit_bzero: yes
+
+getprogname: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_GETPROGNAME  -o test-getprogname tests.c 
+tests.c: In functie ‘main’:
+tests.c:78:20: fout: impliciete declaratie van functie ‘getprogname’ [-Wimplicit-function-declaration]
+   78 |         progname = getprogname();
+      |                    ^~~~~~~~~~~
+tests.c:78:18: fout: assignment to ‘const char *’ from ‘int’ makes pointer from integer without a cast [-Wint-conversion]
+   78 |         progname = getprogname();
+      |                  ^
+getprogname: cc failed with 1
+
+INFTIM: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_INFTIM  -o test-INFTIM tests.c 
+tests.c: In functie ‘main’:
+tests.c:93:55: fout: ‘INFTIM’ undeclared (first use in this function)
+   93 |         printf("INFTIM is defined to be %ld\n", (long)INFTIM);
+      |                                                       ^~~~~~
+tests.c:93:55: note: each undeclared identifier is reported only once for each function it appears in
+INFTIM: cc failed with 1
+
+md5: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_MD5  -o test-md5 tests.c 
+tests.c: In functie ‘main’:
+tests.c:106:25: fout: pointer targets in passing argument 2 of ‘MD5Update’ differ in signedness [-Werror=pointer-sign]
+  106 |         MD5Update(&ctx, "abcd", 4);
+      |                         ^~~~~~
+      |                         |
+      |                         const char *
+In file included from tests.c:99:
+/usr/include/md5.h:37:31: note: expected ‘const uint8_t *’ {aka ‘const unsigned char *’} but argument is of type ‘const char *’
+   37 | void     MD5Update(MD5_CTX *, const uint8_t *, size_t);
+      |                               ^~~~~~~~~~~~~~~
+cc1: alle waarschuwingen worden als fouten behandeld
+md5: cc failed with 1
+
+memmem: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_MEMMEM  -o test-memmem tests.c 
+memmem: cc succeeded
+memmem: yes
+
+memrchr: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_MEMRCHR  -o test-memrchr tests.c 
+memrchr: cc succeeded
+memrchr: yes
+
+memset_s: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_MEMSET_S  -o test-memset_s tests.c 
+tests.c: In functie ‘main’:
+tests.c:144:9: fout: implicit declaration of function ‘memset_s’; did you mean ‘memset’? [-Wimplicit-function-declaration]
+  144 |         memset_s(buf, 0, 'c', sizeof(buf));
+      |         ^~~~~~~~
+      |         memset
+memset_s: cc failed with 1
+
+PATH_MAX: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_PATH_MAX  -o test-PATH_MAX tests.c 
+PATH_MAX: cc succeeded
+PATH_MAX is defined to be 4096
+PATH_MAX: yes
+
+pledge: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_PLEDGE  -o test-pledge tests.c 
+tests.c: In functie ‘main’:
+tests.c:186:18: fout: impliciete declaratie van functie ‘pledge’ [-Wimplicit-function-declaration]
+  186 |         return !!pledge("stdio", NULL);
+      |                  ^~~~~~
+pledge: cc failed with 1
+
+program_invocation_short_name: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_PROGRAM_INVOCATION_SHORT_NAME  -o test-program_invocation_short_name tests.c 
+program_invocation_short_name: cc succeeded
+program_invocation_short_name: yes
+
+reallocarray: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_REALLOCARRAY  -o test-reallocarray tests.c 
+reallocarray: cc succeeded
+reallocarray: yes
+
+recallocarray: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_RECALLOCARRAY  -o test-recallocarray tests.c 
+tests.c: In functie ‘main’:
+tests.c:215:17: fout: implicit declaration of function ‘recallocarray’; did you mean ‘reallocarray’? [-Wimplicit-function-declaration]
+  215 |         return !recallocarray(NULL, 0, 2, 2);
+      |                 ^~~~~~~~~~~~~
+      |                 reallocarray
+recallocarray: cc failed with 1
+
+sandbox_init: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_SANDBOX_INIT -Wno-deprecated -o test-sandbox_init tests.c 
+tests.c:219:10: fatale fout: sandbox.h: Bestand of map bestaat niet
+  219 | #include <sandbox.h>
+      |          ^~~~~~~~~~~
+compilatie is beëindigd.
+sandbox_init: cc failed with 1
+
+seccomp-filter: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_SECCOMP_FILTER  -o test-seccomp-filter tests.c 
+seccomp-filter: cc succeeded
+seccomp-filter: yes
+
+SOCK_NONBLOCK: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_SOCK_NONBLOCK  -o test-SOCK_NONBLOCK tests.c 
+SOCK_NONBLOCK: cc succeeded
+SOCK_NONBLOCK: yes
+
+strlcat: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_STRLCAT  -o test-strlcat tests.c 
+strlcat: cc succeeded
+strlcat: yes
+
+strlcpy: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_STRLCPY  -o test-strlcpy tests.c 
+strlcpy: cc succeeded
+strlcpy: yes
+
+strndup: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_STRNDUP  -o test-strndup tests.c 
+strndup: cc succeeded
+strndup: yes
+
+strnlen: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_STRNLEN  -o test-strnlen tests.c 
+strnlen: cc succeeded
+strnlen: yes
+
+strtonum: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_STRTONUM  -o test-strtonum tests.c 
+tests.c: In functie ‘main’:
+tests.c:333:13: fout: implicit declaration of function ‘strtonum’; did you mean ‘strtouq’? [-Wimplicit-function-declaration]
+  333 |         if (strtonum("1", 0, 2, &errstr) != 1)
+      |             ^~~~~~~~
+      |             strtouq
+strtonum: cc failed with 1
+
+systrace: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_SYSTRACE  -o test-systrace tests.c 
+tests.c:354:10: fatale fout: dev/systrace.h: Bestand of map bestaat niet
+  354 | #include <dev/systrace.h>
+      |          ^~~~~~~~~~~~~~~~
+compilatie is beëindigd.
+systrace: cc failed with 1
+
+zlib: testing...
+cc  -g -W -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter  -Wno-unused -Werror -DTEST_ZLIB  -o test-zlib tests.c -lz
+zlib: cc succeeded
+zlib: yes
+
+__progname: manual (HAVE___PROGNAME=1)
+
+config.h: written
+Makefile.configure: written
