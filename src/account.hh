@@ -219,6 +219,7 @@ namespace weechat
             lmdb::dbi timestamps = 0;
             lmdb::dbi capabilities = 0;  // XEP-0115 capability cache
             lmdb::dbi retractions = 0;   // XEP-0424 retracted message IDs
+            lmdb::dbi cursors = 0;       // RSM cursor persistence for MAM queries
         } mam_dbi;
         std::string mam_db_path;
 
@@ -268,6 +269,8 @@ namespace weechat
         void mam_cache_clear_messages(const std::string& channel_jid);
         time_t mam_cache_get_last_timestamp(const std::string& channel_jid);
         void mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp);
+        std::string mam_cursor_get(const std::string& key);
+        void mam_cursor_set(const std::string& key, const std::string& cursor_id);
         void send_bookmarks();
         
         // Capability cache methods (XEP-0115)

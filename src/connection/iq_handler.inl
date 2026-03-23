@@ -2680,6 +2680,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 if (set__last__text)
                 {
+                    // Persist the RSM cursor so the next reconnect resumes from here
+                    account.mam_cursor_set("global", set__last__text);
+
                     // More pages — issue next page of global MAM query with <after> token
                     account.mam_query_remove(mam_query.id);
 

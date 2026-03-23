@@ -301,13 +301,20 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         xmpp_free(account.context, server_domain);
         // freed by disco_items_id_g
 
-        // Query MAM globally to discover recent conversations
+        // Query MAM globally to discover recent conversations.
+        // If we have a persisted RSM cursor from a previous session, use it as
+        // an <after> token so we only fetch messages we haven't seen yet.
+        // Otherwise fall back to the last 7 days.
         time_t now = time(NULL);
-        time_t start = now - (7 * 86400);  // Last 7 days
+        time_t start = now - (7 * 86400);  // Last 7 days (fallback)
+        std::string global_mam_cursor = account.mam_cursor_get("global");
+        const bool has_cursor = !global_mam_cursor.empty();
+
         xmpp_string_guard global_mam_id_g(account.context, xmpp_uuid_gen(account.context));
         const char *global_mam_id = global_mam_id_g.ptr;
         account.add_mam_query(global_mam_id, "",  // Empty 'with' means global query
-                             std::optional<time_t>(start), std::optional<time_t>(now));
+                             has_cursor ? std::optional<time_t>{} : std::optional<time_t>(start),
+                             std::optional<time_t>(now));
         // Defer OMEMO key-transport sends until all archived messages are
         // replayed (Conversations-style postponed session completion).
         account.omemo.global_mam_catchup = true;
@@ -320,30 +327,48 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         xmpp_stanza_set_name(query, "query");
         xmpp_stanza_set_ns(query, "urn:xmpp:mam:2");
         
-        xmpp_stanza_t *x = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(x, "x");
-        xmpp_stanza_set_ns(x, "jabber:x:data");
-        xmpp_stanza_set_attribute(x, "type", "submit");
-        
-        // FORM_TYPE field
+        if (!has_cursor)
         {
-            xmpp_stanza_t *f = stanza_make_field(account.context,
-                "FORM_TYPE", "urn:xmpp:mam:2", "hidden");
-            xmpp_stanza_add_child(x, f);
-            xmpp_stanza_release(f);
+            // No cursor: use a data form with a start-time filter
+            xmpp_stanza_t *x = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(x, "x");
+            xmpp_stanza_set_ns(x, "jabber:x:data");
+            xmpp_stanza_set_attribute(x, "type", "submit");
+            
+            // FORM_TYPE field
+            {
+                xmpp_stanza_t *f = stanza_make_field(account.context,
+                    "FORM_TYPE", "urn:xmpp:mam:2", "hidden");
+                xmpp_stanza_add_child(x, f);
+                xmpp_stanza_release(f);
+            }
+            
+            // Start time field
+            {
+                char time_buf[256];
+                strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&start));
+                xmpp_stanza_t *f = stanza_make_field(account.context, "start", time_buf);
+                xmpp_stanza_add_child(x, f);
+                xmpp_stanza_release(f);
+            }
+            
+            xmpp_stanza_add_child(query, x);
+            xmpp_stanza_release(x);
         }
-        
-        // Start time field
+        else
         {
-            char time_buf[256];
-            strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&start));
-            xmpp_stanza_t *f = stanza_make_field(account.context, "start", time_buf);
-            xmpp_stanza_add_child(x, f);
-            xmpp_stanza_release(f);
+            // Have cursor: RSM <after> — no time filter, resume from last seen message
+            xmpp_stanza_t *rset = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(rset, "set");
+            xmpp_stanza_set_ns(rset, "http://jabber.org/protocol/rsm");
+            xmpp_stanza_t *after_el = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(after_el, "after");
+            xmpp_stanza_t *after_t = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_text(after_t, global_mam_cursor.c_str());
+            xmpp_stanza_add_child(after_el, after_t); xmpp_stanza_release(after_t);
+            xmpp_stanza_add_child(rset, after_el); xmpp_stanza_release(after_el);
+            xmpp_stanza_add_child(query, rset); xmpp_stanza_release(rset);
         }
-        
-        xmpp_stanza_add_child(query, x);
-        xmpp_stanza_release(x);
         
         xmpp_stanza_add_child(iq, query);
         xmpp_stanza_release(query);

@@ -781,6 +781,7 @@ void weechat::account::mam_cache_init()
         mam_dbi.timestamps = lmdb::dbi::open(transaction, "timestamps", MDB_CREATE);
         mam_dbi.capabilities = lmdb::dbi::open(transaction, "capabilities", MDB_CREATE);
         mam_dbi.retractions = lmdb::dbi::open(transaction, "retractions", MDB_CREATE);
+        mam_dbi.cursors = lmdb::dbi::open(transaction, "cursors", MDB_CREATE);
 
         transaction.commit();
         
@@ -1057,6 +1058,51 @@ void weechat::account::mam_cache_set_last_timestamp(const std::string& channel_j
         
         mdb_put(txn.handle(), mam_dbi.timestamps.handle(), &key, &value, 0);
         
+        txn.commit();
+    } catch (const lmdb::error& ex) {
+        // Silently ignore write errors
+    }
+}
+
+std::string weechat::account::mam_cursor_get(const std::string& key)
+{
+    if (!mam_db_env) return {};
+
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
+
+        MDB_val k = {key.size(), (void*)key.data()};
+        MDB_val v;
+
+        if (mdb_get(txn.handle(), mam_dbi.cursors.handle(), &k, &v) == 0)
+        {
+            std::string result(static_cast<const char*>(v.mv_data), v.mv_size);
+            txn.abort();
+            return result;
+        }
+
+        txn.abort();
+    } catch (const lmdb::error& ex) {
+        // Silently ignore read errors
+    }
+
+    return {};
+}
+
+void weechat::account::mam_cursor_set(const std::string& key, const std::string& cursor_id)
+{
+    if (!mam_db_env || cursor_id.empty()) return;
+
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+
+        MDB_val k = {key.size(), (void*)key.data()};
+        MDB_val v = {cursor_id.size(), (void*)cursor_id.data()};
+
+        mdb_put(txn.handle(), mam_dbi.cursors.handle(), &k, &v, 0);
+
         txn.commit();
     } catch (const lmdb::error& ex) {
         // Silently ignore write errors
