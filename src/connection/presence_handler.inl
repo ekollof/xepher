@@ -30,24 +30,30 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         }
         else
         {
-            // Not cached, send disco query and mark for caching
-            xmpp_string_guard disco_id_g(account.context, xmpp_uuid_gen(account.context));
-            const char *disco_id = disco_id_g.ptr;
-            account.caps_disco_queries[disco_id] = ver;  // Track this query for caching
-            
-            std::string to_jid = binding.from ? binding.from->full : std::string();
+            // Not cached, send disco query and mark for caching.
+            // Only query full JIDs (with a non-empty resource) — caps are
+            // per-client.  A bare JID or a trailing-slash JID (empty resource)
+            // is invalid as a disco target and causes the server to return an
+            // error that disconnects us.
+            bool has_resource = binding.from && !binding.from->resource.empty();
+            if (has_resource)
+            {
+                xmpp_string_guard disco_id_g(account.context, xmpp_uuid_gen(account.context));
+                const char *disco_id = disco_id_g.ptr;
+                account.caps_disco_queries[disco_id] = ver;  // Track this query for caching
 
-            account.connection.send(stanza::iq()
-                        .from(binding.to ? binding.to->full : "")
-                        .to(to_jid)
-                        .type("get")
-                        .id(disco_id)
-                        .xep0030()
-                        .query()
-                        .build(account.context)
-                        .get());
-            
-            // freed by disco_id_g
+                account.connection.send(stanza::iq()
+                            .from(binding.to ? binding.to->full : "")
+                            .to(binding.from->full)
+                            .type("get")
+                            .id(disco_id)
+                            .xep0030()
+                            .query()
+                            .build(account.context)
+                            .get());
+
+                // freed by disco_id_g
+            }
         }
     }
 

@@ -80,7 +80,7 @@ jid::jid(xmpp_ctx_t *, std::string s) : full(s) {
 }
 
 bool jid::is_bare() const {
-    return !resource.empty();
+    return resource.empty();
 }
 
 xml::node::node() {}
