@@ -5651,6 +5651,80 @@ int command__muc_nick(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int command__feed(const void *pointer, void *data,
+                  struct t_gui_buffer *buffer, int argc,
+                  char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    (void) pointer;
+    (void) data;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer,
+                       _("%s%s: you are not connected to server"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 3)
+    {
+        weechat_printf(buffer,
+                       _("%s%s: usage: /feed <service-jid> <node>"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    std::string service_jid = argv[1];
+    std::string node_name   = argv[2];
+    std::string feed_key    = fmt::format("{}/{}", service_jid, node_name);
+
+    // Ensure the FEED buffer exists before we send the IQ so the result
+    // handler can find it.
+    ptr_account->channels.try_emplace(
+        feed_key,
+        *ptr_account,
+        weechat::channel::chat_type::FEED,
+        feed_key,
+        feed_key);
+
+    weechat_printf(buffer, "%sFetching PubSub feed %s from %s (XEP-0060)…",
+                   weechat_prefix("network"), node_name.c_str(), service_jid.c_str());
+
+    // Build and send: <iq type="get" to="service_jid">
+    //                   <pubsub><items node="node_name"/></pubsub>
+    //                 </iq>
+    std::array<xmpp_stanza_t *, 2> children = {nullptr, nullptr};
+    children[0] = stanza__iq_pubsub_items(ptr_account->context, nullptr, node_name.c_str());
+    children[0] = stanza__iq_pubsub(ptr_account->context, nullptr, children.data(),
+                                    with_noop("http://jabber.org/protocol/pubsub"));
+
+    xmpp_string_guard uid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
+    const char *uid = uid_g.ptr;
+
+    children[0] = stanza__iq(ptr_account->context, nullptr, children.data(),
+                              nullptr, uid,
+                              ptr_account->jid().data(),
+                              service_jid.c_str(),
+                              "get");
+
+    if (uid)
+        ptr_account->pubsub_fetch_ids[uid] = {service_jid, node_name};
+
+    ptr_account->connection.send(children[0]);
+    xmpp_stanza_release(children[0]);
+
+    return WEECHAT_RC_OK;
+}
+
 void command__init()
 {
     auto *hook = weechat_hook_command(
@@ -6241,6 +6315,21 @@ void command__init()
         NULL, &command__muc_nick, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /nick");
+
+    hook = weechat_hook_command(
+        "feed",
+        N_("fetch a PubSub feed node and display it in a dedicated buffer (XEP-0060)"),
+        N_("<service-jid> <node>"),
+        N_("service-jid: JID of the PubSub service (e.g. news.movim.eu)\n"
+           "       node: node name on the service (e.g. Phoronix)\n\n"
+           "Sends a PubSub items-fetch IQ to the service and displays\n"
+           "the Atom feed items in a dedicated FEED buffer.\n\n"
+           "Examples:\n"
+           "  /feed news.movim.eu Phoronix\n"
+           "  /feed pubsub.example.com my-node"),
+        NULL, &command__feed, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /feed");
 
     // Internal hidden command used by picker key bindings.
     // Not listed in /help — the leading space makes WeeChat treat it as internal.

@@ -91,8 +91,9 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 | PGP key persistence | — |
 | Encryption status bar item | — |
 | Roster management (`/roster`) | RFC 6121 |
-| Public room search (`/list`) | XEP-0433 |
-| Entity Capability caching | XEP-0115 |
+ | Public room search (`/list`) | XEP-0433 |
+ | PubSub feed reader (`/feed`) | XEP-0060 |
+ | Entity Capability caching | XEP-0115 |
 | User Avatar (colored Unicode symbols) | XEP-0084 |
 | MUC status code handling | XEP-0045 |
 | Ad-hoc Commands (`/adhoc`) | XEP-0050 |
@@ -645,8 +646,9 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 | `/roster` | Display contact list |
 | `/roster add <jid> [name]` | Add a contact |
 | `/roster del <jid>` | Remove a contact |
-| `/list [keywords]` | Search public MUC rooms (XEP-0433) |
-| `/bookmark` | List bookmarks |
+ | `/list [keywords]` | Search public MUC rooms (XEP-0433) |
+ | `/feed <service-jid> <node>` | Fetch a PubSub feed node into a dedicated buffer (XEP-0060) |
+ | `/bookmark` | List bookmarks |
 | `/bookmark add [jid] [name]` | Add a bookmark |
 | `/bookmark del <jid>` | Remove a bookmark |
 | `/bookmark autojoin <jid> <on\|off>` | Toggle autojoin |

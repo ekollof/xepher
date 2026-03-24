@@ -560,6 +560,15 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0060.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>1.25.0</xmpp:version>
+        <xmpp:note xml:lang='en'>Publish-Subscribe (PubSub) - passive feed reader receives and renders Atom items from arbitrary PubSub nodes into per-node WeeChat FEED buffers; /feed command fetches items on demand from any service/node pair; retract events trigger re-fetch</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0071.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.5.4</xmpp:version>

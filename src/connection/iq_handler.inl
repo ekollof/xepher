@@ -429,8 +429,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 account.pubsub_fetch_ids.erase(fetch_it);
 
                 std::string feed_key = fmt::format("{}/{}", feed_service, node_name);
-                auto ch_it = account.channels.find(feed_key);
-                if (ch_it != account.channels.end())
+                auto [ch_it, inserted] = account.channels.try_emplace(
+                    feed_key,
+                    account,
+                    weechat::channel::chat_type::FEED,
+                    feed_key,
+                    feed_key);
                 {
                     weechat::channel &feed_ch = ch_it->second;
 
