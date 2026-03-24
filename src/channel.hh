@@ -23,7 +23,7 @@ namespace weechat
     class channel
     {
     public:
-        enum class chat_type { MUC, PM };
+        enum class chat_type { MUC, PM, FEED };
 
         enum class transport { PLAIN, OMEMO, PGP, OTR, OX };
 

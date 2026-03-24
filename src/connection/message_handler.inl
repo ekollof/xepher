@@ -699,6 +699,148 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
 
                     }
                 }
+
+                // Fallback: unknown PubSub node — treat as a generic feed.
+                // Handles both <item> (publish) and <retract> events from
+                // pubsub services like news.movim.eu (XEP-0060 §7.1 / §7.2).
+                if (items_node
+                    && weechat_strcasecmp(items_node, "urn:xmpp:omemo:2:devices") != 0
+                    && weechat_strcasecmp(items_node, "urn:xmpp:avatar:metadata") != 0
+                    && weechat_strcasecmp(items_node, "urn:xmpp:avatar:data") != 0
+                    && weechat_strcasecmp(items_node, "urn:xmpp:bookmarks:1") != 0
+                    && weechat_strcasecmp(items_node, "urn:xmpp:mds:displayed:0") != 0)
+                {
+                    const char *feed_service = from ? from : account.jid().data();
+                    // Buffer key: "service/node", e.g. "news.movim.eu/Phoronix"
+                    std::string feed_key = fmt::format("{}/{}", feed_service, items_node);
+
+                    // Ensure a FEED buffer exists for this node
+                    auto [ch_it, inserted] = account.channels.try_emplace(
+                        feed_key,
+                        account,
+                        weechat::channel::chat_type::FEED,
+                        feed_key,
+                        feed_key);
+                    weechat::channel &feed_ch = ch_it->second;
+
+                    bool has_item    = false;
+                    bool has_retract = false;
+
+                    for (xmpp_stanza_t *child = xmpp_stanza_get_children(items);
+                         child; child = xmpp_stanza_get_next(child))
+                    {
+                        const char *child_name = xmpp_stanza_get_name(child);
+                        if (!child_name)
+                            continue;
+
+                        if (weechat_strcasecmp(child_name, "item") == 0)
+                        {
+                            has_item = true;
+                            // Extract Atom payload (http://www.w3.org/2005/Atom)
+                            xmpp_stanza_t *entry = xmpp_stanza_get_child_by_name_and_ns(
+                                child, "entry", "http://www.w3.org/2005/Atom");
+                            if (!entry)
+                                entry = xmpp_stanza_get_child_by_name(child, "entry");
+
+                            auto atom_text = [&](const char *tag) -> std::string {
+                                if (!entry) return {};
+                                xmpp_stanza_t *el = xmpp_stanza_get_child_by_name(entry, tag);
+                                if (!el) return {};
+                                char *t = xmpp_stanza_get_text(el);
+                                if (!t) return {};
+                                std::string s(t);
+                                xmpp_free(account.context, t);
+                                return s;
+                            };
+
+                            auto atom_link = [&]() -> std::string {
+                                if (!entry) return {};
+                                for (xmpp_stanza_t *lk = xmpp_stanza_get_children(entry);
+                                     lk; lk = xmpp_stanza_get_next(lk))
+                                {
+                                    const char *lk_name = xmpp_stanza_get_name(lk);
+                                    if (!lk_name || weechat_strcasecmp(lk_name, "link") != 0)
+                                        continue;
+                                    const char *rel = xmpp_stanza_get_attribute(lk, "rel");
+                                    if (!rel || weechat_strcasecmp(rel, "alternate") == 0)
+                                    {
+                                        const char *href = xmpp_stanza_get_attribute(lk, "href");
+                                        if (href) return href;
+                                    }
+                                }
+                                return {};
+                            };
+
+                            std::string title   = atom_text("title");
+                            std::string summary = atom_text("summary");
+                            std::string pubdate = atom_text("published");
+                            std::string link    = atom_link();
+
+                            if (title.empty() && summary.empty())
+                            {
+                                // No Atom payload — just show the item ID
+                                const char *item_id = xmpp_stanza_get_id(child);
+                                weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                    "%s[%s] New item: %s",
+                                    weechat_prefix("network"),
+                                    items_node,
+                                    item_id ? item_id : "(no id)");
+                            }
+                            else
+                            {
+                                if (!pubdate.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "%s%s%s%s — %s",
+                                        weechat_prefix("join"),
+                                        weechat_color("bold"),
+                                        title.c_str(),
+                                        weechat_color("reset"),
+                                        pubdate.c_str());
+                                else
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "%s%s%s%s",
+                                        weechat_prefix("join"),
+                                        weechat_color("bold"),
+                                        title.c_str(),
+                                        weechat_color("reset"));
+
+                                if (!link.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %s", link.c_str());
+
+                                if (!summary.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %s", summary.c_str());
+                            }
+                        }
+                        else if (weechat_strcasecmp(child_name, "retract") == 0)
+                        {
+                            has_retract = true;
+                        }
+                    }
+
+                    // On retract: fetch current items via IQ get (XEP-0060 §6.5.2)
+                    if (has_retract && !has_item)
+                    {
+                        std::array<xmpp_stanza_t *, 2> ch_arr = {nullptr, nullptr};
+                        ch_arr[0] = stanza__iq_pubsub_items(account.context, nullptr,
+                                                            items_node);
+                        ch_arr[0] = stanza__iq_pubsub(account.context, nullptr,
+                                                      ch_arr.data(),
+                                                      with_noop("http://jabber.org/protocol/pubsub"));
+                        xmpp_string_guard uid_g(account.context, xmpp_uuid_gen(account.context));
+                        const char *uid = uid_g.ptr;
+                        ch_arr[0] = stanza__iq(account.context, nullptr, ch_arr.data(),
+                                               nullptr, uid,
+                                               to ? to : account.jid().data(),
+                                               feed_service, "get");
+                        if (uid)
+                            account.pubsub_fetch_ids[uid] = {std::string(feed_service),
+                                                              std::string(items_node)};
+                        account.connection.send(ch_arr[0]);
+                        xmpp_stanza_release(ch_arr[0]);
+                    }
+                }
             }
         }
 

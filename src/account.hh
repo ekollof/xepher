@@ -210,6 +210,10 @@ namespace weechat
         };
         std::unordered_map<std::string, setvcard_query_info> setvcard_queries;  // iq_id -> info
 
+        // XEP-0060: pending pubsub item-fetch IQs triggered by <retract> events.
+        // Maps IQ id → (pubsub_service_jid, node_name)
+        std::unordered_map<std::string, std::pair<std::string, std::string>> pubsub_fetch_ids;
+
         // XEP-0191: Blocking Command — pending unblock picker (non-owning; picker owns itself)
         weechat::ui::picker<std::string> *blocklist_picker = nullptr;
 

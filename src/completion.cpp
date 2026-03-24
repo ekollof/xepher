@@ -94,6 +94,9 @@ int completion__channel_nicks_cb(const void *pointer, void *data,
                                              ptr_account->name.data(),
                                              1, WEECHAT_LIST_POS_END);
             break;
+        case weechat::channel::chat_type::FEED:
+            // FEED buffers have no members to complete
+            break;
         }
     }
 

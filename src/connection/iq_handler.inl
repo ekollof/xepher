@@ -414,6 +414,116 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         }
     }
 
+    // XEP-0060: PubSub feed item-fetch result
+    // Arrives when we sent an IQ get for items after a <retract> event.
+    {
+        xmpp_stanza_t *pubsub_feed = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "pubsub", "http://jabber.org/protocol/pubsub");
+        if (pubsub_feed && id && type && weechat_strcasecmp(type, "result") == 0)
+        {
+            auto fetch_it = account.pubsub_fetch_ids.find(id);
+            if (fetch_it != account.pubsub_fetch_ids.end())
+            {
+                std::string feed_service = fetch_it->second.first;
+                std::string node_name    = fetch_it->second.second;
+                account.pubsub_fetch_ids.erase(fetch_it);
+
+                std::string feed_key = fmt::format("{}/{}", feed_service, node_name);
+                auto ch_it = account.channels.find(feed_key);
+                if (ch_it != account.channels.end())
+                {
+                    weechat::channel &feed_ch = ch_it->second;
+
+                    xmpp_stanza_t *items = xmpp_stanza_get_child_by_name(pubsub_feed, "items");
+                    if (items)
+                    {
+                        for (xmpp_stanza_t *item = xmpp_stanza_get_children(items);
+                             item; item = xmpp_stanza_get_next(item))
+                        {
+                            if (!item || weechat_strcasecmp(xmpp_stanza_get_name(item), "item") != 0)
+                                continue;
+
+                            xmpp_stanza_t *entry = xmpp_stanza_get_child_by_name_and_ns(
+                                item, "entry", "http://www.w3.org/2005/Atom");
+                            if (!entry)
+                                entry = xmpp_stanza_get_child_by_name(item, "entry");
+
+                            auto atom_text = [&](const char *tag) -> std::string {
+                                if (!entry) return {};
+                                xmpp_stanza_t *el = xmpp_stanza_get_child_by_name(entry, tag);
+                                if (!el) return {};
+                                char *t = xmpp_stanza_get_text(el);
+                                if (!t) return {};
+                                std::string s(t);
+                                xmpp_free(account.context, t);
+                                return s;
+                            };
+
+                            auto atom_link = [&]() -> std::string {
+                                if (!entry) return {};
+                                for (xmpp_stanza_t *lk = xmpp_stanza_get_children(entry);
+                                     lk; lk = xmpp_stanza_get_next(lk))
+                                {
+                                    const char *lk_name = xmpp_stanza_get_name(lk);
+                                    if (!lk_name || weechat_strcasecmp(lk_name, "link") != 0)
+                                        continue;
+                                    const char *rel = xmpp_stanza_get_attribute(lk, "rel");
+                                    if (!rel || weechat_strcasecmp(rel, "alternate") == 0)
+                                    {
+                                        const char *href = xmpp_stanza_get_attribute(lk, "href");
+                                        if (href) return href;
+                                    }
+                                }
+                                return {};
+                            };
+
+                            std::string title   = atom_text("title");
+                            std::string summary = atom_text("summary");
+                            std::string pubdate = atom_text("published");
+                            std::string link    = atom_link();
+
+                            if (title.empty() && summary.empty())
+                            {
+                                const char *item_id = xmpp_stanza_get_id(item);
+                                weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                    "%s[%s] Item: %s",
+                                    weechat_prefix("network"),
+                                    node_name.c_str(),
+                                    item_id ? item_id : "(no id)");
+                            }
+                            else
+                            {
+                                if (!pubdate.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "%s%s%s%s — %s",
+                                        weechat_prefix("join"),
+                                        weechat_color("bold"),
+                                        title.c_str(),
+                                        weechat_color("reset"),
+                                        pubdate.c_str());
+                                else
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "%s%s%s%s",
+                                        weechat_prefix("join"),
+                                        weechat_color("bold"),
+                                        title.c_str(),
+                                        weechat_color("reset"));
+
+                                if (!link.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %s", link.c_str());
+
+                                if (!summary.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %s", summary.c_str());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // XEP-0363: HTTP File Upload - handle upload slot response
     xmpp_stanza_t *slot = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "slot", "urn:xmpp:http:upload:0");

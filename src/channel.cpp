@@ -32,6 +32,10 @@ std::string channel_short_name(weechat::channel::chat_type type, std::string_vie
     if (name.empty())
         return {};
 
+    // FEED buffers use the raw node name (e.g. "news.movim.eu/Phoronix")
+    if (type == weechat::channel::chat_type::FEED)
+        return std::string(name);
+
     const char prefix =
         (type == weechat::channel::chat_type::MUC) ? '#' : '@';
     if (name[0] == prefix)
@@ -100,7 +104,9 @@ struct t_gui_buffer *weechat::channel::search_buffer(weechat::channel::chat_type
                 && (   ((  (type == weechat::channel::chat_type::MUC))
                         && (strcmp(ptr_type, "room") == 0))
                     || ((  (type == weechat::channel::chat_type::PM))
-                        && (strcmp(ptr_type, "private") == 0)))
+                        && (strcmp(ptr_type, "private") == 0))
+                    || ((  (type == weechat::channel::chat_type::FEED))
+                        && (strcmp(ptr_type, "feed") == 0)))
                 && (ptr_account_name == account.name)
                 && (weechat_strcasecmp(ptr_remote_jid, name) == 0))
             {
@@ -178,7 +184,9 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
     weechat_buffer_set(ptr_buffer, "notify",
                        (type == weechat::channel::chat_type::PM) ? "3" : "2");
     weechat_buffer_set(ptr_buffer, "localvar_set_type",
-                       (type == weechat::channel::chat_type::PM) ? "private" : "channel");
+                       (type == weechat::channel::chat_type::PM) ? "private"
+                     : (type == weechat::channel::chat_type::FEED) ? "feed"
+                     : "channel");
     weechat_buffer_set(ptr_buffer, "localvar_set_nick",
                        account.nickname().data());
     weechat_buffer_set(ptr_buffer, "localvar_set_account", account.name.data());
@@ -191,7 +199,8 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
                                         WEECHAT_HOOK_SIGNAL_POINTER,
                                         ptr_buffer);
         weechat_buffer_set(ptr_buffer, "input_get_unknown_commands", "1");
-        if (type != weechat::channel::chat_type::PM)
+        if (type != weechat::channel::chat_type::PM
+            && type != weechat::channel::chat_type::FEED)
         {
             weechat_buffer_set(ptr_buffer, "nicklist", "1");
             weechat_buffer_set(ptr_buffer, "nicklist_display_groups", "0");
@@ -212,7 +221,8 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
 
 void weechat::channel::add_nicklist_groups()
 {
-    if (type == weechat::channel::chat_type::PM)
+    if (type == weechat::channel::chat_type::PM
+        || type == weechat::channel::chat_type::FEED)
         return;
 
     weechat_nicklist_add_group(buffer, NULL, fmt::format("%03d|%s", 000, "~").data(),
@@ -274,12 +284,19 @@ weechat::channel::channel(weechat::account& account,
     if (type != weechat::channel::chat_type::MUC)
     {
         // XEP-0085: announce <active> when opening a new PM conversation
-        auto *self_user = weechat::user::search(&account, account.jid_device().data());
-        send_active(self_user);
+        // Skip for FEED buffers — they are read-only pubsub buffers
+        if (type == weechat::channel::chat_type::PM)
+        {
+            auto *self_user = weechat::user::search(&account, account.jid_device().data());
+            send_active(self_user);
+        }
 
         time_t now = time(NULL);
         time_t start;
-        
+
+        // MAM fetch is only for PM channels; FEED buffers are read-only pubsub
+        if (type == weechat::channel::chat_type::PM)
+        {
         // Load last fetch timestamp from cache
         if (last_mam_fetch == 0)
             last_mam_fetch = account.mam_cache_get_last_timestamp(this->id);
@@ -311,6 +328,7 @@ weechat::channel::channel(weechat::account& account,
         char *mam_uuid = xmpp_uuid_gen(account.context);
         fetch_mam(mam_uuid, &start, &end, nullptr);
         xmpp_free(account.context, mam_uuid);
+        } // PM-only MAM block
     }
 }
 
