@@ -212,8 +212,14 @@ namespace weechat
         std::unordered_map<std::string, setvcard_query_info> setvcard_queries;  // iq_id -> info
 
         // XEP-0060: pending pubsub item-fetch IQs triggered by <retract> events or /feed.
-        // Maps IQ id → (pubsub_service_jid, node_name)
-        std::unordered_map<std::string, std::pair<std::string, std::string>> pubsub_fetch_ids;
+        // Maps IQ id → fetch context.
+        struct pubsub_fetch_info {
+            std::string service;       // pubsub service JID
+            std::string node;          // node name
+            std::string before_cursor; // RSM <before> value ("" = latest page)
+            int         max_items = 0; // max_items requested (0 = server default)
+        };
+        std::unordered_map<std::string, pubsub_fetch_info> pubsub_fetch_ids;
 
         // XEP-0060: pending disco#items queries for PubSub node enumeration (/feed <service> --all).
         // Maps IQ id → service_jid

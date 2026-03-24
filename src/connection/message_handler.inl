@@ -859,7 +859,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                                to ? to : account.jid().data(),
                                                feed_service_str.c_str(), "get");
                         if (uid)
-                            account.pubsub_fetch_ids[uid] = {feed_service_str, node_str};
+                            account.pubsub_fetch_ids[uid] = {feed_service_str, node_str, "", 0};
                         account.connection.send(ch_arr[0]);
                         xmpp_stanza_release(ch_arr[0]);
                     }

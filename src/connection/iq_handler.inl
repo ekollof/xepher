@@ -424,8 +424,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             auto fetch_it = account.pubsub_fetch_ids.find(id);
             if (fetch_it != account.pubsub_fetch_ids.end())
             {
-                std::string feed_service = fetch_it->second.first;
-                std::string node_name    = fetch_it->second.second;
+                std::string feed_service    = fetch_it->second.service;
+                std::string node_name       = fetch_it->second.node;
+                std::string before_cursor   = fetch_it->second.before_cursor;
+                int         max_items_req   = fetch_it->second.max_items;
                 account.pubsub_fetch_ids.erase(fetch_it);
 
                 std::string feed_key = fmt::format("{}/{}", feed_service, node_name);
@@ -523,6 +525,47 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             }
                         }
                     }
+
+                    // XEP-0059 RSM: read <set> metadata from the result.
+                    // The <set> is a child of <pubsub>, not <items>.
+                    xmpp_stanza_t *rsm_set = xmpp_stanza_get_child_by_name_and_ns(
+                        pubsub_feed, "set", "http://jabber.org/protocol/rsm");
+                    if (rsm_set && max_items_req > 0)
+                    {
+                        // <first index="N">item-id</first> is the oldest item in this page.
+                        // Store it as the cursor for the next (older) page.
+                        xmpp_stanza_t *first_el = xmpp_stanza_get_child_by_name(rsm_set, "first");
+                        char *first_text = first_el ? xmpp_stanza_get_text(first_el) : nullptr;
+
+                        xmpp_stanza_t *count_el = xmpp_stanza_get_child_by_name(rsm_set, "count");
+                        char *count_text = count_el ? xmpp_stanza_get_text(count_el) : nullptr;
+                        int total_count = count_text ? std::atoi(count_text) : -1;
+                        if (count_text) xmpp_free(account.context, count_text);
+
+                        if (first_text)
+                        {
+                            // Persist cursor in LMDB so it survives reconnects
+                            std::string cursor_key = fmt::format("pubsub:{}", feed_key);
+                            account.mam_cursor_set(cursor_key, first_text);
+
+                            // Print a paging hint to the feed buffer
+                            std::string hint = fmt::format(
+                                "/feed {} {} --before {}",
+                                feed_service, node_name, first_text);
+                            if (total_count > 0)
+                                weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    "%s%d item(s) total — for older entries: %s",
+                                    weechat_prefix("network"),
+                                    total_count, hint.c_str());
+                            else
+                                weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    "%sFor older entries: %s",
+                                    weechat_prefix("network"), hint.c_str());
+
+                            xmpp_free(account.context, first_text);
+                        }
+                    }
+                    (void)before_cursor; // used at send time; not needed in result handler
                 }
             }
         }
@@ -586,7 +629,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                                  "get");
 
                         if (uid)
-                            account.pubsub_fetch_ids[uid] = {feed_service, node_name};
+                            account.pubsub_fetch_ids[uid] = {feed_service, node_name, "", 20};
 
                         this->send(children[0]);
                         xmpp_stanza_release(children[0]);
@@ -1241,7 +1284,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                              "get");
 
                     if (uid)
-                        account.pubsub_fetch_ids[uid] = {feed_service, node_name};
+                        account.pubsub_fetch_ids[uid] = {feed_service, node_name, "", 20};
 
                     this->send(children[0]);
                     xmpp_stanza_release(children[0]);

@@ -5692,17 +5692,18 @@ int command__feed(const void *pointer, void *data,
     if (argc < 2)
     {
         weechat_printf(buffer,
-                       _("%s%s: usage: /feed <service-jid> [--all | <node>] [--limit N]"),
+                       _("%s%s: usage: /feed <service-jid> [--all | <node>] [--limit N] [--before <id>]"),
                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
         return WEECHAT_RC_OK;
     }
 
     std::string service_jid = argv[1];
 
-    // Check for --all flag and --limit N anywhere in args after service-jid
+    // Check for --all, --limit N, --before <id> anywhere in args after service-jid
     bool fetch_all = false;
     int  max_items = 20;   // default: request 20 most-recent items
     std::string node_name;
+    std::string before_cursor;  // RSM <before> cursor ("" = latest page)
     for (int i = 2; i < argc; ++i)
     {
         std::string_view arg(argv[i]);
@@ -5714,6 +5715,11 @@ int command__feed(const void *pointer, void *data,
             long v = std::strtol(argv[i + 1], &end, 10);
             if (end && *end == '\0' && v > 0)
                 max_items = static_cast<int>(v);
+            ++i;   // consume the value token
+        }
+        else if (arg == "--before" && i + 1 < argc)
+        {
+            before_cursor = argv[i + 1];
             ++i;   // consume the value token
         }
         else if (node_name.empty())
@@ -5737,25 +5743,59 @@ int command__feed(const void *pointer, void *data,
         weechat_printf(buffer, "%sFetching PubSub feed %s from %s (XEP-0060)…",
                        weechat_prefix("network"), node_name.c_str(), service_jid.c_str());
 
-        std::array<xmpp_stanza_t *, 2> children = {nullptr, nullptr};
-        children[0] = stanza__iq_pubsub_items(ptr_account->context, nullptr, node_name.c_str(), max_items);
-        children[0] = stanza__iq_pubsub(ptr_account->context, nullptr, children.data(),
-                                        with_noop("http://jabber.org/protocol/pubsub"));
+        // Build: <pubsub><items node=".." max_items="N"/><set xmlns=RSM><max>N</max><before>cursor</before></set></pubsub>
+        std::array<xmpp_stanza_t *, 3> pub_children = {nullptr, nullptr, nullptr};
+        pub_children[0] = stanza__iq_pubsub_items(ptr_account->context, nullptr,
+                                                  node_name.c_str(), max_items);
+
+        // RSM <set>
+        {
+            xmpp_stanza_t *rset = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(rset, "set");
+            xmpp_stanza_set_ns(rset, "http://jabber.org/protocol/rsm");
+
+            // <max>N</max>
+            xmpp_stanza_t *max_el = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(max_el, "max");
+            xmpp_stanza_t *max_t = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_text(max_t, std::to_string(max_items).c_str());
+            xmpp_stanza_add_child(max_el, max_t); xmpp_stanza_release(max_t);
+            xmpp_stanza_add_child(rset, max_el); xmpp_stanza_release(max_el);
+
+            // <before>cursor</before>  (empty element = latest page)
+            xmpp_stanza_t *before_el = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(before_el, "before");
+            if (!before_cursor.empty())
+            {
+                xmpp_stanza_t *before_t = xmpp_stanza_new(ptr_account->context);
+                xmpp_stanza_set_text(before_t, before_cursor.c_str());
+                xmpp_stanza_add_child(before_el, before_t);
+                xmpp_stanza_release(before_t);
+            }
+            xmpp_stanza_add_child(rset, before_el); xmpp_stanza_release(before_el);
+
+            pub_children[1] = rset;
+        }
+
+        pub_children[0] = stanza__iq_pubsub(ptr_account->context, nullptr, pub_children.data(),
+                                            with_noop("http://jabber.org/protocol/pubsub"));
+        // stanza__iq_pubsub consumed both children; reset second slot
+        pub_children[1] = nullptr;
 
         xmpp_string_guard uid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
         const char *uid = uid_g.ptr;
 
-        children[0] = stanza__iq(ptr_account->context, nullptr, children.data(),
-                                  nullptr, uid,
-                                  ptr_account->jid().data(),
-                                  service_jid.c_str(),
-                                  "get");
+        pub_children[0] = stanza__iq(ptr_account->context, nullptr, pub_children.data(),
+                                     nullptr, uid,
+                                     ptr_account->jid().data(),
+                                     service_jid.c_str(),
+                                     "get");
 
         if (uid)
-            ptr_account->pubsub_fetch_ids[uid] = {service_jid, node_name};
+            ptr_account->pubsub_fetch_ids[uid] = {service_jid, node_name, before_cursor, max_items};
 
-        ptr_account->connection.send(children[0]);
-        xmpp_stanza_release(children[0]);
+        ptr_account->connection.send(pub_children[0]);
+        xmpp_stanza_release(pub_children[0]);
     }
     else if (fetch_all)
     {
@@ -6421,19 +6461,23 @@ void command__init()
     hook = weechat_hook_command(
         "feed",
         N_("fetch PubSub feeds from a service and display them in dedicated buffers (XEP-0060)"),
-        N_("<service-jid> [--all | <node>] [--limit N]"),
+        N_("<service-jid> [--all | <node>] [--limit N] [--before <id>]"),
         N_("service-jid: JID of the PubSub service (e.g. news.movim.eu)\n"
            "      --all: discover all nodes on the service via disco#items\n"
            "       node: node name on the service (e.g. Phoronix)\n"
-           "  --limit N: max items to fetch per node (default: 20)\n\n"
+           "  --limit N: max items to fetch per node (default: 20)\n"
+           "--before <id>: fetch the page of items older than item <id> (XEP-0059 RSM)\n\n"
            "Without --all or a node: fetches your subscribed nodes (XEP-0060 subscriptions).\n"
            "If no subscriptions are found, a suggestion to use --all is shown.\n\n"
+           "After a fetch the feed buffer shows a '/feed ... --before <id>' hint for\n"
+           "paging to older entries.\n\n"
            "Examples:\n"
-           "  /feed news.movim.eu                       (fetch subscribed nodes)\n"
-           "  /feed news.movim.eu --all                 (fetch all discovered nodes)\n"
-           "  /feed news.movim.eu --all --limit 50      (fetch up to 50 items per node)\n"
-           "  /feed news.movim.eu Phoronix              (fetch one specific node)\n"
-           "  /feed news.movim.eu Phoronix --limit 5"),
+           "  /feed news.movim.eu                            (fetch subscribed nodes)\n"
+           "  /feed news.movim.eu --all                      (fetch all discovered nodes)\n"
+           "  /feed news.movim.eu --all --limit 50           (up to 50 items per node)\n"
+           "  /feed news.movim.eu Phoronix                   (fetch one specific node)\n"
+           "  /feed news.movim.eu Phoronix --limit 5         (5 items only)\n"
+           "  /feed news.movim.eu Phoronix --before abc123   (page back, older items)"),
         NULL, &command__feed, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /feed");
