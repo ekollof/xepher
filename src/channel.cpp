@@ -239,7 +239,7 @@ void weechat::channel::add_nicklist_groups()
                                "weechat.color.nicklist_group", 1);
     weechat_nicklist_add_group(buffer, NULL, fmt::format("%03d|%s", 006, "!").data(),
                                "weechat.color.nicklist_group", 1);
-    weechat_nicklist_add_group(buffer, NULL, fmt::format("%03d|%s", 999, "...").data(),
+    weechat_nicklist_add_group(buffer, NULL, fmt::format("%03d|%s", 999, ".").data(),
                                "weechat.color.nicklist_group", 1);
 }
 

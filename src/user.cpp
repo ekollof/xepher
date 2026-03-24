@@ -135,7 +135,7 @@ void weechat::user::nicklist_add(weechat::account *account,
 
     ptr_buffer = channel ? channel->buffer : account->buffer;
 
-    const char *group = "...";
+    const char *group = ".";
     if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "outcast")
         group = "!";
     if (this->profile.role.has_value() && this->profile.role.value() == "visitor")
