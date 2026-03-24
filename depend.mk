@@ -27,4 +27,4 @@ depend: $(DEPS) $(SRCS) $(HDRS)
 		esac; \
 	done
 
-include .depend
+-include .depend
