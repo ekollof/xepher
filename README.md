@@ -603,6 +603,22 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 | `/topic [text]` | Set or clear the room topic |
 | `/nick [newnick]` | Change your nickname in the current MUC |
 
+### MUC nicklist prefixes
+
+Each nick in a MUC room displays a prefix indicating their role or affiliation
+(XEP-0045). Affiliation takes precedence over role when both apply.
+
+| Prefix | XEP-0045 role/affiliation | Meaning |
+|--------|--------------------------|---------|
+| `~` | affiliation: owner | Room owner — full control |
+| `&` | affiliation: admin | Administrator — can grant/revoke roles |
+| `@` | role: moderator | Can kick and mute participants |
+| `%` | affiliation: member | Registered member (voice in members-only rooms) |
+| `+` | role: participant | Can send messages (standard occupant) |
+| `?` | role: visitor | Read-only in a moderated room |
+| `!` | affiliation: outcast | Banned from the room |
+| `.` | *(none)* | No role or affiliation set yet |
+
 ### Privacy & blocking
 
 | Command | Description |
