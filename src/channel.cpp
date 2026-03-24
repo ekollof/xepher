@@ -256,11 +256,16 @@ weechat::channel::channel(weechat::account& account,
         throw std::invalid_argument("buffer fail");
     else if (type == weechat::channel::chat_type::PM)
     {
+        // If this PM is with a MUC occupant, position the PM buffer right after
+        // the MUC buffer in the buffer list for convenience.
+        // Do NOT use weechat_buffer_merge — that merges display (shows MUC history
+        // in the PM buffer). Instead, move the PM buffer to the slot after the MUC.
         auto muc_channel = account.channels.find(jid(account.context,
                                                                                std::string(id)).bare.data());
         if (muc_channel != account.channels.end())
         {
-            weechat_buffer_merge(buffer, muc_channel->second.buffer);
+            int muc_num = weechat_buffer_get_integer(muc_channel->second.buffer, "number");
+            weechat_buffer_set(buffer, "number", fmt::format("{}", muc_num + 1).c_str());
         }
     }
 
