@@ -1,4 +1,4 @@
-# weechat-xmpp-fixed
+# weechat-xmpp-improved
 
 A WeeChat plugin written in C/C++23 that adds full XMPP support, including a
 comprehensive set of XEPs targeting CCS2022 compliance.
@@ -222,7 +222,7 @@ platforms are **not routinely tested**. Known considerations:
 
 ```sh
 git clone --depth 1 git@github.com:ekollof/weechat-xmpp-improved.git
-cd weechat-xmpp-fixed
+cd weechat-xmpp-improved
 make install-deps   # installs system packages (requires sudo)
 make
 make test
