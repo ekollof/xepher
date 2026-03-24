@@ -1337,11 +1337,20 @@ int command__open(const void *pointer, void *data,
 
             jid = const_cast<char*>(effective_jid);
 
-            pres = xmpp_presence_new(ptr_account->context);
-            xmpp_stanza_set_to(pres, jid);
-            xmpp_stanza_set_from(pres, ptr_account->jid().data());
-            ptr_account->connection.send( pres);
-            xmpp_stanza_release(pres);
+            // Only send a directed presence when opening a plain JID PM.
+            // Do NOT send presence to a MUC occupant full JID (room@service/nick):
+            // the MUC server treats any presence to a full MUC JID as a join
+            // request and responds with <conflict/> if you are already in the room.
+            bool is_muc_occupant_jid = full_g && ptr_channel
+                && ptr_channel->type == weechat::channel::chat_type::MUC;
+            if (!is_muc_occupant_jid)
+            {
+                pres = xmpp_presence_new(ptr_account->context);
+                xmpp_stanza_set_to(pres, jid);
+                xmpp_stanza_set_from(pres, ptr_account->jid().data());
+                ptr_account->connection.send(pres);
+                xmpp_stanza_release(pres);
+            }
 
             auto channel = ptr_account->channels.find(jid);
             if (channel == ptr_account->channels.end())

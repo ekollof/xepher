@@ -1094,7 +1094,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
 
     char *id = xmpp_uuid_gen(account.context);
     xmpp_stanza_set_id(message, id);
-    
+
     // XEP-0359: Add origin-id for stable message identification
     xmpp_stanza_t *origin_id_elem = xmpp_stanza_new(account.context);
     xmpp_stanza_set_name(origin_id_elem, "origin-id");
@@ -1102,6 +1102,22 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     xmpp_stanza_set_attribute(origin_id_elem, "id", id);
     xmpp_stanza_add_child(message, origin_id_elem);
     xmpp_stanza_release(origin_id_elem);
+
+    // XEP-0045 §7.5: for MUC private messages (chat to an occupant JID
+    // room@service/nick), add <x xmlns='…muc#user'/> so that XEP-0280
+    // Message Carbons can correctly synchronise the message to other clients.
+    // Detection: type is PM, to has a resource, and peer_bare is a known MUC.
+    if (type == weechat::channel::chat_type::PM
+        && to_str.find('/') != std::string::npos
+        && account.channels.count(peer_bare)
+        && account.channels.at(peer_bare).type == weechat::channel::chat_type::MUC)
+    {
+        xmpp_stanza_t *muc_x = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(muc_x, "x");
+        xmpp_stanza_set_ns(muc_x, "http://jabber.org/protocol/muc#user");
+        xmpp_stanza_add_child(message, muc_x);
+        xmpp_stanza_release(muc_x);
+    }
 
     std::string saved_id(id);
     xmpp_free(account.context, id);
