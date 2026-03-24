@@ -1887,14 +1887,16 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
     if (gen_id) { xmpp_free(account.context, gen_id); gen_id = nullptr; }
     const char *mam_id = mam_id_str.c_str();
     xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", mam_id);
-    // XEP-0313: MUC MAM is addressed to the room JID; PM MAM goes to own server.
+    // XEP-0313: MUC MAM is addressed to the room JID; PM MAM goes to the
+    // user's own bare JID (personal archive), NOT the bare server domain.
+    // Sending to the bare domain causes <service-unavailable/> errors.
     if (type == weechat::channel::chat_type::MUC)
         xmpp_stanza_set_to(iq, this->id.data());
     else
     {
-        const char *server = xmpp_jid_domain(account.context, account.jid().data());
-        if (server) xmpp_stanza_set_to(iq, server);
-        xmpp_free(account.context, (void*)server);
+        char *bare_jid = xmpp_jid_bare(account.context, account.jid().data());
+        if (bare_jid) xmpp_stanza_set_to(iq, bare_jid);
+        xmpp_free(account.context, bare_jid);
     }
 
     xmpp_stanza_t *query = xmpp_stanza_new(account.context);
