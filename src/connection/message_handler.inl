@@ -703,16 +703,38 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 // Fallback: unknown PubSub node — treat as a generic feed.
                 // Handles both <item> (publish) and <retract> events from
                 // pubsub services like news.movim.eu (XEP-0060 §7.1 / §7.2).
-                if (items_node
-                    && weechat_strcasecmp(items_node, "urn:xmpp:omemo:2:devices") != 0
-                    && weechat_strcasecmp(items_node, "urn:xmpp:avatar:metadata") != 0
-                    && weechat_strcasecmp(items_node, "urn:xmpp:avatar:data") != 0
-                    && weechat_strcasecmp(items_node, "urn:xmpp:bookmarks:1") != 0
-                    && weechat_strcasecmp(items_node, "urn:xmpp:mds:displayed:0") != 0)
+                //
+                // Guard: only treat nodes as feeds when:
+                //   1. The node name is not a URI/namespace (no "://" and not "urn:")
+                //      — PEP nodes always use namespace URIs, feed nodes use plain names.
+                //   2. The stanza comes from a different bare JID than our own account
+                //      — PEP events from self are internal protocol nodes (nick, mood, …)
+                //
+                std::string_view feed_service_sv = from ? std::string_view(from) : std::string_view{};
+                std::string_view node_sv          = items_node ? std::string_view(items_node) : std::string_view{};
+                bool node_is_uri = !node_sv.empty() && (
+                    node_sv.find("://") != std::string_view::npos ||
+                    node_sv.substr(0, 4) == "urn:");
+                bool from_self = false;
+                if (!feed_service_sv.empty())
                 {
-                    const char *feed_service = from ? from : account.jid().data();
+                    xmpp_string_guard own_bare_g(account.context,
+                        xmpp_jid_bare(account.context, account.jid().data()));
+                    xmpp_string_guard from_bare_g(account.context,
+                        xmpp_jid_bare(account.context, std::string(feed_service_sv).c_str()));
+                    from_self = own_bare_g.ptr && from_bare_g.ptr &&
+                                weechat_strcasecmp(own_bare_g.ptr, from_bare_g.ptr) == 0;
+                }
+
+                if (!node_sv.empty() && !feed_service_sv.empty() && !node_is_uri && !from_self
+                    && node_sv != "urn:xmpp:omemo:2:devices"
+                    && node_sv != "urn:xmpp:avatar:metadata"
+                    && node_sv != "urn:xmpp:avatar:data"
+                    && node_sv != "urn:xmpp:bookmarks:1"
+                    && node_sv != "urn:xmpp:mds:displayed:0")
+                {
                     // Buffer key: "service/node", e.g. "news.movim.eu/Phoronix"
-                    std::string feed_key = fmt::format("{}/{}", feed_service, items_node);
+                    std::string feed_key = fmt::format("{}/{}", feed_service_sv, node_sv);
 
                     // Ensure a FEED buffer exists for this node
                     auto [ch_it, inserted] = account.channels.try_emplace(
@@ -783,7 +805,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                 weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                     "%s[%s] New item: %s",
                                     weechat_prefix("network"),
-                                    items_node,
+                                    std::string(node_sv).c_str(),
                                     item_id ? item_id : "(no id)");
                             }
                             else
@@ -822,9 +844,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     // On retract: fetch current items via IQ get (XEP-0060 §6.5.2)
                     if (has_retract && !has_item)
                     {
+                        std::string feed_service_str(feed_service_sv);
+                        std::string node_str(node_sv);
                         std::array<xmpp_stanza_t *, 2> ch_arr = {nullptr, nullptr};
                         ch_arr[0] = stanza__iq_pubsub_items(account.context, nullptr,
-                                                            items_node);
+                                                            node_str.c_str());
                         ch_arr[0] = stanza__iq_pubsub(account.context, nullptr,
                                                       ch_arr.data(),
                                                       with_noop("http://jabber.org/protocol/pubsub"));
@@ -833,10 +857,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         ch_arr[0] = stanza__iq(account.context, nullptr, ch_arr.data(),
                                                nullptr, uid,
                                                to ? to : account.jid().data(),
-                                               feed_service, "get");
+                                               feed_service_str.c_str(), "get");
                         if (uid)
-                            account.pubsub_fetch_ids[uid] = {std::string(feed_service),
-                                                              std::string(items_node)};
+                            account.pubsub_fetch_ids[uid] = {feed_service_str, node_str};
                         account.connection.send(ch_arr[0]);
                         xmpp_stanza_release(ch_arr[0]);
                     }
