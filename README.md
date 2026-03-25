@@ -16,6 +16,12 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 
 ### Bug fixes
 
+- **`/edit` in MUC rooms**: The picker showed "no message found to edit" even
+  immediately after sending a message. MUC messages are displayed when the
+  server echoes them back; the incoming message handler was not tagging those
+  lines with `self_msg`, so the picker could never find them. Fixed by
+  detecting the sender nick against `account.nickname()` in the receive path
+  and adding the tag there.
 - **Memory corruption**: Fixed `xmlDocDumpFormatMemory` misuse and unaligned
   allocations that caused crashes.
 - **Segfault prevention**: Added comprehensive destructor safety checks to
@@ -105,6 +111,8 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 | Message Processing Hints | XEP-0334 |
 | Enhanced Chat State Notifications | XEP-0085 |
 | HTTP File Upload (`/upload`) | XEP-0363 |
+| File Metadata with image dimensions | XEP-0446 |
+| Stateless File Sharing (inline previews for Conversations / Dino / Gajim) | XEP-0447 |
 | User Mood (`/mood`) | XEP-0107 |
 | User Activity (`/activity`) | XEP-0108 |
 | PEP Native Bookmarks (`/bookmark`) | XEP-0402 |
@@ -679,6 +687,26 @@ Each nick in a MUC room displays a prefix indicating their role or affiliation
 ```
 /upload [filename]   # interactive picker if no filename given
 ```
+
+Uploads a file via HTTP File Upload (XEP-0363) and announces it in the current
+channel using a three-layer stanza for maximum client compatibility:
+
+1. **XEP-0447 Stateless File Sharing** (`urn:xmpp:sfs:0`, `disposition='inline'`) —
+   used by Conversations ≥ 2.10, Dino, and Gajim to display inline image previews
+   without the user having to click a link.
+2. **XEP-0385 SIMS** (`urn:xmpp:sims:1`) — older inline media sharing, understood
+   by clients that pre-date XEP-0447.
+3. **XEP-0066 OOB** (`jabber:x:oob`) — plain URL fallback; renders as a clickable
+   link in any client that does not understand the above.
+
+For JPEG and PNG images the plugin automatically detects `<width>` and `<height>`
+from the file's binary headers (JPEG SOF markers, PNG IHDR chunk) and includes
+them in the XEP-0446 `<file>` element so receiving clients can pre-size preview
+boxes before the image finishes downloading.
+
+Incoming XEP-0447 file-sharing stanzas sent by other clients are also parsed and
+displayed, deduplicated against any SIMS or OOB element for the same URL so the
+file appears only once per message.
 
 ### Archive & history
 
