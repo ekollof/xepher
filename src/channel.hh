@@ -34,6 +34,8 @@ namespace weechat
             std::string content_type;
             size_t size;
             std::string sha256_hash;  // Base64-encoded SHA-256
+            size_t width  = 0;        // Image width  in pixels (0 = unknown/non-image)
+            size_t height = 0;        // Image height in pixels (0 = unknown/non-image)
         };
 
         static const char *transport_name(enum transport transport)

@@ -143,6 +143,8 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         meta.content_type = ctx->content_type;
         meta.size         = ctx->file_size;
         meta.sha256_hash  = ctx->sha256_hash;
+        meta.width        = ctx->image_width;
+        meta.height       = ctx->image_height;
 
         channel_it->second.send_message(
             channel_it->second.id,

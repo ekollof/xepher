@@ -198,6 +198,8 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 - ✅ XEP-0402: PEP Native Bookmarks
 - ✅ XEP-0422: Message Fastening
 - ✅ XEP-0428: Fallback Indication
+- ✅ XEP-0446: File Metadata Element (image dimensions sent with uploads)
+- ✅ XEP-0447: Stateless File Sharing (inline previews for Conversations/Dino/Gajim)
 - ✅ XEP-0490: Message Displayed Synchronization
 - ✅ XEP-0511: Link Metadata (incoming previews + outgoing OpenGraph)
 - ⚡ XEP-0433: Extended Channel Search (Searcher role; Search Service role not implemented)

@@ -104,6 +104,8 @@ namespace weechat
             std::string content_type;
             size_t file_size = 0;
             std::string sha256_hash;
+            size_t image_width  = 0;    // Image width  in pixels (0 = unknown/non-image)
+            size_t image_height = 0;    // Image height in pixels (0 = unknown/non-image)
             long http_code = 0;
             std::string curl_error;
             int pipe_write_fd = -1;     // write end (closed by thread after writing)

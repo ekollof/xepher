@@ -853,7 +853,116 @@ int weechat::channel::send_message(std::string to, std::string body,
     // XEP-0385: SIMS (Stateless Inline Media Sharing) + XEP-0066: Out of Band Data
     if (oob && file_meta)
     {
-        // Build SIMS reference wrapper
+        // ── XEP-0447: Stateless File Sharing (preferred, understood by Conversations ≥2.10 / Dino / Gajim) ──
+        // <file-sharing xmlns='urn:xmpp:sfs:0' disposition='inline'>
+        //   <file xmlns='urn:xmpp:file:metadata:0'> … </file>
+        //   <sources>
+        //     <url-data xmlns='http://jabber.org/protocol/url-data' target='https://…'/>
+        //   </sources>
+        // </file-sharing>
+        xmpp_stanza_t *file_sharing = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(file_sharing, "file-sharing");
+        xmpp_stanza_set_ns(file_sharing, "urn:xmpp:sfs:0");
+        xmpp_stanza_set_attribute(file_sharing, "disposition", "inline");
+
+        xmpp_stanza_t *sfs_file = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(sfs_file, "file");
+        xmpp_stanza_set_ns(sfs_file, "urn:xmpp:file:metadata:0");
+
+        // media-type
+        {
+            xmpp_stanza_t *mt = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(mt, "media-type");
+            xmpp_stanza_t *mt_text = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_text(mt_text, file_meta->content_type.c_str());
+            xmpp_stanza_add_child(mt, mt_text);
+            xmpp_stanza_release(mt_text);
+            xmpp_stanza_add_child(sfs_file, mt);
+            xmpp_stanza_release(mt);
+        }
+
+        // name
+        {
+            xmpp_stanza_t *nm = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(nm, "name");
+            xmpp_stanza_t *nm_text = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_text(nm_text, file_meta->filename.c_str());
+            xmpp_stanza_add_child(nm, nm_text);
+            xmpp_stanza_release(nm_text);
+            xmpp_stanza_add_child(sfs_file, nm);
+            xmpp_stanza_release(nm);
+        }
+
+        // size
+        {
+            xmpp_stanza_t *sz = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(sz, "size");
+            xmpp_stanza_t *sz_text = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_text(sz_text, std::to_string(file_meta->size).c_str());
+            xmpp_stanza_add_child(sz, sz_text);
+            xmpp_stanza_release(sz_text);
+            xmpp_stanza_add_child(sfs_file, sz);
+            xmpp_stanza_release(sz);
+        }
+
+        // width / height — only for images
+        if (file_meta->width > 0 && file_meta->height > 0)
+        {
+            xmpp_stanza_t *wd = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(wd, "width");
+            xmpp_stanza_t *wd_text = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_text(wd_text, std::to_string(file_meta->width).c_str());
+            xmpp_stanza_add_child(wd, wd_text);
+            xmpp_stanza_release(wd_text);
+            xmpp_stanza_add_child(sfs_file, wd);
+            xmpp_stanza_release(wd);
+
+            xmpp_stanza_t *ht = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(ht, "height");
+            xmpp_stanza_t *ht_text = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_text(ht_text, std::to_string(file_meta->height).c_str());
+            xmpp_stanza_add_child(ht, ht_text);
+            xmpp_stanza_release(ht_text);
+            xmpp_stanza_add_child(sfs_file, ht);
+            xmpp_stanza_release(ht);
+        }
+
+        // hash (SHA-256)
+        if (!file_meta->sha256_hash.empty())
+        {
+            xmpp_stanza_t *hash_elem = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(hash_elem, "hash");
+            xmpp_stanza_set_ns(hash_elem, "urn:xmpp:hashes:2");
+            xmpp_stanza_set_attribute(hash_elem, "algo", "sha-256");
+            xmpp_stanza_t *hash_text = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_text(hash_text, file_meta->sha256_hash.c_str());
+            xmpp_stanza_add_child(hash_elem, hash_text);
+            xmpp_stanza_release(hash_text);
+            xmpp_stanza_add_child(sfs_file, hash_elem);
+            xmpp_stanza_release(hash_elem);
+        }
+
+        xmpp_stanza_add_child(file_sharing, sfs_file);
+        xmpp_stanza_release(sfs_file);
+
+        // sources
+        xmpp_stanza_t *sfs_sources = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(sfs_sources, "sources");
+
+        xmpp_stanza_t *url_data = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(url_data, "url-data");
+        xmpp_stanza_set_ns(url_data, "http://jabber.org/protocol/url-data");
+        xmpp_stanza_set_attribute(url_data, "target", oob->c_str());
+        xmpp_stanza_add_child(sfs_sources, url_data);
+        xmpp_stanza_release(url_data);
+
+        xmpp_stanza_add_child(file_sharing, sfs_sources);
+        xmpp_stanza_release(sfs_sources);
+
+        xmpp_stanza_add_child(message, file_sharing);
+        xmpp_stanza_release(file_sharing);
+
+        // ── XEP-0385: SIMS (Stateless Inline Media Sharing) — kept for backward compat ──
         // XEP-0385 §3: <reference> MUST include begin/end character offsets
         // pointing to the URL in the message body (body IS the URL).
         xmpp_stanza_t *reference = xmpp_stanza_new(account.context);
@@ -943,6 +1052,21 @@ int weechat::channel::send_message(std::string to, std::string body,
         
         xmpp_stanza_add_child(message, reference);
         xmpp_stanza_release(reference);
+
+        // XEP-0066 OOB fallback — include alongside SIMS/SFS for legacy clients
+        xmpp_stanza_t *oob_x = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(oob_x, "x");
+        xmpp_stanza_set_ns(oob_x, "jabber:x:oob");
+        xmpp_stanza_t *oob_url = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_name(oob_url, "url");
+        xmpp_stanza_t *oob_url_text = xmpp_stanza_new(account.context);
+        xmpp_stanza_set_text(oob_url_text, oob->c_str());
+        xmpp_stanza_add_child(oob_url, oob_url_text);
+        xmpp_stanza_release(oob_url_text);
+        xmpp_stanza_add_child(oob_x, oob_url);
+        xmpp_stanza_release(oob_url);
+        xmpp_stanza_add_child(message, oob_x);
+        xmpp_stanza_release(oob_x);
     }
     else if (oob)
     {

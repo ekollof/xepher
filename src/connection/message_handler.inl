@@ -2275,6 +2275,100 @@ message_handler_after_omemo:
         }
     }
 
+    // XEP-0447: Stateless File Sharing (SFS)
+    // Parse <file-sharing xmlns='urn:xmpp:sfs:0'> — preferred by Conversations ≥2.10 / Dino / Gajim.
+    // Deduplicate with the SIMS block: if we already built a sims_suffix for the same URL, skip.
+    for (xmpp_stanza_t *fs = xmpp_stanza_get_children(stanza);
+         fs; fs = xmpp_stanza_get_next(fs))
+    {
+        const char *fs_name = xmpp_stanza_get_name(fs);
+        const char *fs_ns   = xmpp_stanza_get_ns(fs);
+        if (!fs_name || !fs_ns) continue;
+        if (strcmp(fs_name, "file-sharing") != 0
+            || strcmp(fs_ns, "urn:xmpp:sfs:0") != 0) continue;
+
+        // <file xmlns='urn:xmpp:file:metadata:0'>
+        xmpp_stanza_t *file_elem = xmpp_stanza_get_child_by_name_and_ns(
+            fs, "file", "urn:xmpp:file:metadata:0");
+
+        std::string sfs_name, sfs_mime, sfs_size_str;
+        if (file_elem)
+        {
+            xmpp_stanza_t *name_e = xmpp_stanza_get_child_by_name(file_elem, "name");
+            xmpp_stanza_t *mime_e = xmpp_stanza_get_child_by_name(file_elem, "media-type");
+            xmpp_stanza_t *size_e = xmpp_stanza_get_child_by_name(file_elem, "size");
+
+            if (name_e) { char *t = xmpp_stanza_get_text(name_e); if (t) { sfs_name = t; xmpp_free(account.context, t); } }
+            if (mime_e) { char *t = xmpp_stanza_get_text(mime_e); if (t) { sfs_mime = t; xmpp_free(account.context, t); } }
+            if (size_e) { char *t = xmpp_stanza_get_text(size_e); if (t) { sfs_size_str = t; xmpp_free(account.context, t); } }
+        }
+
+        // <sources><url-data xmlns='http://jabber.org/protocol/url-data' target='https://...'/>
+        xmpp_stanza_t *sources = xmpp_stanza_get_child_by_name(fs, "sources");
+        std::string sfs_url;
+        if (sources)
+        {
+            for (xmpp_stanza_t *src = xmpp_stanza_get_children(sources);
+                 src && sfs_url.empty(); src = xmpp_stanza_get_next(src))
+            {
+                const char *sname = xmpp_stanza_get_name(src);
+                if (!sname) continue;
+                if (strcmp(sname, "url-data") == 0)
+                {
+                    const char *target = xmpp_stanza_get_attribute(src, "target");
+                    if (target) sfs_url = target;
+                }
+                else if (strcmp(sname, "reference") == 0)
+                {
+                    const char *uri = xmpp_stanza_get_attribute(src, "uri");
+                    if (uri) sfs_url = uri;
+                }
+            }
+        }
+
+        // Skip if SIMS already covered this URL
+        if (!sfs_url.empty() && !sims_suffix.empty()
+            && sims_suffix.find(sfs_url) != std::string::npos)
+            continue;
+        // Also skip if the OOB suffix already covers it
+        if (!sfs_url.empty() && !oob_suffix.empty()
+            && oob_suffix.find(sfs_url) != std::string::npos)
+        {
+            oob_suffix.clear(); // show the richer SFS line instead
+        }
+
+        if (!sfs_url.empty())
+        {
+            sims_suffix += std::string("\n") + weechat_color("cyan") + "[File: ";
+            if (!sfs_name.empty())
+                sims_suffix += sfs_name;
+            else
+                sims_suffix += sfs_url;
+
+            if (!sfs_mime.empty() || !sfs_size_str.empty())
+            {
+                sims_suffix += " (";
+                if (!sfs_mime.empty())
+                    sims_suffix += sfs_mime;
+                if (!sfs_mime.empty() && !sfs_size_str.empty())
+                    sims_suffix += ", ";
+                if (!sfs_size_str.empty())
+                {
+                    long long sz = std::stoll(sfs_size_str);
+                    if (sz >= 1024 * 1024)
+                        sims_suffix += fmt::format("{:.1f} MB", sz / 1048576.0);
+                    else if (sz >= 1024)
+                        sims_suffix += fmt::format("{:.1f} KB", sz / 1024.0);
+                    else
+                        sims_suffix += fmt::format("{} B", sz);
+                }
+                sims_suffix += ")";
+            }
+            sims_suffix += " " + sfs_url;
+            sims_suffix += "]" + std::string(weechat_color("resetcolor"));
+        }
+    }
+
     // XEP-0511: Link Metadata — parse <rdf:Description> containing OpenGraph metadata
     xmpp_stanza_t *rdf_desc = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "Description", "http://www.w3.org/1999/02/22-rdf-syntax-ns#");

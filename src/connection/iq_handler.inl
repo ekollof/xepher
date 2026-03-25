@@ -896,6 +896,66 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         c.sha256_hash = std::string(bptr->data, bptr->length);
                     } // bio_chain freed here
 
+                    // Parse image dimensions from file header (JPEG / PNG).
+                    // We only need the first few hundred bytes — open a short read.
+                    {
+                        std::unique_ptr<FILE, decltype(file_deleter)>
+                            dim_file_guard(fopen(filepath_copy.c_str(), "rb"), file_deleter);
+                        FILE *dim_file = dim_file_guard.get();
+                        if (dim_file)
+                        {
+                            unsigned char hdr[24] = {};
+                            size_t hdr_read = fread(hdr, 1, sizeof(hdr), dim_file);
+                            if (hdr_read >= 8
+                                && hdr[0] == 0x89 && hdr[1] == 'P' && hdr[2] == 'N'
+                                && hdr[3] == 'G'  && hdr[4] == 0x0D&& hdr[5] == 0x0A
+                                && hdr[6] == 0x1A && hdr[7] == 0x0A)
+                            {
+                                // PNG: IHDR chunk starts at byte 8 (4-byte length + "IHDR")
+                                // Width at [16..19], Height at [20..23], big-endian.
+                                if (hdr_read >= 24)
+                                {
+                                    c.image_width  = (static_cast<size_t>(hdr[16]) << 24)
+                                                   | (static_cast<size_t>(hdr[17]) << 16)
+                                                   | (static_cast<size_t>(hdr[18]) <<  8)
+                                                   |  static_cast<size_t>(hdr[19]);
+                                    c.image_height = (static_cast<size_t>(hdr[20]) << 24)
+                                                   | (static_cast<size_t>(hdr[21]) << 16)
+                                                   | (static_cast<size_t>(hdr[22]) <<  8)
+                                                   |  static_cast<size_t>(hdr[23]);
+                                }
+                            }
+                            else if (hdr_read >= 3
+                                     && hdr[0] == 0xFF && hdr[1] == 0xD8 && hdr[2] == 0xFF)
+                            {
+                                // JPEG: scan for SOF0/SOF1/SOF2 markers (0xFF 0xC0-0xC2)
+                                // which contain height and width.
+                                unsigned char buf2[65536];
+                                fseek(dim_file, 2, SEEK_SET);
+                                size_t total = fread(buf2, 1, sizeof(buf2), dim_file);
+                                for (size_t i = 0; i + 8 < total; ++i)
+                                {
+                                    if (buf2[i] == 0xFF
+                                        && (buf2[i+1] == 0xC0
+                                            || buf2[i+1] == 0xC1
+                                            || buf2[i+1] == 0xC2))
+                                    {
+                                        // SOF marker: FF Cx LL LL PP HH HH WW WW
+                                        // Height at [i+5..i+6], Width at [i+7..i+8]
+                                        if (i + 8 < total)
+                                        {
+                                            c.image_height = (static_cast<size_t>(buf2[i+5]) << 8)
+                                                            |  static_cast<size_t>(buf2[i+6]);
+                                            c.image_width  = (static_cast<size_t>(buf2[i+7]) << 8)
+                                            |  static_cast<size_t>(buf2[i+8]);
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } // dim_file closed here
+
                     // Open a fresh handle for upload (avoids any seek/EOF state issues).
                     upload_file_guard.reset(fopen(filepath_copy.c_str(), "rb"));
                     upload_file = upload_file_guard.get();

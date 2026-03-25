@@ -139,7 +139,7 @@
 | 0423: XMPP Compliance Suites 2020(Obsolete)                             |           ✗            |       ✗       |  ✗   |   ✗   |    ✓     |   ✗   |   ✗    |   ✗   |
 | 0424: Message Retraction(Deferred)                                      |           ✗            |       ✗       |  ✗   |   ✗   |    ✗     |   ✓   |   ✗    |   ✗   |
 | 0441: Message Archive Management Preferences(Experimental)              |           ✗            |       ✗       |  ✗   |   ✓   |    ✓     |   ✗   |   ✗    |   ✗   |
-| 0447: Stateless file sharing(Experimental)                              |           ✗            |       ✗       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
+| 0447: Stateless file sharing(Experimental)                              |           ✓            |       ✓       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
 | 0449: Stickers(Experimental)                                            |           ✗            |       ✗       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
 | 0454: OMEMO Media sharing(Experimental)                                 |           ✗            |       ✗       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
 +-------------------------------------------------------------------------+------------------------+---------------+------+-------+----------+-------+--------+-------+
