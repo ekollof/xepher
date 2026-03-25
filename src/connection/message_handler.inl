@@ -1974,6 +1974,26 @@ message_handler_after_omemo:
 
     if (channel->type == weechat::channel::chat_type::PM)
         weechat_string_dyn_concat(dyn_tags, ",private", -1);
+
+    // Detect self-messages so /edit, /retract, etc. can find them.
+    // For MUC: the server echoes our message back — the sender nick is our own nick.
+    // For PM carbons/echoes: from_bare matches our own JID.
+    bool is_from_self = false;
+    if (weechat_strcasecmp(type, "groupchat") == 0)
+    {
+        // nick was set to the resource (occupant nick) above; compare to our config nick.
+        const std::string_view our_nick = account.nickname();
+        if (nick && !our_nick.empty()
+            && weechat_strcasecmp(nick, our_nick.data()) == 0)
+            is_from_self = true;
+    }
+    else if (from_bare && weechat_strcasecmp(from_bare, account.jid().data()) == 0)
+    {
+        is_from_self = true;
+    }
+    if (is_from_self)
+        weechat_string_dyn_concat(dyn_tags, ",self_msg", -1);
+
     if (weechat_string_match(text, "/me *", 0))
         weechat_string_dyn_concat(dyn_tags, ",xmpp_action", -1);
     if (replace)
@@ -1983,8 +2003,13 @@ message_handler_after_omemo:
         weechat_string_dyn_concat(dyn_tags, replace_id, -1);
     }
 
-    if (date != 0 || encrypted)
+    if (date != 0 || encrypted || is_from_self)
+    {
         weechat_string_dyn_concat(dyn_tags, ",notify_none", -1);
+        // Self-messages in MUC are still real messages and should be logged.
+        if (is_from_self && !date && !encrypted)
+            weechat_string_dyn_concat(dyn_tags, ",log1", -1);
+    }
     else if (channel->type == weechat::channel::chat_type::PM
              && from_bare != account.jid())
         weechat_string_dyn_concat(dyn_tags, ",notify_private", -1);
