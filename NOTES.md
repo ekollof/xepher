@@ -82,7 +82,7 @@
 | 0258: Security Labels in XMPP(Draft)                                    |           ✗            |       ✗       |  ✗   |   ✓   |    ✗     |   ✗   |   ✗    |   ✗   |
 | 0260: Jingle SOCKS5 Bytestreams Transport Method(Draft)                 |           ✗            |       ✓       |  ?   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
 | 0261: Jingle In-Band Bytestreams Transport Method(Draft)                |           ✗            |       ✓       |  ✓   |   ✓   |    ☠     |   ✗   |   ✗    |   ✗   |
-| 0277: Microblogging over XMPP(Deferred)                                 |           ✗            |       ✗       |  ✗   |   ✗   |    ✗     |   ✓   |   ✗    |   ✗   |
+| 0277: Microblogging over XMPP(Deferred)                                 |           ✓            |       ✗       |  ✗   |   ✗   |    ✗     |   ✓   |   ✗    |   ✗   |
 | 0280: Message Carbons(Experimental)                                     |           ✓            |       ✓       |  ✓   |   ✓   |    ✓     |   ✓   |   ✓    |   ✓   |
 | 0284: Shared XML Editing(Deferred)                                      |           ✗            |       ✗       |  ✗   |   ✓   |    ✗     |   ✗   |   ✗    |   ✗   |
 | 0286: Mobile Considerations on LTE Networks(Active)                     |           ✓            |       ✗       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✓   |
@@ -142,6 +142,7 @@
 | 0447: Stateless file sharing(Experimental)                              |           ✓            |       ✓       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
 | 0449: Stickers(Experimental)                                            |           ✗            |       ✗       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
 | 0454: OMEMO Media sharing(Experimental)                                 |           ✗            |       ✗       |  ✗   |   ✗   |    ✗     |   ✗   |   ✗    |   ✗   |
+| 0472: Pubsub Social Feed(Experimental)                                  |           ✓            |       ✗       |  ✗   |   ✗   |    ✗     |   ✓   |   ✗    |   ✗   |
 +-------------------------------------------------------------------------+------------------------+---------------+------+-------+----------+-------+--------+-------+
 
 ## Known Issues

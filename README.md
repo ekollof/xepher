@@ -123,6 +123,7 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 | Roster management (`/roster`) | RFC 6121 |
 | Public room search (`/list`) | XEP-0433 |
 | PubSub feed reader (`/feed`) | XEP-0060 |
+| Microblogging post/reply/retract (`/feed post`, `/feed reply`, `/feed retract`) | XEP-0277 / XEP-0472 |
 | Entity Capability caching | XEP-0115 |
 | User Avatar (colored Unicode symbols) | XEP-0084 |
 | MUC status code handling | XEP-0045 |
@@ -210,6 +211,8 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 - ✅ XEP-0447: Stateless File Sharing (inline previews for Conversations/Dino/Gajim)
 - ✅ XEP-0490: Message Displayed Synchronization
 - ✅ XEP-0511: Link Metadata (incoming previews + outgoing OpenGraph)
+- ⚡ XEP-0277: Microblogging over XMPP (Deferred — publish/reply/retract via `/feed post|reply|retract`; receive PEP microblog push events)
+- ⚡ XEP-0472: Pubsub Social Feed (Experimental — publishes `pubsub#type=urn:xmpp:microblog:0`, advertises `urn:xmpp:pubsub-social-feed:1` in caps)
 - ⚡ XEP-0433: Extended Channel Search (Searcher role; Search Service role not implemented)
 
 ### Planned
@@ -729,6 +732,9 @@ file appears only once per message.
 | `/feed <service-jid> <node>` | Fetch a specific PubSub node directly into a dedicated buffer |
 | `/feed ... --limit N` | Override the per-node item limit (default: 20) |
 | `/feed ... --before <id>` | Fetch the page of items older than item `<id>` (XEP-0059 RSM paging) |
+| `/feed post <service> <node> <text>` | Publish a microblog post as an Atom entry (XEP-0472) |
+| `/feed reply <service> <node> <item-id> <text>` | Reply to a post with `thr:in-reply-to` threading |
+| `/feed retract <service> <node> <item-id>` | Retract (delete) a previously published post |
 | `/bookmark` | List bookmarks |
 | `/bookmark add [jid] [name]` | Add a bookmark |
 | `/bookmark del <jid>` | Remove a bookmark |

@@ -712,7 +712,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 //
                 std::string_view feed_service_sv = from ? std::string_view(from) : std::string_view{};
                 std::string_view node_sv          = items_node ? std::string_view(items_node) : std::string_view{};
-                bool node_is_uri = !node_sv.empty() && (
+                // XEP-0472/XEP-0277: urn:xmpp:microblog:0 is the PEP microblog node — treat it
+                // as a social feed even though it starts with "urn:".
+                bool node_is_microblog = (node_sv == "urn:xmpp:microblog:0");
+                bool node_is_uri = !node_sv.empty() && !node_is_microblog && (
                     node_sv.find("://") != std::string_view::npos ||
                     node_sv.substr(0, 4) == "urn:");
                 bool from_self = false;
@@ -793,12 +796,50 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                 return {};
                             };
 
-                            std::string title   = atom_text("title");
-                            std::string summary = atom_text("summary");
-                            std::string pubdate = atom_text("published");
-                            std::string link    = atom_link();
+                            // XEP-0472 / XEP-0277: extract author name
+                            auto atom_author = [&]() -> std::string {
+                                if (!entry) return {};
+                                xmpp_stanza_t *author_el = xmpp_stanza_get_child_by_name(entry, "author");
+                                if (!author_el) return {};
+                                xmpp_stanza_t *name_el = xmpp_stanza_get_child_by_name(author_el, "name");
+                                if (!name_el) return {};
+                                char *t = xmpp_stanza_get_text(name_el);
+                                if (!t) return {};
+                                std::string s(t);
+                                xmpp_free(account.context, t);
+                                return s;
+                            };
 
-                            if (title.empty() && summary.empty())
+                            // XEP-0472: extract thr:in-reply-to ref attribute
+                            auto atom_reply_to = [&]() -> std::string {
+                                if (!entry) return {};
+                                for (xmpp_stanza_t *el = xmpp_stanza_get_children(entry);
+                                     el; el = xmpp_stanza_get_next(el))
+                                {
+                                    const char *el_name = xmpp_stanza_get_name(el);
+                                    if (!el_name) continue;
+                                    // strophe may expose this as "in-reply-to" or "thr:in-reply-to"
+                                    if (weechat_strcasecmp(el_name, "in-reply-to") == 0 ||
+                                        weechat_strcasecmp(el_name, "thr:in-reply-to") == 0)
+                                    {
+                                        const char *ref = xmpp_stanza_get_attribute(el, "ref");
+                                        if (ref) return ref;
+                                        const char *href = xmpp_stanza_get_attribute(el, "href");
+                                        if (href) return href;
+                                    }
+                                }
+                                return {};
+                            };
+
+                            std::string title    = atom_text("title");
+                            std::string summary  = atom_text("summary");
+                            std::string content  = atom_text("content");
+                            std::string pubdate  = atom_text("published");
+                            std::string link     = atom_link();
+                            std::string author   = atom_author();
+                            std::string reply_to = atom_reply_to();
+
+                            if (title.empty() && summary.empty() && content.empty())
                             {
                                 // No Atom payload — just show the item ID
                                 const char *item_id = xmpp_stanza_get_id(child);
@@ -810,29 +851,47 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                             }
                             else
                             {
-                                if (!pubdate.empty())
+                                const std::string &body = !summary.empty() ? summary
+                                                        : !content.empty() ? content : std::string{};
+                                const char *pfx = weechat_prefix("join");
+                                const char *bold = weechat_color("bold");
+                                const char *rst  = weechat_color("reset");
+                                const char *dim  = weechat_color("darkgray");
+
+                                // Header line: [author] title — date
+                                if (!author.empty() && !pubdate.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "%s%s%s%s  [%s%s%s] — %s",
+                                        pfx, bold, title.c_str(), rst,
+                                        dim, author.c_str(), rst,
+                                        pubdate.c_str());
+                                else if (!author.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "%s%s%s%s  [%s%s%s]",
+                                        pfx, bold, title.c_str(), rst,
+                                        dim, author.c_str(), rst);
+                                else if (!pubdate.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "%s%s%s%s — %s",
-                                        weechat_prefix("join"),
-                                        weechat_color("bold"),
-                                        title.c_str(),
-                                        weechat_color("reset"),
+                                        pfx, bold, title.c_str(), rst,
                                         pubdate.c_str());
                                 else
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "%s%s%s%s",
-                                        weechat_prefix("join"),
-                                        weechat_color("bold"),
-                                        title.c_str(),
-                                        weechat_color("reset"));
+                                        pfx, bold, title.c_str(), rst);
+
+                                if (!reply_to.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %sIn reply to:%s %s",
+                                        dim, rst, reply_to.c_str());
 
                                 if (!link.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %s", link.c_str());
 
-                                if (!summary.empty())
+                                if (!body.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "  %s", summary.c_str());
+                                        "  %s", body.c_str());
                             }
                         }
                         else if (weechat_strcasecmp(child_name, "retract") == 0)
@@ -2658,7 +2717,11 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
         "urn:xmpp:mds:displayed:0",
         "urn:xmpp:mds:displayed:0+notify",
         "urn:xmpp:channel-search:0:search",
-        "urn:ietf:params:xml:ns:vcard-4.0"
+        "urn:ietf:params:xml:ns:vcard-4.0",
+        // XEP-0472: Pubsub Social Feed (Experimental)
+        "urn:xmpp:pubsub-social-feed:1",
+        // XEP-0277: receive microblog PEP push events from contacts
+        "urn:xmpp:microblog:0+notify",
     };
 
     std::vector<std::string> sorted_features;

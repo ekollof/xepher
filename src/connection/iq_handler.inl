@@ -483,12 +483,49 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 return {};
                             };
 
-                            std::string title   = atom_text("title");
-                            std::string summary = atom_text("summary");
-                            std::string pubdate = atom_text("published");
-                            std::string link    = atom_link();
+                            // XEP-0472 / XEP-0277: extract author name
+                            auto atom_author = [&]() -> std::string {
+                                if (!entry) return {};
+                                xmpp_stanza_t *author_el = xmpp_stanza_get_child_by_name(entry, "author");
+                                if (!author_el) return {};
+                                xmpp_stanza_t *name_el = xmpp_stanza_get_child_by_name(author_el, "name");
+                                if (!name_el) return {};
+                                char *t = xmpp_stanza_get_text(name_el);
+                                if (!t) return {};
+                                std::string s(t);
+                                xmpp_free(account.context, t);
+                                return s;
+                            };
 
-                            if (title.empty() && summary.empty())
+                            // XEP-0472: extract thr:in-reply-to ref attribute
+                            auto atom_reply_to = [&]() -> std::string {
+                                if (!entry) return {};
+                                for (xmpp_stanza_t *el = xmpp_stanza_get_children(entry);
+                                     el; el = xmpp_stanza_get_next(el))
+                                {
+                                    const char *el_name = xmpp_stanza_get_name(el);
+                                    if (!el_name) continue;
+                                    if (weechat_strcasecmp(el_name, "in-reply-to") == 0 ||
+                                        weechat_strcasecmp(el_name, "thr:in-reply-to") == 0)
+                                    {
+                                        const char *ref = xmpp_stanza_get_attribute(el, "ref");
+                                        if (ref) return ref;
+                                        const char *href = xmpp_stanza_get_attribute(el, "href");
+                                        if (href) return href;
+                                    }
+                                }
+                                return {};
+                            };
+
+                            std::string title    = atom_text("title");
+                            std::string summary  = atom_text("summary");
+                            std::string content  = atom_text("content");
+                            std::string pubdate  = atom_text("published");
+                            std::string link     = atom_link();
+                            std::string author   = atom_author();
+                            std::string reply_to = atom_reply_to();
+
+                            if (title.empty() && summary.empty() && content.empty())
                             {
                                 const char *item_id = xmpp_stanza_get_id(item);
                                 weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
@@ -499,29 +536,46 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             }
                             else
                             {
-                                if (!pubdate.empty())
+                                const std::string &body = !summary.empty() ? summary
+                                                        : !content.empty() ? content : std::string{};
+                                const char *pfx  = weechat_prefix("join");
+                                const char *bold = weechat_color("bold");
+                                const char *rst  = weechat_color("reset");
+                                const char *dim  = weechat_color("darkgray");
+
+                                if (!author.empty() && !pubdate.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "%s%s%s%s  [%s%s%s] — %s",
+                                        pfx, bold, title.c_str(), rst,
+                                        dim, author.c_str(), rst,
+                                        pubdate.c_str());
+                                else if (!author.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "%s%s%s%s  [%s%s%s]",
+                                        pfx, bold, title.c_str(), rst,
+                                        dim, author.c_str(), rst);
+                                else if (!pubdate.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "%s%s%s%s — %s",
-                                        weechat_prefix("join"),
-                                        weechat_color("bold"),
-                                        title.c_str(),
-                                        weechat_color("reset"),
+                                        pfx, bold, title.c_str(), rst,
                                         pubdate.c_str());
                                 else
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "%s%s%s%s",
-                                        weechat_prefix("join"),
-                                        weechat_color("bold"),
-                                        title.c_str(),
-                                        weechat_color("reset"));
+                                        pfx, bold, title.c_str(), rst);
+
+                                if (!reply_to.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %sIn reply to:%s %s",
+                                        dim, rst, reply_to.c_str());
 
                                 if (!link.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %s", link.c_str());
 
-                                if (!summary.empty())
+                                if (!body.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "  %s", summary.c_str());
+                                        "  %s", body.c_str());
                             }
                         }
                     }

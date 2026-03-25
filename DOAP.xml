@@ -591,6 +591,24 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0277.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.6.5</xmpp:version>
+        <xmpp:note xml:lang='en'>Microblogging over XMPP (Deferred) - /feed post publishes Atom entries to urn:xmpp:microblog:0 PEP node; /feed reply adds thr:in-reply-to threading; /feed retract retracts items; incoming PEP microblog push events are rendered; urn:xmpp:microblog:0+notify advertised in caps</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0472.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.2.1</xmpp:version>
+        <xmpp:note xml:lang='en'>Pubsub Social Feed (Experimental) - /feed post sets pubsub#type=urn:xmpp:microblog:0 and required publish-options (persist_items, max_items=max, notify_retract); urn:xmpp:pubsub-social-feed:1 advertised in disco#info; author and thr:in-reply-to parsed and displayed</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0071.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.5.4</xmpp:version>
