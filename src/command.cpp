@@ -1631,18 +1631,24 @@ int command__omemo(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
+    // Helper: guard that OMEMO is initialized; prints error and returns false if not.
+    auto require_omemo = [&]() -> bool {
+        if (!ptr_account->omemo)
+        {
+            weechat_printf(buffer,
+                           _("%s%s: OMEMO not initialized for this account"),
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            return false;
+        }
+        return true;
+    };
+
     // Handle subcommands
     if (argc > 1)
     {
         if (weechat_strcasecmp(argv[1], "check") == 0)
         {
-            if (!ptr_account->omemo)
-            {
-                weechat_printf(buffer,
-                               _("%s%s: OMEMO not initialized for this account"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
-            }
+            if (!require_omemo()) return WEECHAT_RC_OK;
 
             // Show local state immediately (no async needed)
             ptr_account->omemo.show_status(
@@ -1661,13 +1667,7 @@ int command__omemo(const void *pointer, void *data,
 
         if (weechat_strcasecmp(argv[1], "republish") == 0)
         {
-            if (!ptr_account->omemo)
-            {
-                weechat_printf(buffer,
-                               _("%s%s: OMEMO not initialized for this account"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
-            }
+            if (!require_omemo()) return WEECHAT_RC_OK;
 
             weechat_printf(buffer,
                            _("%sRepublishing OMEMO devicelist and bundle..."),
@@ -1736,13 +1736,7 @@ int command__omemo(const void *pointer, void *data,
 
         if (weechat_strcasecmp(argv[1], "reset-keys") == 0)
         {
-            if (!ptr_account->omemo)
-            {
-                weechat_printf(buffer,
-                               _("%s%s: OMEMO not initialized for this account"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
-            }
+            if (!require_omemo()) return WEECHAT_RC_OK;
 
             weechat_printf(buffer,
                            _("%s%s: Resetting OMEMO key database to force renegotiation"),
@@ -1770,13 +1764,7 @@ int command__omemo(const void *pointer, void *data,
 
         if (weechat_strcasecmp(argv[1], "status") == 0)
         {
-            if (!ptr_account->omemo)
-            {
-                weechat_printf(buffer,
-                               _("%s%s: OMEMO not initialized for this account"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
-            }
+            if (!require_omemo()) return WEECHAT_RC_OK;
 
             ptr_account->omemo.show_status(
                 buffer,
@@ -1789,13 +1777,7 @@ int command__omemo(const void *pointer, void *data,
 
         if (weechat_strcasecmp(argv[1], "fingerprint") == 0)
         {
-            if (!ptr_account->omemo)
-            {
-                weechat_printf(buffer,
-                               _("%s%s: OMEMO not initialized for this account"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
-            }
+            if (!require_omemo()) return WEECHAT_RC_OK;
             // Optional argument: jid to look up peer fingerprint; no argument = own key
             const char *jid = (argc > 2) ? argv[2] : nullptr;
             ptr_account->omemo.show_fingerprint(buffer, jid);
@@ -1804,13 +1786,7 @@ int command__omemo(const void *pointer, void *data,
 
         if (weechat_strcasecmp(argv[1], "trust") == 0)
         {
-            if (!ptr_account->omemo)
-            {
-                weechat_printf(buffer,
-                               _("%s%s: OMEMO not initialized for this account"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
-            }
+            if (!require_omemo()) return WEECHAT_RC_OK;
             if (argc < 3)
             {
                 weechat_printf(buffer,
@@ -1825,13 +1801,7 @@ int command__omemo(const void *pointer, void *data,
 
         if (weechat_strcasecmp(argv[1], "devices") == 0)
         {
-            if (!ptr_account->omemo)
-            {
-                weechat_printf(buffer,
-                               _("%s%s: OMEMO not initialized for this account"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
-            }
+            if (!require_omemo()) return WEECHAT_RC_OK;
             // Optional argument: jid; default to channel JID or peer JID
             const char *jid = nullptr;
             if (argc > 2)
@@ -1851,13 +1821,7 @@ int command__omemo(const void *pointer, void *data,
 
         if (weechat_strcasecmp(argv[1], "fetch") == 0)
         {
-            if (!ptr_account->omemo)
-            {
-                weechat_printf(buffer,
-                               _("%s%s: OMEMO not initialized for this account"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
-            }
+            if (!require_omemo()) return WEECHAT_RC_OK;
 
             const char *jid = nullptr;
             if (argc > 2)
@@ -1895,13 +1859,7 @@ int command__omemo(const void *pointer, void *data,
 
         if (weechat_strcasecmp(argv[1], "kex") == 0)
         {
-            if (!ptr_account->omemo)
-            {
-                weechat_printf(buffer,
-                               _("%s%s: OMEMO not initialized for this account"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
-            }
+            if (!require_omemo()) return WEECHAT_RC_OK;
 
             const char *jid = nullptr;
             if (argc > 2)
@@ -2294,6 +2252,36 @@ collect_buffer_messages(struct t_gui_buffer *buffer, int max)
     return result;
 }
 
+// Resolve which message ID to use for XEP operations (edit, retract, reply).
+// In a MUC, prefer the stanza-id assigned by the room (XEP-0359) when it is
+// available and was issued by the channel itself; fall back to origin-id.
+static std::string
+resolve_msg_id(const msg_entry &m, const weechat::channel *ch)
+{
+    if (ch
+        && ch->type == weechat::channel::chat_type::MUC
+        && !m.stanza_id.empty()
+        && weechat_strcasecmp(m.stanza_id_by.c_str(), ch->id.c_str()) == 0)
+        return m.stanza_id;
+    return m.id;
+}
+
+// Return up to `max` own, non-retracted messages from the buffer (newest first).
+static std::vector<msg_entry>
+collect_own_messages(struct t_gui_buffer *buffer, int max = 20)
+{
+    auto all = collect_buffer_messages(buffer, 500);
+    std::vector<msg_entry> result;
+    for (auto &m : all)
+    {
+        if (m.from_self && !m.retracted)
+            result.push_back(m);
+        if (static_cast<int>(result.size()) >= max)
+            break;
+    }
+    return result;
+}
+
 // /edit — open a picker of the last 20 own non-retracted messages.
 // On selection, pre-fill the input bar with "/edit-to <id> <original body>"
 // so the user can modify the text before pressing Enter.
@@ -2331,15 +2319,7 @@ int command__edit(const void *pointer, void *data,
     }
 
     // Collect last own non-retracted messages for picker
-    auto messages = collect_buffer_messages(buffer, 500);
-    std::vector<msg_entry> own_messages;
-    for (auto &m : messages)
-    {
-        if (m.from_self && !m.retracted)
-            own_messages.push_back(m);
-        if (static_cast<int>(own_messages.size()) >= 20)
-            break;
-    }
+    auto own_messages = collect_own_messages(buffer);
 
     if (own_messages.empty())
     {
@@ -2356,14 +2336,7 @@ int command__edit(const void *pointer, void *data,
     for (auto &m : own_messages)
     {
         // Resolve ID: prefer MUC stanza-id when applicable (XEP-0308)
-        std::string resolved_id;
-        if (ptr_channel->type == weechat::channel::chat_type::MUC
-                && !m.stanza_id.empty()
-                && weechat_strcasecmp(m.stanza_id_by.c_str(),
-                                     ptr_channel->id.c_str()) == 0)
-            resolved_id = m.stanza_id;
-        else
-            resolved_id = m.id;
+        std::string resolved_id = resolve_msg_id(m, ptr_channel);
 
         entry_list->push_back({resolved_id, m.body});
         std::string label = m.body.empty() ? resolved_id : m.body;
@@ -2633,15 +2606,7 @@ int command__retract(const void *pointer, void *data,
     }
 
     // Collect last 20 own messages for picker
-    auto messages = collect_buffer_messages(buffer, 500);
-    std::vector<msg_entry> own_messages;
-    for (auto &m : messages)
-    {
-        if (m.from_self && !m.retracted)
-            own_messages.push_back(m);
-        if (static_cast<int>(own_messages.size()) >= 20)
-            break;
-    }
+    auto own_messages = collect_own_messages(buffer);
 
     if (own_messages.empty())
     {
@@ -2655,14 +2620,7 @@ int command__retract(const void *pointer, void *data,
     for (auto &m : own_messages)
     {
         // Resolve ID: prefer MUC stanza-id when applicable
-        std::string resolved_id;
-        if (ptr_channel->type == weechat::channel::chat_type::MUC
-                && !m.stanza_id.empty()
-                && weechat_strcasecmp(m.stanza_id_by.c_str(),
-                                     ptr_channel->id.c_str()) == 0)
-            resolved_id = m.stanza_id;
-        else
-            resolved_id = m.id;
+        std::string resolved_id = resolve_msg_id(m, ptr_channel);
 
         std::string label = m.body.empty() ? m.id : m.body;
         entries.push_back({resolved_id, label, {}});
@@ -2886,14 +2844,7 @@ int command__reply(const void *pointer, void *data,
             if (m.from_self || m.id.empty()) continue;
 
             // Resolve ID: prefer MUC stanza-id when applicable (XEP-0461 §4.1)
-            std::string resolved_id;
-            if (ptr_channel->type == weechat::channel::chat_type::MUC
-                    && !m.stanza_id.empty()
-                    && weechat_strcasecmp(m.stanza_id_by.c_str(),
-                                         ptr_channel->id.c_str()) == 0)
-                resolved_id = m.stanza_id;
-            else
-                resolved_id = m.id;
+            std::string resolved_id = resolve_msg_id(m, ptr_channel);
 
             std::string label = m.body.empty() ? m.id : m.body;
             std::string sublabel = m.nick.empty() ? "" : "from: " + m.nick;

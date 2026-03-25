@@ -868,6 +868,61 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         }
 
         // XEP-0184: Message Delivery Receipts — handle incoming <received> from others
+        // Helper: walk the buffer backwards and update the status glyph on the line
+        // tagged id_<acked_id> (strips any existing glyph suffix, appends new_glyph).
+        auto update_line_glyph = [](weechat::channel *ch,
+                                    const char       *acked_id,
+                                    std::string_view  new_glyph)
+        {
+            struct t_hdata *hdata_line      = weechat_hdata_get("line");
+            struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+            struct t_hdata *hdata_lines     = weechat_hdata_get("lines");
+            struct t_hdata *hdata_buffer    = weechat_hdata_get("buffer");
+            void *lines     = weechat_hdata_pointer(hdata_buffer, ch->buffer, "lines");
+            void *last_line = lines ? weechat_hdata_pointer(hdata_lines, lines, "last_line") : nullptr;
+            std::string target_tag = std::string("id_") + acked_id;
+            while (last_line)
+            {
+                void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
+                if (line_data)
+                {
+                    int tags_count = weechat_hdata_integer(hdata_line_data, line_data, "tags_count");
+                    bool found = false;
+                    for (int n = 0; n < tags_count && !found; n++)
+                    {
+                        auto str_tag = fmt::format("{}|tags_array", n);
+                        const char *tag = weechat_hdata_string(hdata_line_data, line_data, str_tag.c_str());
+                        if (tag && weechat_strcasecmp(tag, target_tag.c_str()) == 0)
+                            found = true;
+                    }
+                    if (found)
+                    {
+                        const char *cur_msg = weechat_hdata_string(hdata_line_data, line_data, "message");
+                        std::string new_msg = cur_msg ? cur_msg : "";
+                        // Strip any pending/delivered/seen glyph suffix
+                        for (const char *glyph : { " ⌛", " ✓", " ✓✓" })
+                        {
+                            std::string g(glyph);
+                            if (new_msg.size() >= g.size() &&
+                                new_msg.compare(new_msg.size() - g.size(), g.size(), g) == 0)
+                            {
+                                new_msg.erase(new_msg.size() - g.size());
+                                break;
+                            }
+                        }
+                        new_msg += new_glyph;
+                        struct t_hashtable *ht = weechat_hashtable_new(4,
+                            WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING, NULL, NULL);
+                        weechat_hashtable_set(ht, "message", new_msg.c_str());
+                        weechat_hdata_update(hdata_line_data, line_data, ht);
+                        weechat_hashtable_free(ht);
+                        break;
+                    }
+                }
+                last_line = weechat_hdata_pointer(hdata_line, last_line, "prev_line");
+            }
+        };
+
         {
             xmpp_stanza_t *receipt_received = xmpp_stanza_get_child_by_name_and_ns(
                 stanza, "received", "urn:xmpp:receipts");
@@ -883,53 +938,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (ch)
                     {
                         // Find the sent message line tagged id_<acked_id> and update glyph ⌛→✓
-                        struct t_hdata *hdata_line      = weechat_hdata_get("line");
-                        struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
-                        struct t_hdata *hdata_lines     = weechat_hdata_get("lines");
-                        struct t_hdata *hdata_buffer    = weechat_hdata_get("buffer");
-                        void *lines     = weechat_hdata_pointer(hdata_buffer, ch->buffer, "lines");
-                        void *last_line = lines ? weechat_hdata_pointer(hdata_lines, lines, "last_line") : nullptr;
-                        std::string target_tag = std::string("id_") + acked_id;
-                        while (last_line)
-                        {
-                            void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
-                            if (line_data)
-                            {
-                                int tags_count = weechat_hdata_integer(hdata_line_data, line_data, "tags_count");
-                                bool found = false;
-                                for (int n = 0; n < tags_count && !found; n++)
-                                {
-                                    auto str_tag = fmt::format("{}|tags_array", n);
-                                    const char *tag = weechat_hdata_string(hdata_line_data, line_data, str_tag.c_str());
-                                    if (tag && weechat_strcasecmp(tag, target_tag.c_str()) == 0)
-                                        found = true;
-                                }
-                                if (found)
-                                {
-                                    const char *cur_msg = weechat_hdata_string(hdata_line_data, line_data, "message");
-                                    std::string new_msg = cur_msg ? cur_msg : "";
-                                    // Strip any pending/delivered glyph suffix
-                                    for (const char *glyph : { " ⌛", " ✓", " ✓✓" })
-                                    {
-                                        std::string g(glyph);
-                                        if (new_msg.size() >= g.size() &&
-                                            new_msg.compare(new_msg.size() - g.size(), g.size(), g) == 0)
-                                        {
-                                            new_msg.erase(new_msg.size() - g.size());
-                                            break;
-                                        }
-                                    }
-                                    new_msg += " ✓";
-                                    struct t_hashtable *ht = weechat_hashtable_new(4,
-                                        WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING, NULL, NULL);
-                                    weechat_hashtable_set(ht, "message", new_msg.c_str());
-                                    weechat_hdata_update(hdata_line_data, line_data, ht);
-                                    weechat_hashtable_free(ht);
-                                    break;
-                                }
-                            }
-                            last_line = weechat_hdata_pointer(hdata_line, last_line, "prev_line");
-                        }
+                        update_line_glyph(ch, acked_id, " ✓");
                     }
                     xmpp_free(account.context, (void*)bare);
                 }
@@ -956,53 +965,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (ch)
                     {
                         // Find the sent message line tagged id_<acked_id> and update glyph ⌛/✓→✓✓
-                        struct t_hdata *hdata_line      = weechat_hdata_get("line");
-                        struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
-                        struct t_hdata *hdata_lines     = weechat_hdata_get("lines");
-                        struct t_hdata *hdata_buffer    = weechat_hdata_get("buffer");
-                        void *lines     = weechat_hdata_pointer(hdata_buffer, ch->buffer, "lines");
-                        void *last_line = lines ? weechat_hdata_pointer(hdata_lines, lines, "last_line") : nullptr;
-                        std::string target_tag = std::string("id_") + acked_id;
-                        while (last_line)
-                        {
-                            void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
-                            if (line_data)
-                            {
-                                int tags_count = weechat_hdata_integer(hdata_line_data, line_data, "tags_count");
-                                bool found = false;
-                                for (int n = 0; n < tags_count && !found; n++)
-                                {
-                                    auto str_tag = fmt::format("{}|tags_array", n);
-                                    const char *tag = weechat_hdata_string(hdata_line_data, line_data, str_tag.c_str());
-                                    if (tag && weechat_strcasecmp(tag, target_tag.c_str()) == 0)
-                                        found = true;
-                                }
-                                if (found)
-                                {
-                                    const char *cur_msg = weechat_hdata_string(hdata_line_data, line_data, "message");
-                                    std::string new_msg = cur_msg ? cur_msg : "";
-                                    // Strip any pending/delivered/seen glyph suffix
-                                    for (const char *glyph : { " ⌛", " ✓", " ✓✓" })
-                                    {
-                                        std::string g(glyph);
-                                        if (new_msg.size() >= g.size() &&
-                                            new_msg.compare(new_msg.size() - g.size(), g.size(), g) == 0)
-                                        {
-                                            new_msg.erase(new_msg.size() - g.size());
-                                            break;
-                                        }
-                                    }
-                                    new_msg += " ✓✓";
-                                    struct t_hashtable *ht = weechat_hashtable_new(4,
-                                        WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING, NULL, NULL);
-                                    weechat_hashtable_set(ht, "message", new_msg.c_str());
-                                    weechat_hdata_update(hdata_line_data, line_data, ht);
-                                    weechat_hashtable_free(ht);
-                                    break;
-                                }
-                            }
-                            last_line = weechat_hdata_pointer(hdata_line, last_line, "prev_line");
-                        }
+                        update_line_glyph(ch, acked_id, " ✓✓");
                     }
                     xmpp_free(account.context, (void*)bare);
                 }
