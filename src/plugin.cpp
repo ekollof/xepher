@@ -47,9 +47,12 @@ void (* weechat_signal_handler)(int);
 // Callback invoked when weechat.color.chat_nick_colors or
 // weechat.look.nick_color_* changes. Updates all nicklist entry colors
 // in-place (no remove+re-add) so the palette takes effect immediately.
+// Also walks existing buffer lines and updates their prefix color so that
+// already-printed messages pick up the new palette without a restart.
 extern "C"
 int nick_color_config_cb(const void *, void *, const char *, const char *)
 {
+    // ── 1. Update nicklist colors ────────────────────────────────────────────
     for (auto& [aname, account] : weechat::accounts)
     {
         for (auto& [cid, channel] : account.channels)
@@ -72,6 +75,88 @@ int nick_color_config_cb(const void *, void *, const char *, const char *)
             }
         }
     }
+
+    // ── 2. Update prefix colors on already-printed chat lines ────────────────
+    // Walk every line of every XMPP channel buffer, look for nick_XXXX tags,
+    // and rebuild the prefix with the freshly-computed color so the on-screen
+    // text immediately reflects the new palette.
+    struct t_hdata *hdata_buffer   = weechat_hdata_get("buffer");
+    struct t_hdata *hdata_lines    = weechat_hdata_get("lines");
+    struct t_hdata *hdata_line     = weechat_hdata_get("line");
+    struct t_hdata *hdata_ldata    = weechat_hdata_get("line_data");
+
+    if (!hdata_buffer || !hdata_lines || !hdata_line || !hdata_ldata)
+        return WEECHAT_RC_OK;
+
+    for (auto& [aname, account] : weechat::accounts)
+    {
+        for (auto& [cid, channel] : account.channels)
+        {
+            if (!channel.buffer)
+                continue;
+
+            void *lines = weechat_hdata_pointer(hdata_buffer, channel.buffer, "lines");
+            if (!lines)
+                continue;
+
+            void *line = weechat_hdata_pointer(hdata_lines, lines, "last_line");
+            while (line)
+            {
+                void *ldata = weechat_hdata_pointer(hdata_line, line, "data");
+                if (!ldata)
+                {
+                    line = weechat_hdata_move(hdata_line, line, -1);
+                    continue;
+                }
+
+                int tags_count = weechat_hdata_integer(hdata_ldata, ldata, "tags_count");
+                const char *nick_name = nullptr;
+                for (int i = 0; i < tags_count; ++i)
+                {
+                    // tags_array is a char** — index via "NNN|tags_array"
+                    char index_key[32];
+                    snprintf(index_key, sizeof(index_key), "%d|tags_array", i);
+                    const char *tag = weechat_hdata_string(hdata_ldata, ldata, index_key);
+                    if (tag && strncmp(tag, "nick_", 5) == 0 && tag[5] != '\0')
+                    {
+                        nick_name = tag + 5;
+                        break;
+                    }
+                }
+
+                if (nick_name)
+                {
+                    // Get the current prefix so we can detect avatar prefix or
+                    // other leading content before the tab separator.
+                    const char *cur_prefix = weechat_hdata_string(hdata_ldata, ldata, "prefix");
+
+                    // Rebuild prefix: {new_color}{nick}\t
+                    // (same as weechat::user::as_prefix(nick_name))
+                    std::string new_color = weechat_info_get("nick_color", nick_name);
+                    std::string new_prefix = new_color + nick_name + "\t";
+
+                    // Only update if it actually changed (avoid unnecessary redraws).
+                    if (!cur_prefix || new_prefix != cur_prefix)
+                    {
+                        struct t_hashtable *update = weechat_hashtable_new(
+                            4,
+                            WEECHAT_HASHTABLE_STRING,
+                            WEECHAT_HASHTABLE_STRING,
+                            nullptr, nullptr);
+                        if (update)
+                        {
+                            weechat_hashtable_set(update, "prefix", new_prefix.c_str());
+                            weechat_hdata_update(hdata_ldata, ldata, update);
+                            weechat_hashtable_free(update);
+                        }
+                    }
+                }
+
+                line = weechat_hdata_move(hdata_line, line, -1);
+            }
+        }
+    }
+
     return WEECHAT_RC_OK;
 }
 
