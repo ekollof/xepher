@@ -21,6 +21,8 @@
 #include "plugin.hh"
 #include "config.hh"
 #include "account.hh"
+#include "channel.hh"
+#include "user.hh"
 #include "connection.hh"
 #include "command.hh"
 #include "input.hh"
@@ -41,6 +43,38 @@ WEECHAT_PLUGIN_PRIORITY(5500);
 }
 
 void (* weechat_signal_handler)(int);
+
+// Callback invoked when weechat.color.chat_nick_colors changes.
+// Re-adds all nicklist entries for every channel so colors are refreshed.
+extern "C"
+int nick_color_config_cb(const void *, void *, const char *, const char *)
+{
+    for (auto& [aname, account] : weechat::accounts)
+    {
+        for (auto& [cid, channel] : account.channels)
+        {
+            if (!channel.buffer)
+                continue;
+            weechat_nicklist_remove_all(channel.buffer);
+            channel.add_nicklist_groups();
+            for (auto& [uid, user] : account.users)
+            {
+                // Only re-add users whose bare JID matches this channel.
+                // For MUC occupants the user id is the full occupant JID
+                // (e.g. room@conf.server/nick); strip to bare to compare.
+                const char *name = user.profile.display_name.c_str();
+                xmpp_string_guard bare_g(account.context,
+                    xmpp_jid_bare(account.context, name));
+                if (bare_g &&
+                    weechat_strcasecmp(bare_g.c_str(), channel.id.data()) == 0)
+                {
+                    user.nicklist_add(&account, &channel);
+                }
+            }
+        }
+    }
+    return WEECHAT_RC_OK;
+}
 
 extern "C"
 void wrapped_signal_handler(int arg)
@@ -87,6 +121,7 @@ weechat::plugin::plugin(struct t_weechat_plugin *plugin)
     , m_encryption_bar_item(nullptr)
     , m_buffer_switch_hook(nullptr)
     , m_input_text_changed_hook(nullptr)
+    , m_nick_color_config_hook(nullptr)
 {
 }
 
@@ -128,6 +163,10 @@ void weechat::plugin::init(int argc, char *argv[])
                                                       &input__text_changed_cb, // TODO: port
                                                       nullptr, nullptr);
 
+    m_nick_color_config_hook = weechat_hook_config("weechat.color.chat_nick_colors",
+                                                    &nick_color_config_cb,
+                                                    nullptr, nullptr);
+
     // Smart filter: auto-register a WeeChat filter to hide join/leave/nick-change
     // lines tagged with xmpp_smart_filter.  Users can toggle it with
     //   /filter enable|disable xmpp_smart_filter_default
@@ -157,7 +196,12 @@ void weechat::plugin::end() {
         weechat_unhook(m_input_text_changed_hook);
         m_input_text_changed_hook = nullptr;
     }
-    
+
+    if (m_nick_color_config_hook) {
+        weechat_unhook(m_nick_color_config_hook);
+        m_nick_color_config_hook = nullptr;
+    }
+
     if (m_encryption_bar_item)
         weechat_bar_item_remove(m_encryption_bar_item);
 

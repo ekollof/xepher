@@ -47,6 +47,7 @@ namespace weechat {
         struct t_gui_bar_item *m_encryption_bar_item;
         struct t_hook *m_buffer_switch_hook;
         struct t_hook *m_input_text_changed_hook;
+        struct t_hook *m_nick_color_config_hook;
 
         std::vector<std::string_view> m_args;
     };
