@@ -58,10 +58,12 @@ int nick_color_config_cb(const void *, void *, const char *, const char *)
                 continue;
             for (auto& [uid, user] : account.users)
             {
-                // Only update users that belong to this channel.
-                const char *name = user.profile.display_name.c_str();
+                // Match users to this channel by comparing the bare JID of the
+                // user's map key (full JID, e.g. "room@conf/nick") against the
+                // channel id (bare JID, e.g. "room@conf").  Using display_name
+                // was wrong for MUC users whose display_name is just a nickname.
                 xmpp_string_guard bare_g(account.context,
-                    xmpp_jid_bare(account.context, name));
+                    xmpp_jid_bare(account.context, uid.c_str()));
                 if (bare_g &&
                     weechat_strcasecmp(bare_g.c_str(), channel.id.data()) == 0)
                 {
