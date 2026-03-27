@@ -1542,11 +1542,24 @@ int command__feed(const void *pointer, void *data,
                     }
                 }
             }
-            // Fallback: construct the standard comments node name on the same service.
+            // Fallback: if the current buffer is already a comments node
+            // (urn:xmpp:microblog:0:comments/…), reply into that same node —
+            // this is a flat thread, not a nested one.  Otherwise construct the
+            // standard comments node for this item on the same service.
             if (reply_target_service.empty() || reply_target_node.empty())
             {
-                reply_target_service = pub_service;
-                reply_target_node    = fmt::format("urn:xmpp:microblog:0:comments/{}", reply_to_id);
+                constexpr std::string_view kCommentsPfx = "urn:xmpp:microblog:0:comments/";
+                if (pub_node.rfind(kCommentsPfx, 0) == 0)
+                {
+                    // Already in a comments buffer — post into the same node.
+                    reply_target_service = pub_service;
+                    reply_target_node    = pub_node;
+                }
+                else
+                {
+                    reply_target_service = pub_service;
+                    reply_target_node    = fmt::format("urn:xmpp:microblog:0:comments/{}", reply_to_id);
+                }
             }
         }
         else
