@@ -1401,15 +1401,25 @@ int command__feed(const void *pointer, void *data,
 
         // Short-form detection for /feed post: "/feed post <text>"
         // (no explicit service/node — inferred from the current FEED buffer).
-        // Distinguishable from long form because long form needs argc >= 5
-        // (post <service> <node> <text>); if argc < 5 and we're in a feed
-        // buffer, treat it as short form.
-        bool post_short_form = (subcmd == "post")
-            && (argc >= 3)
-            && (argc < 5 || (ptr_channel && ptr_channel->type == weechat::channel::chat_type::FEED
-                             && std::string_view(argv[2]).find('.') == std::string_view::npos
-                             && std::string_view(argv[2]).find('@') == std::string_view::npos
-                             && std::string_view(argv[2]) != "--open"));
+        //
+        // Rules (evaluated top-to-bottom, first match wins):
+        //   1. Explicit override: argv[2] == "--" → always short form; body = argv_eol[3].
+        //   2. argc < 5 AND in a feed buffer → unambiguously short form (long form needs ≥5).
+        //   3. argc >= 5 AND in a feed buffer AND argv[2] doesn't look like a service JID
+        //      (no '.' or '@') → short form.
+        //   4. Otherwise → long form.
+        //
+        // If the post body starts with a word that contains '.' or '@', use "--":
+        //   /feed post -- hello.world@example.com is my favourite site
+        bool post_force_short = (subcmd == "post") && (argc >= 3)
+            && std::string_view(argv[2]) == "--";
+        bool post_short_form = post_force_short
+            || ((subcmd == "post") && (argc >= 3)
+                && (argc < 5
+                    || (ptr_channel && ptr_channel->type == weechat::channel::chat_type::FEED
+                        && std::string_view(argv[2]).find('.') == std::string_view::npos
+                        && std::string_view(argv[2]).find('@') == std::string_view::npos
+                        && std::string_view(argv[2]) != "--open")));
 
         int min_argc = subcmd == "reply"   ? (reply_short_form ? 4 : 6)
                      : subcmd == "retract" ? 5
@@ -1419,7 +1429,8 @@ int command__feed(const void *pointer, void *data,
             if (subcmd == "post")
                 weechat_printf(buffer,
                                _("%s%s: usage: /feed post <service-jid> <node> <text>\n"
-                                 "           or: /feed post <text>  (from a feed buffer)"),
+                                 "           or: /feed post <text>  (from a feed buffer)\n"
+                                 "           or: /feed post -- <text>  (force short form when body starts with a JID-like word)"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
             else if (subcmd == "reply")
                 weechat_printf(buffer,
@@ -1641,12 +1652,17 @@ int command__feed(const void *pointer, void *data,
         }
         else
         {
-            // /feed post — check for --open flag
+            // /feed post — check for --open flag and -- separator
             if (post_short_form)
             {
-                // Short form: argv[2] is either --open or the body text
-                if (argc > 2 && std::string_view(argv[2]) == "--open")
+                if (post_force_short)
                 {
+                    // "/feed post -- <body>" — '--' is consumed, rest is body
+                    body_raw = argc > 3 ? argv_eol[3] : nullptr;
+                }
+                else if (argc > 2 && std::string_view(argv[2]) == "--open")
+                {
+                    // Short form: argv[2] is either --open or the body text
                     access_open = true;
                     body_raw    = argv_eol[3];
                 }
