@@ -15,6 +15,52 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     const char *from = xmpp_stanza_get_from(stanza);
     const char *to = xmpp_stanza_get_to(stanza);
     const char *type = xmpp_stanza_get_attribute(stanza, "type");
+
+    // XEP-0060: on publish success, re-fetch the single published item so
+    // the comments buffer (or blog buffer) updates immediately without a
+    // manual /feed refresh.  Called at every publish-result erase site.
+    auto trigger_publish_refetch = [&](const char *iq_id) {
+        auto pub_it = account.pubsub_publish_ids.find(iq_id);
+        if (pub_it == account.pubsub_publish_ids.end())
+        {
+            account.pubsub_publish_ids.erase(iq_id);
+            return;
+        }
+        std::string pub_service = pub_it->second.service;
+        std::string pub_node    = pub_it->second.node;
+        std::string pub_item_id = pub_it->second.item_id;
+        account.pubsub_publish_ids.erase(pub_it);
+
+        if (pub_service.empty() || pub_node.empty() || pub_item_id.empty())
+            return;
+
+        // Build: <iq type='get' to='service'>
+        //          <pubsub xmlns='http://jabber.org/protocol/pubsub'>
+        //            <items node='...'><item id='...'/></items>
+        //          </pubsub>
+        //        </iq>
+        xmpp_stanza_t *item_req =
+            stanza__iq_pubsub_items_item(account.context, nullptr,
+                                         with_noop(pub_item_id.c_str()));
+        xmpp_stanza_t *items_req =
+            stanza__iq_pubsub_items(account.context, nullptr,
+                                    pub_node.c_str());
+        xmpp_stanza_add_child(items_req, item_req);
+        xmpp_stanza_release(item_req);
+        std::array<xmpp_stanza_t *, 2> rf_ch = {items_req, nullptr};
+        rf_ch[0] = stanza__iq_pubsub(account.context, nullptr, rf_ch.data(),
+                                     with_noop("http://jabber.org/protocol/pubsub"));
+        xmpp_string_guard rf_uid_g(account.context, xmpp_uuid_gen(account.context));
+        const char *rf_uid = rf_uid_g.ptr;
+        rf_ch[0] = stanza__iq(account.context, nullptr, rf_ch.data(),
+                              nullptr, rf_uid,
+                              account.jid().data(),
+                              pub_service.c_str(), "get");
+        if (rf_uid)
+            account.pubsub_fetch_ids[rf_uid] = {pub_service, pub_node, "", 0};
+        account.connection.send(rf_ch[0]);
+        xmpp_stanza_release(rf_ch[0]);
+    };
     
     // Handle XMPP Ping (XEP-0199)
     xmpp_stanza_t *ping = xmpp_stanza_get_child_by_name_and_ns(
@@ -421,8 +467,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             stanza, "pubsub", "http://jabber.org/protocol/pubsub");
         if (pubsub_feed && id && type && weechat_strcasecmp(type, "result") == 0)
         {
-            // Clean up successful publish tracking (server may echo <publish> back).
-            account.pubsub_publish_ids.erase(id);
+            // Clean up successful publish tracking and trigger a re-fetch so the
+            // comments/blog buffer updates immediately (server echoed <publish> back).
+            trigger_publish_refetch(id);
 
             auto fetch_it = account.pubsub_fetch_ids.find(id);
             if (fetch_it != account.pubsub_fetch_ids.end())
@@ -1200,8 +1247,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     }
     
     // XEP-0060: clean up publish tracking on bare <iq type='result'/> (no pubsub child)
+    // and trigger a single-item re-fetch so the buffer updates immediately.
     if (id && type && weechat_strcasecmp(type, "result") == 0)
-        account.pubsub_publish_ids.erase(id);
+        trigger_publish_refetch(id);
 
     // XEP-0363: HTTP File Upload - handle upload slot errors
     if (id && type && weechat_strcasecmp(type, "error") == 0)
