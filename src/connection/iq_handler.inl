@@ -537,10 +537,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 const char *bold = weechat_color("bold");
                                 const char *rst  = weechat_color("reset");
                                 const char *dim  = weechat_color("darkgray");
+                                const char *grn  = weechat_color("green");
 
                                 // Use Atom <link rel="alternate"> when present; fall back to
-                                // the canonical XEP-0060 item URI so there is always something
-                                // clickable (e.g. feeds that omit <link>, like PlanetDebian).
+                                // the canonical XEP-0060 item URI. Only shown when no alias.
                                 std::string link = ae.link;
                                 if (link.empty() && item_id_raw && *item_id_raw)
                                     link = fmt::format("xmpp:{}?;node={};item={}",
@@ -549,47 +549,82 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 // Short alias prefix shown before the title, e.g. "#3 ".
                                 std::string alias_pfx;
                                 if (item_alias > 0)
-                                    alias_pfx = fmt::format("#{} ", item_alias);
+                                    alias_pfx = fmt::format("#{}", item_alias);
 
                                 if (!author.empty() && !pubdate.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "%s%s%s%s%s  [%s%s%s] — %s",
-                                        pfx, dim, alias_pfx.c_str(), bold, title.c_str(), rst,
+                                        "%s%s%s%s %s%s%s  [%s%s%s] — %s",
+                                        pfx,
+                                        alias_pfx.empty() ? "" : grn,
+                                        alias_pfx.c_str(),
+                                        alias_pfx.empty() ? "" : rst,
+                                        bold, title.c_str(), rst,
                                         dim, author.c_str(), rst,
                                         pubdate.c_str());
                                 else if (!author.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "%s%s%s%s%s  [%s%s%s]",
-                                        pfx, dim, alias_pfx.c_str(), bold, title.c_str(), rst,
+                                        "%s%s%s%s %s%s%s  [%s%s%s]",
+                                        pfx,
+                                        alias_pfx.empty() ? "" : grn,
+                                        alias_pfx.c_str(),
+                                        alias_pfx.empty() ? "" : rst,
+                                        bold, title.c_str(), rst,
                                         dim, author.c_str(), rst);
                                 else if (!pubdate.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "%s%s%s%s%s — %s",
-                                        pfx, dim, alias_pfx.c_str(), bold, title.c_str(), rst,
+                                        "%s%s%s%s %s%s%s — %s",
+                                        pfx,
+                                        alias_pfx.empty() ? "" : grn,
+                                        alias_pfx.c_str(),
+                                        alias_pfx.empty() ? "" : rst,
+                                        bold, title.c_str(), rst,
                                         pubdate.c_str());
                                 else
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "%s%s%s%s%s",
-                                        pfx, dim, alias_pfx.c_str(), bold, title.c_str(), rst);
+                                        "%s%s%s%s %s%s%s",
+                                        pfx,
+                                        alias_pfx.empty() ? "" : grn,
+                                        alias_pfx.c_str(),
+                                        alias_pfx.empty() ? "" : rst,
+                                        bold, title.c_str(), rst);
 
                                 if (!reply_to.empty())
+                                {
+                                    // Extract item UUID from xmpp: URI (item=<uuid>) and
+                                    // resolve to an alias if possible; fall back to UUID.
+                                    std::string reply_label;
+                                    auto item_eq = reply_to.rfind("item=");
+                                    if (item_eq != std::string::npos)
+                                    {
+                                        std::string reply_uuid = reply_to.substr(item_eq + 5);
+                                        int ralias = account.feed_alias_lookup(feed_key, reply_uuid);
+                                        if (ralias > 0)
+                                            reply_label = fmt::format("#{}", ralias);
+                                        else
+                                            reply_label = reply_uuid;
+                                    }
+                                    else
+                                        reply_label = reply_to;
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %sIn reply to:%s %s",
-                                        dim, rst, reply_to.c_str());
+                                        dim, rst, reply_label.c_str());
+                                }
 
                                 if (!via_link.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %sRepeated from:%s %s",
                                         dim, rst, via_link.c_str());
 
-                                if (!link.empty())
+                                // Only show the raw link when there is no alias to use instead.
+                                if (!link.empty() && item_alias <= 0)
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %s", link.c_str());
 
+                                // Comments: suppress raw URI — user uses /feed comments #N.
                                 if (!replies_link.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "  %sComments:%s %s",
-                                        dim, rst, replies_link.c_str());
+                                        "  %sComments:%s /feed comments #%s",
+                                        dim, rst, alias_pfx.empty() ? "?" : alias_pfx.c_str());
 
                                 if (!ae.categories.empty())
                                 {

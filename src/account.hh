@@ -386,6 +386,13 @@ namespace weechat
             auto it = feed_alias_fwd.find(feed_key + "\n" + std::string(alias));
             return it != feed_alias_fwd.end() ? it->second : std::string();
         }
+        // Reverse lookup: item_id → alias number for a feed_key. Returns -1 if not found.
+        int feed_alias_lookup(const std::string& feed_key, const std::string& item_id) const
+        {
+            auto it = feed_alias_rev.find(feed_key + "\n" + item_id);
+            if (it == feed_alias_rev.end()) return -1;
+            try { return std::stoi(it->second); } catch (...) { return -1; }
+        }
         void send_bookmarks();
         
         // Capability cache methods (XEP-0115)
