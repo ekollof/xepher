@@ -571,6 +571,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 continue;
                             }
 
+                            // Deduplication: skip items already rendered in a previous
+                            // /feed invocation (e.g. the same page re-fetched).
+                            if (item_id_raw && account.feed_item_seen(feed_key, item_id_raw))
+                                continue;
+
                             {
                                 const std::string &title    = ae.title;
                                 const std::string &pubdate  = ae.pubdate;
@@ -708,6 +713,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %s", body.c_str());
                             }
+                            // Mark rendered so push duplicates and re-fetches are suppressed.
+                            if (item_id_raw)
+                                account.feed_item_mark_seen(feed_key, item_id_raw);
                         }
                     }
 
