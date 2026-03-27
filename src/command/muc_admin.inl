@@ -1056,12 +1056,17 @@ int command__feed(const void *pointer, void *data,
             xmpp_stanza_release(author_el);
         }
 
-        // <link rel='via' href='xmpp:…'/>  (XEP-0472 §4.5 boost/repeat)
+        // <link rel='via' href='xmpp:…' ref='atom-id'/>  (XEP-0472 §4.5 boost/repeat)
+        // 'href' = XMPP URI of original item; 'ref' = Atom <id> of original (if known).
         {
+            const std::string rep_feed_key = fmt::format("{}/{}", rep_service, rep_node);
+            const std::string rep_atom_id  = ptr_account->feed_atom_id_get(rep_feed_key, rep_item_id);
             xmpp_stanza_t *via_el = xmpp_stanza_new(ptr_account->context);
             xmpp_stanza_set_name(via_el, "link");
             xmpp_stanza_set_attribute(via_el, "rel",  "via");
             xmpp_stanza_set_attribute(via_el, "href", via_uri.c_str());
+            if (!rep_atom_id.empty())
+                xmpp_stanza_set_attribute(via_el, "ref", rep_atom_id.c_str());
             xmpp_stanza_add_child(entry, via_el);
             xmpp_stanza_release(via_el);
         }
@@ -1704,6 +1709,20 @@ int command__feed(const void *pointer, void *data,
             xmpp_stanza_release(author_el);
         }
 
+        // <content type='text'>body</content> — XEP-0472 §4.2 requires at least
+        // one <content> element so receiving clients have something to display.
+        {
+            xmpp_stanza_t *content_el = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(content_el, "content");
+            xmpp_stanza_set_attribute(content_el, "type", "text");
+            xmpp_stanza_t *ct = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_text(ct, body.c_str());
+            xmpp_stanza_add_child(content_el, ct);
+            xmpp_stanza_release(ct);
+            xmpp_stanza_add_child(entry, content_el);
+            xmpp_stanza_release(content_el);
+        }
+
         // <thr:in-reply-to> for replies (XEP-0472 §4.2)
         if (!reply_to_id.empty())
         {
@@ -1721,6 +1740,33 @@ int command__feed(const void *pointer, void *data,
             xmpp_stanza_set_attribute(reply_el, "href", reply_xmpp_uri.c_str());
             xmpp_stanza_add_child(entry, reply_el);
             xmpp_stanza_release(reply_el);
+        }
+
+        // Determine the target service/node and whether this is a comments node.
+        // These are needed both for the <link rel='replies'> and for publish-options.
+        static constexpr std::string_view k_comments_pfx = "urn:xmpp:microblog:0:comments/";
+        const bool is_comments_node = (pub_node.rfind(k_comments_pfx, 0) == 0);
+        const std::string target_service = (!reply_target_service.empty())
+            ? reply_target_service : pub_service;
+        const std::string target_node    = (!reply_target_node.empty())
+            ? reply_target_node    : pub_node;
+
+        // <link rel='replies' title='comments' href='xmpp:…'/> for top-level posts (XEP-0277 §3).
+        // Only for top-level posts (not replies), and not when publishing to an already-existing
+        // comments node.  The comments node URI follows XEP-0277 §3: urn:xmpp:microblog:0:comments/<uuid>.
+        if (reply_to_id.empty() && !is_comments_node)
+        {
+            const std::string comments_node_name =
+                fmt::format("urn:xmpp:microblog:0:comments/{}", item_uuid);
+            const std::string comments_xmpp_uri = fmt::format(
+                "xmpp:{}?;node={}", target_service, comments_node_name);
+            xmpp_stanza_t *replies_el = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(replies_el, "link");
+            xmpp_stanza_set_attribute(replies_el, "rel",   "replies");
+            xmpp_stanza_set_attribute(replies_el, "title", "comments");
+            xmpp_stanza_set_attribute(replies_el, "href",  comments_xmpp_uri.c_str());
+            xmpp_stanza_add_child(entry, replies_el);
+            xmpp_stanza_release(replies_el);
         }
 
         // <generator> — identify the client (XEP-0277 / RFC 4287)
@@ -1747,10 +1793,6 @@ int command__feed(const void *pointer, void *data,
 
         // Wrap in <publish node='…'><item…/></publish>
         // For replies, publish to the comments node, not the blog node (XEP-0472 §5).
-        const std::string target_service = (!reply_target_service.empty())
-            ? reply_target_service : pub_service;
-        const std::string target_node    = (!reply_target_node.empty())
-            ? reply_target_node    : pub_node;
         xmpp_stanza_t *pub_children2[2] = {item_el, nullptr};
         xmpp_stanza_t *publish_el = stanza__iq_pubsub_publish(
             ptr_account->context, nullptr, pub_children2, with_noop(target_node.c_str()));
@@ -1761,8 +1803,6 @@ int command__feed(const void *pointer, void *data,
         // exact config we don't know; XEP-0060 §7.1.5 requires every asserted
         // field to match the node's current config exactly, so we omit
         // publish-options entirely to avoid precondition-not-met.
-        static constexpr std::string_view k_comments_pfx = "urn:xmpp:microblog:0:comments/";
-        bool is_comments_node = (pub_node.rfind(k_comments_pfx, 0) == 0);
         xmpp_stanza_t *pub_opts = nullptr;
         if (subcmd != "reply" && !is_comments_node)
         {
