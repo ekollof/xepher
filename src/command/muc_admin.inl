@@ -1421,6 +1421,33 @@ int command__feed(const void *pointer, void *data,
                         && std::string_view(argv[2]).find('@') == std::string_view::npos
                         && std::string_view(argv[2]) != "--open")));
 
+        // --edit flag: delegate to feed-compose Python script.
+        // Supported forms:
+        //   /feed post --edit              → open blank composer (short form from feed buffer)
+        //   /feed reply #N --edit          → open composer pre-wired for reply to #N
+        //   /feed reply svc node id --edit → same, long form
+        // The last argv must be "--edit"; we strip it and hand off.
+        if (subcmd != "retract" && argc >= 3
+            && std::string_view(argv[argc - 1]) == "--edit")
+        {
+            std::string compose_args;
+            if (subcmd == "reply")
+            {
+                // Determine the alias/id argument regardless of short/long form.
+                // short form: argv[2] = alias
+                // long  form: argv[4] = alias/id  (service=argv[2], node=argv[3])
+                std::string_view alias_arg = reply_short_form
+                    ? std::string_view(argv[2])
+                    : (argc >= 5 ? std::string_view(argv[4]) : std::string_view());
+                if (!alias_arg.empty())
+                    compose_args = fmt::format("--reply {}", alias_arg);
+            }
+            // For post, no extra args — open a blank composer in the current buffer.
+            weechat_command(buffer,
+                fmt::format("/feed-compose {}", compose_args).c_str());
+            return WEECHAT_RC_OK;
+        }
+
         int min_argc = subcmd == "reply"   ? (reply_short_form ? 4 : 6)
                      : subcmd == "retract" ? 5
                      : (post_short_form    ? 3 : 5); // post
@@ -1430,12 +1457,14 @@ int command__feed(const void *pointer, void *data,
                 weechat_printf(buffer,
                                _("%s%s: usage: /feed post <service-jid> <node> <text>\n"
                                  "           or: /feed post <text>  (from a feed buffer)\n"
-                                 "           or: /feed post -- <text>  (force short form when body starts with a JID-like word)"),
+                                 "           or: /feed post -- <text>  (force short form when body starts with a JID-like word)\n"
+                                 "           or: /feed post --edit  (open $EDITOR, requires feed-compose.py)"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
             else if (subcmd == "reply")
                 weechat_printf(buffer,
                                _("%s%s: usage: /feed reply <service-jid> <node> <item-id|#N> <text>\n"
-                                 "           or: /feed reply #N <text>  (from a feed buffer)"),
+                                 "           or: /feed reply #N <text>  (from a feed buffer)\n"
+                                 "           or: /feed reply #N --edit  (open $EDITOR, requires feed-compose.py)"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
             else
                 weechat_printf(buffer,
