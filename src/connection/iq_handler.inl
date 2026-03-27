@@ -667,8 +667,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                         "  %sRepeated from:%s %s",
                                         dim, rst, via_link.c_str());
 
-                                // Only show the raw link when there is no alias to use instead.
-                                if (!link.empty() && item_alias <= 0)
+                                if (!link.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %s", link.c_str());
 
