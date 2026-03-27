@@ -571,10 +571,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 continue;
                             }
 
-                            // Deduplication: skip items already rendered in a previous
-                            // /feed invocation (e.g. the same page re-fetched).
-                            if (item_id_raw && account.feed_item_seen(feed_key, item_id_raw))
-                                continue;
+                            // Deduplication: only suppress items that arrive via
+                            // push (message_handler).  IQ results are explicit
+                            // user fetches (/feed …) so always render them.
+                            // mark_seen is still called so push duplicates are
+                            // suppressed after the fetch.
 
                             {
                                 const std::string &title    = ae.title;
