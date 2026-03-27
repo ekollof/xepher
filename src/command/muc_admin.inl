@@ -1713,10 +1713,17 @@ int command__feed(const void *pointer, void *data,
         xmpp_stanza_t *publish_el = stanza__iq_pubsub_publish(
             ptr_account->context, nullptr, pub_children2, with_noop(target_node.c_str()));
 
-        // <publish-options> with required XEP-0472 node config
-        xmpp_stanza_t *pub_opts = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(pub_opts, "publish-options");
+        // <publish-options>: assert node config so the server auto-creates the node
+        // correctly for /feed post.  For /feed reply we publish to a pre-existing
+        // comments node whose exact config we don't know; XEP-0060 §7.1.5 requires
+        // every asserted field to match the node's current config exactly, so we
+        // omit publish-options entirely for replies to avoid precondition-not-met.
+        xmpp_stanza_t *pub_opts = nullptr;
+        if (subcmd != "reply")
         {
+            pub_opts = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(pub_opts, "publish-options");
+
             xmpp_stanza_t *x = xmpp_stanza_new(ptr_account->context);
             xmpp_stanza_set_name(x, "x");
             xmpp_stanza_set_ns(x, "jabber:x:data");
@@ -1737,19 +1744,11 @@ int command__feed(const void *pointer, void *data,
 
             add_field("FORM_TYPE", "http://jabber.org/protocol/pubsub#publish-options");
             add_field("pubsub#persist_items", "true");
-            // Do NOT send pubsub#max_items for replies: the comments node has its
-            // own configured max_items and Prosody rejects publish-options that
-            // don't exactly match the node's current config (XEP-0060 §7.1.5).
-            if (subcmd != "reply")
-                add_field("pubsub#max_items", "max");
+            add_field("pubsub#max_items",     "max");
             add_field("pubsub#notify_retract","true");
             add_field("pubsub#send_last_published_item", "never");
             add_field("pubsub#deliver_payloads", "false");  // XEP-0472 §5.1.1
-            // XEP-0472: set pubsub#type to identify the node type
-            if (subcmd == "reply")
-                add_field("pubsub#type", "urn:xmpp:microblog:0:comments");
-            else
-                add_field("pubsub#type", "urn:xmpp:microblog:0");
+            add_field("pubsub#type", "urn:xmpp:microblog:0");
             if (access_open)
                 add_field("pubsub#access_model", "open");
 
@@ -1757,7 +1756,7 @@ int command__feed(const void *pointer, void *data,
             xmpp_stanza_release(x);
         }
 
-        // Assemble: <pubsub><publish/><publish-options/></pubsub>
+        // Assemble: <pubsub><publish/>[<publish-options/>]</pubsub>
         xmpp_stanza_t *ps_children[3] = {publish_el, pub_opts, nullptr};
         xmpp_stanza_t *pubsub_el = stanza__iq_pubsub(
             ptr_account->context, nullptr, ps_children,
