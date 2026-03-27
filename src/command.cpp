@@ -654,12 +654,17 @@ void command__init()
     hook = weechat_hook_command(
         "feed",
         N_("fetch and interact with PubSub feeds (XEP-0060 / XEP-0472 microblogging)"),
-        N_("[<service-jid> [--all | <node>] [--limit N] [--before <id>]]\n"
+        N_("[<service-jid> [--all | <node>] [--limit N] [--before <id>] [--latest]]\n"
            "  discover [--all]\n"
            "  post <service-jid> <node> [--open] <text>\n"
-           "  reply <service-jid> <node> <item-id> <text>\n"
-           "  comments <service-jid> <node> <item-id>\n"
+           "  post [--open] <text>  (from a feed buffer)\n"
+           "  post -- <text>        (force short form when body starts with a JID-like word)\n"
+           "  reply <service-jid> <node> <item-id|#N> [--open] <text>\n"
+           "  reply #N [--open] <text>  (from a feed buffer)\n"
+           "  comments <service-jid> <node> <item-id|#N>\n"
+           "  comments #N           (from a feed buffer)\n"
            "  repeat <service-jid> <node> <item-id> [comment]\n"
+           "  repeat #N [comment]   (from a feed buffer)\n"
            "  retract <service-jid> <node> <item-id>\n"
            "  subscribe <service-jid> <node>\n"
            "  unsubscribe <service-jid> <node>\n"
@@ -669,13 +674,16 @@ void command__init()
            "       node: node name on the service (e.g. Phoronix)\n"
            "  --limit N: max items to fetch per node (default: 20)\n"
            "--before <id>: fetch the page of items older than item <id> (XEP-0059 RSM)\n"
-           "     --open: publish node with access_model=open (public)\n\n"
+           "   --latest: clear the saved RSM cursor and fetch the newest page\n"
+           "     --open: publish node with access_model=open (public)\n"
+           "         #N: short alias shown next to each displayed item (e.g. #3)\n"
+           "         --: separator to force short form when body starts with a JID-like word\n\n"
            "Without arguments: auto-discovers PubSub services on your server and fetches\n"
            "your subscribed nodes from each one.\n\n"
            "/feed discover: list PubSub services found on your server at connect time.\n"
            "  /feed discover --all  fetches every node from every discovered service.\n\n"
            "After a fetch the feed buffer shows a '/feed ... --before <id>' hint for\n"
-           "paging to older entries.\n\n"
+           "paging to older entries. Use --latest to go back to the newest page.\n\n"
            "Examples:\n"
            "  /feed                                          (auto-discover and fetch subscriptions)\n"
            "  /feed discover                                 (list known pubsub services)\n"
@@ -686,16 +694,23 @@ void command__init()
            "  /feed news.movim.eu Phoronix                   (fetch one specific node)\n"
            "  /feed news.movim.eu Phoronix --limit 5         (5 items only)\n"
            "  /feed news.movim.eu Phoronix --before abc123   (page back, older items)\n"
-           "  /feed post news.movim.eu myblog Hello world    (publish a post)\n"
+           "  /feed news.movim.eu Phoronix --latest          (return to latest page)\n"
+           "  /feed post news.movim.eu myblog Hello world    (publish a post, long form)\n"
+           "  /feed post Hello world                         (publish from a feed buffer)\n"
+           "  /feed post -- hello@world.example great post   (force short form)\n"
            "  /feed post news.movim.eu myblog --open Hello   (publish to a public node)\n"
            "  /feed reply news.movim.eu myblog abc123 Nice!  (reply to item abc123)\n"
+           "  /feed reply #3 Nice post!                      (reply using alias, from feed buffer)\n"
            "  /feed comments news.movim.eu myblog abc123     (fetch comments for item abc123)\n"
+           "  /feed comments #3                              (fetch comments using alias)\n"
            "  /feed repeat news.movim.eu myblog abc123       (boost item abc123)\n"
+           "  /feed repeat #3 Great post                     (boost using alias, with comment)\n"
            "  /feed retract news.movim.eu myblog abc123      (delete item abc123)\n"
            "  /feed subscribe news.movim.eu Phoronix         (subscribe to node)\n"
            "  /feed unsubscribe news.movim.eu Phoronix       (unsubscribe from node)\n"
            "  /feed subscriptions news.movim.eu              (list subscriptions)"),
-        NULL, &command__feed, NULL, NULL);
+        "discover||post||reply||comments||repeat||retract||subscribe||unsubscribe||subscriptions",
+        &command__feed, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /feed");
 
