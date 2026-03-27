@@ -1182,8 +1182,6 @@ int command__feed(const void *pointer, void *data,
             add_field_r("pubsub#persist_items", "true");
             add_field_r("pubsub#max_items",     "max");
             add_field_r("pubsub#notify_retract","true");
-            add_field_r("pubsub#send_last_published_item", "never");
-            add_field_r("pubsub#deliver_payloads", "false");
             add_field_r("pubsub#type", "urn:xmpp:microblog:0");
             xmpp_stanza_add_child(pub_opts_r, x);
             xmpp_stanza_release(x);
@@ -1934,8 +1932,6 @@ int command__feed(const void *pointer, void *data,
             add_field("pubsub#persist_items", "true");
             add_field("pubsub#max_items",     "max");
             add_field("pubsub#notify_retract","true");
-            add_field("pubsub#send_last_published_item", "never");
-            add_field("pubsub#deliver_payloads", "false");  // XEP-0472 §5.1.1
             add_field("pubsub#type", "urn:xmpp:microblog:0");
             if (access_open)
                 add_field("pubsub#access_model", "open");
