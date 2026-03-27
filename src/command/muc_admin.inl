@@ -1160,6 +1160,122 @@ int command__feed(const void *pointer, void *data,
     }
 
     // ── /feed post <service> <node> <text> ──────────────────────────────────
+    if (subcmd == "comments")
+    {
+        if (argc < 5)
+        {
+            weechat_printf(buffer,
+                           _("%s%s: usage: /feed comments <service-jid> <node> <item-id>"),
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            return WEECHAT_RC_OK;
+        }
+
+        const std::string service_jid = argv[2];
+        const std::string node_name   = argv[3];
+        const std::string item_id     = argv[4];
+        const std::string feed_key    = fmt::format("{}/{}", service_jid, node_name);
+        const std::string replies_uri = ptr_account->feed_replies_link_get(feed_key, item_id);
+        if (replies_uri.empty())
+        {
+            weechat_printf(buffer,
+                           _("%s%s: no cached comments link for %s/%s item %s; fetch the post first"),
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                           service_jid.c_str(), node_name.c_str(), item_id.c_str());
+            return WEECHAT_RC_OK;
+        }
+
+        auto percent_decode = [](std::string_view in) {
+            std::string out;
+            out.reserve(in.size());
+            auto hexval = [](char c) -> int {
+                if (c >= '0' && c <= '9') return c - '0';
+                if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+                if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+                return -1;
+            };
+            for (size_t i = 0; i < in.size(); ++i)
+            {
+                if (in[i] == '%' && i + 2 < in.size())
+                {
+                    int hi = hexval(in[i + 1]);
+                    int lo = hexval(in[i + 2]);
+                    if (hi >= 0 && lo >= 0)
+                    {
+                        out.push_back(static_cast<char>((hi << 4) | lo));
+                        i += 2;
+                        continue;
+                    }
+                }
+                out.push_back(in[i]);
+            }
+            return out;
+        };
+
+        std::string comments_service;
+        std::string comments_node;
+        if (replies_uri.rfind("xmpp:", 0) == 0)
+        {
+            auto qpos = replies_uri.find('?');
+            comments_service = (qpos == std::string::npos)
+                ? replies_uri.substr(5)
+                : replies_uri.substr(5, qpos - 5);
+            if (qpos != std::string::npos)
+            {
+                std::string_view query(replies_uri.data() + qpos + 1, replies_uri.size() - qpos - 1);
+                auto npos = query.find("node=");
+                if (npos != std::string_view::npos)
+                {
+                    auto start = npos + 5;
+                    auto end = query.find(';', start);
+                    comments_node = percent_decode(query.substr(start, end == std::string_view::npos ? query.size() - start : end - start));
+                }
+            }
+        }
+
+        if (comments_service.empty() || comments_node.empty())
+        {
+            weechat_printf(buffer,
+                           _("%s%s: could not parse comments link: %s"),
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                           replies_uri.c_str());
+            return WEECHAT_RC_OK;
+        }
+
+        std::string comments_feed_key = fmt::format("{}/{}", comments_service, comments_node);
+        ptr_account->channels.try_emplace(
+            comments_feed_key,
+            *ptr_account,
+            weechat::channel::chat_type::FEED,
+            comments_feed_key,
+            comments_feed_key);
+
+        std::array<xmpp_stanza_t *, 3> pub_children = {nullptr, nullptr, nullptr};
+        pub_children[0] = stanza__iq_pubsub_items(ptr_account->context, nullptr,
+                                                  comments_node.c_str(), 20);
+        pub_children[0] = stanza__iq_pubsub(ptr_account->context, nullptr, pub_children.data(),
+                                            with_noop("http://jabber.org/protocol/pubsub"));
+        pub_children[1] = nullptr;
+
+        xmpp_string_guard uid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
+        const char *uid = uid_g.ptr;
+        pub_children[0] = stanza__iq(ptr_account->context, nullptr, pub_children.data(),
+                                     nullptr, uid,
+                                     ptr_account->jid().data(),
+                                     comments_service.c_str(),
+                                     "get");
+        if (uid)
+            ptr_account->pubsub_fetch_ids[uid] = {comments_service, comments_node, "", 20};
+
+        ptr_account->connection.send(pub_children[0]);
+        xmpp_stanza_release(pub_children[0]);
+
+        weechat_printf(buffer, "%sFetching comments for %s/%s item %s from %s/%s…",
+                       weechat_prefix("network"),
+                       service_jid.c_str(), node_name.c_str(), item_id.c_str(),
+                       comments_service.c_str(), comments_node.c_str());
+        return WEECHAT_RC_OK;
+    }
+
     if (subcmd == "post" || subcmd == "reply" || subcmd == "retract")
     {
         if (argc < (subcmd == "reply" ? 6 : (subcmd == "retract" ? 5 : 5)))
@@ -1356,13 +1472,17 @@ int command__feed(const void *pointer, void *data,
         // <thr:in-reply-to> for replies (XEP-0472 §4.2)
         if (!reply_to_id.empty())
         {
+            const std::string reply_feed_key = fmt::format("{}/{}", pub_service, pub_node);
             const std::string reply_xmpp_uri = fmt::format(
                 "xmpp:{}?;node={};item={}", pub_service, pub_node, reply_to_id);
+            const std::string reply_atom_id = ptr_account->feed_atom_id_get(reply_feed_key, reply_to_id);
             xmpp_stanza_t *reply_el = xmpp_stanza_new(ptr_account->context);
             xmpp_stanza_set_name(reply_el, "thr:in-reply-to");
             xmpp_stanza_set_attribute(reply_el, "xmlns:thr",
                                       "http://purl.org/syndication/thread/1.0");
-            xmpp_stanza_set_attribute(reply_el, "ref", reply_to_id.c_str());
+            xmpp_stanza_set_attribute(reply_el, "ref",
+                                      reply_atom_id.empty() ? reply_xmpp_uri.c_str()
+                                                            : reply_atom_id.c_str());
             xmpp_stanza_set_attribute(reply_el, "href", reply_xmpp_uri.c_str());
             xmpp_stanza_add_child(entry, reply_el);
             xmpp_stanza_release(reply_el);
@@ -1642,4 +1762,3 @@ int command__feed(const void *pointer, void *data,
 
     return WEECHAT_RC_OK;
 }
-

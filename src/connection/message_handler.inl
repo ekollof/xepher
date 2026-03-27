@@ -773,13 +773,55 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                             if (!entry)
                                 entry = xmpp_stanza_get_child_by_name(child, "entry");
 
-                            atom_entry ae = parse_atom_entry(account.context, entry);
+                            xmpp_stanza_t *feed = xmpp_stanza_get_child_by_name_and_ns(
+                                child, "feed", "http://www.w3.org/2005/Atom");
+                            if (!feed)
+                                feed = xmpp_stanza_get_child_by_name(child, "feed");
+
+                            if (!entry && feed)
+                            {
+                                atom_feed af = parse_atom_feed(account.context, feed);
+                                if (!af.empty())
+                                {
+                                    if (!af.title.empty())
+                                    {
+                                        feed_ch.update_name(af.title.c_str());
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                            "%sFeed title:%s %s",
+                                            weechat_prefix("network"),
+                                            weechat_color("reset"),
+                                            af.title.c_str());
+                                    }
+                                    if (!af.author.empty())
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                            "  %sAuthor:%s %s",
+                                            weechat_color("darkgray"),
+                                            weechat_color("reset"),
+                                            af.author.c_str());
+                                    if (!af.subtitle.empty())
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                            "  %s", af.subtitle.c_str());
+                                }
+                                if (item_id_raw)
+                                    account.feed_item_mark_seen(feed_key, item_id_raw);
+                                continue;
+                            }
+
+                            const char *publisher = xmpp_stanza_get_attribute(child, "publisher");
+                            atom_entry ae = parse_atom_entry(account.context, entry, publisher);
+                            if (item_id_raw && !ae.item_id.empty())
+                                account.feed_atom_id_set(feed_key, item_id_raw, ae.item_id);
+                            if (item_id_raw && !ae.replies_link.empty())
+                                account.feed_replies_link_set(feed_key, item_id_raw, ae.replies_link);
 
                             const std::string &title    = ae.title;
                             const std::string &pubdate  = ae.pubdate;
                             const std::string &link     = ae.link;
                             const std::string &author   = ae.author;
                             const std::string &reply_to = ae.reply_to;
+                            const std::string &via_link = ae.via_link;
+                            const std::string &replies_link = ae.replies_link;
+                            const std::string &geoloc = ae.geoloc;
 
                             // When true, display was deferred to the IQ result handler;
                             // do NOT mark the item seen here — the IQ handler will do it.
@@ -864,9 +906,42 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                         "  %sIn reply to:%s %s",
                                         dim, rst, reply_to.c_str());
 
+                                if (!via_link.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %sRepeated from:%s %s",
+                                        dim, rst, via_link.c_str());
+
                                 if (!link.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %s", link.c_str());
+
+                                if (!replies_link.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %sComments:%s %s",
+                                        dim, rst, replies_link.c_str());
+
+                                if (!ae.categories.empty())
+                                {
+                                    std::string tags;
+                                    for (size_t i = 0; i < ae.categories.size(); ++i)
+                                    {
+                                        if (i) tags += ", ";
+                                        tags += ae.categories[i];
+                                    }
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %sTags:%s %s",
+                                        dim, rst, tags.c_str());
+                                }
+
+                                for (const auto &enclosure : ae.enclosures)
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %sAttachment:%s %s",
+                                        dim, rst, enclosure.c_str());
+
+                                if (!geoloc.empty())
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %sLocation:%s %s",
+                                        dim, rst, geoloc.c_str());
 
                                 if (!body.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
@@ -3017,4 +3092,3 @@ static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
                                  weechat_color("cyan"), weechat_color("resetcolor"),
                                  weechat_color("yellow"), weechat_color("resetcolor"));
 }
-

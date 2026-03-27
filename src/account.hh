@@ -251,6 +251,13 @@ namespace weechat
         // identity category='pubsub'. Used by /feed discover and /feed (no args).
         std::vector<std::string> known_pubsub_services;
 
+        // Runtime cache: map "feed_key + item_id" to Atom entry IDs so /feed reply
+        // can reference the target entry's real atom:id in thr:in-reply-to@ref.
+        std::unordered_map<std::string, std::string> feed_atom_ids;
+        // Runtime cache: map "feed_key + item_id" to replies XMPP URI so
+        // /feed comments can open/fetch the comments node for a post.
+        std::unordered_map<std::string, std::string> feed_replies_links;
+
         // XEP-0191: Blocking Command — pending unblock picker (non-owning; picker owns itself)
         weechat::ui::picker<std::string> *blocklist_picker = nullptr;
 
@@ -321,6 +328,30 @@ namespace weechat
         // Feed item deduplication (stored in cursors LMDB table)
         bool feed_item_seen(const std::string& feed_key, const std::string& item_id);
         void feed_item_mark_seen(const std::string& feed_key, const std::string& item_id);
+        void feed_atom_id_set(const std::string& feed_key, const std::string& item_id,
+                              const std::string& atom_id)
+        {
+            if (feed_key.empty() || item_id.empty() || atom_id.empty())
+                return;
+            feed_atom_ids[feed_key + "\n" + item_id] = atom_id;
+        }
+        std::string feed_atom_id_get(const std::string& feed_key, const std::string& item_id) const
+        {
+            auto it = feed_atom_ids.find(feed_key + "\n" + item_id);
+            return it != feed_atom_ids.end() ? it->second : std::string();
+        }
+        void feed_replies_link_set(const std::string& feed_key, const std::string& item_id,
+                                   const std::string& replies_uri)
+        {
+            if (feed_key.empty() || item_id.empty() || replies_uri.empty())
+                return;
+            feed_replies_links[feed_key + "\n" + item_id] = replies_uri;
+        }
+        std::string feed_replies_link_get(const std::string& feed_key, const std::string& item_id) const
+        {
+            auto it = feed_replies_links.find(feed_key + "\n" + item_id);
+            return it != feed_replies_links.end() ? it->second : std::string();
+        }
         void send_bookmarks();
         
         // Capability cache methods (XEP-0115)

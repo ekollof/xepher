@@ -28,7 +28,8 @@ static std::string atom_text_child(xmpp_ctx_t *ctx, xmpp_stanza_t *parent, const
     return s;
 }
 
-atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry)
+atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
+                            const char *publisher)
 {
     atom_entry e;
     if (!entry) return e;
@@ -36,7 +37,11 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry)
     e.title   = atom_text_child(ctx, entry, "title");
     e.summary = atom_text_child(ctx, entry, "summary");
     e.pubdate = atom_text_child(ctx, entry, "published");
+    e.updated = atom_text_child(ctx, entry, "updated");
     e.item_id = atom_text_child(ctx, entry, "id");
+
+    if (e.pubdate.empty())
+        e.pubdate = e.updated;
 
     // <content> — RFC 4287 §4.1.3.
     // Movim and other clients often publish both type='text' and type='xhtml'.
@@ -113,8 +118,30 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry)
                     xmpp_free(ctx, t);
                 }
             }
+
+            xmpp_stanza_t *uri_el = xmpp_stanza_get_child_by_name(author_el, "uri");
+            if (uri_el)
+            {
+                char *t = xmpp_stanza_get_text(uri_el);
+                if (t)
+                {
+                    e.author_uri = t;
+                    xmpp_free(ctx, t);
+                }
+            }
         }
     }
+
+    if (e.author.empty() && !e.author_uri.empty())
+    {
+        if (e.author_uri.size() >= 5 && e.author_uri.compare(0, 5, "xmpp:") == 0)
+            e.author = e.author_uri.substr(5);
+        else
+            e.author = e.author_uri;
+    }
+
+    if (e.author.empty() && publisher && *publisher)
+        e.author = publisher;
 
     // Iterate children for <link> and <thr:in-reply-to>
     for (xmpp_stanza_t *child = xmpp_stanza_get_children(entry);
@@ -139,6 +166,15 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry)
                 if (e.via_link.empty())
                     e.via_link = href;
             }
+            else if (strcasecmp(rel, "replies") == 0)
+            {
+                if (e.replies_link.empty())
+                    e.replies_link = href;
+            }
+            else if (strcasecmp(rel, "enclosure") == 0)
+            {
+                e.enclosures.emplace_back(href);
+            }
         }
         else if (strcasecmp(child_name, "in-reply-to") == 0 ||
                  strcasecmp(child_name, "thr:in-reply-to") == 0)
@@ -156,7 +192,77 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry)
                 }
             }
         }
+        else if (strcasecmp(child_name, "category") == 0)
+        {
+            const char *term = xmpp_stanza_get_attribute(child, "term");
+            if (term && *term)
+                e.categories.emplace_back(term);
+        }
+        else if (strcasecmp(child_name, "geoloc") == 0)
+        {
+            std::string lat = atom_text_child(ctx, child, "lat");
+            std::string lon = atom_text_child(ctx, child, "lon");
+            std::string country = atom_text_child(ctx, child, "country");
+            std::string region = atom_text_child(ctx, child, "region");
+            std::string locality = atom_text_child(ctx, child, "locality");
+
+            if (!lat.empty() || !lon.empty())
+                e.geoloc = lat + (lat.empty() || lon.empty() ? "" : ", ") + lon;
+            if (!locality.empty())
+                e.geoloc += (e.geoloc.empty() ? "" : " - ") + locality;
+            else if (!region.empty())
+                e.geoloc += (e.geoloc.empty() ? "" : " - ") + region;
+            if (!country.empty())
+                e.geoloc += (e.geoloc.empty() ? "" : ", ") + country;
+        }
     }
 
     return e;
+}
+
+atom_feed parse_atom_feed(xmpp_ctx_t *ctx, xmpp_stanza_t *feed)
+{
+    atom_feed f;
+    if (!feed) return f;
+
+    f.title    = atom_text_child(ctx, feed, "title");
+    f.subtitle = atom_text_child(ctx, feed, "subtitle");
+    f.updated  = atom_text_child(ctx, feed, "updated");
+    f.feed_id  = atom_text_child(ctx, feed, "id");
+
+    xmpp_stanza_t *author_el = xmpp_stanza_get_child_by_name(feed, "author");
+    if (author_el)
+    {
+        xmpp_stanza_t *name_el = xmpp_stanza_get_child_by_name(author_el, "name");
+        if (name_el)
+        {
+            char *t = xmpp_stanza_get_text(name_el);
+            if (t)
+            {
+                f.author = t;
+                xmpp_free(ctx, t);
+            }
+        }
+
+        xmpp_stanza_t *uri_el = xmpp_stanza_get_child_by_name(author_el, "uri");
+        if (uri_el)
+        {
+            char *t = xmpp_stanza_get_text(uri_el);
+            if (t)
+            {
+                f.author_uri = t;
+                xmpp_free(ctx, t);
+            }
+        }
+    }
+
+    if (f.author.empty() && !f.author_uri.empty())
+    {
+        if (f.author_uri.size() >= 5 && f.author_uri.compare(0, 5, "xmpp:") == 0)
+            f.author = f.author_uri.substr(5);
+        else
+            f.author = f.author_uri;
+    }
+
+    return f;
 }
