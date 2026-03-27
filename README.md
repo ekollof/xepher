@@ -926,6 +926,31 @@ tools/correlate_omemo_xml.sh --account <account>
 
 ---
 
+## Companion scripts
+
+Optional Python scripts live in `scripts/`.  They are **not** loaded
+automatically — install the ones you want by hand.
+
+### feed_compose.py — compose posts in `$EDITOR`
+
+Opens a temporary file in your editor; on save the content is placed in the
+WeeChat input bar as a `/feed post …` command ready to review and send.
+
+```sh
+cp scripts/feed_compose.py ~/.local/share/weechat/python/autoload/
+```
+
+Inside WeeChat:
+
+```
+/alias add fc /feed-compose
+/key bind meta-e /feed-compose
+```
+
+See [`scripts/README.md`](scripts/README.md) for full configuration options.
+
+---
+
 ## Contributing
 
 Pull requests and issues are welcome.  
