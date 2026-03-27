@@ -623,7 +623,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 // Comments: suppress raw URI — user uses /feed comments #N.
                                 if (!replies_link.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "  %sComments:%s /feed comments #%s",
+                                        "  %sComments:%s /feed comments %s",
                                         dim, rst, alias_pfx.empty() ? "?" : alias_pfx.c_str());
 
                                 if (!ae.categories.empty())
