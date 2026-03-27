@@ -1441,6 +1441,9 @@ int command__feed(const void *pointer, void *data,
         // Optional flag: --open  (sets pubsub#access_model=open)
         bool access_open = false;
         std::string reply_to_id;
+        // For replies: the actual publish target (comments node, not the blog node)
+        std::string reply_target_service;
+        std::string reply_target_node;
         const char *body_raw = nullptr;
         if (subcmd == "reply")
         {
@@ -1490,6 +1493,60 @@ int command__feed(const void *pointer, void *data,
                 }
                 else
                     body_raw    = argv_eol[5];
+            }
+
+            // Resolve the comments node URI for this reply.
+            // XEP-0472 §5: replies go to the comments node, not the blog node.
+            const std::string replies_uri_for_reply =
+                ptr_account->feed_replies_link_get(pub_feed_key, reply_to_id);
+            if (!replies_uri_for_reply.empty() && replies_uri_for_reply.rfind("xmpp:", 0) == 0)
+            {
+                auto qpos = replies_uri_for_reply.find('?');
+                reply_target_service = (qpos == std::string::npos)
+                    ? replies_uri_for_reply.substr(5)
+                    : replies_uri_for_reply.substr(5, qpos - 5);
+                if (qpos != std::string::npos)
+                {
+                    std::string_view query(replies_uri_for_reply.data() + qpos + 1,
+                                           replies_uri_for_reply.size() - qpos - 1);
+                    auto npos2 = query.find("node=");
+                    if (npos2 != std::string_view::npos)
+                    {
+                        auto start = npos2 + 5;
+                        auto end   = query.find(';', start);
+                        // percent-decode the node name
+                        std::string raw_node(query.substr(start,
+                            end == std::string_view::npos ? query.size() - start : end - start));
+                        auto hexval = [](char c) -> int {
+                            if (c >= '0' && c <= '9') return c - '0';
+                            if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+                            if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+                            return -1;
+                        };
+                        for (size_t i = 0; i < raw_node.size(); ++i)
+                        {
+                            if (raw_node[i] == '%' && i + 2 < raw_node.size())
+                            {
+                                int hi = hexval(raw_node[i + 1]);
+                                int lo = hexval(raw_node[i + 2]);
+                                if (hi >= 0 && lo >= 0)
+                                {
+                                    reply_target_node.push_back(
+                                        static_cast<char>((hi << 4) | lo));
+                                    i += 2;
+                                    continue;
+                                }
+                            }
+                            reply_target_node.push_back(raw_node[i]);
+                        }
+                    }
+                }
+            }
+            // Fallback: construct the standard comments node name on the same service.
+            if (reply_target_service.empty() || reply_target_node.empty())
+            {
+                reply_target_service = pub_service;
+                reply_target_node    = fmt::format("urn:xmpp:microblog:0:comments/{}", reply_to_id);
             }
         }
         else
@@ -1647,9 +1704,14 @@ int command__feed(const void *pointer, void *data,
             ptr_account->context, nullptr, item_children, with_noop(item_uuid.c_str()));
 
         // Wrap in <publish node='…'><item…/></publish>
+        // For replies, publish to the comments node, not the blog node (XEP-0472 §5).
+        const std::string target_service = (!reply_target_service.empty())
+            ? reply_target_service : pub_service;
+        const std::string target_node    = (!reply_target_node.empty())
+            ? reply_target_node    : pub_node;
         xmpp_stanza_t *pub_children2[2] = {item_el, nullptr};
         xmpp_stanza_t *publish_el = stanza__iq_pubsub_publish(
-            ptr_account->context, nullptr, pub_children2, with_noop(pub_node.c_str()));
+            ptr_account->context, nullptr, pub_children2, with_noop(target_node.c_str()));
 
         // <publish-options> with required XEP-0472 node config
         xmpp_stanza_t *pub_opts = xmpp_stanza_new(ptr_account->context);
@@ -1675,12 +1737,19 @@ int command__feed(const void *pointer, void *data,
 
             add_field("FORM_TYPE", "http://jabber.org/protocol/pubsub#publish-options");
             add_field("pubsub#persist_items", "true");
-            add_field("pubsub#max_items",     "max");
+            // Do NOT send pubsub#max_items for replies: the comments node has its
+            // own configured max_items and Prosody rejects publish-options that
+            // don't exactly match the node's current config (XEP-0060 §7.1.5).
+            if (subcmd != "reply")
+                add_field("pubsub#max_items", "max");
             add_field("pubsub#notify_retract","true");
             add_field("pubsub#send_last_published_item", "never");
             add_field("pubsub#deliver_payloads", "false");  // XEP-0472 §5.1.1
-            // XEP-0472: set pubsub#type to identify this as a social feed
-            add_field("pubsub#type", "urn:xmpp:microblog:0");
+            // XEP-0472: set pubsub#type to identify the node type
+            if (subcmd == "reply")
+                add_field("pubsub#type", "urn:xmpp:microblog:0:comments");
+            else
+                add_field("pubsub#type", "urn:xmpp:microblog:0");
             if (access_open)
                 add_field("pubsub#access_model", "open");
 
@@ -1700,7 +1769,7 @@ int command__feed(const void *pointer, void *data,
         xmpp_stanza_t *iq = stanza__iq(ptr_account->context, nullptr, iq_children,
                                        nullptr, uid_g.ptr,
                                        ptr_account->jid().data(),
-                                       pub_service.c_str(),
+                                       target_service.c_str(),
                                        "set");
 
         ptr_account->connection.send(iq);
@@ -1708,12 +1777,12 @@ int command__feed(const void *pointer, void *data,
 
         // Track publish IQ for error reporting
         if (uid_g.ptr)
-            ptr_account->pubsub_publish_ids[uid_g.ptr] = {pub_service, pub_node, item_uuid, buffer};
+            ptr_account->pubsub_publish_ids[uid_g.ptr] = {target_service, target_node, item_uuid, buffer};
 
         if (subcmd == "reply")
             weechat_printf(buffer, "%sPosted reply to %s on %s/%s",
                            weechat_prefix("network"),
-                           reply_to_id.c_str(), pub_service.c_str(), pub_node.c_str());
+                           reply_to_id.c_str(), target_service.c_str(), target_node.c_str());
         else
             weechat_printf(buffer, "%sPosted to %s/%s (id: %s)",
                            weechat_prefix("network"),
