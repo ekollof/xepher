@@ -269,6 +269,72 @@ Skip autojoin for IRC gateway rooms (causes connection issues):
 - Filter logs: `grep "OMEMO\|bundle\|devicelist" ~/.local/share/weechat/logs/xmpp.account.*.weechatlog`
 - **Note**: Plugin must be restarted (WeeChat closed/reopened) after code changes to test - cannot safely reload in-place
 
+### Interacting with a Running WeeChat Instance
+
+Two mechanisms are available for sending commands to or evaluating expressions in a running WeeChat process without touching the terminal.
+
+#### 1. Debug socket (preferred — two-way)
+
+`weechat_debug_socket.py` opens a Unix socket at:
+
+```
+$XDG_RUNTIME_DIR/weechat/weechat_debug.sock
+# typically: /run/user/1000/weechat/weechat_debug.sock
+```
+
+Use the `weechat-cmd.sh` wrapper from `~/Code/weechat-export/`:
+
+```bash
+# Eval a WeeChat expression (must use ${...} syntax) — returns result
+bash ~/Code/weechat-export/weechat-cmd.sh '${info:version}'
+bash ~/Code/weechat-export/weechat-cmd.sh '${weechat.color.chat_bg}'
+
+# Execute a WeeChat command — prints "ok", no output returned
+bash ~/Code/weechat-export/weechat-cmd.sh '/xmpp feed andrath@deimos.hackerheaven.org urn:xmpp:microblog:0'
+```
+
+Or directly with `socat`:
+
+```bash
+echo '${info:version}' | socat - UNIX-CONNECT:/run/user/1000/weechat/weechat_debug.sock
+```
+
+**Important**: The script must be loaded in the running WeeChat first. If the
+socket is absent, load it via the FIFO (see below):
+
+```bash
+echo "*/python load weechat_debug_socket.py" > /run/user/1000/weechat/weechat_fifo_<pid>
+```
+
+**Do NOT use the debug socket to run `/plugin reload xmpp`** — unloading the
+compiled plugin mid-session crashes WeeChat. Install a new `xmpp.so` to
+`~/.local/share/weechat/plugins/` and restart WeeChat instead.
+
+#### 2. FIFO pipe (one-way, no output)
+
+WeeChat creates a FIFO at:
+
+```
+$XDG_RUNTIME_DIR/weechat/weechat_fifo_<pid>
+# typically: /run/user/1000/weechat/weechat_fifo_<pid>
+```
+
+Find the current FIFO:
+
+```bash
+ls /run/user/1000/weechat/weechat_fifo_*
+```
+
+Send a command (note the `*\t` prefix — `*` means "core buffer", tab-separated):
+
+```bash
+echo "*/python load weechat_debug_socket.py" > /run/user/1000/weechat/weechat_fifo_<pid>
+```
+
+The FIFO is write-only and returns no output. Use it only when the debug socket
+is not yet available (e.g. to bootstrap loading `weechat_debug_socket.py`).
+Prefer the debug socket for all other interactions.
+
 **Testing Approach:**
 - **Pragmatic manual testing** - The codebase uses minimal automated tests due to:
   - Complex WeeChat plugin API dependencies
