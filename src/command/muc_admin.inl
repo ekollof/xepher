@@ -1344,14 +1344,27 @@ int command__feed(const void *pointer, void *data,
             && (argc >= 4)
             && (argv[2][0] == '#' || std::isdigit((unsigned char)argv[2][0]));
 
+        // Short-form detection for /feed post: "/feed post <text>"
+        // (no explicit service/node — inferred from the current FEED buffer).
+        // Distinguishable from long form because long form needs argc >= 5
+        // (post <service> <node> <text>); if argc < 5 and we're in a feed
+        // buffer, treat it as short form.
+        bool post_short_form = (subcmd == "post")
+            && (argc >= 3)
+            && (argc < 5 || (ptr_channel && ptr_channel->type == weechat::channel::chat_type::FEED
+                             && std::string_view(argv[2]).find('.') == std::string_view::npos
+                             && std::string_view(argv[2]).find('@') == std::string_view::npos
+                             && std::string_view(argv[2]) != "--open"));
+
         int min_argc = subcmd == "reply"   ? (reply_short_form ? 4 : 6)
                      : subcmd == "retract" ? 5
-                     :                       5; // post
+                     : (post_short_form    ? 3 : 5); // post
         if (argc < min_argc)
         {
             if (subcmd == "post")
                 weechat_printf(buffer,
-                               _("%s%s: usage: /feed post <service-jid> <node> <text>"),
+                               _("%s%s: usage: /feed post <service-jid> <node> <text>\n"
+                                 "           or: /feed post <text>  (from a feed buffer)"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
             else if (subcmd == "reply")
                 weechat_printf(buffer,
@@ -1368,14 +1381,15 @@ int command__feed(const void *pointer, void *data,
         std::string pub_service;
         std::string pub_node;
 
-        if (reply_short_form)
+        if (reply_short_form || post_short_form)
         {
             // Infer feed from current FEED buffer.
             if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::FEED)
             {
                 weechat_printf(buffer,
-                               _("%s%s: /feed reply #N requires running from a feed buffer"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                               _("%s%s: /feed %s short form requires running from a feed buffer"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                               std::string(subcmd).c_str());
                 return WEECHAT_RC_OK;
             }
             const std::string &fk = ptr_channel->name;
@@ -1564,14 +1578,29 @@ int command__feed(const void *pointer, void *data,
         }
         else
         {
-            // Check if --open appears before the body text
-            if (argc > 4 && std::string_view(argv[4]) == "--open")
+            // /feed post — check for --open flag
+            if (post_short_form)
             {
-                access_open = true;
-                body_raw    = argv_eol[5];
+                // Short form: argv[2] is either --open or the body text
+                if (argc > 2 && std::string_view(argv[2]) == "--open")
+                {
+                    access_open = true;
+                    body_raw    = argv_eol[3];
+                }
+                else
+                    body_raw = argv_eol[2];
             }
             else
-                body_raw = argv_eol[4];
+            {
+                // Long form: argv[2]=service, argv[3]=node, argv[4]=text (or --open)
+                if (argc > 4 && std::string_view(argv[4]) == "--open")
+                {
+                    access_open = true;
+                    body_raw    = argv_eol[5];
+                }
+                else
+                    body_raw = argv_eol[4];
+            }
         }
 
         if (!body_raw || !*body_raw)
@@ -1727,12 +1756,15 @@ int command__feed(const void *pointer, void *data,
             ptr_account->context, nullptr, pub_children2, with_noop(target_node.c_str()));
 
         // <publish-options>: assert node config so the server auto-creates the node
-        // correctly for /feed post.  For /feed reply we publish to a pre-existing
-        // comments node whose exact config we don't know; XEP-0060 §7.1.5 requires
-        // every asserted field to match the node's current config exactly, so we
-        // omit publish-options entirely for replies to avoid precondition-not-met.
+        // correctly for /feed post.  For /feed reply (or /feed post to a comments
+        // node via short form) we publish to a pre-existing comments node whose
+        // exact config we don't know; XEP-0060 §7.1.5 requires every asserted
+        // field to match the node's current config exactly, so we omit
+        // publish-options entirely to avoid precondition-not-met.
+        static constexpr std::string_view k_comments_pfx = "urn:xmpp:microblog:0:comments/";
+        bool is_comments_node = (pub_node.rfind(k_comments_pfx, 0) == 0);
         xmpp_stanza_t *pub_opts = nullptr;
-        if (subcmd != "reply")
+        if (subcmd != "reply" && !is_comments_node)
         {
             pub_opts = xmpp_stanza_new(ptr_account->context);
             xmpp_stanza_set_name(pub_opts, "publish-options");
