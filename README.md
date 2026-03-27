@@ -597,72 +597,76 @@ are Atom entries stored on PubSub nodes; contacts who subscribe to your
 > varies. Movim and Libervia implement the full stack; ejabberd supports the
 > underlying XEP-0060 mechanics.
 
+**Short aliases (#N):**
+
+When you fetch a feed, each item is assigned a short `#N` alias shown in green.
+Use it in place of the full item-id in any write command:
+
 ```
-/feed post <service-jid> <node> [--open] <text>
-/feed reply <service-jid> <node> <item-id> <text>
-/feed repeat <service-jid> <node> <item-id> [comment]
-/feed retract <service-jid> <node> <item-id>
-/feed comments <service-jid> <node> <item-id>
-/feed subscribe <service-jid> <node>
-/feed unsubscribe <service-jid> <node>
-/feed subscriptions <service-jid>
+/feed reply #3 That's a great point!
+/feed repeat #3 Great content
+/feed comments #3
+/feed retract #3
 ```
 
 **Publishing a post:**
 
 ```
+# Long form
 /feed post movim.eu urn:xmpp:microblog:0 Hello from WeeChat!
-/feed post movim.eu myblog --open My public post
+/feed post movim.eu myblog --open My public post     # --open = public node
+
+# Short form from a feed buffer (service/node inferred)
+/feed post Hello everyone!
+/feed post -- https://example.com check this out     # '--' avoids JID-like parse
 ```
 
-Sends an Atom `<entry>` to the PubSub node on `movim.eu`. The entry carries
-`pubsub#type=urn:xmpp:microblog:0` and the `urn:xmpp:pubsub-social-feed:1`
-publish-option required by XEP-0472. Use `--open` to set
-`pubsub#access_model=open` (public node visible to all).
-Contacts who follow your microblog receive a PEP push notification immediately.
+Sends an Atom `<entry>` to the PubSub node with `pubsub#type=urn:xmpp:microblog:0`
+and the `urn:xmpp:pubsub-social-feed:1` publish-option required by XEP-0472.
 Failed publishes are reported in the buffer with the server error condition.
 
 **Replying to a post (threaded):**
 
 ```
 /feed reply movim.eu urn:xmpp:microblog:0 abc123 That's a great point!
+/feed reply #3 That's a great point!    # short form using alias
 ```
 
-Adds a `thr:in-reply-to` element (RFC 4685) to the Atom entry referencing the
-original item ID `abc123`. Clients such as Movim render threaded conversations
-from these references.
+Adds a `thr:in-reply-to` element (RFC 4685) referencing the original item.
+Clients such as Movim render threaded conversations from these references.
 
 **Boosting / repeating a post (XEP-0472 §4.5):**
 
 ```
 /feed repeat movim.eu urn:xmpp:microblog:0 abc123
 /feed repeat movim.eu urn:xmpp:microblog:0 abc123 Great post!
+/feed repeat #3                         # short form using alias
+/feed repeat #3 Great content!          # short form with comment
 ```
 
-Publishes a new entry with a `<link rel='via'>` pointing to the original item,
-implementing the XEP-0472 boost/repeat pattern. An optional comment is included
-in the entry body.
+Publishes a new entry with `<link rel='via'>` pointing to the original item.
+An optional comment is included in the entry body.
 
 **Retracting (deleting) a post:**
 
 ```
 /feed retract movim.eu urn:xmpp:microblog:0 abc123
+/feed retract #3    # short form using alias
 ```
 
-Sends a PubSub retract for the given item ID. The post is removed from the
-node and a retraction notification is pushed to subscribers.
+Sends a PubSub retract IQ. Server errors are reported in the buffer.
 
 **Fetching comments for a post:**
 
 ```
 /feed comments movim.eu urn:xmpp:microblog:0 abc123
+/feed comments #3   # short form using alias
 ```
 
 If the post carried a `<link rel='replies'>` element (XEP-0277 §4.1), this
-fetches the linked comments node into a dedicated FEED buffer. The replies URI
-is cached from the most recent fetch or push of the item; if no link was
-advertised by the server the command reports that no cached link is available.
-Run `/feed movim.eu urn:xmpp:microblog:0` first to populate the cache.
+fetches the linked comments node into a dedicated FEED buffer. The hint is shown
+in the feed buffer as `Comments: /feed comments #N`. Run
+`/feed movim.eu urn:xmpp:microblog:0` first if no hint is shown.
 
 **Subscribing and unsubscribing:**
 
@@ -672,8 +676,8 @@ Run `/feed movim.eu urn:xmpp:microblog:0` first to populate the cache.
 /feed subscriptions news.movim.eu
 ```
 
-Sends XEP-0060 subscribe/unsubscribe IQ stanzas. Use `/feed subscriptions` to
-list all nodes you are subscribed to on a given service.
+Sends XEP-0060 subscribe/unsubscribe IQ stanzas. Feedback (success or error
+condition) is printed in the originating buffer.
 
 **Receiving posts from contacts:**
 
@@ -681,19 +685,21 @@ Incoming PEP pushes from contacts' `urn:xmpp:microblog:0` nodes are
 automatically rendered in the WeeChat buffer for that contact, showing the
 author name, timestamp, content body, and — when present — threaded reply
 references (`thr:in-reply-to`), boost/repeat provenance (`Repeated from:`),
-comments links (`Comments:`), category tags, enclosure URLs, and geolocation.
-XHTML and HTML content is rendered with WeeChat formatting (bold, italic, links,
-blockquotes). Duplicate items (already seen via IQ fetch) are suppressed via
-LMDB deduplication. Feed-level `<feed>` metadata items update the buffer title.
+comments links (`Comments: /feed comments #N`), category tags, enclosure URLs,
+and geolocation. XHTML and HTML content is rendered with WeeChat formatting.
+Duplicate items (already seen via IQ fetch) are suppressed via LMDB deduplication.
 
 **Reading a microblog feed:**
 
 ```
 /feed movim.eu urn:xmpp:microblog:0
+/feed movim.eu urn:xmpp:microblog:0 --limit 5
+/feed movim.eu urn:xmpp:microblog:0 --before <item-id>   # older page (RSM)
+/feed movim.eu urn:xmpp:microblog:0 --latest             # reset cursor; newest page
 ```
 
-Fetches recent posts from the node and opens a dedicated buffer. Supports
-RSM paging (`--before <id>`, `--limit N`). See the PubSub feed reader section.
+The RSM cursor is persisted in LMDB. Use `--latest` to go back to the newest
+page after paging back through older items.
 
 **Auto-discovering your server's PubSub services:**
 
@@ -857,14 +863,29 @@ file appears only once per message.
 | `/roster add <jid> [name]` | Add a contact |
 | `/roster del <jid>` | Remove a contact |
 | `/list [keywords]` | Search public MUC rooms (XEP-0433) |
-| `/feed <service-jid>` | Fetch all subscribed PubSub nodes from a service (XEP-0060) |
-| `/feed <service-jid> --all` | Discover and fetch all PubSub nodes on a service via disco#items |
-| `/feed <service-jid> <node>` | Fetch a specific PubSub node directly into a dedicated buffer |
+| `/feed` | Fetch subscriptions from all auto-discovered PubSub services (XEP-0060) |
+| `/feed discover` | List auto-discovered PubSub services |
+| `/feed discover --all` | Fetch every node from every discovered service |
+| `/feed <service-jid>` | Fetch all subscribed nodes on a service |
+| `/feed <service-jid> --all` | Discover and fetch all nodes via disco#items |
+| `/feed <service-jid> <node>` | Fetch a specific node into a dedicated buffer |
 | `/feed ... --limit N` | Override the per-node item limit (default: 20) |
-| `/feed ... --before <id>` | Fetch the page of items older than item `<id>` (XEP-0059 RSM paging) |
-| `/feed post <service> <node> <text>` | Publish a microblog post as an Atom entry (XEP-0472) |
-| `/feed reply <service> <node> <item-id> <text>` | Reply to a post with `thr:in-reply-to` threading |
-| `/feed retract <service> <node> <item-id>` | Retract (delete) a previously published post |
+| `/feed ... --before <id>` | Fetch items older than `<id>` (XEP-0059 RSM paging) |
+| `/feed ... --latest` | Clear saved RSM cursor; return to the newest page |
+| `/feed subscribe <service> <node>` | Subscribe to a PubSub node |
+| `/feed unsubscribe <service> <node>` | Unsubscribe from a PubSub node |
+| `/feed subscriptions <service>` | List subscribed nodes on a service |
+| `/feed post <service> <node> [--open] <text>` | Publish a microblog Atom entry (XEP-0472) |
+| `/feed post [--open] <text>` | Short form: post from a feed buffer (service/node inferred) |
+| `/feed post -- <text>` | `--` separator: body starts with JID-like word or URL |
+| `/feed reply <service> <node> <item-id\|#N> <text>` | Reply with `thr:in-reply-to` threading |
+| `/feed reply #N <text>` | Short form reply using item alias |
+| `/feed repeat <service> <node> <item-id> [comment]` | Boost/repeat a post (XEP-0472 §4.5) |
+| `/feed repeat #N [comment]` | Short form boost using item alias |
+| `/feed retract <service> <node> <item-id>` | Retract (delete) a published post |
+| `/feed retract #N` | Short form retract using item alias |
+| `/feed comments <service> <node> <item-id\|#N>` | Fetch comments node for a post (XEP-0277) |
+| `/feed comments #N` | Short form fetch comments using item alias |
 | `/bookmark` | List bookmarks |
 | `/bookmark add [jid] [name]` | Add a bookmark |
 | `/bookmark del <jid>` | Remove a bookmark |
