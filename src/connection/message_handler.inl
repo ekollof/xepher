@@ -814,15 +814,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                             if (item_id_raw && !ae.replies_link.empty())
                                 account.feed_replies_link_set(feed_key, item_id_raw, ae.replies_link);
 
-                            const std::string &title    = ae.title;
-                            const std::string &pubdate  = ae.pubdate;
-                            const std::string &link     = ae.link;
-                            const std::string &author   = ae.author;
-                            const std::string &reply_to = ae.reply_to;
-                            const std::string &via_link = ae.via_link;
-                            const std::string &replies_link = ae.replies_link;
-                            const std::string &geoloc = ae.geoloc;
-
                             // When true, display was deferred to the IQ result handler;
                             // do NOT mark the item seen here — the IQ handler will do it.
                             bool deferred_to_iq = false;
@@ -873,11 +864,26 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                             }
                             else
                             {
+                                const std::string &title    = ae.title;
+                                const std::string &pubdate  = ae.pubdate;
+                                const std::string &author   = ae.author;
+                                const std::string &reply_to = ae.reply_to;
+                                const std::string &via_link = ae.via_link;
+                                const std::string &replies_link = ae.replies_link;
+                                const std::string &geoloc = ae.geoloc;
                                 const std::string &body = ae.body();
                                 const char *pfx = weechat_prefix("join");
                                 const char *bold = weechat_color("bold");
                                 const char *rst  = weechat_color("reset");
                                 const char *dim  = weechat_color("darkgray");
+
+                                // Use Atom <link rel="alternate"> when present; fall back to
+                                // the canonical XEP-0060 item URI so there is always something
+                                // clickable (e.g. feeds that omit <link>, like PlanetDebian).
+                                std::string link = ae.link;
+                                if (link.empty() && item_id_raw && *item_id_raw)
+                                    link = fmt::format("xmpp:{}?;node={};item={}",
+                                                       feed_service_sv, node_sv, item_id_raw);
 
                                 // Header line: [author] title — date
                                 if (!author.empty() && !pubdate.empty())

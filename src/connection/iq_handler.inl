@@ -521,7 +521,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             {
                                 const std::string &title    = ae.title;
                                 const std::string &pubdate  = ae.pubdate;
-                                const std::string &link     = ae.link;
                                 const std::string &author   = ae.author;
                                 const std::string &reply_to = ae.reply_to;
                                 const std::string &via_link = ae.via_link;
@@ -532,6 +531,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 const char *bold = weechat_color("bold");
                                 const char *rst  = weechat_color("reset");
                                 const char *dim  = weechat_color("darkgray");
+
+                                // Use Atom <link rel="alternate"> when present; fall back to
+                                // the canonical XEP-0060 item URI so there is always something
+                                // clickable (e.g. feeds that omit <link>, like PlanetDebian).
+                                std::string link = ae.link;
+                                if (link.empty() && item_id_raw && *item_id_raw)
+                                    link = fmt::format("xmpp:{}?;node={};item={}",
+                                                       feed_service, node_name, item_id_raw);
 
                                 if (!author.empty() && !pubdate.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
