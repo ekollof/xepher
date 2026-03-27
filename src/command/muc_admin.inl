@@ -1710,17 +1710,15 @@ int command__feed(const void *pointer, void *data,
          }
          const std::string body(body_raw);
 
-         // Derive title: explicit --title wins; otherwise first non-empty line.
-         if (post_title.empty())
-         {
-             for (const char *p = body_raw; *p; ++p)
-             {
-                 if (*p == '\n') break;
-                 post_title += *p;
-             }
-         }
+          // post_title is only set when the user explicitly provided --title (or
+          // YAML frontmatter via feed_compose.py).  We intentionally do NOT fall
+          // back to the first line of the body here: Movim and other microblog
+          // clients treat <title> as a headline separate from the post body, so
+          // synthesising one from the body causes the full text to appear as a
+          // title in the Movim web UI.  When post_title is empty we simply omit
+          // <title> from the Atom entry, letting <content> carry everything.
 
-        // Generate a stable UUID for the item
+         // Generate a stable UUID for the item
         xmpp_string_guard item_uuid_g(ptr_account->context,
                                       xmpp_uuid_gen(ptr_account->context));
         const std::string item_uuid = item_uuid_g.ptr ? item_uuid_g.ptr : "post";
@@ -1762,18 +1760,24 @@ int command__feed(const void *pointer, void *data,
         xmpp_stanza_set_name(entry, "entry");
         xmpp_stanza_set_ns(entry, "http://www.w3.org/2005/Atom");
 
-        // <title type='text'>…</title>
-        xmpp_stanza_t *title_el = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(title_el, "title");
-        xmpp_stanza_set_attribute(title_el, "type", "text");
+        // <title type='text'>…</title> — only emitted when the user explicitly
+        // provided a title.  Omitting it for untitled posts lets Movim and
+        // similar clients display the <content> body directly without treating
+        // a synthesised first-line as the post headline.
+        if (!post_title.empty())
         {
-            xmpp_stanza_t *t = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_text(t, post_title.c_str());
-            xmpp_stanza_add_child(title_el, t);
-            xmpp_stanza_release(t);
+            xmpp_stanza_t *title_el = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(title_el, "title");
+            xmpp_stanza_set_attribute(title_el, "type", "text");
+            {
+                xmpp_stanza_t *t = xmpp_stanza_new(ptr_account->context);
+                xmpp_stanza_set_text(t, post_title.c_str());
+                xmpp_stanza_add_child(title_el, t);
+                xmpp_stanza_release(t);
+            }
+            xmpp_stanza_add_child(entry, title_el);
+            xmpp_stanza_release(title_el);
         }
-        xmpp_stanza_add_child(entry, title_el);
-        xmpp_stanza_release(title_el);
 
         // <id>tag:…</id>
         {

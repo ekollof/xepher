@@ -604,42 +604,80 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 if (item_alias > 0)
                                     alias_pfx = fmt::format("#{}", item_alias);
 
-                                if (!author.empty() && !pubdate.empty())
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "%s%s%s%s %s%s%s  [%s%s%s] — %s",
-                                        pfx,
-                                        alias_pfx.empty() ? "" : grn,
-                                        alias_pfx.c_str(),
-                                        alias_pfx.empty() ? "" : rst,
-                                        bold, title.c_str(), rst,
-                                        dim, author.c_str(), rst,
-                                        pubdate.c_str());
-                                else if (!author.empty())
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "%s%s%s%s %s%s%s  [%s%s%s]",
-                                        pfx,
-                                        alias_pfx.empty() ? "" : grn,
-                                        alias_pfx.c_str(),
-                                        alias_pfx.empty() ? "" : rst,
-                                        bold, title.c_str(), rst,
-                                        dim, author.c_str(), rst);
-                                else if (!pubdate.empty())
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "%s%s%s%s %s%s%s — %s",
-                                        pfx,
-                                        alias_pfx.empty() ? "" : grn,
-                                        alias_pfx.c_str(),
-                                        alias_pfx.empty() ? "" : rst,
-                                        bold, title.c_str(), rst,
-                                        pubdate.c_str());
+                                // Header line.  When the entry has an explicit title we
+                                // display it prominently in bold.  When there is no title
+                                // (microblog / social post) we emit only the alias + metadata
+                                // so the body line carries the content without duplication.
+                                if (!title.empty())
+                                {
+                                    if (!author.empty() && !pubdate.empty())
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                            "%s%s%s%s %s%s%s  [%s%s%s] — %s",
+                                            pfx,
+                                            alias_pfx.empty() ? "" : grn,
+                                            alias_pfx.c_str(),
+                                            alias_pfx.empty() ? "" : rst,
+                                            bold, title.c_str(), rst,
+                                            dim, author.c_str(), rst,
+                                            pubdate.c_str());
+                                    else if (!author.empty())
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                            "%s%s%s%s %s%s%s  [%s%s%s]",
+                                            pfx,
+                                            alias_pfx.empty() ? "" : grn,
+                                            alias_pfx.c_str(),
+                                            alias_pfx.empty() ? "" : rst,
+                                            bold, title.c_str(), rst,
+                                            dim, author.c_str(), rst);
+                                    else if (!pubdate.empty())
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                            "%s%s%s%s %s%s%s — %s",
+                                            pfx,
+                                            alias_pfx.empty() ? "" : grn,
+                                            alias_pfx.c_str(),
+                                            alias_pfx.empty() ? "" : rst,
+                                            bold, title.c_str(), rst,
+                                            pubdate.c_str());
+                                    else
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                            "%s%s%s%s %s%s%s",
+                                            pfx,
+                                            alias_pfx.empty() ? "" : grn,
+                                            alias_pfx.c_str(),
+                                            alias_pfx.empty() ? "" : rst,
+                                            bold, title.c_str(), rst);
+                                }
                                 else
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
-                                        "%s%s%s%s %s%s%s",
-                                        pfx,
-                                        alias_pfx.empty() ? "" : grn,
-                                        alias_pfx.c_str(),
-                                        alias_pfx.empty() ? "" : rst,
-                                        bold, title.c_str(), rst);
+                                {
+                                    // No title: metadata-only header line.
+                                    if (!author.empty() && !pubdate.empty())
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                            "%s%s%s%s  [%s%s%s] — %s",
+                                            pfx,
+                                            alias_pfx.empty() ? "" : grn,
+                                            alias_pfx.c_str(),
+                                            alias_pfx.empty() ? "" : rst,
+                                            dim, author.c_str(), rst,
+                                            pubdate.c_str());
+                                    else if (!author.empty())
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                            "%s%s%s%s  [%s%s%s]",
+                                            pfx,
+                                            alias_pfx.empty() ? "" : grn,
+                                            alias_pfx.c_str(),
+                                            alias_pfx.empty() ? "" : rst,
+                                            dim, author.c_str(), rst);
+                                    else if (!pubdate.empty())
+                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                            "%s%s%s%s  — %s",
+                                            pfx,
+                                            alias_pfx.empty() ? "" : grn,
+                                            alias_pfx.c_str(),
+                                            alias_pfx.empty() ? "" : rst,
+                                            pubdate.c_str());
+                                    // else: alias-only line already shown by the alias_pfx branch below,
+                                    // or nothing to print; body line still follows.
+                                }
 
                                 if (!reply_to.empty())
                                 {
