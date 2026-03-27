@@ -32,9 +32,35 @@ std::string channel_short_name(weechat::channel::chat_type type, std::string_vie
     if (name.empty())
         return {};
 
-    // FEED buffers use the raw node name (e.g. "news.movim.eu/Phoronix")
+    // FEED buffers: derive a human-readable short name from the feed_key
+    // which has the form "<service_jid>/<node>".
     if (type == weechat::channel::chat_type::FEED)
-        return std::string(name);
+    {
+        // Split into service_jid and node at the first '/'.
+        auto slash = name.find('/');
+        std::string_view service = (slash != std::string_view::npos) ? name.substr(0, slash) : name;
+        std::string_view node    = (slash != std::string_view::npos) ? name.substr(slash + 1) : name;
+
+        // Extract the local part of the service JID (everything before '@',
+        // or the full string if there is no '@').
+        std::string_view local = service;
+        auto at = service.find('@');
+        if (at != std::string_view::npos)
+            local = service.substr(0, at);
+
+        // Well-known PEP node → append a readable hint.
+        if (node == "urn:xmpp:microblog:0")
+            return fmt::format("{} (blog)", local);
+
+        // Named node (no ':' in it, e.g. "lunduke") → use the node name directly.
+        if (node.find(':') == std::string_view::npos)
+            return std::string(node);
+
+        // Generic URN node → use the last ':'-delimited segment.
+        auto colon = node.rfind(':');
+        std::string_view suffix = node.substr(colon + 1);
+        return fmt::format("{} ({})", local, suffix);
+    }
 
     const char prefix =
         (type == weechat::channel::chat_type::MUC) ? '#' : '@';
@@ -151,7 +177,11 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
         char *res = (char*)strrchr(name, '/');
         if (!weechat_buffer_get_integer(ptr_buffer, "short_name_is_set"))
         {
-            auto short_name_value = channel_short_name(type, res ? res + 1 : name);
+            // For FEED buffers pass the full feed_key so channel_short_name
+            // can derive a readable name from both the JID and the node.
+            auto short_name_value = (type == weechat::channel::chat_type::FEED)
+                ? channel_short_name(type, name)
+                : channel_short_name(type, res ? res + 1 : name);
             weechat_buffer_set(ptr_buffer, "short_name", short_name_value.c_str());
         }
     }
@@ -165,7 +195,9 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
             (localvar_remote_jid && (strcmp(localvar_remote_jid, short_name) == 0)))
         {
             char *node = xmpp_jid_node(account.context, name);
-            auto short_name_value = channel_short_name(type, node ? node : name);
+            auto short_name_value = (type == weechat::channel::chat_type::FEED)
+                ? channel_short_name(type, name)
+                : channel_short_name(type, node ? node : name);
             weechat_buffer_set(ptr_buffer, "short_name", short_name_value.c_str());
             xmpp_free(account.context, node);
         }
