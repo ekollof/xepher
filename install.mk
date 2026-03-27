@@ -16,6 +16,10 @@ else
 	mkdir -p $(WEECHATHOME)/plugins
 	cp xmpp.so $(WEECHATHOME)/plugins/xmpp.so
 	chmod 755 $(WEECHATHOME)/plugins/xmpp.so
+	mkdir -p $(WEECHATHOME)/python/autoload
+	cp scripts/feed_compose.py $(WEECHATHOME)/python/feed_compose.py
+	chmod 644 $(WEECHATHOME)/python/feed_compose.py
+	ln -sf ../feed_compose.py $(WEECHATHOME)/python/autoload/feed_compose.py
 endif
 
 release: xmpp.so
