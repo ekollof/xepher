@@ -353,6 +353,23 @@ void weechat::account::mam_cursor_set(const std::string& key, const std::string&
     }
 }
 
+void weechat::account::mam_cursor_clear(const std::string& key)
+{
+    if (!mam_db_env) return;
+
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+
+        MDB_val k = {key.size(), (void*)key.data()};
+        mdb_del(txn.handle(), mam_dbi.cursors.handle(), &k, nullptr);
+
+        txn.commit();
+    } catch (const lmdb::error& ex) {
+        // Silently ignore delete errors (key may not exist)
+    }
+}
+
 bool weechat::account::feed_item_seen(const std::string& feed_key, const std::string& item_id)
 {
     if (!mam_db_env || item_id.empty()) return false;

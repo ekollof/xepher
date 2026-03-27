@@ -1935,8 +1935,9 @@ int command__feed(const void *pointer, void *data,
 
     std::string service_jid = argv[1];
 
-    // Check for --all, --limit N, --before <id> anywhere in args after service-jid
+    // Check for --all, --limit N, --before <id>, --latest anywhere in args after service-jid
     bool fetch_all = false;
+    bool fetch_latest = false;  // --latest: clear saved RSM cursor and fetch newest page
     int  max_items = 20;   // default: request 20 most-recent items
     std::string node_name;
     std::string before_cursor;  // RSM <before> cursor ("" = latest page)
@@ -1945,6 +1946,8 @@ int command__feed(const void *pointer, void *data,
         std::string_view arg(argv[i]);
         if (arg == "--all")
             fetch_all = true;
+        else if (arg == "--latest")
+            fetch_latest = true;
         else if (arg == "--limit" && i + 1 < argc)
         {
             char *end = nullptr;
@@ -1975,9 +1978,18 @@ int command__feed(const void *pointer, void *data,
         // If no --before was given, check LMDB for a persisted RSM cursor so
         // that successive /feed invocations automatically page forward through
         // older items without the user having to copy-paste a cursor id.
-        if (before_cursor.empty())
+        // --latest clears the saved cursor so the newest page is fetched instead.
+        std::string cursor_key = fmt::format("pubsub:{}", feed_key);
+        if (fetch_latest)
         {
-            std::string cursor_key = fmt::format("pubsub:{}", feed_key);
+            ptr_account->mam_cursor_clear(cursor_key);
+            weechat_printf(buffer,
+                           "%sCleared saved cursor for %s/%s; fetching latest page…",
+                           weechat_prefix("network"),
+                           service_jid.c_str(), node_name.c_str());
+        }
+        else if (before_cursor.empty())
+        {
             before_cursor = ptr_account->mam_cursor_get(cursor_key);
             if (!before_cursor.empty())
                 weechat_printf(buffer,

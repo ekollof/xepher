@@ -338,6 +338,7 @@ namespace weechat
          void mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp);
         std::string mam_cursor_get(const std::string& key);
         void mam_cursor_set(const std::string& key, const std::string& cursor_id);
+        void mam_cursor_clear(const std::string& key);  // delete saved cursor to return to latest page
         // Feed item deduplication (stored in cursors LMDB table)
         bool feed_item_seen(const std::string& feed_key, const std::string& item_id);
         void feed_item_mark_seen(const std::string& feed_key, const std::string& item_id);
