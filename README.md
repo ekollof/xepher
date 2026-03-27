@@ -123,7 +123,7 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 | Roster management (`/roster`) | RFC 6121 |
 | Public room search (`/list`) | XEP-0433 |
 | PubSub feed reader (`/feed`) | XEP-0060 |
-| Microblogging post/reply/repeat/retract + subscribe/unsubscribe (`/feed post`, `/feed reply`, `/feed repeat`, `/feed retract`, `/feed subscribe`, `/feed unsubscribe`, `/feed subscriptions`) | XEP-0277 / XEP-0472 |
+| Microblogging post/reply/repeat/retract + subscribe/unsubscribe + comments (`/feed post`, `/feed reply`, `/feed repeat`, `/feed retract`, `/feed subscribe`, `/feed unsubscribe`, `/feed subscriptions`, `/feed comments`) | XEP-0277 / XEP-0472 |
 | Auto-discover server PubSub components (`/feed discover`, `/feed`) | XEP-0030 / XEP-0060 |
 | Entity Capability caching | XEP-0115 |
 | User Avatar (colored Unicode symbols) | XEP-0084 |
@@ -212,8 +212,8 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 - ✅ XEP-0447: Stateless File Sharing (inline previews for Conversations/Dino/Gajim)
 - ✅ XEP-0490: Message Displayed Synchronization
 - ✅ XEP-0511: Link Metadata (incoming previews + outgoing OpenGraph)
-- ⚡ XEP-0277: Microblogging over XMPP (Deferred — publish/reply/retract via `/feed post|reply|retract`; receive PEP microblog push events)
-- ⚡ XEP-0472: Pubsub Social Feed (Experimental — publishes `pubsub#type=urn:xmpp:microblog:0`, advertises `urn:xmpp:pubsub-social-feed:1` in caps)
+- ⚡ XEP-0277: Microblogging over XMPP (Deferred — publish/reply/retract via `/feed post|reply|retract`; receive PEP microblog push events; Atom metadata: title, author, categories, enclosures, geolocation, replies links; `/feed comments` fetches comments nodes)
+- ⚡ XEP-0472: Pubsub Social Feed (Experimental — publishes `pubsub#type=urn:xmpp:microblog:0`, advertises `urn:xmpp:pubsub-social-feed:1` in caps; `thr:in-reply-to@ref` uses real Atom entry IRI; feed-level `<feed>` metadata items rendered; XHTML/HTML Atom content properly rendered)
 - ⚡ XEP-0433: Extended Channel Search (Searcher role; Search Service role not implemented)
 
 ### Planned
@@ -585,7 +585,7 @@ moderation stanza.
 
 ---
 
-### Microblogging — `/feed post`, `/feed reply`, `/feed repeat`, `/feed retract`, `/feed subscribe` (XEP-0277 / XEP-0472)
+### Microblogging — `/feed post`, `/feed reply`, `/feed repeat`, `/feed retract`, `/feed subscribe`, `/feed comments` (XEP-0277 / XEP-0472)
 
 Publish and interact with microblog posts on PubSub services such as
 [Movim](https://movim.eu/) and [Libervia/Salut-à-Toi](https://libervia.org/).
@@ -602,6 +602,7 @@ are Atom entries stored on PubSub nodes; contacts who subscribe to your
 /feed reply <service-jid> <node> <item-id> <text>
 /feed repeat <service-jid> <node> <item-id> [comment]
 /feed retract <service-jid> <node> <item-id>
+/feed comments <service-jid> <node> <item-id>
 /feed subscribe <service-jid> <node>
 /feed unsubscribe <service-jid> <node>
 /feed subscriptions <service-jid>
@@ -651,6 +652,18 @@ in the entry body.
 Sends a PubSub retract for the given item ID. The post is removed from the
 node and a retraction notification is pushed to subscribers.
 
+**Fetching comments for a post:**
+
+```
+/feed comments movim.eu urn:xmpp:microblog:0 abc123
+```
+
+If the post carried a `<link rel='replies'>` element (XEP-0277 §4.1), this
+fetches the linked comments node into a dedicated FEED buffer. The replies URI
+is cached from the most recent fetch or push of the item; if no link was
+advertised by the server the command reports that no cached link is available.
+Run `/feed movim.eu urn:xmpp:microblog:0` first to populate the cache.
+
 **Subscribing and unsubscribing:**
 
 ```
@@ -666,9 +679,12 @@ list all nodes you are subscribed to on a given service.
 
 Incoming PEP pushes from contacts' `urn:xmpp:microblog:0` nodes are
 automatically rendered in the WeeChat buffer for that contact, showing the
-author name, timestamp, content body, and — when present — the
-`thr:in-reply-to` parent reference. Duplicate items (already seen via IQ fetch)
-are suppressed via LMDB deduplication.
+author name, timestamp, content body, and — when present — threaded reply
+references (`thr:in-reply-to`), boost/repeat provenance (`Repeated from:`),
+comments links (`Comments:`), category tags, enclosure URLs, and geolocation.
+XHTML and HTML content is rendered with WeeChat formatting (bold, italic, links,
+blockquotes). Duplicate items (already seen via IQ fetch) are suppressed via
+LMDB deduplication. Feed-level `<feed>` metadata items update the buffer title.
 
 **Reading a microblog feed:**
 

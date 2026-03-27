@@ -594,7 +594,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0277.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.6.5</xmpp:version>
-        <xmpp:note xml:lang='en'>Microblogging over XMPP (Deferred) - /feed post publishes Atom entries to urn:xmpp:microblog:0 PEP node; /feed reply adds thr:in-reply-to threading; /feed repeat publishes boost entry with &lt;link rel='via'&gt; (XEP-0472 §4.5); /feed retract retracts items; incoming PEP microblog push events are rendered with deduplication; urn:xmpp:microblog:0+notify advertised in caps</xmpp:note>
+        <xmpp:note xml:lang='en'>Microblogging over XMPP (Deferred) - /feed post publishes Atom entries to urn:xmpp:microblog:0 PEP node; /feed reply adds thr:in-reply-to threading with real Atom entry IRI in @ref (RFC 4685); /feed repeat publishes boost entry with &lt;link rel='via'&gt; (XEP-0472 §4.5); /feed retract retracts items; /feed comments fetches the comments/replies node linked via &lt;link rel='replies'&gt;; incoming PEP microblog push events rendered with full Atom metadata: author URI, updated timestamp, categories, enclosures, geolocation (XEP-0080), replies links; XHTML and HTML content rendered with WeeChat formatting; feed-level &lt;feed&gt; metadata items update buffer title; deduplication via LMDB; urn:xmpp:microblog:0+notify advertised in caps</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -603,7 +603,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0472.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.2.1</xmpp:version>
-        <xmpp:note xml:lang='en'>Pubsub Social Feed (Experimental) - /feed post sets pubsub#type=urn:xmpp:microblog:0 and required publish-options (persist_items, max_items=max, notify_retract, deliver_payloads=false); --open flag sets pubsub#access_model=open; &lt;generator&gt; element included in published entries; urn:xmpp:pubsub-social-feed:1 advertised in disco#info; author and thr:in-reply-to parsed and displayed; publish errors reported in buffer</xmpp:note>
+        <xmpp:note xml:lang='en'>Pubsub Social Feed (Experimental) - /feed post sets pubsub#type=urn:xmpp:microblog:0 and required publish-options (persist_items, max_items=max, notify_retract, deliver_payloads=false); --open flag sets pubsub#access_model=open; &lt;generator&gt; element included in published entries; urn:xmpp:pubsub-social-feed:1 advertised in disco#info; Atom entry parsing: author name+URI, title, summary, content (text/xhtml/html), published+updated timestamps, categories, enclosures, geolocation, &lt;link rel='replies'&gt; comments links; thr:in-reply-to@ref uses real Atom entry IRI when cached; feed-level &lt;feed&gt; metadata items recognised and displayed; XHTML rendered via XEP-0071 renderer; HTML tag-stripped to plain text; publish errors reported in buffer</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
