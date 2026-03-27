@@ -1832,6 +1832,11 @@ int command__feed(const void *pointer, void *data,
             node_name = argv[i];
     }
 
+    // If no node was given and the service looks like a user JID (contains '@'),
+    // default to the PEP microblog node — so "/feed user@example.org" just works.
+    if (node_name.empty() && !fetch_all && service_jid.find('@') != std::string::npos)
+        node_name = "urn:xmpp:microblog:0";
+
     if (!node_name.empty())
     {
         // Specific node requested: fetch items directly.
