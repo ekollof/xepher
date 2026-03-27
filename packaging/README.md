@@ -1,4 +1,4 @@
-# Packaging Guide for weechat-xmpp
+# Packaging Guide for Xepher
 
 This directory contains packaging infrastructure for building distribution packages.
 
@@ -34,7 +34,7 @@ cp -r packaging/debian .
 debuild -us -uc -b
 
 # Install
-sudo dpkg -i ../weechat-xmpp_*.deb
+sudo dpkg -i ../xepher_*.deb
 ```
 
 #### Fedora/RHEL/CentOS
@@ -48,17 +48,17 @@ rpmdev-setuptree
 
 # Create source tarball
 cd ..
-tar czf ~/rpmbuild/SOURCES/weechat-xmpp-0.2.0.tar.gz weechat-xmpp-improved/
+tar czf ~/rpmbuild/SOURCES/xepher-0.2.0.tar.gz xepher/
 
 # Copy spec file
-cp weechat-xmpp-improved/packaging/rpm/weechat-xmpp.spec ~/rpmbuild/SPECS/
+cp xepher/packaging/rpm/weechat-xmpp.spec ~/rpmbuild/SPECS/xepher.spec
 
 # Build package
 cd ~/rpmbuild/SPECS
-rpmbuild -bb weechat-xmpp.spec
+rpmbuild -bb xepher.spec
 
 # Install
-sudo dnf install ~/rpmbuild/RPMS/*/weechat-xmpp-*.rpm
+sudo dnf install ~/rpmbuild/RPMS/*/xepher-*.rpm
 ```
 
 #### Arch Linux
@@ -72,7 +72,7 @@ cd /tmp/build
 makepkg -sf
 
 # Install
-sudo pacman -U weechat-xmpp-*.pkg.tar.zst
+sudo pacman -U xepher-*.pkg.tar.zst
 ```
 
 ## Updating Package Versions
@@ -85,8 +85,6 @@ When releasing a new version, update these files:
    ```
 
 2. **RPM**: `packaging/rpm/weechat-xmpp.spec`
-   - Update `Version:` field
-   - Add entry to `%changelog` section
 
 3. **Arch**: `packaging/arch/PKGBUILD`
    - Update `pkgver=` field
@@ -97,8 +95,8 @@ When releasing a new version, update these files:
 
 All packages install:
 - Plugin binary: `/usr/lib/weechat/plugins/xmpp.so`
-- Documentation: `/usr/share/doc/weechat-xmpp/`
-- License: `/usr/share/licenses/weechat-xmpp/` (Arch) or `/usr/share/doc/weechat-xmpp/` (Debian/RPM)
+- Documentation: `/usr/share/doc/xepher/`
+- License: `/usr/share/licenses/xepher/` (Arch) or `/usr/share/doc/xepher/` (Debian/RPM)
 
 ## Dependencies
 
@@ -152,7 +150,6 @@ sudo apt-get build-dep .
 
 # Fedora/RHEL
 sudo dnf builddep packaging/rpm/weechat-xmpp.spec
-
 # Arch
 makepkg -s  # automatically installs makedepends
 ```
@@ -183,13 +180,13 @@ This is automated in the build scripts.
 
 ```bash
 # Clone AUR repository
-git clone ssh://aur@aur.archlinux.org/weechat-xmpp.git
+git clone ssh://aur@aur.archlinux.org/xepher.git
 
 # Copy PKGBUILD
-cp packaging/arch/PKGBUILD weechat-xmpp/
+cp packaging/arch/PKGBUILD xepher/
 
 # Update .SRCINFO
-cd weechat-xmpp
+cd xepher
 makepkg --printsrcinfo > .SRCINFO
 
 # Commit and push
@@ -210,4 +207,4 @@ See: https://docs.fedoraproject.org/en-US/package-maintainers/
 
 For packaging issues, contact:
 - Maintainer: Emiel Kollof <emiel@kollof.nl>
-- Repository: https://git.hackerheaven.org/ekollof/weechat-xmpp-improved
+- Repository: https://github.com/ekollof/xepher

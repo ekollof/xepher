@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build distribution packages for weechat-xmpp
+# Build distribution packages for Xepher
 
 set -e
 
@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 VERSION="${1:-0.2.0}"
 
-echo "Building packages for weechat-xmpp version $VERSION"
+echo "Building packages for Xepher version $VERSION"
 echo "Project directory: $PROJECT_DIR"
 echo ""
 
@@ -34,8 +34,8 @@ build_deb() {
     trap "rm -rf $BUILD_DIR" EXIT
     
     # Copy source
-    cp -r "$PROJECT_DIR" "$BUILD_DIR/weechat-xmpp-$VERSION"
-    cd "$BUILD_DIR/weechat-xmpp-$VERSION"
+    cp -r "$PROJECT_DIR" "$BUILD_DIR/xepher-$VERSION"
+    cd "$BUILD_DIR/xepher-$VERSION"
     
     # Copy debian packaging files
     cp -r "$PROJECT_DIR/packaging/debian" ./debian
@@ -62,16 +62,16 @@ build_rpm() {
     
     # Create source tarball
     cd "$PROJECT_DIR/.."
-    tar czf "$HOME/rpmbuild/SOURCES/weechat-xmpp-$VERSION.tar.gz" \
-        --transform "s|^weechat-xmpp-improved|weechat-xmpp-$VERSION|" \
-        weechat-xmpp-improved/
+    tar czf "$HOME/rpmbuild/SOURCES/xepher-$VERSION.tar.gz" \
+        --transform "s|^xepher|xepher-$VERSION|" \
+        xepher/
     
     # Copy spec file
-    cp "$PROJECT_DIR/packaging/rpm/weechat-xmpp.spec" "$HOME/rpmbuild/SPECS/"
+    cp "$PROJECT_DIR/packaging/rpm/weechat-xmpp.spec" "$HOME/rpmbuild/SPECS/xepher.spec"
     
     # Build RPM
     cd "$HOME/rpmbuild/SPECS"
-    rpmbuild -bb weechat-xmpp.spec
+    rpmbuild -bb xepher.spec
     
     # Copy result
     mkdir -p "$PROJECT_DIR/packaging/build"

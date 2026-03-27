@@ -1,4 +1,4 @@
-Source: weechat-xmpp
+Source: xepher
 Section: net
 Priority: optional
 Maintainer: Emiel Kollof <emiel@kollof.nl>
@@ -17,11 +17,11 @@ Build-Depends: debhelper-compat (= 13),
                libssl-dev,
                weechat-dev
 Standards-Version: 4.6.0
-Homepage: https://git.hackerheaven.org/ekollof/weechat-xmpp-improved
-Vcs-Git: https://git.hackerheaven.org/ekollof/weechat-xmpp-improved.git
-Vcs-Browser: https://git.hackerheaven.org/ekollof/weechat-xmpp-improved
+Homepage: https://github.com/ekollof/xepher
+Vcs-Git: https://github.com/ekollof/xepher.git
+Vcs-Browser: https://github.com/ekollof/xepher
 
-Package: weechat-xmpp
+Package: xepher
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
          weechat (>= 1.0),

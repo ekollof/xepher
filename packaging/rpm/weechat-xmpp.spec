@@ -1,10 +1,10 @@
-Name:           weechat-xmpp
+Name:           xepher
 Version:        0.2.0
 Release:        1%{?dist}
-Summary:        WeeChat plugin for XMPP/Jabber protocol
+Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
 License:        MPL-2.0
-URL:            https://git.hackerheaven.org/ekollof/weechat-xmpp-improved
+URL:            https://github.com/ekollof/xepher
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  gcc-c++ >= 12

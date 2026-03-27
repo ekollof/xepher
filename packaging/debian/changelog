@@ -1,4 +1,4 @@
-weechat-xmpp (0.2.0-1) unstable; urgency=medium
+xepher (0.2.0-1) unstable; urgency=medium
 
   * Initial Debian package release
   * Feature: PM buffer close fix (prevents unwanted reopening)

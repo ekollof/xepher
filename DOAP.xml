@@ -6,28 +6,28 @@
     xmlns:schema='https://schema.org'
 >
   <Project>
-    <name>weechat-xmpp</name>
+    <name>Xepher</name>
 
     <created>2021-06-26</created>
 
-    <shortdesc xml:lang='en'>Weechat XMPP client</shortdesc>
-    <shortdesc xml:lang='fr'>Client XMPP pour Weechat</shortdesc>
+    <shortdesc xml:lang='en'>Xepher — WeeChat XMPP client</shortdesc>
+    <shortdesc xml:lang='fr'>Xepher — Client XMPP pour WeeChat</shortdesc>
 
     <description
             xml:lang='en'
         >Weechat plugin for accessing XMPP, written in C++. This fork includes bug fixes and feature enhancements.</description>
 
     <homepage
-            rdf:resource='https://github.com/ekollof/weechat-xmpp-improved'
+            rdf:resource='https://github.com/ekollof/xepher'
         />
     <bug-database
-            rdf:resource='https://github.com/ekollof/weechat-xmpp-improved/issues'
+            rdf:resource='https://github.com/ekollof/xepher/issues'
         />
     <developer-forum rdf:resource='xmpp:weechat@muc.xa0.uk?join' />
     <support-forum rdf:resource='xmpp:weechat@muc.xa0.uk?join' />
 
     <license
-            rdf:resource='https://github.com/ekollof/weechat-xmpp-improved/blob/master/LICENSE'
+            rdf:resource='https://github.com/ekollof/xepher/blob/master/LICENSE'
         />
 
     <language>en</language>
@@ -43,10 +43,10 @@
     <repository>
       <GitRepository>
         <browse
-                    rdf:resource='https://github.com/ekollof/weechat-xmpp-improved'
+                    rdf:resource='https://github.com/ekollof/xepher'
                 />
         <location
-                    rdf:resource='https://github.com/ekollof/weechat-xmpp-improved.git'
+                    rdf:resource='https://github.com/ekollof/xepher.git'
                 />
       </GitRepository>
     </repository>

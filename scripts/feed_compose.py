@@ -39,7 +39,7 @@ import tempfile
 import weechat
 
 SCRIPT_NAME = "feed_compose"
-SCRIPT_AUTHOR = "weechat-xmpp"
+SCRIPT_AUTHOR = "Xepher"
 SCRIPT_VERSION = "1.3.0"
 SCRIPT_LICENSE = "MIT"
 SCRIPT_DESC = "Compose /feed posts and replies in $EDITOR, then populate the input bar"

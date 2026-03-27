@@ -1,10 +1,10 @@
 # Maintainer: Emiel Kollof <emiel@kollof.nl>
-pkgname=weechat-xmpp
+pkgname=xepher
 pkgver=0.2.0
 pkgrel=1
-pkgdesc="WeeChat plugin for XMPP/Jabber protocol"
+pkgdesc="Xepher — WeeChat plugin for XMPP/Jabber protocol"
 arch=('x86_64' 'aarch64')
-url="https://git.hackerheaven.org/ekollof/weechat-xmpp-improved"
+url="https://github.com/ekollof/xepher"
 license=('MPL2')
 depends=(
     'weechat'
@@ -23,21 +23,21 @@ makedepends=(
     'bison'
     'flex'
 )
-source=("git+https://git.hackerheaven.org/ekollof/weechat-xmpp-improved.git#tag=v${pkgver}")
+source=("git+https://github.com/ekollof/xepher.git#tag=v${pkgver}")
 sha256sums=('SKIP')
 
 prepare() {
-    cd "$srcdir/weechat-xmpp-improved"
+    cd "$srcdir/xepher"
     git submodule update --init --recursive
 }
 
 build() {
-    cd "$srcdir/weechat-xmpp-improved"
-    make weechat-xmpp
+    cd "$srcdir/xepher"
+    make
 }
 
 package() {
-    cd "$srcdir/weechat-xmpp-improved"
+    cd "$srcdir/xepher"
     install -Dm755 xmpp.so "$pkgdir/usr/lib/weechat/plugins/xmpp.so"
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"

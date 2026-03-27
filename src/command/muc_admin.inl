@@ -1140,10 +1140,10 @@ int command__feed(const void *pointer, void *data,
             xmpp_stanza_t *gen_el = xmpp_stanza_new(ptr_account->context);
             xmpp_stanza_set_name(gen_el, "generator");
             xmpp_stanza_set_attribute(gen_el, "uri",
-                "https://github.com/ekollof/weechat-xmpp-improved");
+                "https://github.com/ekollof/xepher");
             xmpp_stanza_set_attribute(gen_el, "version", WEECHAT_XMPP_PLUGIN_VERSION);
             xmpp_stanza_t *gt = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_text(gt, "weechat-xmpp-improved");
+            xmpp_stanza_set_text(gt, "Xepher");
             xmpp_stanza_add_child(gen_el, gt);
             xmpp_stanza_release(gt);
             xmpp_stanza_add_child(entry, gen_el);
@@ -1882,11 +1882,11 @@ int command__feed(const void *pointer, void *data,
             xmpp_stanza_t *gen_el = xmpp_stanza_new(ptr_account->context);
             xmpp_stanza_set_name(gen_el, "generator");
             xmpp_stanza_set_attribute(gen_el, "uri",
-                "https://github.com/ekollof/weechat-xmpp-improved");
+                "https://github.com/ekollof/xepher");
             xmpp_stanza_set_attribute(gen_el, "version", WEECHAT_XMPP_PLUGIN_VERSION);
             {
                 xmpp_stanza_t *gt = xmpp_stanza_new(ptr_account->context);
-                xmpp_stanza_set_text(gt, "weechat-xmpp-improved");
+                xmpp_stanza_set_text(gt, "Xepher");
                 xmpp_stanza_add_child(gen_el, gt);
                 xmpp_stanza_release(gt);
             }

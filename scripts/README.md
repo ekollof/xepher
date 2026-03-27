@@ -1,6 +1,6 @@
 # scripts/
 
-Companion Python scripts for the weechat-xmpp plugin.  
+Companion Python scripts for **Xepher** (weechat-xmpp plugin).  
 These are optional; they are **not** loaded automatically by the plugin.
 
 ## feed_compose.py

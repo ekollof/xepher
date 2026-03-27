@@ -1,4 +1,6 @@
-# weechat-xmpp-improved
+# Xepher
+
+![Xepher logo](assets/xepher.png)
 
 A WeeChat plugin written in C/C++23 that adds full XMPP support, including a
 comprehensive set of XEPs targeting CCS2022 compliance.
@@ -6,7 +8,7 @@ comprehensive set of XEPs targeting CCS2022 compliance.
 > **Fork of [bqv/weechat-xmpp](https://github.com/bqv/weechat-xmpp)**  
 > Original author: **Tony Olagbaiye** &lt;bqv@fron.io&gt;  
 > This fork is maintained at
-> [github.com/ekollof/weechat-xmpp-improved](https://github.com/ekollof/weechat-xmpp-improved)
+> [github.com/ekollof/xepher](https://github.com/ekollof/xepher)
 > and carries critical bug fixes, new XEP implementations, and ongoing
 > refactoring not yet merged upstream.
 
@@ -260,8 +262,8 @@ platforms are **not routinely tested**. Known considerations:
 ### Build
 
 ```sh
-git clone --depth 1 git@github.com:ekollof/weechat-xmpp-improved.git
-cd weechat-xmpp-improved
+git clone --depth 1 git@github.com:ekollof/xepher.git
+cd xepher
 make install-deps   # installs system packages (requires sudo)
 make
 make test
