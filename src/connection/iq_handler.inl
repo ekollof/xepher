@@ -2501,14 +2501,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     
                     if (max_size > 0)
                     {
-                        weechat_printf(account.buffer, "%sDiscovered upload service: %s (max: %zu MB)",
-                                      weechat_prefix("network"), service_jid.c_str(),
-                                      max_size / (1024 * 1024));
+                        XDEBUG("Discovered upload service: {} (max: {} MB)",
+                               service_jid, max_size / (1024 * 1024));
                     }
                     else
                     {
-                        weechat_printf(account.buffer, "%sDiscovered upload service: %s",
-                                      weechat_prefix("network"), service_jid.c_str());
+                        XDEBUG("Discovered upload service: {}", service_jid);
                     }
                 }
             }
@@ -3145,25 +3143,16 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 account.devices[self_dev.id] = self_dev;
                             }
 
-                            weechat_printf(account.buffer,
-                                           "%sServer devicelist for %s:",
-                                           weechat_prefix("network"), node_owner);
+                            XDEBUG("Server devicelist for {}:", node_owner);
                             for (const auto &entry : account.devices)
                             {
-                                weechat_printf(account.buffer,
-                                               "%s  Device %u%s",
-                                               weechat_prefix("network"),
-                                               entry.first,
-                                               entry.first == account.omemo.device_id
-                                                   ? " (weechat - this device)"
-                                                   : "");
+                                XDEBUG("  Device {}{}", entry.first,
+                                       entry.first == account.omemo.device_id
+                                           ? " (weechat - this device)"
+                                           : "");
                             }
-
-                            weechat_printf(account.buffer,
-                                           "%sServer has %d valid OMEMO device(s) for %s",
-                                           weechat_prefix("network"),
-                                           valid_device_count,
-                                           node_owner);
+                            XDEBUG("Server has {} valid OMEMO device(s) for {}",
+                                   valid_device_count, node_owner);
 
                             if (!found_self)
                             {

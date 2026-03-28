@@ -390,9 +390,6 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                             if (bare)
                             {
                                 xmpp_stanza_t *iq = ::xmpp::xep0054::vcard_request(account.context, bare);
-                                const char *req_id = xmpp_stanza_get_id(iq);
-                                if (req_id)
-                                    account.whois_queries[req_id] = { account.buffer, std::string(bare) };
                                 send(iq);
                                 xmpp_stanza_release(iq);
                                 xmpp_free(account.context, bare);
