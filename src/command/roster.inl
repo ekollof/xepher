@@ -354,7 +354,8 @@ int command__roster(const void *pointer, void *data,
                 weechat_command(buf, cmd.c_str());
             },
             {},
-            buffer);
+            buffer,
+            true /* sort_entries */);
         (void) p;  // picker owns itself
         return WEECHAT_RC_OK;
     }
