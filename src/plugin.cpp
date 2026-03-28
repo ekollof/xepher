@@ -28,6 +28,7 @@
 #include "input.hh"
 #include "buffer.hh"
 #include "completion.hh"
+#include "debug.hh"
 
 #define WEECHAT_TIMER_INTERVAL_SEC 0.01
 #define WEECHAT_TIMER_SECONDS(IVL) (WEECHAT_TIMER_INTERVAL_SEC * IVL)
@@ -226,6 +227,8 @@ void weechat::plugin::init(int argc, char *argv[])
 
     weechat::config::read();
 
+    weechat::debug::init();
+
     weechat::connection::init();
 
     command__init(); // TODO: port
@@ -303,6 +306,8 @@ void weechat::plugin::end() {
 
     // Write config before clearing accounts
     weechat::config::write();
+
+    weechat::debug::fini();
     
     // Do not clear accounts during shutdown.
     // account/omemo teardown can still race libsignal/libstrophe object lifetime

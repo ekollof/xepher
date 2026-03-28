@@ -256,6 +256,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         // Determine which buffer to print into: the one that issued /whois, or
         // the account buffer for auto-fetched vCards (XEP-0153 trigger).
         struct t_gui_buffer *target_buf = account.buffer;
+        bool is_whois = false;
         if (id)
         {
             auto it = account.whois_queries.find(id);
@@ -263,6 +264,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 target_buf = it->second.buffer;
                 account.whois_queries.erase(it);
+                is_whois = true;
             }
         }
 
@@ -285,8 +287,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                weechat_color("reset"), val.c_str());
         };
 
-        weechat_printf(target_buf, "%svCard for %s:",
-                       weechat_prefix("network"), from_jid);
+        if (is_whois)
+        {
+            weechat_printf(target_buf, "%svCard for %s:",
+                           weechat_prefix("network"), from_jid);
+        }
+        else
+        {
+            XDEBUG("vCard auto-fetched for {}", from_jid);
+        }
 
         std::string fn       = child_text(vcard, "FN");
         std::string nickname = child_text(vcard, "NICKNAME");
@@ -329,19 +338,22 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
         }
 
-        print_field("Full name:",    fn);
-        print_field("Nickname:",     nickname);
-        print_field("Birthday:",     bday);
-        print_field("Organisation:", org);
-        print_field("Title:",        title);
-        print_field("Role:",         role_vc);
-        print_field("Email:",        email_val);
-        print_field("Phone:",        tel);
-        print_field("Address:",      adr);
-        print_field("URL:",          url);
-        print_field("JID:",          jabbid);
-        print_field("Note:",         note);
-        print_field("Description:",  desc);
+        if (is_whois)
+        {
+            print_field("Full name:",    fn);
+            print_field("Nickname:",     nickname);
+            print_field("Birthday:",     bday);
+            print_field("Organisation:", org);
+            print_field("Title:",        title);
+            print_field("Role:",         role_vc);
+            print_field("Email:",        email_val);
+            print_field("Phone:",        tel);
+            print_field("Address:",      adr);
+            print_field("URL:",          url);
+            print_field("JID:",          jabbid);
+            print_field("Note:",         note);
+            print_field("Description:",  desc);
+        }
 
         // Store into user profile for future reference
         weechat::user *u = weechat::user::search(&account, from_jid);
@@ -975,14 +987,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     
     if (slot && id && type && weechat_strcasecmp(type, "result") == 0)
     {
-        weechat_printf(account.buffer, "%s[DEBUG] Upload slot response received (id: %s)",
-                      weechat_prefix("network"), id);
+        XDEBUG("Upload slot response received (id: {})", id);
         
         auto req_it = account.upload_requests.find(id);
         if (req_it != account.upload_requests.end())
         {
-            weechat_printf(account.buffer, "%s[DEBUG] Found matching upload request",
-                          weechat_prefix("network"));
+            XDEBUG("Found matching upload request");
             // Extract PUT and GET URLs
             xmpp_stanza_t *put_elem = xmpp_stanza_get_child_by_name(slot, "put");
             xmpp_stanza_t *get_elem = xmpp_stanza_get_child_by_name(slot, "get");
@@ -990,10 +1000,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             const char *put_url = put_elem ? xmpp_stanza_get_attribute(put_elem, "url") : NULL;
             const char *get_url = get_elem ? xmpp_stanza_get_attribute(get_elem, "url") : NULL;
             
-            weechat_printf(account.buffer, "%s[DEBUG] PUT URL: %s",
-                          weechat_prefix("network"), put_url ? put_url : "(null)");
-            weechat_printf(account.buffer, "%s[DEBUG] GET URL: %s",
-                          weechat_prefix("network"), get_url ? get_url : "(null)");
+            XDEBUG("PUT URL: {}", put_url ? put_url : "(null)");
+            XDEBUG("GET URL: {}", get_url ? get_url : "(null)");
             
             // Extract PUT headers (XEP-0363 allows Authorization and other headers)
             std::vector<std::string> put_headers;
@@ -1008,8 +1016,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     {
                         std::string header_str = fmt::format("{}: {}", name, value);
                         put_headers.push_back(header_str);
-                        weechat_printf(account.buffer, "%s[DEBUG] PUT header: %s",
-                                      weechat_prefix("network"), header_str.c_str());
+                        XDEBUG("PUT header: {}", header_str);
                     }
                     if (value) xmpp_free(account.context, value);
                     header = xmpp_stanza_get_next(header);
@@ -1310,14 +1317,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         }
         else
         {
-            weechat_printf(account.buffer, "%s[DEBUG] Upload request ID not found: %s",
-                          weechat_prefix("error"), id);
+            weechat_printf(account.buffer, "%s%s: upload slot response for unknown request ID: %s",
+                          weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, id);
         }
     }
     else if (id && account.upload_requests.count(id))
     {
-        weechat_printf(account.buffer, "%s[DEBUG] Slot response but no slot element or wrong type (type: %s)",
-                      weechat_prefix("error"), type ? type : "(null)");
+        weechat_printf(account.buffer, "%s%s: upload slot response malformed or wrong type (type: %s)",
+                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, type ? type : "(null)");
     }
     
     // XEP-0060: clean up publish tracking on bare <iq type='result'/> (no pubsub child)

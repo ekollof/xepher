@@ -20,8 +20,7 @@ int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaini
                                 .build(account->context)
                                 .get());
         account->csi_active = false;
-        weechat_printf(account->buffer, "%sClient state: inactive (idle for %ld seconds)",
-                      weechat_prefix("network"), idle_time);
+        XDEBUG("Client state: inactive (idle for {} seconds)", idle_time);
     }
 
     return WEECHAT_RC_OK;
@@ -54,8 +53,7 @@ int weechat::account::activity_cb(const void *pointer, void *data,
                                 .build(account->context)
                                 .get());
         account->csi_active = true;
-        weechat_printf(account->buffer, "%sClient state: active",
-                      weechat_prefix("network"));
+        XDEBUG("Client state: active");
     }
 
     return WEECHAT_RC_OK;

@@ -135,6 +135,13 @@ weechat::config::config()
     , section_look{file, "look", 0, 0, {}, {}, {}, {}, {}}
     , account_default{file, section_account_default}
     , look{
+            .debug{file, section_look, "debug", "boolean",
+                "enable debug mode: print verbose protocol messages (PEP events, avatar "
+                "updates, vCard dumps, OMEMO device lists, stream management, client state) "
+                "to the xmpp.debug buffer instead of account buffers",
+                nullptr, 0, 0,
+                "off", nullptr, false,
+                {}, {}, {}},
             .nick_completion_smart{file, section_look, "nick_completion_smart", "integer",
                 ("smart completion for nicks (completes first with last speakers): "
                  "speakers = all speakers (including highlights), "
@@ -178,3 +185,11 @@ std::optional<weechat::config> weechat::config::instance;
 bool weechat::config::init() { instance.emplace(); return true; }
 bool weechat::config::read() { return instance->file.read(); }
 bool weechat::config::write() { return instance->file.write(); }
+
+// Used by debug.hh XDEBUG macro — defined here to avoid circular header deps.
+bool xmpp_debug_is_on()
+{
+    if (!weechat::config::instance)
+        return false;
+    return weechat_config_boolean(weechat::config::instance->look.debug);
+}

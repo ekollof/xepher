@@ -85,10 +85,9 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         {
             if (!account.sm_id.empty() && account.sm_h_inbound > 0)
             {
-                weechat_printf(account.buffer, "%sAttempting to resume SM session (id=%s, h=%u)...",
-                              weechat_prefix("network"),
-                              account.sm_id.data(),
-                              account.sm_h_inbound);
+                XDEBUG("Attempting to resume SM session (id={}, h={})...",
+                       account.sm_id.data(),
+                       account.sm_h_inbound);
                 this->send(stanza::xep0198::resume(account.sm_h_inbound, account.sm_id)
                            .build(account.context)
                            .get());
@@ -279,8 +278,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         }
 
         // Discover HTTP File Upload service (XEP-0363)
-        weechat_printf(account.buffer, "%sDiscovering upload service...",
-                      weechat_prefix("network"));
+        XDEBUG("Discovering upload service...");
         
         // Build disco#items query manually
         xmpp_string_guard disco_items_id_g(account.context, xmpp_uuid_gen(account.context));

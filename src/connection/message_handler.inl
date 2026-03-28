@@ -236,8 +236,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         // Create PM channel if it doesn't exist
                         if (partner_jid && !account.channels.contains(partner_jid))
                         {
-                            weechat_printf(account.buffer, "%sDiscovered conversation with %s",
-                                          weechat_prefix("network"), partner_jid);
+                            XDEBUG("MAM: discovered conversation with {}", partner_jid);
                             
                             account.channels.emplace(
                                 std::make_pair(partner_jid, weechat::channel {
@@ -379,11 +378,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 // Log all PEP events for debugging/future features (XEP-0163)
                 if (items_node)
                 {
-                    weechat_printf_date_tags(account.buffer, 0, "xmpp_pep",
-                                            "%sPEP event from %s: %s",
-                                            weechat_prefix("network"),
-                                            from ? from : account.jid().data(),
-                                            items_node);
+                    XDEBUG("PEP event from {}: {}",
+                           from ? from : account.jid().data(),
+                           items_node);
                 }
                 
                 if (items_node
@@ -403,11 +400,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                     &account, from ? from : account.jid().data(), items);
                             }
 
-                            weechat_printf(account.buffer,
-                                           "%somemo: [dbg] PEP devicelist from %s — omemo=%s",
-                                           weechat_prefix("network"),
-                                           from ? from : account.jid().data(),
-                                           account.omemo ? "ready" : "NOT ready");
+                            XDEBUG("omemo: [dbg] PEP devicelist from {} — omemo={}",
+                                   from ? from : account.jid().data(),
+                                   account.omemo ? "ready" : "NOT ready");
                         }
                     }
                 }
@@ -447,13 +442,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                      // Only fetch/load data when hash is new or user was unknown
                                      if (hash_changed || (user && user->profile.avatar_data.empty()))
                                      {
-                                         weechat_printf_date_tags(account.buffer, 0, "xmpp_avatar",
-                                                                 "%sAvatar update from %s (hash: %.8s..., type: %s, bytes: %s)",
-                                                                 weechat_prefix("network"),
-                                                                 from_jid,
-                                                                 info_id,
-                                                                 info_type ? info_type : "unknown",
-                                                                 info_bytes ? info_bytes : "unknown");
+                                         XDEBUG("Avatar update from {} (hash: {:.8}..., type: {}, bytes: {})",
+                                                from_jid,
+                                                info_id,
+                                                info_type ? info_type : "unknown",
+                                                info_bytes ? info_bytes : "unknown");
 
                                          // request_data() checks cache before sending IQ
                                          weechat::avatar::request_data(account, from_jid, info_id);
@@ -518,12 +511,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                                                                    avatar_data.meta.type);
                                     }
                                     
-                                    weechat_printf_date_tags(account.buffer, 0, "xmpp_avatar",
-                                                            "%sAvatar data received from %s (%d bytes, hash verified: %s)",
-                                                            weechat_prefix("network"),
-                                                            from_jid,
-                                                            actual_len,
-                                                            hash.c_str());
+                                    XDEBUG("Avatar data received from {} ({} bytes, hash verified: {})",
+                                           from_jid,
+                                           actual_len,
+                                           hash);
                                 }
                                 
                                 xmpp_free(account.context, b64_data);
@@ -623,9 +614,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         }
                     }
                     
-                    weechat_printf(account.buffer, "%sLoaded %zu bookmarks from PEP",
-                                  weechat_prefix("network"),
-                                  account.bookmarks.size());
+                    XDEBUG("Loaded {} bookmarks from PEP", account.bookmarks.size());
                 }
 
                 // XEP-0490: Message Displayed Synchronization

@@ -29,6 +29,7 @@
 #include "user.hh"
 #include "channel.hh"
 #include "buffer.hh"
+#include "debug.hh"
 
 // Use a pointer that's never freed to prevent destructor running at program exit
 // when plugin is already unloaded. Memory is leaked but OS reclaims it.

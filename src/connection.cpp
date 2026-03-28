@@ -40,6 +40,7 @@
 #include "pgp.hh"
 #include "util.hh"
 #include "avatar.hh"
+#include "debug.hh"
 #include "xmpp/xep-0054.inl"
 #include "xmpp/xep-0084.inl"
 #include "xmpp/xep-0172.inl"

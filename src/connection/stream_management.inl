@@ -27,13 +27,11 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         if (id)
         {
             account.sm_id = id;
-            weechat_printf(account.buffer, "%sStream Management enabled (resumable, id=%s)",
-                          weechat_prefix("network"), id);
+            XDEBUG("Stream Management enabled (resumable, id={})", id);
         }
         else
         {
-            weechat_printf(account.buffer, "%sStream Management enabled (not resumable)",
-                          weechat_prefix("network"));
+            XDEBUG("Stream Management enabled (not resumable)");
         }
 
         // Set up periodic ack timer (every 30 seconds)
@@ -49,13 +47,11 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         {
             ack_h = std::stoul(h);
             account.sm_last_ack = ack_h;
-            weechat_printf(account.buffer, "%sStream resumed (h=%u)",
-                          weechat_prefix("network"), ack_h);
+            XDEBUG("Stream resumed (h={})", ack_h);
         }
         else
         {
-            weechat_printf(account.buffer, "%sStream resumed",
-                          weechat_prefix("network"));
+            XDEBUG("Stream resumed");
         }
 
         // Prune stanzas the server already acknowledged
@@ -137,11 +133,10 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
             time_t now = time(NULL);
             if (unacked > 0 || (now - last_ack_log) > 300)  // Log every 5 minutes if quiet
             {
-                weechat_printf(account.buffer, "%sReceived ack: h=%u (sent=%u, unacked=%d)",
-                              weechat_prefix("network"),
-                              ack_count,
-                              account.sm_h_outbound,
-                              unacked);
+                XDEBUG("Received ack: h={} (sent={}, unacked={})",
+                       ack_count,
+                       account.sm_h_outbound,
+                       unacked);
                 last_ack_log = now;
             }
         }
