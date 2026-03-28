@@ -1049,8 +1049,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                         dim, rst, geoloc.c_str());
 
                                 if (!body.empty())
+                                {
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %s\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500%s",
+                                        dim, rst);
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %s", body.c_str());
+                                }
                             }
                             // Mark this item seen so push duplicates are suppressed.
                             // Skip if we deferred display to the IQ result handler —

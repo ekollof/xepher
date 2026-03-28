@@ -757,8 +757,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                         dim, rst, geoloc.c_str());
 
                                 if (!body.empty())
+                                {
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %s\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500%s",
+                                        dim, rst);
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %s", body.c_str());
+                                }
                             }
                             // Mark rendered so push duplicates and re-fetches are suppressed.
                             if (item_id_raw)
