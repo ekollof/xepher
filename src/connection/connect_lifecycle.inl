@@ -406,6 +406,80 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                                 }));
                     }
                 }
+                // Restore FEED buffers from previous session
+                // (MUCs are restored via bookmarks; PMs handled above)
+                else if (ptr_type && strcmp(ptr_type, "feed") == 0 &&
+                         ptr_account_name && account.name == ptr_account_name &&
+                         ptr_remote_jid && ptr_remote_jid[0])
+                {
+                    std::string feed_key(ptr_remote_jid);
+
+                    // Re-create the in-memory channel object if it was lost on disconnect
+                    account.channels.try_emplace(
+                        feed_key,
+                        account, weechat::channel::chat_type::FEED,
+                        feed_key, feed_key);
+
+                    // Parse feed_key "service_jid/node" at the first '/'
+                    auto slash = feed_key.find('/');
+                    if (slash != std::string::npos)
+                    {
+                        std::string service_jid = feed_key.substr(0, slash);
+                        std::string node_name   = feed_key.substr(slash + 1);
+
+                        // Read the persisted RSM cursor from LMDB (may be empty → latest page)
+                        std::string cursor_key    = fmt::format("pubsub:{}", feed_key);
+                        std::string before_cursor = account.mam_cursor_get(cursor_key);
+
+                        // Build pubsub items IQ with RSM <before> (mirrors command__feed logic)
+                        const int max_items = 20;
+                        std::array<xmpp_stanza_t *, 3> pub_children = {nullptr, nullptr, nullptr};
+                        pub_children[0] = stanza__iq_pubsub_items(account.context, nullptr,
+                                                                   node_name.c_str(), max_items);
+
+                        xmpp_stanza_t *rset = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_name(rset, "set");
+                        xmpp_stanza_set_ns(rset, "http://jabber.org/protocol/rsm");
+
+                        xmpp_stanza_t *max_el = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_name(max_el, "max");
+                        xmpp_stanza_t *max_t = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_text(max_t, std::to_string(max_items).c_str());
+                        xmpp_stanza_add_child(max_el, max_t); xmpp_stanza_release(max_t);
+                        xmpp_stanza_add_child(rset, max_el); xmpp_stanza_release(max_el);
+
+                        xmpp_stanza_t *before_el = xmpp_stanza_new(account.context);
+                        xmpp_stanza_set_name(before_el, "before");
+                        if (!before_cursor.empty())
+                        {
+                            xmpp_stanza_t *before_t = xmpp_stanza_new(account.context);
+                            xmpp_stanza_set_text(before_t, before_cursor.c_str());
+                            xmpp_stanza_add_child(before_el, before_t);
+                            xmpp_stanza_release(before_t);
+                        }
+                        xmpp_stanza_add_child(rset, before_el); xmpp_stanza_release(before_el);
+                        pub_children[1] = rset;
+
+                        pub_children[0] = stanza__iq_pubsub(account.context, nullptr, pub_children.data(),
+                                                            with_noop("http://jabber.org/protocol/pubsub"));
+                        pub_children[1] = nullptr;
+
+                        xmpp_string_guard uid_g(account.context, xmpp_uuid_gen(account.context));
+                        const char *uid = uid_g.ptr;
+
+                        pub_children[0] = stanza__iq(account.context, nullptr, pub_children.data(),
+                                                     nullptr, uid,
+                                                     account.jid().data(),
+                                                     service_jid.c_str(),
+                                                     "get");
+
+                        if (uid)
+                            account.pubsub_fetch_ids[uid] = {service_jid, node_name, before_cursor, max_items};
+
+                        this->send(pub_children[0]);
+                        xmpp_stanza_release(pub_children[0]);
+                    }
+                }
             }
             ptr_buffer = (struct t_gui_buffer*)weechat_hdata_move(hdata_buffer, ptr_buffer, 1);
         }
