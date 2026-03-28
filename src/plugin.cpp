@@ -227,8 +227,6 @@ void weechat::plugin::init(int argc, char *argv[])
 
     weechat::config::read();
 
-    weechat::debug::init();
-
     weechat::connection::init();
 
     command__init(); // TODO: port
