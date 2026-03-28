@@ -499,7 +499,8 @@ int command__bookmark(const void *pointer, void *data,
                 weechat_command(buf, cmd.c_str());
             },
             {},
-            buffer);
+            buffer,
+            true /* sort_entries */);
         (void) p;
         return WEECHAT_RC_OK;
     }

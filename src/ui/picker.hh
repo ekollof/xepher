@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -63,25 +64,40 @@ public:
     // -----------------------------------------------------------------------
     // Constructor — opens the WeeChat buffer and switches to it.
     //
-    // buf_name   : WeeChat buffer name (e.g. "xmpp.picker.mood")
-    // title      : header line displayed at the top of the picker
-    // entries    : initial list of items (may be empty; use add_entry later)
-    // on_select  : called with the selected item when the user presses Enter
-    // on_close   : optional; called on cancel or after on_select
-    // origin_buf : buffer to return focus to after the picker closes
+    // buf_name     : WeeChat buffer name (e.g. "xmpp.picker.mood")
+    // title        : header line displayed at the top of the picker
+    // entries      : initial list of items (may be empty; use add_entry later)
+    // on_select    : called with the selected item when the user presses Enter
+    // on_close     : optional; called on cancel or after on_select
+    // origin_buf   : buffer to return focus to after the picker closes
+    // sort_entries : if true, sort entries alphabetically by label before display
     // -----------------------------------------------------------------------
     picker(std::string_view buf_name,
            std::string_view title,
            std::vector<entry> entries,
            action_cb on_select,
            close_cb  on_close,
-           struct t_gui_buffer *origin_buf)
+           struct t_gui_buffer *origin_buf,
+           bool sort_entries = false)
          : origin_buf_(origin_buf)
         , entries_(std::move(entries))
         , title_(title)
         , on_select_(std::move(on_select))
         , on_close_(std::move(on_close))
     {
+        if (sort_entries)
+        {
+            std::ranges::stable_sort(entries_, [](const entry &a, const entry &b) {
+                // Case-insensitive sort on label; non-selectable entries (headers)
+                // sort before selectable ones to keep separators at the top.
+                if (a.selectable != b.selectable)
+                    return !a.selectable;
+                std::string la = a.label, lb = b.label;
+                std::ranges::transform(la, la.begin(), ::tolower);
+                std::ranges::transform(lb, lb.begin(), ::tolower);
+                return la < lb;
+            });
+        }
         buf_ = weechat_buffer_new(
             std::string(buf_name).c_str(),
             &picker::s_input_cb, this, nullptr,
