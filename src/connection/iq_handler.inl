@@ -16,9 +16,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     const char *to = xmpp_stanza_get_to(stanza);
     const char *type = xmpp_stanza_get_attribute(stanza, "type");
 
-    // XEP-0060: on publish success, re-fetch the single published item so
-    // the comments buffer (or blog buffer) updates immediately without a
-    // manual /feed refresh.  Called at every publish-result erase site.
+    // XEP-0060: on publish success, re-fetch so the feed buffer updates
+    // immediately without a manual /feed refresh.
+    // - publish/reply: re-fetch only the single new item by ID.
+    // - retract:       re-fetch the full node (the item is gone; fetching it
+    //                  by ID returns nothing, so we need the current page).
+    // Called at every publish-result erase site.
     auto trigger_publish_refetch = [&](const char *iq_id) {
         auto pub_it = account.pubsub_publish_ids.find(iq_id);
         if (pub_it == account.pubsub_publish_ids.end())
@@ -26,27 +29,29 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             account.pubsub_publish_ids.erase(iq_id);
             return;
         }
-        std::string pub_service = pub_it->second.service;
-        std::string pub_node    = pub_it->second.node;
-        std::string pub_item_id = pub_it->second.item_id;
+        std::string pub_service   = pub_it->second.service;
+        std::string pub_node      = pub_it->second.node;
+        std::string pub_item_id   = pub_it->second.item_id;
+        bool        pub_is_retract = pub_it->second.is_retract;
         account.pubsub_publish_ids.erase(pub_it);
 
-        if (pub_service.empty() || pub_node.empty() || pub_item_id.empty())
+        if (pub_service.empty() || pub_node.empty())
             return;
 
-        // Build: <iq type='get' to='service'>
-        //          <pubsub xmlns='http://jabber.org/protocol/pubsub'>
-        //            <items node='...'><item id='...'/></items>
-        //          </pubsub>
-        //        </iq>
-        xmpp_stanza_t *item_req =
-            stanza__iq_pubsub_items_item(account.context, nullptr,
-                                         with_noop(pub_item_id.c_str()));
         xmpp_stanza_t *items_req =
-            stanza__iq_pubsub_items(account.context, nullptr,
-                                    pub_node.c_str());
-        xmpp_stanza_add_child(items_req, item_req);
-        xmpp_stanza_release(item_req);
+            stanza__iq_pubsub_items(account.context, nullptr, pub_node.c_str());
+
+        if (!pub_is_retract && !pub_item_id.empty())
+        {
+            // Publish path: request only the single newly-published item.
+            xmpp_stanza_t *item_req =
+                stanza__iq_pubsub_items_item(account.context, nullptr,
+                                             with_noop(pub_item_id.c_str()));
+            xmpp_stanza_add_child(items_req, item_req);
+            xmpp_stanza_release(item_req);
+        }
+        // Retract path: no <item id> filter → server returns current page.
+
         std::array<xmpp_stanza_t *, 2> rf_ch = {items_req, nullptr};
         rf_ch[0] = stanza__iq_pubsub(account.context, nullptr, rf_ch.data(),
                                      with_noop("http://jabber.org/protocol/pubsub"));

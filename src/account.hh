@@ -231,13 +231,14 @@ namespace weechat
         // Maps IQ id → service_jid
         std::unordered_map<std::string, std::string> pubsub_subscriptions_queries;
 
-        // XEP-0060: pending publish IQs (/feed post, /feed reply).
+        // XEP-0060: pending publish IQs (/feed post, /feed reply, /feed retract).
         // Maps IQ id → context used to report errors to the user.
         struct pubsub_publish_context {
             std::string service;
             std::string node;
             std::string item_id;
             struct t_gui_buffer *buffer = nullptr;  // buffer for error feedback
+            bool is_retract = false;                // true → full node re-fetch on result
         };
         std::unordered_map<std::string, pubsub_publish_context> pubsub_publish_ids;
 

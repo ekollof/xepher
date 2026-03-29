@@ -1539,9 +1539,11 @@ int command__feed(const void *pointer, void *data,
 
             // Track the IQ so the error handler can report server-side failures
             // (e.g. item-not-found, forbidden) instead of silently dropping them.
+            // is_retract=true makes trigger_publish_refetch do a full node re-fetch
+            // on success (the retracted item is gone; fetching it by ID returns nothing).
             if (retract_uid_g.ptr)
                 ptr_account->pubsub_publish_ids[retract_uid_g.ptr] = {
-                    pub_service, pub_node, retract_id, buffer};
+                    pub_service, pub_node, retract_id, buffer, /*is_retract=*/true};
 
             ptr_account->connection.send(iq);
             xmpp_stanza_release(iq);
