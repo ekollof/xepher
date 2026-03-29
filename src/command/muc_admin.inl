@@ -1370,6 +1370,12 @@ int command__feed(const void *pointer, void *data,
             && (argc >= 4)
             && (argv[2][0] == '#' || std::isdigit((unsigned char)argv[2][0]));
 
+        // Short-form detection for /feed retract: "/feed retract #N"
+        // (no explicit service/node — inferred from the current FEED buffer).
+        bool retract_short_form = (subcmd == "retract")
+            && (argc >= 3)
+            && (argv[2][0] == '#' || std::isdigit((unsigned char)argv[2][0]));
+
         // Short-form detection for /feed post: "/feed post <text>"
         // (no explicit service/node — inferred from the current FEED buffer).
         //
@@ -1420,7 +1426,7 @@ int command__feed(const void *pointer, void *data,
         }
 
         int min_argc = subcmd == "reply"   ? (reply_short_form ? 4 : 6)
-                     : subcmd == "retract" ? 5
+                     : subcmd == "retract" ? (retract_short_form ? 3 : 5)
                      : (post_short_form    ? 3 : 5); // post
         if (argc < min_argc)
         {
@@ -1439,7 +1445,8 @@ int command__feed(const void *pointer, void *data,
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
             else
                 weechat_printf(buffer,
-                               _("%s%s: usage: /feed retract <service-jid> <node> <item-id>"),
+                               _("%s%s: usage: /feed retract <service-jid> <node> <item-id>\n"
+                                 "           or: /feed retract #N  (from a feed buffer)"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
             return WEECHAT_RC_OK;
         }
@@ -1447,7 +1454,7 @@ int command__feed(const void *pointer, void *data,
         std::string pub_service;
         std::string pub_node;
 
-        if (reply_short_form || post_short_form)
+        if (reply_short_form || post_short_form || retract_short_form)
         {
             // Infer feed from current FEED buffer.
             if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::FEED)
@@ -1479,7 +1486,29 @@ int command__feed(const void *pointer, void *data,
         if (subcmd == "retract")
         {
             // ── /feed retract <service> <node> <item-id> ──────────────────
-            const std::string retract_id = argv[4];
+            // ── /feed retract #N  (short form from a feed buffer)  ─────────
+            const std::string pub_feed_key = fmt::format("{}/{}", pub_service, pub_node);
+            std::string retract_id;
+            if (retract_short_form)
+            {
+                retract_id = ptr_account->feed_alias_resolve(pub_feed_key, argv[2]);
+                if (retract_id.empty())
+                {
+                    weechat_printf(buffer, _("%s%s: unknown alias %s in feed %s"),
+                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                                   argv[2], pub_feed_key.c_str());
+                    return WEECHAT_RC_OK;
+                }
+            }
+            else
+            {
+                // Long form: argv[4] may be a raw UUID or a #N alias.
+                std::string_view arg4(argv[4]);
+                if (!arg4.empty() && (arg4[0] == '#' || std::isdigit((unsigned char)arg4[0])))
+                    retract_id = ptr_account->feed_alias_resolve(pub_feed_key, arg4);
+                if (retract_id.empty())
+                    retract_id = std::string(arg4);
+            }
 
             xmpp_string_guard retract_uid_g(ptr_account->context,
                                             xmpp_uuid_gen(ptr_account->context));

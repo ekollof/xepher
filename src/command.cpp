@@ -668,6 +668,7 @@ void command__init()
            "  repeat <service-jid> <node> <item-id> [comment]\n"
            "  repeat #N [comment]   (from a feed buffer)\n"
            "  retract <service-jid> <node> <item-id>\n"
+           "  retract #N  (from a feed buffer)\n"
            "  subscribe <service-jid> <node>\n"
            "  unsubscribe <service-jid> <node>\n"
            "  subscriptions <service-jid>"),

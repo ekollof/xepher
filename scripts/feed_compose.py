@@ -146,6 +146,9 @@ def _finish(buf: str, path: str, reply_id: str, mouse_was_on: bool) -> None:
             raw = fh.read()
     except OSError as exc:
         weechat.prnt(buf, f"{SCRIPT_NAME}: error reading temp file: {exc}")
+        weechat.buffer_set(buf, "input", "")
+        weechat.buffer_set(buf, "input_pos", "0")
+        weechat.command(buf, "/redraw")
         return
     finally:
         try:
@@ -157,12 +160,15 @@ def _finish(buf: str, path: str, reply_id: str, mouse_was_on: bool) -> None:
 
     if not body:
         weechat.prnt(buf, f"{SCRIPT_NAME}: empty content, cancelled")
+        weechat.buffer_set(buf, "input", "")
+        weechat.buffer_set(buf, "input_pos", "0")
+        weechat.command(buf, "/redraw")
         return
 
     cmd = _build_input(buf, title, body, reply_id)
     weechat.buffer_set(buf, "input", cmd)
     weechat.buffer_set(buf, "input_pos", str(len(cmd)))
-    weechat.command(buf, "/window refresh")
+    weechat.command(buf, "/redraw")
 
 
 # ---------------------------------------------------------------------------
