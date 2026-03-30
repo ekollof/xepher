@@ -803,7 +803,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (rsm_set && max_items_req > 0)
                     {
                         // <first index="N">item-id</first> is the oldest item in this page.
-                        // Store it as the cursor for the next (older) page.
                         xmpp_stanza_t *first_el = xmpp_stanza_get_child_by_name(rsm_set, "first");
                         char *first_text = first_el ? xmpp_stanza_get_text(first_el) : nullptr;
 
@@ -811,17 +810,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         char *count_text = count_el ? xmpp_stanza_get_text(count_el) : nullptr;
                         int total_count = count_text ? std::atoi(count_text) : -1;
                         if (count_text) xmpp_free(account.context, count_text);
-
-                        // <last> is the newest item in this page; persist as reconnect
-                        // cursor so on the next session we fetch items after it (newer).
-                        xmpp_stanza_t *last_el = xmpp_stanza_get_child_by_name(rsm_set, "last");
-                        char *last_text = last_el ? xmpp_stanza_get_text(last_el) : nullptr;
-                        if (last_text)
-                        {
-                            std::string cursor_key = fmt::format("pubsub:{}", feed_key);
-                            account.mam_cursor_set(cursor_key, last_text);
-                            xmpp_free(account.context, last_text);
-                        }
 
                         if (first_text)
                         {
