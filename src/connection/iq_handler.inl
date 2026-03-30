@@ -644,8 +644,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     xmpp_stanza_t *items = xmpp_stanza_get_child_by_name(pubsub_feed, "items");
                     if (items && !stale_page)
                     {
+                        // Collect items then reverse so we render newest-first.
+                        // Servers typically return oldest-first within a page.
+                        std::vector<xmpp_stanza_t *> item_vec;
                         for (xmpp_stanza_t *item = xmpp_stanza_get_children(items);
                              item; item = xmpp_stanza_get_next(item))
+                            item_vec.push_back(item);
+                        std::reverse(item_vec.begin(), item_vec.end());
+                        for (xmpp_stanza_t *item : item_vec)
                         {
                             if (!item || weechat_strcasecmp(xmpp_stanza_get_name(item), "item") != 0)
                                 continue;
