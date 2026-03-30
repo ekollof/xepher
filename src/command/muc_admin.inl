@@ -1711,6 +1711,18 @@ int command__feed(const void *pointer, void *data,
                 else
                     body_raw = argv_eol[4];
             }
+
+            // When posting from a comments buffer, treat it as a reply to the
+            // parent item so that <thr:in-reply-to> threading is emitted and the
+            // post is routed back into the same comments node.
+            // The comments node name is "urn:xmpp:microblog:0:comments/<parent-id>".
+            constexpr std::string_view kCommentsPfx = "urn:xmpp:microblog:0:comments/";
+            if (reply_to_id.empty() && pub_node.rfind(kCommentsPfx, 0) == 0)
+            {
+                reply_to_id          = pub_node.substr(kCommentsPfx.size());
+                reply_target_service = pub_service;
+                reply_target_node    = pub_node;
+            }
         }
 
          if (!body_raw || !*body_raw)
