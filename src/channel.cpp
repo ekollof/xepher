@@ -1431,18 +1431,21 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                 std::string url;
                 std::string output;
             };
-            auto *task = new message_task { *this, to_str, body_str, url };
+            auto task_owned = std::make_unique<message_task>(message_task { *this, to_str, body_str, url });
             auto callback = [](const void *pointer, void *,
                     const char *, int ret, const char *out, const char * /*err*/) {
-                auto *task = static_cast<message_task*>(const_cast<void*>(pointer));
-                if (!task) return WEECHAT_RC_ERROR;
+                auto *task_raw = static_cast<message_task*>(const_cast<void*>(pointer));
+                if (!task_raw) return WEECHAT_RC_ERROR;
 
                 if (ret == WEECHAT_HOOK_PROCESS_RUNNING)
                 {
                     if (out && *out)
-                        task->output += out;
+                        task_raw->output += out;
                     return WEECHAT_RC_OK;
                 }
+
+                // Terminal call — take ownership for automatic cleanup
+                auto task = std::unique_ptr<message_task>(task_raw);
 
                 if (out && *out)
                     task->output += out;
@@ -1486,12 +1489,11 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                 // call above (skip_probe=true path hits the URL scan loop).
                 // Do NOT call send_link_preview() here — that would double-send.
 
-                delete task;
                 return WEECHAT_RC_OK;
             };
             struct t_hook *process_hook =
                 weechat_hook_process_hashtable(command.data(), options, timeout,
-                    callback, task, nullptr);
+                    callback, task_owned.release(), nullptr);
             weechat_hashtable_free(options);
             (void) process_hook;
             return WEECHAT_RC_OK;
@@ -1631,19 +1633,22 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
         std::string url;
         std::string output;
     };
-    auto *task = new link_preview_task { *this, to, url };
+    auto task_owned = std::make_unique<link_preview_task>(link_preview_task { *this, to, url });
 
     auto callback = [](const void *pointer, void *,
             const char *, int ret, const char *out, const char * /*err*/) {
-        auto *task = static_cast<link_preview_task*>(const_cast<void*>(pointer));
-        if (!task) return WEECHAT_RC_ERROR;
+        auto *task_raw = static_cast<link_preview_task*>(const_cast<void*>(pointer));
+        if (!task_raw) return WEECHAT_RC_ERROR;
 
         if (ret == WEECHAT_HOOK_PROCESS_RUNNING)
         {
             if (out && *out)
-                task->output += out;
+                task_raw->output += out;
             return WEECHAT_RC_OK;
         }
+
+        // Terminal call — take ownership for automatic cleanup
+        auto task = std::unique_ptr<link_preview_task>(task_raw);
 
         if (out && *out)
             task->output += out;
@@ -1718,7 +1723,6 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
 
             // Only send a preview stanza if we got at least a title or url
             if (og_title.empty() && og_url.empty()) {
-                delete task;
                 return WEECHAT_RC_OK;
             }
 
@@ -1785,14 +1789,13 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
             xmpp_stanza_release(msg);
         }
 
-        delete task;
         return WEECHAT_RC_OK;
     };
 
     auto command = "url:" + url;
     struct t_hook *process_hook =
         weechat_hook_process_hashtable(command.data(), options, timeout,
-                callback, task, nullptr);
+                callback, task_owned.release(), nullptr);
     weechat_hashtable_free(options);
     (void) process_hook;
 }

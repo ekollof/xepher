@@ -138,16 +138,17 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
         lmdb::txn parentTransaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
         
-        MDB_cursor *cursor;
-        mdb_cursor_open(txn.handle(), mam_dbi.messages.handle(), &cursor);
-        
+        MDB_cursor *cursor_raw = nullptr;
+        mdb_cursor_open(txn.handle(), mam_dbi.messages.handle(), &cursor_raw);
+        std::unique_ptr<MDB_cursor, decltype(&mdb_cursor_close)> cursor(cursor_raw, &mdb_cursor_close);
+
         // Start with channel prefix
         std::string prefix = channel_jid + ":";
         MDB_val key = {prefix.size(), (void*)prefix.data()};
         MDB_val value;
         
         int count = 0;
-        int rc = mdb_cursor_get(cursor, &key, &value, MDB_SET_RANGE);
+        int rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_SET_RANGE);
         
         while (rc == 0 && count < 100)  // Limit to last 100 cached messages
         {
@@ -201,10 +202,10 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
                 count++;
             }
             
-            rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT);
+            rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_NEXT);
         }
         
-        mdb_cursor_close(cursor);
+        cursor.reset();
         txn.abort();
         
         if (count > 0)
@@ -227,15 +228,16 @@ void weechat::account::mam_cache_clear_messages(const std::string& channel_jid)
         lmdb::txn parentTransaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
         
-        MDB_cursor *cursor;
-        mdb_cursor_open(txn.handle(), mam_dbi.messages.handle(), &cursor);
-        
+        MDB_cursor *cursor_raw = nullptr;
+        mdb_cursor_open(txn.handle(), mam_dbi.messages.handle(), &cursor_raw);
+        std::unique_ptr<MDB_cursor, decltype(&mdb_cursor_close)> cursor(cursor_raw, &mdb_cursor_close);
+
         // Start with channel prefix
         std::string prefix = channel_jid + ":";
         MDB_val key = {prefix.size(), (void*)prefix.data()};
         MDB_val value;
         
-        int rc = mdb_cursor_get(cursor, &key, &value, MDB_SET_RANGE);
+        int rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_SET_RANGE);
         
         while (rc == 0)
         {
@@ -246,13 +248,13 @@ void weechat::account::mam_cache_clear_messages(const std::string& channel_jid)
                 break;
             
             // Delete this entry
-            mdb_cursor_del(cursor, 0);
+            mdb_cursor_del(cursor.get(), 0);
             
             // Move to next
-            rc = mdb_cursor_get(cursor, &key, &value, MDB_NEXT);
+            rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_NEXT);
         }
         
-        mdb_cursor_close(cursor);
+        cursor.reset();
         txn.commit();
     } catch (const lmdb::error& ex) {
         // Silently ignore errors
@@ -612,13 +614,14 @@ void weechat::account::caps_cache_load()
         lmdb::txn parentTransaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
         
-        MDB_cursor *cursor;
-        mdb_cursor_open(txn.handle(), mam_dbi.capabilities.handle(), &cursor);
-        
+        MDB_cursor *cursor_raw = nullptr;
+        mdb_cursor_open(txn.handle(), mam_dbi.capabilities.handle(), &cursor_raw);
+        std::unique_ptr<MDB_cursor, decltype(&mdb_cursor_close)> cursor(cursor_raw, &mdb_cursor_close);
+
         MDB_val key, value;
         int count = 0;
         
-        while (mdb_cursor_get(cursor, &key, &value, MDB_NEXT) == 0)
+        while (mdb_cursor_get(cursor.get(), &key, &value, MDB_NEXT) == 0)
         {
             std::string ver_hash((char*)key.mv_data, key.mv_size);
             std::string features_str((char*)value.mv_data, value.mv_size);
@@ -642,7 +645,7 @@ void weechat::account::caps_cache_load()
             count++;
         }
         
-        mdb_cursor_close(cursor);
+        cursor.reset();
         txn.abort();
         
         if (count > 0)

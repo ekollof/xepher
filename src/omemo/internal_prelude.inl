@@ -111,19 +111,13 @@ struct omemo2_keys {
     std::array<std::uint8_t, 16> iv {};
 };
 
-struct free_deleter {
-    void operator()(char *ptr) const noexcept
-    {
-        free(ptr);
-    }
-};
-
-using c_string = std::unique_ptr<char, free_deleter>;
+using c_string = std::unique_ptr<char, decltype(&free)>;
 
 [[nodiscard]] auto eval_path(const std::string &expression) -> std::string
 {
     c_string value {
         weechat_string_eval_expression(expression.c_str(), nullptr, nullptr, nullptr),
+        &free,
     };
     return value ? std::string {value.get()} : std::string {};
 }

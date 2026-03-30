@@ -2,8 +2,8 @@ int command__block(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
     xmpp_stanza_t *iq;
 
     (void) pointer;
@@ -66,8 +66,8 @@ int command__unblock(const void *pointer, void *data,
                     struct t_gui_buffer *buffer, int argc,
                     char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
     xmpp_stanza_t *iq;
 
     (void) pointer;
@@ -133,8 +133,8 @@ int command__blocklist(const void *pointer, void *data,
                       struct t_gui_buffer *buffer, int argc,
                       char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -230,8 +230,8 @@ int command__disco(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -254,7 +254,7 @@ int command__disco(const void *pointer, void *data,
     bool do_items = argc > 1 && weechat_strcasecmp(argv[1], "items") == 0;
     int jid_arg = do_items ? 2 : 1;  // argv index of optional jid
 
-    const char *target = NULL;
+    const char *target = nullptr;
     if (argc > jid_arg)
         target = argv[jid_arg];
     else
@@ -297,8 +297,8 @@ int command__roster(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -364,7 +364,7 @@ int command__roster(const void *pointer, void *data,
     if (argc >= 3 && weechat_strcasecmp(argv[1], "add") == 0)
     {
         const char *jid = argv[2];
-        const char *name = (argc >= 4) ? argv_eol[3] : NULL;
+        const char *name = (argc >= 4) ? argv_eol[3] : nullptr;
 
         xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
         const char *id = id_g.ptr;
@@ -450,8 +450,8 @@ int command__bookmark(const void *pointer, void *data,
                      struct t_gui_buffer *buffer, int argc,
                      char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -509,13 +509,13 @@ int command__bookmark(const void *pointer, void *data,
     // /bookmark add [jid] [name]
     if (argc >= 2 && weechat_strcasecmp(argv[1], "add") == 0)
     {
-        const char *jid = NULL;
-        const char *name = NULL;
+        const char *jid = nullptr;
+        const char *name = nullptr;
         
         if (argc >= 3)
         {
             jid = argv[2];
-            name = (argc >= 4) ? argv_eol[3] : NULL;
+            name = (argc >= 4) ? argv_eol[3] : nullptr;
         }
         else if (ptr_channel && ptr_channel->type == weechat::channel::chat_type::MUC)
         {

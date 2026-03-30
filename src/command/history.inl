@@ -120,8 +120,8 @@ int command__edit(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -205,8 +205,9 @@ int command__edit(const void *pointer, void *data,
             std::string clean_body;
             if (!body.empty())
             {
-                char *stripped = weechat_string_remove_color(body.c_str(), NULL);
-                if (stripped) { clean_body = stripped; free(stripped); }
+                std::unique_ptr<char, decltype(&free)> stripped(
+                    weechat_string_remove_color(body.c_str(), nullptr), &free);
+                if (stripped) clean_body = stripped.get();
                 else clean_body = body;
             }
 
@@ -229,8 +230,8 @@ int command__edit_to(const void *pointer, void *data,
                      struct t_gui_buffer *buffer, int argc,
                      char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -268,7 +269,7 @@ int command__edit_to(const void *pointer, void *data,
 
     xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
                                               type,
-                                              ptr_channel->id.data(), NULL);
+                                              ptr_channel->id.data(), nullptr);
 
     xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
     const char *new_id = id_g.ptr;
@@ -313,7 +314,7 @@ do_retract_send(weechat::account *account, weechat::channel *channel,
     xmpp_stanza_t *message = xmpp_message_new(account->context,
                     channel->type == weechat::channel::chat_type::MUC
                     ? "groupchat" : "chat",
-                    channel->id.data(), NULL);
+                    channel->id.data(), nullptr);
 
     xmpp_string_guard id_g(account->context, xmpp_uuid_gen(account->context));
     const char *id = id_g.ptr;
@@ -371,7 +372,7 @@ do_moderate_send(weechat::account *account, weechat::channel *channel,
 {
     const char *room_jid = channel->id.data();
     xmpp_stanza_t *iq = xmpp_message_new(account->context, "groupchat",
-                                         room_jid, NULL);
+                                         room_jid, nullptr);
     xmpp_stanza_set_to(iq, room_jid);
 
     xmpp_stanza_t *apply_to = xmpp_stanza_new(account->context);
@@ -419,8 +420,8 @@ int command__retract(const void *pointer, void *data,
                      struct t_gui_buffer *buffer, int argc,
                      char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -491,8 +492,8 @@ int command__react(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -561,7 +562,7 @@ int command__react(const void *pointer, void *data,
                 std::string msg_id;
                 std::string sid;
                 std::string sid_by;
-                char **tag_array = weechat_string_split(tags, ",", NULL, 0, 0, NULL);
+                char **tag_array = weechat_string_split(tags, ",", nullptr, 0, 0, nullptr);
                 if (tag_array)
                 {
                     for (int i = 0; tag_array[i]; i++)
@@ -603,7 +604,7 @@ int command__react(const void *pointer, void *data,
     xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
                     ptr_channel->type == weechat::channel::chat_type::MUC
                     ? "groupchat" : "chat",
-                    ptr_channel->id.data(), NULL);
+                    ptr_channel->id.data(), nullptr);
 
     xmpp_string_guard msg_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
     const char *msg_id = msg_id_g.ptr;
@@ -651,8 +652,8 @@ int command__reply(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -768,7 +769,7 @@ int command__reply(const void *pointer, void *data,
     else
         reply_to_jid = ptr_channel->name;
 
-    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, type, to, NULL);
+    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, type, to, nullptr);
     xmpp_string_guard uuid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
     const char *uuid = uuid_g.ptr;
     xmpp_stanza_set_id(message, uuid);
@@ -835,8 +836,8 @@ int command__reply_to(const void *pointer, void *data,
                       struct t_gui_buffer *buffer, int argc,
                       char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -878,7 +879,7 @@ int command__reply_to(const void *pointer, void *data,
     const char *type = (ptr_channel->type == weechat::channel::chat_type::MUC)
                         ? "groupchat" : "chat";
 
-    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, type, to, NULL);
+    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, type, to, nullptr);
     xmpp_string_guard uuid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
     xmpp_stanza_set_id(message, uuid_g.ptr);
 
@@ -932,8 +933,8 @@ int command__moderate(const void *pointer, void *data,
                       struct t_gui_buffer *buffer, int argc,
                       char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;

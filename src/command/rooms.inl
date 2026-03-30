@@ -35,8 +35,8 @@ int command__list(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -64,8 +64,8 @@ int command__list(const void *pointer, void *data,
     if (argc >= 2)
     {
         // Heuristic: if the first arg contains a dot but no spaces, it's a JID/domain
-        bool first_arg_is_jid = (strchr(argv[1], '.') != NULL)
-                                 && (strchr(argv[1], ' ') == NULL);
+        bool first_arg_is_jid = (strchr(argv[1], '.') != nullptr)
+                                 && (strchr(argv[1], ' ') == nullptr);
         if (first_arg_is_jid)
         {
             service_jid = argv[1];
@@ -202,8 +202,8 @@ int command__upload(const void *pointer, void *data,
     (void) data;
     (void) argv_eol;
 
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
     
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 

@@ -51,7 +51,7 @@ namespace weechat
                 case transport::OTR:
                     return "OTR";
                 default:
-                    return NULL;
+                    return nullptr;
             }
         }
 

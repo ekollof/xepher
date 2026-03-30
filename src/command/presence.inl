@@ -2,10 +2,10 @@ int command__ping(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
     xmpp_stanza_t *iq;
-    const char *target = NULL;
+    const char *target = nullptr;
 
     (void) pointer;
     (void) data;
@@ -29,7 +29,7 @@ int command__ping(const void *pointer, void *data,
     else if (ptr_channel)
         target = ptr_channel->id.data();
     else
-        target = NULL;  // Ping the server
+        target = nullptr;  // Ping the server
 
     // Create ping IQ
     xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
@@ -37,7 +37,7 @@ int command__ping(const void *pointer, void *data,
     iq = xmpp_iq_new(ptr_account->context, "get", id);
     
     // Track ping time for response measurement
-    ptr_account->user_ping_queries[id] = time(NULL);
+    ptr_account->user_ping_queries[id] = time(nullptr);
     
     if (target)
     {
@@ -69,8 +69,8 @@ int command__mood(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -103,11 +103,11 @@ int command__mood(const void *pointer, void *data,
         "proud", "relaxed", "relieved", "remorseful", "restless", "sad",
         "sarcastic", "serious", "shocked", "shy", "sick", "sleepy",
         "spontaneous", "stressed", "strong", "surprised", "thankful",
-        "thirsty", "tired", "undefined", "weak", "worried", NULL
+        "thirsty", "tired", "undefined", "weak", "worried", nullptr
     };
 
-    const char *mood = NULL;
-    const char *text = NULL;
+    const char *mood = nullptr;
+    const char *text = nullptr;
 
     if (argc >= 2)
     {
@@ -121,7 +121,7 @@ int command__mood(const void *pointer, void *data,
     {
         using picker_t = weechat::ui::picker<std::string>;
         std::vector<picker_t::entry> entries;
-        for (int i = 0; valid_moods[i] != NULL; i++)
+        for (int i = 0; valid_moods[i] != nullptr; i++)
             entries.push_back({ std::string(valid_moods[i]), valid_moods[i], "", true });
 
         auto *p = new picker_t(
@@ -180,7 +180,7 @@ int command__mood(const void *pointer, void *data,
     {
         // Validate mood
         bool valid = false;
-        for (int i = 0; valid_moods[i] != NULL; i++)
+        for (int i = 0; valid_moods[i] != nullptr; i++)
         {
             if (weechat_strcasecmp(mood, valid_moods[i]) == 0)
             {
@@ -260,8 +260,8 @@ int command__activity(const void *pointer, void *data,
                       struct t_gui_buffer *buffer, int argc,
                       char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -284,13 +284,13 @@ int command__activity(const void *pointer, void *data,
     const char *valid_categories[] = {
         "doing_chores", "drinking", "eating", "exercising", "grooming",
         "having_appointment", "inactive", "relaxing", "talking", "traveling",
-        "working", NULL
+        "working", nullptr
     };
 
     std::string category_s;
     std::string specific_s;
-    const char *specific = NULL;
-    const char *text = NULL;
+    const char *specific = nullptr;
+    const char *text = nullptr;
 
     if (argc >= 2)
     {
@@ -309,14 +309,14 @@ int command__activity(const void *pointer, void *data,
             text = argv_eol[2];
     }
 
-    const char *category = category_s.empty() ? NULL : category_s.c_str();
+    const char *category = category_s.empty() ? nullptr : category_s.c_str();
 
     // No arguments: open interactive picker
     if (!category)
     {
         using picker_t = weechat::ui::picker<std::string>;
         std::vector<picker_t::entry> entries;
-        for (int i = 0; valid_categories[i] != NULL; i++)
+        for (int i = 0; valid_categories[i] != nullptr; i++)
             entries.push_back({ std::string(valid_categories[i]), valid_categories[i], "", true });
 
         auto *p = new picker_t(
@@ -373,7 +373,7 @@ int command__activity(const void *pointer, void *data,
     {
         // Validate category
         bool valid = false;
-        for (int i = 0; valid_categories[i] != NULL; i++)
+        for (int i = 0; valid_categories[i] != nullptr; i++)
         {
             if (weechat_strcasecmp(category, valid_categories[i]) == 0)
             {
@@ -472,8 +472,8 @@ int command__selfping(const void *pointer, void *data,
                      struct t_gui_buffer *buffer, int argc,
                      char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
     xmpp_stanza_t *iq;
 
     (void) pointer;
@@ -540,9 +540,9 @@ int command__whois(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
-    const char *target = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+    const char *target = nullptr;
 
     (void) pointer;
     (void) data;
@@ -605,8 +605,8 @@ int command__setvcard(const void *pointer, void *data,
                       struct t_gui_buffer *buffer, int argc,
                       char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -669,8 +669,8 @@ int command__setavatar(const void *pointer, void *data,
                        struct t_gui_buffer *buffer, int argc,
                        char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;

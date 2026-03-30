@@ -102,7 +102,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
 
         /* Send initial <presence/> so that we appear online to contacts */
         /* children layout: [0]=<c/> [1]=<status/> [2]=<x vcard-temp:x:update/> [3]=<x pgp/> [4]=NULL */
-        auto children = std::unique_ptr<xmpp_stanza_t*[]>(new xmpp_stanza_t*[4 + 1]);
+        auto children = std::make_unique<xmpp_stanza_t*[]>(4 + 1);
 
         pres__c = xmpp_stanza_new(account.context);
         xmpp_stanza_set_name(pres__c, "c");
@@ -112,11 +112,11 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
 
         xmpp_stanza_t *caps = xmpp_stanza_new(account.context);
         xmpp_stanza_set_name(caps, "caps");
-        char *cap_hash;
-        caps = this->get_caps(caps, &cap_hash);
+        char *cap_hash_raw = nullptr;
+        caps = this->get_caps(caps, &cap_hash_raw);
         xmpp_stanza_release(caps);
-        xmpp_stanza_set_attribute(pres__c, "ver", cap_hash);
-        free(cap_hash);
+        std::unique_ptr<char, decltype(&free)> cap_hash(cap_hash_raw, &free);
+        xmpp_stanza_set_attribute(pres__c, "ver", cap_hash.get());
 
         children[0] = pres__c;
 

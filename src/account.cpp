@@ -47,10 +47,10 @@ void weechat::log_emit(void *const userdata, const xmpp_log_level_t level,
     if (level == XMPP_LEVEL_DEBUG)
         return;
 
-    const char *tags = level > XMPP_LEVEL_DEBUG ? "no_log" : NULL;
+    const char *tags = level > XMPP_LEVEL_DEBUG ? "no_log" : nullptr;
 
     weechat_printf_date_tags(
-        account ? account->buffer : NULL,
+        account ? account->buffer : nullptr,
         0, tags,
         _("%s%s (%s): %s"),
         weechat_prefix("network"), area,
@@ -142,7 +142,7 @@ xmpp_stanza_t *weechat::account::get_devicelist()
     std::vector<xmpp_stanza_t*> children_vec(devices.size() + 4, nullptr);
     xmpp_stanza_t **children = children_vec.data();
     children[i++] = stanza__iq_pubsub_publish_item_list_device(
-        context, NULL, with_noop(device.name.c_str()), with_noop(nullptr));
+        context, nullptr, with_noop(device.name.c_str()), with_noop(nullptr));
 
     for (auto& device : devices)
     {
@@ -169,22 +169,22 @@ xmpp_stanza_t *weechat::account::get_devicelist()
         if (device.first != omemo.device_id)
             children[i++] = stanza__iq_pubsub_publish_item_list_device(
                 context,
-                NULL,
+                nullptr,
                 with_noop(device.second.name.data()),
                 with_noop(device.second.label.empty() ? nullptr : device.second.label.c_str()));
     }
 
-    children[i] = NULL;
+    children[i] = nullptr;
     const char *node = "urn:xmpp:omemo:2";
     children[0] = stanza__iq_pubsub_publish_item_list(
-        context, NULL, children, with_noop(node));
-    children[1] = NULL;
+        context, nullptr, children, with_noop(node));
+    children[1] = nullptr;
     children[0] = stanza__iq_pubsub_publish_item(
-        context, NULL, children, with_noop("current"));
+        context, nullptr, children, with_noop("current"));
     node = "urn:xmpp:omemo:2:devices";
-    children[0] = stanza__iq_pubsub_publish(context, NULL, children, with_noop(node));
+    children[0] = stanza__iq_pubsub_publish(context, nullptr, children, with_noop(node));
     const char *ns = "http://jabber.org/protocol/pubsub";
-    children[0] = stanza__iq_pubsub(context, NULL, children, with_noop(ns));
+    children[0] = stanza__iq_pubsub(context, nullptr, children, with_noop(ns));
 
     // Add publish-options so the server delivers PubSub notifications to
     // contacts and allows them to fetch our devicelist (access_model=open).
@@ -222,9 +222,9 @@ xmpp_stanza_t *weechat::account::get_devicelist()
         xmpp_stanza_release(publish_options);
     }
 
-    xmpp_stanza_t * parent = stanza__iq(context, NULL,
-                                        children, NULL, "announce1",
-                                        NULL, NULL, "set");
+    xmpp_stanza_t * parent = stanza__iq(context, nullptr,
+                                        children, nullptr, "announce1",
+                                        nullptr, nullptr, "set");
 
     weechat_printf(buffer,
                    "%somemo: publishing devicelist for device %u with open access model",
@@ -552,7 +552,7 @@ void weechat::account::disconnect(int reconnect)
         else
             reconnect_delay = std::min(reconnect_delay * 2, 120);
         current_retry++;
-        reconnect_start = time(NULL) + reconnect_delay;
+        reconnect_start = time(nullptr) + reconnect_delay;
         weechat_printf(buffer,
                        "%sxmpp: reconnecting in %ds (attempt %d)…",
                        weechat_prefix("network"),
@@ -584,10 +584,10 @@ void weechat::account::disconnect_all()
 struct t_gui_buffer *weechat::account::create_buffer()
 {
     buffer = weechat_buffer_new(fmt::format("account.{}", name).data(),
-                                &input__data_cb, NULL, NULL,
-                                &buffer__close_cb, NULL, NULL);
+                                &input__data_cb, nullptr, nullptr,
+                                &buffer__close_cb, nullptr, nullptr);
     if (!buffer)
-        return NULL;
+        return nullptr;
     weechat_printf(buffer, "xmpp: %s", name.data());
 
     if (!weechat_buffer_get_integer(buffer, "short_name_is_set"))
@@ -694,7 +694,7 @@ int weechat::account::timer_cb(const void *pointer, void *data, int remaining_ca
                 ptr_account.second.connection.process(ptr_account.second.context, 10);
             else if (ptr_account.second.disconnected);
             else if (ptr_account.second.reconnect_start > 0
-                     && ptr_account.second.reconnect_start < time(NULL))
+                     && ptr_account.second.reconnect_start < time(nullptr))
             {
                 // Clear reconnect_start BEFORE calling connect() so that a
                 // failed connect() does not cause an immediate re-fire on the
@@ -732,13 +732,13 @@ void weechat::account::load_pgp_keys()
         return;
     
     // Parse "jid:keyid,jid2:keyid2,..."
-    char **pairs = weechat_string_split(keys_str.data(), ",", NULL, 0, 0, NULL);
+    char **pairs = weechat_string_split(keys_str.data(), ",", nullptr, 0, 0, nullptr);
     if (!pairs)
         return;
     
     for (int i = 0; pairs[i]; i++)
     {
-        char **parts = weechat_string_split(pairs[i], ":", NULL, 0, 2, NULL);
+        char **parts = weechat_string_split(pairs[i], ":", nullptr, 0, 2, nullptr);
         if (parts && parts[0] && parts[1])
         {
             std::string jid = parts[0];

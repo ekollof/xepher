@@ -635,11 +635,9 @@ int pre_key_remove(std::uint32_t pre_key_id, void *user_data)
 
     auto transaction = lmdb::txn::begin(self->db_env);
     if (self->dbi.omemo.del(transaction, key_for_prekey_record(pre_key_id)))
-    {
         transaction.commit();
-        return SG_SUCCESS;
-    }
-
+    else
+        transaction.abort();
     return SG_SUCCESS;
 }
 
@@ -683,6 +681,8 @@ int signed_pre_key_remove(std::uint32_t signed_pre_key_id, void *user_data)
     auto transaction = lmdb::txn::begin(self->db_env);
     if (self->dbi.omemo.del(transaction, key_for_signed_prekey_record(signed_pre_key_id)))
         transaction.commit();
+    else
+        transaction.abort();
     return SG_SUCCESS;
 }
 
@@ -773,6 +773,8 @@ int session_delete(const signal_protocol_address *address, void *user_data)
                                              key_for_session(signal_address_name(address), address->device_id));
     if (deleted)
         transaction.commit();
+    else
+        transaction.abort();
     return deleted ? 1 : 0;
 }
 

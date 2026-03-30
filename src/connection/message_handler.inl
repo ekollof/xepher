@@ -12,9 +12,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     const char *text = nullptr;
     xmpp_string_guard intext_g { account.context, nullptr };
     char *&intext = intext_g.ptr;
-    struct free_guard { char *ptr; ~free_guard() { if (ptr) ::free(ptr); } };
-    free_guard cleartext_g { nullptr };
-    char *&cleartext = cleartext_g.ptr;
+    std::unique_ptr<char, decltype(&free)> cleartext_g(nullptr, &free);
+    char *cleartext = nullptr;
     std::string difftext;
     struct tm time = {0};
     time_t date = 0;
@@ -73,20 +72,20 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
 
     // Payloadless OMEMO stanzas are control/key-transport messages and must
     // not create PM buffers for inactive roster contacts.
-    if (body == NULL && encrypted_without_body && !stanza_has_user_message_payload(stanza))
+    if (body == nullptr && encrypted_without_body && !stanza_has_user_message_payload(stanza))
         return 1;
 
-    if (body == NULL && !encrypted_without_body && !pgp_without_body)
+    if (body == nullptr && !encrypted_without_body && !pgp_without_body)
     {
         topic = xmpp_stanza_get_child_by_name(stanza, "subject");
-        if (topic != NULL)
+        if (topic != nullptr)
         {
             intext = xmpp_stanza_get_text(topic);
             type = xmpp_stanza_get_type(stanza);
-            if (type != NULL && strcmp(type, "error") == 0)
+            if (type != nullptr && strcmp(type, "error") == 0)
                 return 1;
             from = xmpp_stanza_get_from(stanza);
-            if (from == NULL)
+            if (from == nullptr)
                 return 1;
             xmpp_string_guard from_bare_g { account.context, xmpp_jid_bare(account.context, from) };
             xmpp_string_guard from_resource_g { account.context, xmpp_jid_resource(account.context, from) };
@@ -130,7 +129,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         if (composing || paused || active || inactive || gone)
         {
             from = xmpp_stanza_get_from(stanza);
-            if (from == NULL)
+            if (from == nullptr)
                 return 1;
             xmpp_string_guard cs_from_bare_g { account.context, xmpp_jid_bare(account.context, from) };
             xmpp_string_guard cs_nick_g { account.context, xmpp_jid_resource(account.context, from) };
@@ -183,7 +182,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         if (received)
             forwarded = xmpp_stanza_get_child_by_name_and_ns(
                 received, "forwarded", "urn:xmpp:forward:0");
-        if ((sent || received) && forwarded != NULL)
+        if ((sent || received) && forwarded != nullptr)
         {
             // XEP-0280 §8.5: MUST verify the outer stanza's `from` is the
             // account's own bare JID (server-stamped). Drop spoofed carbons.
@@ -208,7 +207,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         {
             forwarded = xmpp_stanza_get_child_by_name_and_ns(
                 result, "forwarded", "urn:xmpp:forward:0");
-            if (forwarded != NULL)
+            if (forwarded != nullptr)
             {
                 xmpp_stanza_t *message = xmpp_stanza_get_child_by_name(forwarded, "message");
                 if (message)
@@ -226,11 +225,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     // of this function (lines ~76-77) before reaching here.
                     if (!debug_type || weechat_strcasecmp(debug_type, "groupchat") != 0)
                     {
-                        const char *from_bare = debug_from ? xmpp_jid_bare(account.context, debug_from) : NULL;
-                        const char *to_bare = debug_to ? xmpp_jid_bare(account.context, debug_to) : NULL;
+                        const char *from_bare = debug_from ? xmpp_jid_bare(account.context, debug_from) : nullptr;
+                        const char *to_bare = debug_to ? xmpp_jid_bare(account.context, debug_to) : nullptr;
                         
                         // Determine the conversation partner JID
-                        const char *partner_jid = NULL;
+                        const char *partner_jid = nullptr;
                         if (from_bare && weechat_strcasecmp(from_bare, account.jid().data()) != 0)
                             partner_jid = from_bare;  // Message FROM someone else
                         else if (to_bare && weechat_strcasecmp(to_bare, account.jid().data()) != 0)
@@ -260,11 +259,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     const char *msg_from = xmpp_stanza_get_from(message);
                     const char *msg_to = xmpp_stanza_get_to(message);
                     xmpp_stanza_t *msg_body = xmpp_stanza_get_child_by_name(message, "body");
-                    char *msg_text = msg_body ? xmpp_stanza_get_text(msg_body) : NULL;
+                    char *msg_text = msg_body ? xmpp_stanza_get_text(msg_body) : nullptr;
                     
                     delay = xmpp_stanza_get_child_by_name_and_ns(
                         forwarded, "delay", "urn:xmpp:delay");
-                    const char *timestamp_str = delay ? xmpp_stanza_get_attribute(delay, "stamp") : NULL;
+                    const char *timestamp_str = delay ? xmpp_stanza_get_attribute(delay, "stamp") : nullptr;
                     
                     // Parse timestamp (stamp is always UTC, use timegm not mktime)
                     time_t msg_timestamp = 0;
@@ -279,7 +278,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (msg_id && msg_from && msg_text && msg_timestamp > 0)
                     {
                         const char *from_bare = xmpp_jid_bare(account.context, msg_from);
-                        const char *to_bare = msg_to ? xmpp_jid_bare(account.context, msg_to) : NULL;
+                        const char *to_bare = msg_to ? xmpp_jid_bare(account.context, msg_to) : nullptr;
                         
                         // Determine channel JID (from_bare for received, to_bare for sent)
                         const char *channel_jid = from_bare;
@@ -358,7 +357,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     }
 
                     message = xmpp_stanza_copy(message);
-                    if (delay != NULL)
+                    if (delay != nullptr)
                         xmpp_stanza_add_child_ex(message, xmpp_stanza_copy(delay), 0);
                     int ret = message_handler(message, false);  // Don't double-count MAM forwarded message
                     xmpp_stanza_release(message);
@@ -584,7 +583,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         const char *autojoin = xmpp_stanza_get_attribute(conference, "autojoin");
                         
                         xmpp_stanza_t *nick_elem = xmpp_stanza_get_child_by_name(conference, "nick");
-                        char *nick_text = NULL;
+                        char *nick_text = nullptr;
                         if (nick_elem)
                             nick_text = xmpp_stanza_get_text(nick_elem);
 
@@ -616,9 +615,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         {
                             // XEP-0402 §4: join immediately on autojoin=true notification.
                             // Skip biboumi (IRC gateway) rooms.
-                            bool is_biboumi = (strchr(item_id, '%') != NULL) ||
-                                            (strstr(item_id, "biboumi") != NULL) ||
-                                            (strstr(item_id, "@irc.") != NULL);
+                            bool is_biboumi = (strchr(item_id, '%') != nullptr) ||
+                                            (strstr(item_id, "biboumi") != nullptr) ||
+                                            (strstr(item_id, "@irc.") != nullptr);
                             
                             if (!is_biboumi)
                             {
@@ -1171,7 +1170,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         }
                         new_msg += new_glyph;
                         struct t_hashtable *ht = weechat_hashtable_new(4,
-                            WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING, NULL, NULL);
+                            WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING, nullptr, nullptr);
                         weechat_hashtable_set(ht, "message", new_msg.c_str());
                         weechat_hdata_update(hdata_line_data, line_data, ht);
                         weechat_hashtable_free(ht);
@@ -1265,17 +1264,17 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         return 1;
     }
     type = xmpp_stanza_get_type(stanza);
-    if (type != NULL && strcmp(type, "error") == 0)
+    if (type != nullptr && strcmp(type, "error") == 0)
         return 1;
     from = xmpp_stanza_get_from(stanza);
-    if (from == NULL)
+    if (from == nullptr)
         return 1;
     from_bare = xmpp_jid_bare(account.context, from);
     xmpp_string_guard from_bare_main_g { account.context, const_cast<char*>(from_bare) };
     to = xmpp_stanza_get_to(stanza);
-    if (to == NULL)
+    if (to == nullptr)
         to = account.jid().data();
-    to_bare = to ? xmpp_jid_bare(account.context, to) : NULL;
+    to_bare = to ? xmpp_jid_bare(account.context, to) : nullptr;
     xmpp_string_guard to_bare_main_g { account.context, const_cast<char*>(to_bare) };
     const bool is_self_outbound_copy = from_bare && to_bare
         && weechat_strcasecmp(from_bare, account.jid().data()) == 0
@@ -1285,18 +1284,18 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     
     // XEP-0359: Unique and Stable Stanza IDs
     xmpp_stanza_t *stanza_id_elem = xmpp_stanza_get_child_by_name_and_ns(stanza, "stanza-id", "urn:xmpp:sid:0");
-    const char *stanza_id = stanza_id_elem ? xmpp_stanza_get_attribute(stanza_id_elem, "id") : NULL;
-    const char *stanza_id_by = stanza_id_elem ? xmpp_stanza_get_attribute(stanza_id_elem, "by") : NULL;
+    const char *stanza_id = stanza_id_elem ? xmpp_stanza_get_attribute(stanza_id_elem, "id") : nullptr;
+    const char *stanza_id_by = stanza_id_elem ? xmpp_stanza_get_attribute(stanza_id_elem, "by") : nullptr;
     
     xmpp_stanza_t *origin_id_elem = xmpp_stanza_get_child_by_name_and_ns(stanza, "origin-id", "urn:xmpp:sid:0");
-    const char *origin_id = origin_id_elem ? xmpp_stanza_get_attribute(origin_id_elem, "id") : NULL;
+    const char *origin_id = origin_id_elem ? xmpp_stanza_get_attribute(origin_id_elem, "id") : nullptr;
     
     // Prefer stanza-id over origin-id over regular id for stable message identification
     const char *stable_id = stanza_id ? stanza_id : (origin_id ? origin_id : id);
     
     replace = xmpp_stanza_get_child_by_name_and_ns(stanza, "replace",
                                                    "urn:xmpp:message-correct:0");
-    replace_id = replace ? xmpp_stanza_get_id(replace) : NULL;
+    replace_id = replace ? xmpp_stanza_get_id(replace) : nullptr;
     request = xmpp_stanza_get_child_by_name_and_ns(stanza, "request",
                                                    "urn:xmpp:receipts");
     markable = xmpp_stanza_get_child_by_name_and_ns(stanza, "markable",
@@ -1348,7 +1347,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         // Use the incoming message type so routing is correct.
         xmpp_stanza_t *message = xmpp_message_new(account.context,
                                                   type,  // "chat" or "groupchat"
-                                                  channel->id.data(), NULL);
+                                                  channel->id.data(), nullptr);
 
         if (request)
         {
@@ -1449,8 +1448,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     // XEP-0380: Explicit Message Encryption
     xmpp_stanza_t *eme = xmpp_stanza_get_child_by_name_and_ns(stanza, "encryption",
                                                                 "urn:xmpp:eme:0");
-    const char *eme_namespace = eme ? xmpp_stanza_get_attribute(eme, "namespace") : NULL;
-    const char *eme_name = eme ? xmpp_stanza_get_attribute(eme, "name") : NULL;
+    const char *eme_namespace = eme ? xmpp_stanza_get_attribute(eme, "namespace") : nullptr;
+    const char *eme_name = eme ? xmpp_stanza_get_attribute(eme, "name") : nullptr;
     
     intext = body ? xmpp_stanza_get_text(body) : nullptr;
 
@@ -1524,6 +1523,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     if (encrypted && account.omemo)
     {
         cleartext = account.omemo.decode(&account, channel->buffer, from_bare, encrypted);
+        cleartext_g.reset(cleartext);
         if (!cleartext)
         {
             if (is_self_outbound_copy)
@@ -1542,15 +1542,17 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     else
     {
         if (encrypted && !is_self_outbound_copy)
-            weechat_printf(NULL, "%sOMEMO: encrypted message but account.omemo is NULL/false",
+            weechat_printf(nullptr, "%sOMEMO: encrypted message but account.omemo is nullptr/false",
                            weechat_prefix("error"));
     }
 message_handler_after_omemo:
     if (x)
     {
         char *ciphertext = xmpp_stanza_get_text(x);
-        if (auto decrypted = account.pgp.decrypt(channel->buffer, ciphertext))
+        if (auto decrypted = account.pgp.decrypt(channel->buffer, ciphertext)) {
             cleartext = strdup(decrypted->c_str());
+            cleartext_g.reset(cleartext);
+        }
         xmpp_free(account.context, ciphertext);
     }
     text = cleartext ? cleartext : intext;
@@ -1621,7 +1623,8 @@ message_handler_after_omemo:
 
     if (replace)
     {
-        char *orig = NULL;
+        std::unique_ptr<char, decltype(&free)> orig_guard(nullptr, &free);
+        char *orig = nullptr;
         void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
                                             channel->buffer, "lines");
         if (lines)
@@ -1676,7 +1679,7 @@ message_handler_after_omemo:
                                 weechat_arraylist_free(al);
                             };
                             std::unique_ptr<struct t_arraylist, decltype(arraylist_deleter)>
-                                orig_lines_ptr(weechat_arraylist_new(0, 0, 0, NULL, NULL, NULL, NULL),
+                                orig_lines_ptr(weechat_arraylist_new(0, 0, 0, nullptr, nullptr, nullptr, nullptr),
                                                arraylist_deleter);
                             struct t_arraylist *orig_lines = orig_lines_ptr.get();
                             char *msg = (char*)weechat_hdata_string(weechat_hdata_get("line_data"),
@@ -1691,9 +1694,9 @@ message_handler_after_omemo:
                                     line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                                       last_line, "data");
                                 else
-                                    line_data = NULL;
+                                    line_data = nullptr;
 
-                                msg = NULL;
+                                msg = nullptr;
                                 if (line_data)
                                 {
                                     tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
@@ -1723,7 +1726,8 @@ message_handler_after_omemo:
                                                           (const char*)weechat_arraylist_get(orig_lines, i),
                                                           -1);
                             orig = *orig_message;
-                            weechat_string_dyn_free(orig_message, 0); // free_string=0: keep buffer, transfer ownership to orig
+                            orig_guard.reset(orig);
+                            weechat_string_dyn_free(orig_message, 0); // free_string=0: keep buffer, ownership transferred to orig_guard
                             break;
                         }
                     }
@@ -1739,6 +1743,8 @@ message_handler_after_omemo:
             struct diff result;
             if (diff(&result, char_cmp, 1, orig, strlen(orig), text, strlen(text)) > 0)
             {
+                std::unique_ptr<void, decltype(&free)> ses_guard(result.ses, &free);
+                std::unique_ptr<void, decltype(&free)> lcs_guard(result.lcs, &free);
                 char **visual = weechat_string_dyn_alloc(256);
                 char ch[2] = {0};
                 int retention = 0;
@@ -1768,8 +1774,6 @@ message_handler_after_omemo:
                             retention++;
                             break;
                     }
-                free(result.ses);
-                free(result.lcs);
 
                 if ((modification > 20) && (modification > retention)) {
                     weechat_string_dyn_free(visual, 1);
@@ -1787,15 +1791,14 @@ message_handler_after_omemo:
                 weechat_string_dyn_free(visual, 1);
             }
         }
-        free(orig);
     }
 
     // XEP-0425: Message Moderation (extends XEP-0424)
     // Look for <apply-to xmlns='urn:xmpp:fasten:0'><moderate xmlns='urn:xmpp:message-moderate:1'>
     xmpp_stanza_t *apply_to = xmpp_stanza_get_child_by_name_and_ns(stanza, "apply-to",
                                                                     "urn:xmpp:fasten:0");
-    const char *moderate_id = NULL;
-    const char *moderate_reason = NULL;
+    const char *moderate_id = nullptr;
+    const char *moderate_reason = nullptr;
     
     if (apply_to)
     {
@@ -1854,7 +1857,7 @@ message_handler_after_omemo:
                                 struct t_hashtable *hashtable = weechat_hashtable_new(8,
                                     WEECHAT_HASHTABLE_STRING,
                                     WEECHAT_HASHTABLE_STRING,
-                                    NULL, NULL);
+                                    nullptr, nullptr);
                                 weechat_hashtable_set(hashtable, "message", tombstone.c_str());
                                 weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,xmpp_moderated,notify_none");
                                 weechat_hdata_update(weechat_hdata_get("line_data"), line_data, hashtable);
@@ -1905,7 +1908,7 @@ message_handler_after_omemo:
     // XEP-0424: Message Retraction
     xmpp_stanza_t *retract = xmpp_stanza_get_child_by_name_and_ns(stanza, "retract",
                                                                    "urn:xmpp:message-retract:1");
-    const char *retract_id = retract ? xmpp_stanza_get_attribute(retract, "id") : NULL;
+    const char *retract_id = retract ? xmpp_stanza_get_attribute(retract, "id") : nullptr;
     
     if (retract_id)
     {
@@ -1947,7 +1950,7 @@ message_handler_after_omemo:
                             struct t_hashtable *hashtable = weechat_hashtable_new(8,
                                 WEECHAT_HASHTABLE_STRING,
                                 WEECHAT_HASHTABLE_STRING,
-                                NULL, NULL);
+                                nullptr, nullptr);
                             weechat_hashtable_set(hashtable, "message", tombstone.c_str());
                             weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,notify_none");
                             weechat_hdata_update(weechat_hdata_get("line_data"), line_data, hashtable);
@@ -1982,7 +1985,7 @@ message_handler_after_omemo:
     // XEP-0444: Message Reactions
     xmpp_stanza_t *reactions = xmpp_stanza_get_child_by_name_and_ns(stanza, "reactions",
                                                                      "urn:xmpp:reactions:0");
-    const char *reactions_id = reactions ? xmpp_stanza_get_attribute(reactions, "id") : NULL;
+    const char *reactions_id = reactions ? xmpp_stanza_get_attribute(reactions, "id") : nullptr;
     
     if (reactions_id)
     {
@@ -2059,7 +2062,7 @@ message_handler_after_omemo:
                                 struct t_hashtable *hashtable = weechat_hashtable_new(8,
                                     WEECHAT_HASHTABLE_STRING,
                                     WEECHAT_HASHTABLE_STRING,
-                                    NULL, NULL);
+                                    nullptr, nullptr);
                                 weechat_hashtable_set(hashtable, "message", new_message.c_str());
                                 weechat_hdata_update(weechat_hdata_get("line_data"), line_data, hashtable);
                                 weechat_hashtable_free(hashtable);
@@ -2111,8 +2114,8 @@ message_handler_after_omemo:
         display_from = from;
     }
     delay = xmpp_stanza_get_child_by_name_and_ns(stanza, "delay", "urn:xmpp:delay");
-    timestamp = delay ? xmpp_stanza_get_attribute(delay, "stamp") : NULL;
-    const char *delay_from = delay ? xmpp_stanza_get_attribute(delay, "from") : NULL;
+    timestamp = delay ? xmpp_stanza_get_attribute(delay, "stamp") : nullptr;
+    const char *delay_from = delay ? xmpp_stanza_get_attribute(delay, "from") : nullptr;
     if (timestamp)
     {
         strptime(timestamp, "%FT%T", &time);
@@ -2320,14 +2323,14 @@ message_handler_after_omemo:
     if (x && text == cleartext && channel->transport != weechat::channel::transport::PGP)
     {
         channel->transport = weechat::channel::transport::PGP;
-        weechat_printf_date_tags(channel->buffer, date, NULL, "%s%sTransport: %s",
+        weechat_printf_date_tags(channel->buffer, date, nullptr, "%s%sTransport: %s",
                                  weechat_prefix("network"), weechat_color("gray"),
                                  channel::transport_name(channel->transport));
     }
     else if (!x && !encrypted && text == intext && channel->transport != weechat::channel::transport::PLAIN)
     {
         channel->transport = weechat::channel::transport::PLAIN;
-        weechat_printf_date_tags(channel->buffer, date, NULL, "%s%sTransport: %s",
+        weechat_printf_date_tags(channel->buffer, date, nullptr, "%s%sTransport: %s",
                                  weechat_prefix("network"), weechat_color("gray"),
                                  channel::transport_name(channel->transport));
     }
@@ -2360,7 +2363,7 @@ message_handler_after_omemo:
     
     // XEP-0461: Message Replies - extract reply context
     xmpp_stanza_t *reply_elem = xmpp_stanza_get_child_by_name_and_ns(stanza, "reply", "urn:xmpp:reply:0");
-    const char *reply_to_id = reply_elem ? xmpp_stanza_get_attribute(reply_elem, "id") : NULL;
+    const char *reply_to_id = reply_elem ? xmpp_stanza_get_attribute(reply_elem, "id") : nullptr;
     std::string reply_prefix;
     
     if (reply_to_id)
@@ -2443,7 +2446,7 @@ message_handler_after_omemo:
             {
                 // Optionally get description
                 xmpp_stanza_t *desc_elem = xmpp_stanza_get_child_by_name(oob_x, "desc");
-                char *desc_text = desc_elem ? xmpp_stanza_get_text(desc_elem) : NULL;
+                char *desc_text = desc_elem ? xmpp_stanza_get_text(desc_elem) : nullptr;
                 
                 // Format: [URL: url] or [URL: description (url)]
                 if (desc_text && strlen(desc_text) > 0)
@@ -2858,18 +2861,19 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
     if (node && *node)
         xmpp_stanza_set_attribute(query, "node", node);
 
-    char *client_name = weechat_string_eval_expression(
-            "weechat ${info:version}", NULL, NULL, NULL);
+    std::unique_ptr<char, decltype(&free)> client_name(
+            weechat_string_eval_expression(
+                "weechat ${info:version}", nullptr, nullptr, nullptr),
+            &free);
     char **serial = weechat_string_dyn_alloc(256);
     weechat_string_dyn_concat(serial, "client/pc//", -1);
-    weechat_string_dyn_concat(serial, client_name, -1);
+    weechat_string_dyn_concat(serial, client_name.get(), -1);
     weechat_string_dyn_concat(serial, "<", -1);
 
     xmpp_stanza_t *identity = xmpp_stanza_new(account.context);
     xmpp_stanza_set_name(identity, "identity");
     xmpp_stanza_set_attribute(identity, "category", "client");
-    xmpp_stanza_set_attribute(identity, "name", client_name);
-    free(client_name);
+    xmpp_stanza_set_attribute(identity, "name", client_name.get());
     xmpp_stanza_set_attribute(identity, "type", "pc");
     xmpp_stanza_add_child(query, identity);
     xmpp_stanza_release(identity);
@@ -3040,9 +3044,9 @@ static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
     if (!x_form || !buf) return;
 
     xmpp_stanza_t *title_elem = xmpp_stanza_get_child_by_name(x_form, "title");
-    const char *title = title_elem ? xmpp_stanza_get_text_ptr(title_elem) : NULL;
+    const char *title = title_elem ? xmpp_stanza_get_text_ptr(title_elem) : nullptr;
     xmpp_stanza_t *instr_elem = xmpp_stanza_get_child_by_name(x_form, "instructions");
-    const char *instr = instr_elem ? xmpp_stanza_get_text_ptr(instr_elem) : NULL;
+    const char *instr = instr_elem ? xmpp_stanza_get_text_ptr(instr_elem) : nullptr;
 
     weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
                              "%s%s── Ad-Hoc Form%s%s%s ──%s",

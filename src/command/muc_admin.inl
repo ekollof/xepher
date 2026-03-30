@@ -3,8 +3,8 @@ int command__buzz(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -40,7 +40,7 @@ int command__buzz(const void *pointer, void *data,
 
     // Send <message> with <attention> element (XEP-0224)
     xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, "chat",
-                                               ptr_channel->id.data(), NULL);
+                                               ptr_channel->id.data(), nullptr);
 
     xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
     const char *id = id_g.ptr;
@@ -67,8 +67,8 @@ int command__spoiler(const void *pointer, void *data,
                      struct t_gui_buffer *buffer, int argc,
                      char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -115,7 +115,7 @@ int command__spoiler(const void *pointer, void *data,
         xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
                         ptr_channel->type == weechat::channel::chat_type::MUC
                         ? "groupchat" : "chat",
-                        ptr_channel->id.data(), NULL);
+                        ptr_channel->id.data(), nullptr);
 
         xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
         const char *id = id_g.ptr;
@@ -150,7 +150,7 @@ int command__spoiler(const void *pointer, void *data,
         xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
                         ptr_channel->type == weechat::channel::chat_type::MUC
                         ? "groupchat" : "chat",
-                        ptr_channel->id.data(), NULL);
+                        ptr_channel->id.data(), nullptr);
 
         xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
         const char *id = id_g.ptr;
@@ -192,8 +192,8 @@ int command__adhoc(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -380,8 +380,8 @@ int command__kick(const void *pointer, void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -416,7 +416,7 @@ int command__kick(const void *pointer, void *data,
     }
 
     const char *nick = argv[1];
-    const char *reason = argc > 2 ? argv_eol[2] : NULL;
+    const char *reason = argc > 2 ? argv_eol[2] : nullptr;
 
     /* IQ set to room: <query xmlns='…muc#admin'><item nick='NICK' role='none'/></query> */
     xmpp_string_guard kick_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
@@ -465,8 +465,8 @@ int command__ban(const void *pointer, void *data,
                  struct t_gui_buffer *buffer, int argc,
                  char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -501,7 +501,7 @@ int command__ban(const void *pointer, void *data,
     }
 
     const char *target_jid = argv[1];
-    const char *reason = argc > 2 ? argv_eol[2] : NULL;
+    const char *reason = argc > 2 ? argv_eol[2] : nullptr;
 
     /* IQ set to room: <query xmlns='…muc#admin'><item jid='JID' affiliation='outcast'/></query> */
     xmpp_string_guard ban_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
@@ -550,8 +550,8 @@ int command__topic(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
@@ -583,7 +583,7 @@ int command__topic(const void *pointer, void *data,
     const char *new_topic = argc > 1 ? argv_eol[1] : "";
 
     xmpp_stanza_t *msg = xmpp_message_new(ptr_account->context,
-                                           "groupchat", ptr_channel->id.data(), NULL);
+                                           "groupchat", ptr_channel->id.data(), nullptr);
 
     xmpp_stanza_t *subject = xmpp_stanza_new(ptr_account->context);
     xmpp_stanza_set_name(subject, "subject");
@@ -609,8 +609,8 @@ int command__muc_nick(const void *pointer, void *data,
                       struct t_gui_buffer *buffer, int argc,
                       char **argv, char **argv_eol)
 {
-    weechat::account *ptr_account = NULL;
-    weechat::channel *ptr_channel = NULL;
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
 
     (void) pointer;
     (void) data;
