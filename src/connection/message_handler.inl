@@ -2443,14 +2443,33 @@ message_handler_after_omemo:
                                     }
                                 }
 
-                                // Count newlines in the original to decide whether to truncate.
-                                // If the original has more than 5 newlines it is a long multi-line
-                                // message: show a 40-char excerpt.  Otherwise show the full text.
-                                int newline_count = 0;
-                                for (const char *p = clean_text; *p; ++p)
-                                    if (*p == '\n') ++newline_count;
+                                // Decide whether to truncate to a 40-char excerpt.
+                                // Truncate if: more than 5 newlines, OR any single line
+                                // (segment between newlines) exceeds 200 characters.
+                                bool do_truncate = false;
+                                {
+                                    int newline_count = 0;
+                                    int line_len = 0;
+                                    for (const char *p = clean_text; *p; ++p)
+                                    {
+                                        if (*p == '\n')
+                                        {
+                                            ++newline_count;
+                                            line_len = 0;
+                                        }
+                                        else
+                                        {
+                                            ++line_len;
+                                        }
+                                        if (newline_count > 5 || line_len > 200)
+                                        {
+                                            do_truncate = true;
+                                            break;
+                                        }
+                                    }
+                                }
 
-                                std::string excerpt = (newline_count > 5 && strlen(clean_text) > 40)
+                                std::string excerpt = (do_truncate && strlen(clean_text) > 40)
                                     ? std::string(clean_text, 40) + "..."
                                     : std::string(clean_text);
 
