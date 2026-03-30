@@ -404,6 +404,7 @@ namespace weechat
             try { return std::stoi(it->second); } catch (...) { return -1; }
         }
         void send_bookmarks();
+        void retract_bookmark(std::string_view jid);
         
         // Capability cache methods (XEP-0115)
         void caps_cache_load();

@@ -558,7 +558,7 @@ int command__bookmark(const void *pointer, void *data,
         }
         
         ptr_account->bookmarks.erase(jid);
-        ptr_account->send_bookmarks();
+        ptr_account->retract_bookmark(jid);
         
         weechat_printf(buffer, "%sBookmark removed: %s", 
                       weechat_prefix("network"), jid);

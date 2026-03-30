@@ -566,6 +566,42 @@ std::vector<std::string> weechat::account::feed_open_list()
     xmpp_stanza_release(iq);
 }
 
+// XEP-0402 §3.5: Remove a bookmark via PubSub <retract> with notify='true'.
+// This sends a targeted retract for the single item instead of re-publishing
+// the remaining bookmarks, which is the correct spec-mandated behaviour.
+void weechat::account::retract_bookmark(std::string_view jid_sv)
+{
+    char *id = xmpp_uuid_gen(context);
+    xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id);
+    xmpp_free(context, id);
+
+    xmpp_stanza_t *pubsub = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(pubsub, "pubsub");
+    xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
+
+    xmpp_stanza_t *retract = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(retract, "retract");
+    xmpp_stanza_set_attribute(retract, "node", "urn:xmpp:bookmarks:1");
+    xmpp_stanza_set_attribute(retract, "notify", "true");
+
+    xmpp_stanza_t *item = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(item, "item");
+    // item id must be a null-terminated string; jid_sv is backed by a
+    // std::string in bookmarks map so .data() is NUL-terminated.
+    xmpp_stanza_set_id(item, jid_sv.data());
+
+    xmpp_stanza_add_child(retract, item);
+    xmpp_stanza_add_child(pubsub, retract);
+    xmpp_stanza_add_child(iq, pubsub);
+
+    connection.send(iq);
+
+    xmpp_stanza_release(item);
+    xmpp_stanza_release(retract);
+    xmpp_stanza_release(pubsub);
+    xmpp_stanza_release(iq);
+}
+
 // Capability cache implementation (XEP-0115)
 
 void weechat::account::caps_cache_load()
