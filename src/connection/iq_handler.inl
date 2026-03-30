@@ -644,13 +644,40 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     xmpp_stanza_t *items = xmpp_stanza_get_child_by_name(pubsub_feed, "items");
                     if (items && !stale_page)
                     {
-                        // Collect items then reverse so we render newest-first.
-                        // Servers typically return oldest-first within a page.
+                        // Collect items and sort newest-first by Atom <published>
+                        // (falling back to <updated>). ISO 8601 strings are
+                        // zero-padded and sort correctly as strings, so no
+                        // strptime needed. This is server-order-independent:
+                        // it doesn't matter whether the server returns
+                        // oldest-first or newest-first.
+                        xmpp_ctx_t *ctx = account.context;
+                        auto item_pubdate = [ctx](xmpp_stanza_t *item) -> std::string {
+                            xmpp_stanza_t *entry =
+                                xmpp_stanza_get_child_by_name_and_ns(
+                                    item, "entry", "http://www.w3.org/2005/Atom");
+                            if (!entry)
+                                entry = xmpp_stanza_get_child_by_name(item, "entry");
+                            if (!entry) return {};
+                            for (const char *tag : {"published", "updated"}) {
+                                xmpp_stanza_t *el =
+                                    xmpp_stanza_get_child_by_name(entry, tag);
+                                if (!el) continue;
+                                char *t = xmpp_stanza_get_text(el);
+                                if (!t) continue;
+                                std::string s(t);
+                                xmpp_free(ctx, t);
+                                if (!s.empty()) return s;
+                            }
+                            return {};
+                        };
                         std::vector<xmpp_stanza_t *> item_vec;
                         for (xmpp_stanza_t *item = xmpp_stanza_get_children(items);
                              item; item = xmpp_stanza_get_next(item))
                             item_vec.push_back(item);
-                        std::reverse(item_vec.begin(), item_vec.end());
+                        std::stable_sort(item_vec.begin(), item_vec.end(),
+                            [&item_pubdate](xmpp_stanza_t *a, xmpp_stanza_t *b) {
+                                return item_pubdate(a) > item_pubdate(b);
+                            });
                         for (xmpp_stanza_t *item : item_vec)
                         {
                             if (!item || weechat_strcasecmp(xmpp_stanza_get_name(item), "item") != 0)
