@@ -644,7 +644,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     xmpp_stanza_t *items = xmpp_stanza_get_child_by_name(pubsub_feed, "items");
                     if (items && !stale_page)
                     {
-                        // Collect items and sort newest-first by Atom <published>
+                        // Collect items and sort oldest-first by Atom <published>
                         // (falling back to <updated>). ISO 8601 strings are
                         // zero-padded and sort correctly as strings, so no
                         // strptime needed. This is server-order-independent:
@@ -676,7 +676,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             item_vec.push_back(item);
                         std::stable_sort(item_vec.begin(), item_vec.end(),
                             [&item_pubdate](xmpp_stanza_t *a, xmpp_stanza_t *b) {
-                                return item_pubdate(a) > item_pubdate(b);
+                                return item_pubdate(a) < item_pubdate(b);
                             });
                         for (xmpp_stanza_t *item : item_vec)
                         {
