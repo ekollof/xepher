@@ -252,6 +252,10 @@ namespace weechat
         // Maps IQ id → service_jid
         std::unordered_map<std::string, std::string> pubsub_subscriptions_queries;
 
+        // XEP-0441: MAM Preferences — pending get/set IQ tracking.
+        // Maps IQ id → buffer to print result into.
+        std::unordered_map<std::string, struct t_gui_buffer *> mam_prefs_queries;
+
         // XEP-0060: pending publish IQs (/feed post, /feed reply, /feed retract).
         // Maps IQ id → context used to report errors to the user.
         struct pubsub_publish_context {

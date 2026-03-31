@@ -187,6 +187,84 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 }
     }
     
+    // XEP-0441: MAM Preferences — handle <prefs xmlns='urn:xmpp:mam:2'> result/error
+    if (id && account.mam_prefs_queries.count(id))
+    {
+        struct t_gui_buffer *prefs_buf = account.mam_prefs_queries[id];
+        if (!prefs_buf) prefs_buf = account.buffer;
+        account.mam_prefs_queries.erase(id);
+
+        xmpp_stanza_t *prefs_el = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "prefs", "urn:xmpp:mam:2");
+
+        if (type && weechat_strcasecmp(type, "error") == 0)
+        {
+            xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
+            const char *err_type = err ? xmpp_stanza_get_attribute(err, "type") : "unknown";
+            weechat_printf(prefs_buf,
+                "%sMAM preferences: server returned error (%s) — feature may not be supported",
+                weechat_prefix("error"), err_type);
+        }
+        else if (prefs_el)
+        {
+            const char *def = xmpp_stanza_get_attribute(prefs_el, "default");
+            weechat_printf(prefs_buf,
+                "%sMAM preferences: default=%s%s%s",
+                weechat_prefix("network"),
+                weechat_color("bold"), def ? def : "(unset)", weechat_color("-bold"));
+
+            // Always list
+            xmpp_stanza_t *always_el = xmpp_stanza_get_child_by_name(prefs_el, "always");
+            if (always_el)
+            {
+                std::string jids_str;
+                for (xmpp_stanza_t *jid_el = xmpp_stanza_get_children(always_el);
+                     jid_el; jid_el = xmpp_stanza_get_next(jid_el))
+                {
+                    const char *jn = xmpp_stanza_get_name(jid_el);
+                    if (!jn || strcmp(jn, "jid") != 0) continue;
+                    char *jid_txt = xmpp_stanza_get_text(jid_el);
+                    if (jid_txt)
+                    {
+                        if (!jids_str.empty()) jids_str += ", ";
+                        jids_str += jid_txt;
+                        xmpp_free(account.context, jid_txt);
+                    }
+                }
+                weechat_printf(prefs_buf, "%s  always: %s",
+                    weechat_prefix("network"),
+                    jids_str.empty() ? "(empty)" : jids_str.c_str());
+            }
+
+            // Never list
+            xmpp_stanza_t *never_el = xmpp_stanza_get_child_by_name(prefs_el, "never");
+            if (never_el)
+            {
+                std::string jids_str;
+                for (xmpp_stanza_t *jid_el = xmpp_stanza_get_children(never_el);
+                     jid_el; jid_el = xmpp_stanza_get_next(jid_el))
+                {
+                    const char *jn = xmpp_stanza_get_name(jid_el);
+                    if (!jn || strcmp(jn, "jid") != 0) continue;
+                    char *jid_txt = xmpp_stanza_get_text(jid_el);
+                    if (jid_txt)
+                    {
+                        if (!jids_str.empty()) jids_str += ", ";
+                        jids_str += jid_txt;
+                        xmpp_free(account.context, jid_txt);
+                    }
+                }
+                weechat_printf(prefs_buf, "%s  never:  %s",
+                    weechat_prefix("network"),
+                    jids_str.empty() ? "(empty)" : jids_str.c_str());
+            }
+
+            weechat_printf(prefs_buf, "%sMAM preferences updated successfully",
+                weechat_prefix("network"));
+        }
+        return true;
+    }
+
     // Handle vCard responses (XEP-0054)
     xmpp_stanza_t *vcard = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "vCard", "vcard-temp");

@@ -627,6 +627,15 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0441.html' />
+        <xmpp:status>complete</xmpp:status>
+        <xmpp:version>0.2.0</xmpp:version>
+        <xmpp:note xml:lang='en'>MAM Preferences (Experimental) - /mam prefs shows current server MAM preferences (default policy, always/never JID lists); /mam prefs default &lt;always|never|roster&gt; sets the default policy; /mam prefs always &lt;jid&gt; and /mam prefs never &lt;jid&gt; add a JID to the respective list; IQ results displayed on the issuing buffer; errors reported with server error type</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0277.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.6.5</xmpp:version>

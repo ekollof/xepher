@@ -163,10 +163,22 @@ void command__init()
 
     hook = weechat_hook_command(
         "mam",
-        N_("retrieve mam messages for the current channel"),
-        N_("[days]"),
-        N_("days: number of days to fetch (default: " STR(MAM_DEFAULT_DAYS) ")"),
-        NULL, &command__mam, NULL, NULL);
+        N_("retrieve MAM messages or manage archiving preferences (XEP-0313/0441)"),
+        N_("[days | prefs [get | default <always|never|roster> | always <jid> | never <jid>]]"),
+        N_("         days: number of days to fetch for current channel (default: " STR(MAM_DEFAULT_DAYS) ")\n"
+           "        prefs: display current MAM archiving preferences\n"
+           "  prefs get  : same as prefs\n"
+           "  prefs default <always|never|roster>: set the default archiving policy\n"
+           "  prefs always <jid>: add <jid> to the always-archive list\n"
+           "  prefs never <jid> : add <jid> to the never-archive list"),
+        "prefs"
+        " || prefs get"
+        " || prefs default always"
+        " || prefs default never"
+        " || prefs default roster"
+        " || prefs always %(jabber_jids)"
+        " || prefs never %(jabber_jids)",
+        &command__mam, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /mam");
 

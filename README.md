@@ -671,7 +671,11 @@ file appears only once per message.
 ### Archive & history
 
 ```
-/mam [days]   # default: 7 days
+/mam [days]                          # fetch history (default: 7 days)
+/mam prefs                           # show MAM preferences (XEP-0441)
+/mam prefs default <always|never|roster>  # set default archiving policy
+/mam prefs always <jid>              # add JID to always-archive list
+/mam prefs never <jid>               # add JID to never-archive list
 ```
 
 ### Service discovery & roster
@@ -938,6 +942,7 @@ Please keep to the existing indentation style (C++23, clang-format enforced).
 - ⚡ XEP-0413: Order-By for MAM (Experimental — `urn:xmpp:order-by:1 field='creation-date'` included in XEP-0442 pubsub MAM queries for newest-first ordering; advertised in caps)
  - ⚡ XEP-0442: Pubsub MAM (Experimental — on reconnect, disco#info probes each pubsub service; if `urn:xmpp:mam:2` is supported, fetches feed history via MAM with `node=` filter and XEP-0413 Order-By; falls back to XEP-0060 `max_items` for servers without pubsub MAM support; Atom entries extracted from forwarded MAM result messages and rendered to the feed buffer with dedup and alias assignment; RSM cursor persisted to LMDB)
  - ⚡ XEP-0452: MUC Mention Notifications (Experimental — receive side: `<addresses type='mentioned'>` notification messages from MUC service detected and forwarded message body rendered to the MUC buffer with highlight, so missed @mentions surface even when not present in the room)
+ - ⚡ XEP-0441: MAM Preferences (Experimental — `/mam prefs` displays current server default policy and always/never JID lists; `/mam prefs default <always|never|roster>` sets default; `/mam prefs always <jid>` / `/mam prefs never <jid>` add JIDs to the respective list)
  - ⚡ XEP-0472: Pubsub Social Feed (Experimental — publishes `pubsub#type=urn:xmpp:microblog:0`, advertises `urn:xmpp:pubsub-social-feed:1` in caps; `thr:in-reply-to@ref` uses real Atom entry IRI; feed-level `<feed>` metadata items rendered; XHTML/HTML Atom content properly rendered)
 - ⚡ XEP-0433: Extended Channel Search (Searcher role; Search Service role not implemented)
 
