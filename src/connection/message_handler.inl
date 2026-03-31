@@ -3406,8 +3406,9 @@ message_handler_after_omemo:
     std::string final_text; // used by spoiler / ephemeral / oob suffix blocks below
 
     // XEP-0461: emit reply context as a separate quote line above the message.
-    // Format:  (action-prefix)  │ nick: excerpt
-    // Using notify_none,no_log so it doesn't trigger highlights or log duplication.
+    // Nick column shows the replying user (same as the message line below it).
+    // Body shows  │ quotedNick: excerpt  in dim/cyan so it reads as a quote block.
+    // notify_none,no_log: no highlight, no duplicate log entry.
     if (!reply_prefix.empty())
     {
         std::string quote_line = std::string(weechat_color("darkgray"))
@@ -3418,7 +3419,7 @@ message_handler_after_omemo:
         quote_line += weechat_color("darkgray") + reply_prefix + weechat_color("resetcolor");
         weechat_printf_date_tags(channel->buffer, date,
             "notify_none,no_log,xmpp_reply_quote",
-            "%s\t%s", weechat_prefix("action"), quote_line.c_str());
+            "%s\t%s", display_prefix.data(), quote_line.c_str());
     }
 
     // XEP-0382: Spoiler Messages — prepend spoiler warning before the body
