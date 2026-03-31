@@ -3287,9 +3287,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // Skip autojoin for biboumi (IRC gateway) rooms
                     // Biboumi JIDs typically contain % (e.g., #channel%irc.server.org@gateway)
                     // or have 'biboumi' in the server component
-                    bool is_biboumi = (strchr(jid, '%') != NULL) ||
-                                      (strstr(jid, "biboumi") != NULL) ||
-                                      (strstr(jid, "@irc.") != NULL);
+                    std::string_view jid_sv(jid);
+                    bool is_biboumi = jid_sv.contains('%') ||
+                                      jid_sv.contains("biboumi") ||
+                                      jid_sv.contains("@irc.");
 
                     if (is_biboumi)
                     {

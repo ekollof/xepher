@@ -669,7 +669,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                     {
                                         const char *tags = (const char*)
                                             weechat_hdata_string(hdata_line_data, ld, "tags");
-                                        if (tags && strstr(tags, needle.c_str()))
+                                        if (tags && std::string_view(tags).contains(needle))
                                             already_displayed = true;
                                     }
                                     ln = (struct t_gui_line*)
@@ -975,9 +975,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         {
                             // XEP-0402 §4: join immediately on autojoin=true notification.
                             // Skip biboumi (IRC gateway) rooms.
-                            bool is_biboumi = (strchr(item_id, '%') != nullptr) ||
-                                            (strstr(item_id, "biboumi") != nullptr) ||
-                                            (strstr(item_id, "@irc.") != nullptr);
+                            std::string_view item_sv(item_id);
+                            bool is_biboumi = item_sv.contains('%') ||
+                                            item_sv.contains("biboumi") ||
+                                            item_sv.contains("@irc.");
                             
                             if (!is_biboumi)
                             {
@@ -2641,7 +2642,7 @@ message_handler_after_omemo:
                 {
                     const char *tags = (const char*)
                         weechat_hdata_string(hdata_line_data, ld, "tags");
-                    if (tags && strstr(tags, needle.c_str()))
+                    if (tags && std::string_view(tags).contains(needle))
                         already_shown = true;
                 }
                 ln = (struct t_gui_line*)
@@ -2704,11 +2705,11 @@ message_handler_after_omemo:
         weechat_string_dyn_concat(dyn_tags, ",eme_", -1);
         if (eme_name)
             weechat_string_dyn_concat(dyn_tags, eme_name, -1);
-        else if (strstr(eme_namespace, "omemo"))
+        else if (std::string_view(eme_namespace).contains("omemo"))
             weechat_string_dyn_concat(dyn_tags, "OMEMO", -1);
-        else if (strstr(eme_namespace, "openpgp"))
+        else if (std::string_view(eme_namespace).contains("openpgp"))
             weechat_string_dyn_concat(dyn_tags, "OpenPGP", -1);
-        else if (strstr(eme_namespace, "encryption"))
+        else if (std::string_view(eme_namespace).contains("encryption"))
             weechat_string_dyn_concat(dyn_tags, "PGP", -1);
         else
             weechat_string_dyn_concat(dyn_tags, "encrypted", -1);
@@ -2798,9 +2799,10 @@ message_handler_after_omemo:
             const char *ref_uri = xmpp_stanza_get_attribute(ref, "uri");
             if (!ref_uri) continue;
             // URI is "xmpp:user@server" or "xmpp:user@server/resource"
-            const char *colon = strchr(ref_uri, ':');
-            if (!colon) continue;
-            std::string mentioned_jid(colon + 1);
+            std::string_view ref_uri_sv(ref_uri);
+            auto colon_pos = ref_uri_sv.find(':');
+            if (colon_pos == std::string_view::npos) continue;
+            std::string mentioned_jid(ref_uri_sv.substr(colon_pos + 1));
             // Strip resource if present
             auto slash = mentioned_jid.find('/');
             if (slash != std::string::npos)
@@ -2895,15 +2897,15 @@ message_handler_after_omemo:
                             if (orig_message)
                             {
                                 // Extract just the text part (after tab if present)
-                                const char *msg_text = strchr(orig_message, '\t');
-                                if (msg_text)
-                                    msg_text++; // Skip the tab
-                                else
-                                    msg_text = orig_message;
+                                std::string_view msg_sv(orig_message);
+                                auto tab_pos = msg_sv.find('\t');
+                                if (tab_pos != std::string_view::npos)
+                                    msg_sv = msg_sv.substr(tab_pos + 1);
 
                                 // Strip embedded color codes so we get plain text
-                                char *plain_text = weechat_string_remove_color(msg_text, nullptr);
-                                const char *clean_text = plain_text ? plain_text : msg_text;
+                                std::string msg_owned(msg_sv);
+                                char *plain_text = weechat_string_remove_color(msg_owned.c_str(), nullptr);
+                                std::string_view clean_text = plain_text ? plain_text : msg_sv;
 
                                 // Skip any leading reply prefix(es) (↪ …) from a prior reply chain.
                                 // UTF-8 encoding of ↪ is 3 bytes: e2 86 aa.
@@ -2912,19 +2914,19 @@ message_handler_after_omemo:
                                 // Simpler: repeatedly consume "↪ <everything up to next ↪ or end>"
                                 // by scanning forward for the next ↪ occurrence.
                                 {
-                                    const char arrow[] = "\xE2\x86\xAA"; // ↪
-                                    const char *next = strstr(clean_text, arrow);
-                                    while (next)
+                                    constexpr std::string_view arrow = "\xE2\x86\xAA"; // ↪
+                                    auto pos = clean_text.find(arrow);
+                                    while (pos != std::string_view::npos)
                                     {
-                                        // advance past this ↪ and look for another one
-                                        const char *after = next + 3;
-                                        while (*after == ' ') after++;
-                                        const char *further = strstr(after, arrow);
-                                        if (further)
+                                        // advance past this ↪ and any trailing spaces
+                                        std::string_view after = clean_text.substr(pos + arrow.size());
+                                        after = after.substr(after.find_first_not_of(' '));
+                                        auto further = after.find(arrow);
+                                        if (further != std::string_view::npos)
                                         {
                                             // there is another ↪ ahead — skip to it
-                                            clean_text = further;
-                                            next = further;
+                                            clean_text = after.substr(further);
+                                            pos = 0;
                                         }
                                         else
                                         {
@@ -2946,9 +2948,9 @@ message_handler_after_omemo:
                                 {
                                     int newline_count = 0;
                                     int line_len = 0;
-                                    for (const char *p = clean_text; *p; ++p)
+                                    for (char c : clean_text)
                                     {
-                                        if (*p == '\n')
+                                        if (c == '\n')
                                         {
                                             ++newline_count;
                                             line_len = 0;
@@ -2965,8 +2967,8 @@ message_handler_after_omemo:
                                     }
                                 }
 
-                                std::string excerpt = (do_truncate && strlen(clean_text) > 40)
-                                    ? std::string(clean_text, 40) + "..."
+                                std::string excerpt = (do_truncate && clean_text.size() > 40)
+                                    ? std::string(clean_text.substr(0, 40)) + "..."
                                     : std::string(clean_text);
 
                                 if (plain_text) free(plain_text);
