@@ -61,7 +61,7 @@ namespace {
 
     std::uint32_t parsed = 0;
     const auto *begin = value;
-    const auto *end = value + std::strlen(value);
+    const auto *end = value + std::string_view(value).size();
     const auto [ptr, error] = std::from_chars(begin, end, parsed);
     if (error != std::errc {} || ptr != end || parsed == 0 || parsed > 0x7fffffffU)
         return std::nullopt;

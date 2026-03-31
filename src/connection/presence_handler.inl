@@ -75,7 +75,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             
             // Only log if the error has meaningful information
             // Skip generic "Unspecified" errors that don't have useful context
-            if (strcmp(error_reason, "Unspecified") != 0 || error->description)
+            if (std::string_view(error_reason) != "Unspecified" || error->description)
             {
                 weechat_printf(channel->buffer, "[!]\t%s%sError: %s%s%s%s",
                                weechat_color("gray"),
@@ -411,7 +411,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             if (photo)
             {
                 char *photo_hash = xmpp_stanza_get_text(photo);
-                if (photo_hash && strlen(photo_hash) > 0)
+                if (photo_hash && !std::string_view(photo_hash).empty())
                 {
                     // Store the vCard avatar hash if we don't already have one
                     // from XEP-0084 (prefer PEP avatar over legacy vCard avatar)

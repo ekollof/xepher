@@ -57,6 +57,11 @@ std::string format_key(weechat::xmpp::pgp &pgp, std::string_view keyid)
 #define PGP_SIGNATURE_HEADER "-----BEGIN PGP SIGNATURE-----\r\n"
 #define PGP_SIGNATURE_FOOTER "\r\n-----END PGP SIGNATURE-----"
 
+static constexpr std::string_view kPgpMessageHeader   { PGP_MESSAGE_HEADER };
+static constexpr std::string_view kPgpMessageFooter   { PGP_MESSAGE_FOOTER };
+static constexpr std::string_view kPgpSignatureHeader { PGP_SIGNATURE_HEADER };
+static constexpr std::string_view kPgpSignatureFooter { PGP_SIGNATURE_FOOTER };
+
 const char *weechat::xmpp::PGP_ADVICE = "[PGP encrypted message (XEP-0027)]";
 
 weechat::xmpp::pgp::pgp()
@@ -156,10 +161,10 @@ encrypt_finish:
                 gpgme_strsource(err), gpgme_strerror(err));
         return std::nullopt;
     }
-    if (encrypted.size() <= strlen(PGP_MESSAGE_HEADER) + strlen(PGP_MESSAGE_FOOTER))
+    if (encrypted.size() <= kPgpMessageHeader.size() + kPgpMessageFooter.size())
         return std::nullopt;
-    return std::string(encrypted.data() + strlen(PGP_MESSAGE_HEADER),
-                       encrypted.size() - strlen(PGP_MESSAGE_HEADER) - strlen(PGP_MESSAGE_FOOTER));
+    return std::string(encrypted.data() + kPgpMessageHeader.size(),
+                       encrypted.size() - kPgpMessageHeader.size() - kPgpMessageFooter.size());
 }
 
 //"hQIMAzlgcSFDGLKEAQ//cGG3DFughC5xBF7xeXz1RdayOfhBAPfoZIq62MVuSnfS\nMfig65Zxz1LtAnnFq90TZY7hiHPBtVlYqg47AbSoYweMdpXsKgbUrd3NNf6k2nsZ\nUkChCtyGuHi8pTzclfle7gT0nNXJ1WcLCZ4ORZCrg3D5A+YTO9tdmE8GQsTT6TdV\nbbxF5yR4JF5SzFhuFL3ZoXPXrWylcwKXarYfoOTa6M2vSsCwApVIXQgJ/FI46sLT\nb0B/EVCjFvcvjkNr7+K7mQtth+x0a0pC4BtEhRvnIRAe/sdGp8NY+DP76clx4U+k\nIDG4H92F632pR6eEIoZttnBoaj0O4sTVAJCao5AoecR4w2FDqBWWtIyQp5vbo17/\nMtzungkk5vQP6Jhu36wa+JKpbHoxomVpHPZfAtIoyaY6pzQ0bUomIlSVpbZDvF68\nZKTlFd89Pm5x0JO5gsVYvf+N9Ed33d34n/0CFz5K5Tgu4Bk0v4LWEy3wtNsuQB4p\nkBSZJk7I2BakcRwP0zwld6rRHFIX1pb7zqThBPZGB9RkWPltiktUTibOII12tWhi\nksFpQJ8l1A8h9vM5kUXIeD6H2yP0CBUEIZF3Sf+jiSRZ/1/n3KoUrKEzkf/y4xgv\n1LA4pMjNLEr6J2fqGyYRFv4Bxv3PIvF17V5CwOtguxGRJHJXdIzm1BSHSqXxHezS\nYAFXMUb9fw3QX7Ed23KiyZjzd/LRsQBqMs9RsYyZB2PqF9x84lQYYbE8lErrryvK\nUEtmJKPw3Hvb7kgGox5vl5+KCg9q64EU9TgQpufYNShKtDz7Fsvc+ncgZoshDUeo\npw==\n=euIB"
@@ -327,8 +332,8 @@ sign_finish:
                 gpgme_strsource(err), gpgme_strerror(err));
         return std::nullopt;
     }
-    if (signature.size() <= strlen(PGP_SIGNATURE_HEADER) + strlen(PGP_SIGNATURE_FOOTER))
+    if (signature.size() <= kPgpSignatureHeader.size() + kPgpSignatureFooter.size())
         return std::nullopt;
-    return std::string(signature.data() + strlen(PGP_SIGNATURE_HEADER),
-                       signature.size() - strlen(PGP_SIGNATURE_HEADER) - strlen(PGP_SIGNATURE_FOOTER));
+    return std::string(signature.data() + kPgpSignatureHeader.size(),
+                       signature.size() - kPgpSignatureHeader.size() - kPgpSignatureFooter.size());
 }

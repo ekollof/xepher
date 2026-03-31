@@ -12,9 +12,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     const char *text = nullptr;
     xmpp_string_guard intext_g { account.context, nullptr };
     char *&intext = intext_g.ptr;
-    std::unique_ptr<char, decltype(&free)> cleartext_g(nullptr, &free);
-    char *cleartext = nullptr;
-    std::string difftext;
+     std::string omemo_cleartext_storage; // owns OMEMO-decrypted text
+     std::string pgp_cleartext_storage; // owns PGP-decrypted text (avoids strdup)
+     char *cleartext = nullptr;
+     std::string difftext;
     struct tm time = {0};
     time_t date = 0;
 
@@ -82,12 +83,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         {
             intext = xmpp_stanza_get_text(topic);
             type = xmpp_stanza_get_type(stanza);
-            if (type != nullptr && strcmp(type, "error") == 0)
-                return 1;
-            from = xmpp_stanza_get_from(stanza);
-            if (from == nullptr)
-                return 1;
-            xmpp_string_guard from_bare_g { account.context, xmpp_jid_bare(account.context, from) };
+        if (type != nullptr && std::string_view(type) == "error")
+            return 1;
+        from = xmpp_stanza_get_from(stanza);
+        if (from == nullptr)
+            return 1;
+        xmpp_string_guard from_bare_g { account.context, xmpp_jid_bare(account.context, from) };
             xmpp_string_guard from_resource_g { account.context, xmpp_jid_resource(account.context, from) };
             from_bare = from_bare_g.ptr;
             from = from_resource_g.ptr;
@@ -798,14 +799,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         xmpp_stanza_t *data_elem = xmpp_stanza_get_child_by_name_and_ns(
                             item, "data", "urn:xmpp:avatar:data");
                         
-                        if (data_elem)
-                        {
-                            char *b64_data = xmpp_stanza_get_text(data_elem);
-                            if (b64_data)
+                            if (data_elem)
                             {
-                                // Decode base64 avatar data
-                                BIO *bio, *b64;
-                                size_t decode_len = strlen(b64_data);
+                                char *b64_data = xmpp_stanza_get_text(data_elem);
+                                if (b64_data)
+                                {
+                                    // Decode base64 avatar data
+                                    BIO *bio, *b64;
+                                    size_t decode_len = std::string_view(b64_data).size();
                                 std::vector<uint8_t> image_data(decode_len);
                                 
                                 bio = BIO_new_mem_buf(b64_data, -1);
@@ -1664,7 +1665,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         return 1;
     }
     type = xmpp_stanza_get_type(stanza);
-    if (type != nullptr && strcmp(type, "error") == 0)
+    if (type != nullptr && std::string_view(type) == "error")
         return 1;
     from = xmpp_stanza_get_from(stanza);
     if (from == nullptr)
@@ -1984,8 +1985,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     
     if (encrypted && account.omemo)
     {
-        cleartext = account.omemo.decode(&account, channel->buffer, from_bare, encrypted);
-        cleartext_g.reset(cleartext);
+        auto omemo_result = account.omemo.decode(&account, channel->buffer, from_bare, encrypted);
+        if (omemo_result)
+        {
+            omemo_cleartext_storage = std::move(*omemo_result);
+            cleartext = omemo_cleartext_storage.data();
+        }
         if (!cleartext)
         {
             if (is_self_outbound_copy)
@@ -2012,8 +2017,8 @@ message_handler_after_omemo:
     {
         char *ciphertext = xmpp_stanza_get_text(x);
         if (auto decrypted = account.pgp.decrypt(channel->buffer, ciphertext)) {
-            cleartext = strdup(decrypted->c_str());
-            cleartext_g.reset(cleartext);
+            pgp_cleartext_storage = std::move(*decrypted);
+            cleartext = pgp_cleartext_storage.data();
         }
         xmpp_free(account.context, ciphertext);
     }
@@ -2124,11 +2129,11 @@ message_handler_after_omemo:
                         str_tag = fmt::format("{}|tags_array", n_tag);
                         const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                line_data, str_tag.c_str());
-                        if (strlen(tag) > strlen("id_") &&
-                            weechat_strcasecmp(tag+strlen("id_"), replace_id) == 0)
-                        {
-                            // XEP-0308 §3: Verify the correcting sender matches
-                            // the original message author before applying the edit.
+                         if (std::string_view(tag).starts_with("id_") &&
+                             weechat_strcasecmp(tag + 3, replace_id) == 0)
+                         {
+                             // XEP-0308 §3: Verify the correcting sender matches
+                             // the original message author before applying the edit.
                             // Compute expected nick tag value (same logic as display path).
                             const char *corr_nick = from;
                             xmpp_string_guard corr_resource_g { account.context,
@@ -2144,8 +2149,8 @@ message_handler_after_omemo:
                                 str_tag = fmt::format("{}|tags_array", chk);
                                 const char *chk_tag = weechat_hdata_string(
                                     weechat_hdata_get("line_data"), line_data, str_tag.c_str());
-                                if (strlen(chk_tag) > strlen("nick_") &&
-                                    weechat_strcasecmp(chk_tag + strlen("nick_"), corr_nick) == 0)
+                                 if (std::string_view(chk_tag).starts_with("nick_") &&
+                                    weechat_strcasecmp(chk_tag + 5, corr_nick) == 0)
                                 {
                                     sender_matches = true;
                                     break;
@@ -2188,8 +2193,8 @@ message_handler_after_omemo:
                                         str_tag = fmt::format("{}|tags_array", n_tag);
                                         tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                    line_data, str_tag.c_str());
-                                        if (strlen(tag) > strlen("id_") &&
-                                            weechat_strcasecmp(tag+strlen("id_"), replace_id) == 0)
+                                         if (std::string_view(tag).starts_with("id_") &&
+                                            weechat_strcasecmp(tag + 3, replace_id) == 0)
                                         {
                                             msg = (char*)weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                               line_data, "message");
@@ -2223,7 +2228,7 @@ message_handler_after_omemo:
         if (orig)
         {
             struct diff result;
-            if (diff(&result, char_cmp, 1, orig, strlen(orig), text, strlen(text)) > 0)
+            if (diff(&result, char_cmp, 1, orig, std::string_view(orig).size(), text, std::string_view(text).size()) > 0)
             {
                 std::unique_ptr<void, decltype(&free)> ses_guard(result.ses, &free);
                 std::unique_ptr<void, decltype(&free)> lcs_guard(result.lcs, &free);
@@ -2261,7 +2266,7 @@ message_handler_after_omemo:
                     weechat_string_dyn_free(visual, 1);
                     visual = weechat_string_dyn_alloc(256);
                     weechat_string_dyn_concat(visual, weechat_color("red"), -1);
-                    if (strlen(orig) >= 16) {
+                    if (std::string_view(orig).size() >= 16) {
                         weechat_string_dyn_concat(visual, orig, 16);
                         weechat_string_dyn_concat(visual, "...", -1);
                     } else
@@ -2336,8 +2341,8 @@ message_handler_after_omemo:
                             str_tag = fmt::format("{}|tags_array", n_tag);
                             const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                    line_data, str_tag.c_str());
-                            if (strlen(tag) > strlen("id_") &&
-                                weechat_strcasecmp(tag+strlen("id_"), moderate_id) == 0)
+                            if (std::string_view(tag).starts_with("id_") &&
+                                weechat_strcasecmp(tag + 3, moderate_id) == 0)
                             {
                                 // Found the message to moderate - update it with tombstone
                                 std::string tombstone = moderate_reason
@@ -2433,8 +2438,8 @@ message_handler_after_omemo:
                         str_tag = fmt::format("{}|tags_array", n_tag);
                         const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                line_data, str_tag.c_str());
-                        if (strlen(tag) > strlen("id_") &&
-                            weechat_strcasecmp(tag+strlen("id_"), retract_id) == 0)
+                        if (std::string_view(tag).starts_with("id_") &&
+                            weechat_strcasecmp(tag + 3, retract_id) == 0)
                         {
                             // Found the message to retract - update it with tombstone
                             // Create tombstone text
@@ -2507,7 +2512,7 @@ message_handler_after_omemo:
         }
         
         const char *emojis = *dyn_emojis;
-        if (strlen(emojis) > 0)
+        if (std::string_view(emojis).size() > 0)
         {
             // Find the message being reacted to and append reaction
             void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
@@ -2530,8 +2535,8 @@ message_handler_after_omemo:
                             str_tag = fmt::format("{}|tags_array", n_tag);
                             const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                    line_data, str_tag.c_str());
-                            if (strlen(tag) > strlen("id_") &&
-                                weechat_strcasecmp(tag+strlen("id_"), reactions_id) == 0)
+                            if (std::string_view(tag).starts_with("id_") &&
+                                weechat_strcasecmp(tag + 3, reactions_id) == 0)
                             {
                                 // Found the message.
                                 // XEP-0444: a new <reactions> from a sender REPLACES their
@@ -2791,11 +2796,11 @@ message_handler_after_omemo:
             const char *ref_ns = xmpp_stanza_get_ns(ref);
             const char *ref_name = xmpp_stanza_get_name(ref);
             if (!ref_ns || !ref_name) continue;
-            if (strcmp(ref_name, "reference") != 0
-                || strcmp(ref_ns, "urn:xmpp:reference:0") != 0)
+            if (std::string_view(ref_name) != "reference"
+                || std::string_view(ref_ns) != "urn:xmpp:reference:0")
                 continue;
             const char *ref_type = xmpp_stanza_get_attribute(ref, "type");
-            if (!ref_type || strcmp(ref_type, "mention") != 0) continue;
+            if (!ref_type || std::string_view(ref_type) != "mention") continue;
             const char *ref_uri = xmpp_stanza_get_attribute(ref, "uri");
             if (!ref_uri) continue;
             // URI is "xmpp:user@server" or "xmpp:user@server/resource"
@@ -2887,8 +2892,8 @@ message_handler_after_omemo:
                         str_tag = fmt::format("{}|tags_array", n_tag);
                         const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                line_data, str_tag.c_str());
-                        if (strlen(tag) > strlen("id_") &&
-                            weechat_strcasecmp(tag+strlen("id_"), reply_to_id) == 0)
+                        if (std::string_view(tag).starts_with("id_") &&
+                            weechat_strcasecmp(tag + 3, reply_to_id) == 0)
                         {
                             // Found the original message - get excerpt
                             const char *orig_message = weechat_hdata_string(
@@ -2979,7 +2984,7 @@ message_handler_after_omemo:
                                     str_tag = fmt::format("{}|tags_array", nn);
                                     const char *ntag = weechat_hdata_string(
                                         weechat_hdata_get("line_data"), line_data, str_tag.c_str());
-                                    if (ntag && strncmp(ntag, "nick_", 5) == 0)
+                                    if (ntag && std::string_view(ntag).starts_with("nick_"))
                                     {
                                         reply_quote_nick = ntag + 5;
                                         break;
@@ -3021,7 +3026,7 @@ message_handler_after_omemo:
                 char *desc_text = desc_elem ? xmpp_stanza_get_text(desc_elem) : nullptr;
                 
                 // Format: [URL: url] or [URL: description (url)]
-                if (desc_text && strlen(desc_text) > 0)
+                if (desc_text && !std::string_view(desc_text).empty())
                 {
                     oob_suffix = fmt::format(" {}[URL: {} ({})]{}",
                                             weechat_color("blue"),
@@ -3051,11 +3056,10 @@ message_handler_after_omemo:
         const char *ref_name = xmpp_stanza_get_name(ref);
         const char *ref_ns   = xmpp_stanza_get_ns(ref);
         if (!ref_name || !ref_ns) continue;
-        if (strcmp(ref_name, "reference") != 0
-            || strcmp(ref_ns, "urn:xmpp:reference:0") != 0) continue;
-
+        if (std::string_view(ref_name) != "reference"
+            || std::string_view(ref_ns) != "urn:xmpp:reference:0") continue;
         const char *ref_type = xmpp_stanza_get_attribute(ref, "type");
-        if (!ref_type || strcmp(ref_type, "data") != 0) continue;
+        if (!ref_type || std::string_view(ref_type) != "data") continue;
 
         xmpp_stanza_t *ms = xmpp_stanza_get_child_by_name_and_ns(
             ref, "media-sharing", "urn:xmpp:sims:1");
@@ -3089,13 +3093,11 @@ message_handler_after_omemo:
                 const char *sname = xmpp_stanza_get_name(src);
                 const char *sns   = xmpp_stanza_get_ns(src);
                 if (!sname || !sns) continue;
-                if (strcmp(sname, "reference") == 0
-                    && strcmp(sns, "urn:xmpp:reference:0") == 0)
+                if (std::string_view(sname) == "reference"
+                    && std::string_view(sns) == "urn:xmpp:reference:0")
                 {
-                    const char *uri = xmpp_stanza_get_attribute(src, "uri");
-                    if (uri) sims_url = uri;
                 }
-                else if (strcmp(sname, "url-data") == 0)
+                else if (std::string_view(sname) == "url-data")
                 {
                     const char *target = xmpp_stanza_get_attribute(src, "target");
                     if (target) sims_url = target;
@@ -3150,8 +3152,8 @@ message_handler_after_omemo:
         const char *fs_name = xmpp_stanza_get_name(fs);
         const char *fs_ns   = xmpp_stanza_get_ns(fs);
         if (!fs_name || !fs_ns) continue;
-        if (strcmp(fs_name, "file-sharing") != 0
-            || strcmp(fs_ns, "urn:xmpp:sfs:0") != 0) continue;
+        if (std::string_view(fs_name) != "file-sharing"
+            || std::string_view(fs_ns) != "urn:xmpp:sfs:0") continue;
 
         // <file xmlns='urn:xmpp:file:metadata:0'>
         xmpp_stanza_t *file_elem = xmpp_stanza_get_child_by_name_and_ns(
@@ -3183,8 +3185,8 @@ message_handler_after_omemo:
                 if (!sname) continue;
 
                 // XEP-0448: <encrypted xmlns='urn:xmpp:esfs:0'>
-                if (strcmp(sname, "encrypted") == 0 && sns
-                    && strcmp(sns, "urn:xmpp:esfs:0") == 0)
+                if (std::string_view(sname) == "encrypted" && sns
+                    && std::string_view(sns) == "urn:xmpp:esfs:0")
                 {
                     // Extract key, iv, and inner url-data target.
                     std::string esfs_key, esfs_iv, esfs_ct_url;
@@ -3200,7 +3202,7 @@ message_handler_after_omemo:
                              isrc && esfs_ct_url.empty(); isrc = xmpp_stanza_get_next(isrc))
                         {
                             const char *iname = xmpp_stanza_get_name(isrc);
-                            if (iname && strcmp(iname, "url-data") == 0)
+                            if (iname && std::string_view(iname) == "url-data")
                             {
                                 const char *target = xmpp_stanza_get_attribute(isrc, "target");
                                 if (target) esfs_ct_url = target;
@@ -3221,12 +3223,10 @@ message_handler_after_omemo:
 
                 if (!sfs_url.empty()) continue; // already have a plain URL
 
-                if (strcmp(sname, "url-data") == 0)
+                if (std::string_view(sname) == "url-data")
                 {
-                    const char *target = xmpp_stanza_get_attribute(src, "target");
-                    if (target) sfs_url = target;
                 }
-                else if (strcmp(sname, "reference") == 0)
+                else if (std::string_view(sname) == "reference")
                 {
                     const char *uri = xmpp_stanza_get_attribute(src, "uri");
                     if (uri) sfs_url = uri;
@@ -3310,8 +3310,8 @@ message_handler_after_omemo:
             const char *desc_name = xmpp_stanza_get_name(desc);
             const char *desc_ns   = xmpp_stanza_get_ns(desc);
             if (!desc_name || !desc_ns) continue;
-            if (strcmp(desc_name, "Description") != 0
-                || strcmp(desc_ns, "http://www.w3.org/1999/02/22-rdf-syntax-ns#") != 0)
+            if (std::string_view(desc_name) != "Description"
+                || std::string_view(desc_ns) != "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
                 continue;
 
             std::string og_title, og_desc, og_url, og_image;
@@ -3321,21 +3321,21 @@ message_handler_after_omemo:
                 const char *prop_name = xmpp_stanza_get_name(prop);
                 const char *prop_ns   = xmpp_stanza_get_ns(prop);
                 if (!prop_name || !prop_ns) continue;
-                if (strcmp(prop_ns, "https://ogp.me/ns#") != 0) continue;
+                if (std::string_view(prop_ns) != "https://ogp.me/ns#") continue;
 
                 char *val = xmpp_stanza_get_text(prop);
                 if (!val) continue;
 
-                if (strcmp(prop_name, "title") == 0 && og_title.empty())
+                if (std::string_view(prop_name) == "title" && og_title.empty())
                     og_title = val;
-                else if (strcmp(prop_name, "description") == 0 && og_desc.empty())
+                else if (std::string_view(prop_name) == "description" && og_desc.empty())
                     og_desc = val;
-                else if (strcmp(prop_name, "url") == 0 && og_url.empty())
+                else if (std::string_view(prop_name) == "url" && og_url.empty())
                     og_url = val;
-                else if (strcmp(prop_name, "image") == 0 && og_image.empty())
+                else if (std::string_view(prop_name) == "image" && og_image.empty())
                 {
                     // Only store HTTP(S) image URLs; skip cid:, ni:, data: URIs
-                    if (strncmp(val, "http", 4) == 0)
+                    if (std::string_view(val).starts_with("http"))
                         og_image = val;
                 }
                 xmpp_free(account.context, val);
@@ -3429,7 +3429,7 @@ message_handler_after_omemo:
     {
         std::string spoiler_prefix = std::string(weechat_color("yellow"))
             + "[Spoiler"
-            + (spoiler_hint && strlen(spoiler_hint) > 0
+            + (spoiler_hint && !std::string_view(spoiler_hint).empty()
                ? std::string(": ") + spoiler_hint
                : std::string(""))
             + "] "
@@ -3652,7 +3652,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
         xmpp_stanza_t *f = stanza_make_field(account.context, var, val, type);
         xmpp_stanza_add_child(x, f);
         xmpp_stanza_release(f);
-        if (strcmp(var, "FORM_TYPE") == 0) {
+        if (std::string_view(var) == "FORM_TYPE") {
             weechat_string_dyn_concat(serial, var, -1);
             weechat_string_dyn_concat(serial, "<", -1);
         }
@@ -3701,7 +3701,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
 
     unsigned char digest[20];
     xmpp_sha1_t *sha1 = xmpp_sha1_new(account.context);
-    xmpp_sha1_update(sha1, (unsigned char*)*serial, strlen(*serial));
+    xmpp_sha1_update(sha1, (unsigned char*)*serial, std::string_view(*serial).size());
     xmpp_sha1_final(sha1);
     weechat_string_dyn_free(serial, 1);
     xmpp_sha1_to_digest(sha1, digest);
@@ -3710,7 +3710,13 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
     if (hash)
     {
         char *cap_hash = xmpp_base64_encode(account.context, digest, 20);
-        *hash = strdup(cap_hash);
+        if (cap_hash) {
+            std::string_view sv(cap_hash);
+            auto buf = std::make_unique<char[]>(sv.size() + 1);
+            sv.copy(buf.get(), sv.size());
+            buf.get()[sv.size()] = '\0';
+            *hash = buf.release(); // caller owns, must delete[]
+        }
         xmpp_free(account.context, cap_hash);
     }
 
@@ -3751,13 +3757,13 @@ static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
          field; field = xmpp_stanza_get_next(field))
     {
         const char *fname = xmpp_stanza_get_name(field);
-        if (!fname || strcmp(fname, "field") != 0) continue;
+        if (!fname || std::string_view(fname) != "field") continue;
         const char *var   = xmpp_stanza_get_attribute(field, "var");
         const char *label = xmpp_stanza_get_attribute(field, "label");
         const char *ftype = xmpp_stanza_get_attribute(field, "type");
 
         // Skip hidden fields — not user-visible
-        if (ftype && strcmp(ftype, "hidden") == 0) continue;
+        if (ftype && std::string_view(ftype) == "hidden") continue;
 
         field_index++;
 
@@ -3767,7 +3773,7 @@ static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
              v; v = xmpp_stanza_get_next(v))
         {
             const char *vname = xmpp_stanza_get_name(v);
-            if (!vname || strcmp(vname, "value") != 0) continue;
+            if (!vname || std::string_view(vname) != "value") continue;
             const char *vtext = xmpp_stanza_get_text_ptr(v);
             if (vtext) values.push_back(vtext);
         }
@@ -3776,11 +3782,11 @@ static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         bool required = (xmpp_stanza_get_child_by_name(field, "required") != nullptr);
 
         // Determine display value string
-        bool is_password = ftype && strcmp(ftype, "text-private") == 0;
-        bool is_boolean  = ftype && strcmp(ftype, "boolean") == 0;
-        bool is_fixed    = ftype && strcmp(ftype, "fixed") == 0;
-        bool is_list     = ftype && (strcmp(ftype, "list-single") == 0
-                                  || strcmp(ftype, "list-multi") == 0);
+        bool is_password = ftype && std::string_view(ftype) == "text-private";
+        bool is_boolean  = ftype && std::string_view(ftype) == "boolean";
+        bool is_fixed    = ftype && std::string_view(ftype) == "fixed";
+        bool is_list     = ftype && (std::string_view(ftype) == "list-single"
+                                  || std::string_view(ftype) == "list-multi");
 
         // Fixed fields are just informational text — print them differently
         if (is_fixed)
@@ -3843,7 +3849,7 @@ static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
                  opt; opt = xmpp_stanza_get_next(opt))
             {
                 const char *oname = xmpp_stanza_get_name(opt);
-                if (!oname || strcmp(oname, "option") != 0) continue;
+                if (!oname || std::string_view(oname) != "option") continue;
 
                 xmpp_stanza_t *oval_elem = xmpp_stanza_get_child_by_name(opt, "value");
                 const char *oval  = oval_elem ? xmpp_stanza_get_text_ptr(oval_elem) : nullptr;
@@ -3862,7 +3868,7 @@ static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
                     options_str += weechat_color("darkgray");
 
                 options_str += oval ? oval : "?";
-                if (olabel && oval && strcmp(olabel, oval) != 0)
+                if (olabel && oval && std::string_view(olabel) != std::string_view(oval))
                 {
                     options_str += '(';
                     options_str += olabel;
@@ -3879,7 +3885,7 @@ static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         const char *type_color = "gray";
         if (ftype)
         {
-            if (strcmp(ftype, "text-single") == 0 || strcmp(ftype, "text-multi") == 0)
+            if (std::string_view(ftype) == "text-single" || std::string_view(ftype) == "text-multi")
                 type_color = "cyan";
             else if (is_boolean)
                 type_color = "yellow";

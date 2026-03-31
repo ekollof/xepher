@@ -118,7 +118,7 @@ int nick_color_config_cb(const void *, void *, const char *, const char *)
                     char index_key[32];
                     snprintf(index_key, sizeof(index_key), "%d|tags_array", i);
                     const char *tag = weechat_hdata_string(hdata_ldata, ldata, index_key);
-                    if (tag && strncmp(tag, "nick_", 5) == 0 && tag[5] != '\0')
+                    if (tag && std::string_view(tag).starts_with("nick_") && tag[5] != '\0')
                     {
                         nick_name = tag + 5;
                         break;

@@ -44,18 +44,19 @@ collect_buffer_messages(struct t_gui_buffer *buffer, int max)
                 const char *tag = weechat_hdata_string(hd_line_data, line_data, key.c_str());
                 if (!tag) continue;
 
-                if (strcmp(tag, "self_msg") == 0)
+                const std::string_view tag_sv { tag };
+                if (tag_sv == "self_msg")
                     e.from_self = true;
-                else if (strcmp(tag, "xmpp_retracted") == 0)
+                else if (tag_sv == "xmpp_retracted")
                     e.retracted = true;
-                else if (strncmp(tag, "id_", 3) == 0 && e.id.empty())
-                    e.id = tag + 3;
-                else if (strncmp(tag, "stanza_id_by_", 13) == 0)
-                    e.stanza_id_by = tag + 13;
-                else if (strncmp(tag, "stanza_id_", 10) == 0 && e.stanza_id.empty())
-                    e.stanza_id = tag + 10;
-                else if (strncmp(tag, "nick_", 5) == 0 && e.nick.empty())
-                    e.nick = tag + 5;
+                else if (tag_sv.starts_with("id_") && e.id.empty())
+                    e.id = tag_sv.substr(3);
+                else if (tag_sv.starts_with("stanza_id_by_"))
+                    e.stanza_id_by = tag_sv.substr(13);
+                else if (tag_sv.starts_with("stanza_id_") && e.stanza_id.empty())
+                    e.stanza_id = tag_sv.substr(10);
+                else if (tag_sv.starts_with("nick_") && e.nick.empty())
+                    e.nick = tag_sv.substr(5);
             }
 
             // Accept lines that have at least one usable ID (origin-id or stanza-id).
@@ -556,7 +557,7 @@ int command__react(const void *pointer, void *data,
             const char *tags = (const char*)weechat_hdata_string(hdata_line_data, line_data, "tags");
             
             // Look for messages with ID that aren't from us
-            if (tags && strstr(tags, "id_") && !strstr(tags, "self_msg"))
+            if (tags && std::string_view(tags).contains("id_") && !std::string_view(tags).contains("self_msg"))
             {
                 // Extract the message ID and (for MUC) stanza-id from tags
                 std::string msg_id;
@@ -567,12 +568,13 @@ int command__react(const void *pointer, void *data,
                 {
                     for (int i = 0; tag_array[i]; i++)
                     {
-                        if (strncmp(tag_array[i], "id_", 3) == 0 && msg_id.empty())
-                            msg_id = tag_array[i] + 3;
-                        else if (strncmp(tag_array[i], "stanza_id_by_", 13) == 0)
-                            sid_by = tag_array[i] + 13;
-                        else if (strncmp(tag_array[i], "stanza_id_", 10) == 0)
-                            sid = tag_array[i] + 10;
+                        const std::string_view t { tag_array[i] };
+                        if (t.starts_with("id_") && msg_id.empty())
+                            msg_id = t.substr(3);
+                        else if (t.starts_with("stanza_id_by_"))
+                            sid_by = t.substr(13);
+                        else if (t.starts_with("stanza_id_"))
+                            sid = t.substr(10);
                     }
                     weechat_string_free_split(tag_array);
                 }

@@ -222,7 +222,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                      jid_el; jid_el = xmpp_stanza_get_next(jid_el))
                 {
                     const char *jn = xmpp_stanza_get_name(jid_el);
-                    if (!jn || strcmp(jn, "jid") != 0) continue;
+                    if (!jn || std::string_view(jn) != "jid") continue;
                     char *jid_txt = xmpp_stanza_get_text(jid_el);
                     if (jid_txt)
                     {
@@ -245,7 +245,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                      jid_el; jid_el = xmpp_stanza_get_next(jid_el))
                 {
                     const char *jn = xmpp_stanza_get_name(jid_el);
-                    if (!jn || strcmp(jn, "jid") != 0) continue;
+                    if (!jn || std::string_view(jn) != "jid") continue;
                     char *jid_txt = xmpp_stanza_get_text(jid_el);
                     if (jid_txt)
                     {
@@ -471,7 +471,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (items)
             {
                 const char *node = xmpp_stanza_get_attribute(items, "node");
-                if (node && strcmp(node, NS_VCARD4_PUBSUB) == 0)
+                if (node && std::string_view(node) == NS_VCARD4_PUBSUB)
                 {
                     const char *from_jid = from ? from : account.jid().data();
 
@@ -1819,7 +1819,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     while (child)
                     {
                         const char *name = xmpp_stanza_get_name(child);
-                        if (name && strcmp(name, "text") != 0)
+                        if (name && std::string_view(name) != "text")
                         {
                             error_msg = fmt::format("Upload slot request failed: {}", name);
                             break;
@@ -1859,7 +1859,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                              c; c = xmpp_stanza_get_next(c))
                         {
                             const char *cname = xmpp_stanza_get_name(c);
-                            if (cname && strcmp(cname, "text") != 0)
+                            if (cname && std::string_view(cname) != "text")
                             { error_cond = cname; break; }
                         }
                     }
@@ -1895,7 +1895,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                              c; c = xmpp_stanza_get_next(c))
                         {
                             const char *cname = xmpp_stanza_get_name(c);
-                            if (cname && strcmp(cname, "text") != 0)
+                            if (cname && std::string_view(cname) != "text")
                             { error_cond = cname; break; }
                         }
                     }
@@ -1929,7 +1929,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                              c; c = xmpp_stanza_get_next(c))
                         {
                             const char *cname = xmpp_stanza_get_name(c);
-                            if (cname && strcmp(cname, "text") != 0)
+                            if (cname && std::string_view(cname) != "text")
                             { error_cond = cname; break; }
                         }
                     }
@@ -1968,7 +1968,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                              c; c = xmpp_stanza_get_next(c))
                         {
                             const char *cname = xmpp_stanza_get_name(c);
-                            if (cname && strcmp(cname, "text") != 0)
+                            if (cname && std::string_view(cname) != "text")
                             { error_cond = cname; break; }
                         }
                     }
@@ -2152,7 +2152,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         // XEP-0050: Ad-Hoc Commands — handle list and execute/form results
         const char *items_node = xmpp_stanza_get_attribute(items_query, "node");
         bool is_commands_node = items_node
-            && strcmp(items_node, "http://jabber.org/protocol/commands") == 0;
+            && std::string_view(items_node) == "http://jabber.org/protocol/commands";
         const char *iq_id = xmpp_stanza_get_id(stanza);
         bool is_adhoc_query = iq_id && account.adhoc_queries.count(iq_id);
 
@@ -2362,7 +2362,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (x_form)
             {
                 const char *form_type = xmpp_stanza_get_attribute(x_form, "type");
-                if (form_type && strcmp(form_type, "result") == 0)
+                if (form_type && std::string_view(form_type) == "result")
                 {
                     // Display result form (read-only)
                     render_data_form(adhoc_buf, x_form, from_jid, cmd_node, NULL);
@@ -2373,7 +2373,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     render_data_form(adhoc_buf, x_form, from_jid, cmd_node, session_id);
                 }
             }
-            else if (cmd_status && strcmp(cmd_status, "completed") == 0)
+            else if (cmd_status && std::string_view(cmd_status) == "completed")
             {
                 // Command completed with no form — check for <note>
                 xmpp_stanza_t *note = xmpp_stanza_get_child_by_name(adhoc_command, "note");
@@ -2385,7 +2385,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                          note_text ? ": " : "",
                                          note_text ? note_text : "");
             }
-            else if (cmd_status && strcmp(cmd_status, "executing") == 0 && !x_form)
+            else if (cmd_status && std::string_view(cmd_status) == "executing" && !x_form)
             {
                 weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
                                          "%s[adhoc] Command %s in progress (no form)",
@@ -2431,8 +2431,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             const char *cond_name = xmpp_stanza_get_name(cond);
                             if (cond_name
                                 && cond_ns
-                                && strcmp(cond_ns, "urn:ietf:params:xml:ns:xmpp-stanzas") == 0
-                                && strcmp(cond_name, "text") != 0)
+                                && std::string_view(cond_ns) == "urn:ietf:params:xml:ns:xmpp-stanzas"
+                                && std::string_view(cond_name) != "text")
                             {
                                 err_condition = cond_name;
                                 break;
@@ -2597,7 +2597,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             const char *open_raw = xmpp_stanza_get_text_ptr(open_el);
                             if (!open_raw || !open_raw[0]
                                 || weechat_strcasecmp(open_raw, "true") == 0
-                                || strcmp(open_raw, "1") == 0)
+                                || std::string_view(open_raw) == "1")
                             {
                                 is_open = true;
                             }
@@ -2786,11 +2786,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         const char *txt = val ? xmpp_stanza_get_text_ptr(val) : nullptr;
                         if (var && txt && txt[0])
                         {
-                            if (strcmp(var, "muc#roominfo_description") == 0)
+                            if (std::string_view(var) == "muc#roominfo_description")
                                 desc_s = txt;
-                            else if (strcmp(var, "muc#roominfo_occupants") == 0)
+                            else if (std::string_view(var) == "muc#roominfo_occupants")
                                 occ_s = txt;
-                            else if (strcmp(var, "muc#roominfo_lang") == 0)
+                            else if (std::string_view(var) == "muc#roominfo_lang")
                                 lang_s = txt;
                         }
                         field = xmpp_stanza_get_next(field);
@@ -2894,7 +2894,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 while (feature)
                 {
                     const char *var = xmpp_stanza_get_attribute(feature, "var");
-                    if (var && strcmp(var, "urn:xmpp:http:upload:0") == 0)
+                    if (var && std::string_view(var) == "urn:xmpp:http:upload:0")
                     {
                         supports_upload = true;
                     }
@@ -2911,7 +2911,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         while (field)
                         {
                             const char *var = xmpp_stanza_get_attribute(field, "var");
-                            if (var && strcmp(var, "max-file-size") == 0)
+                            if (var && std::string_view(var) == "max-file-size")
                             {
                                 xmpp_stanza_t *value = xmpp_stanza_get_child_by_name(field, "value");
                                 if (value)
@@ -3355,14 +3355,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // Also match by known publish IQ id (e.g. "omemo-bundle").
                 if (target_node.empty() && id)
                 {
-                    if (strcmp(id, "omemo-bundle") == 0)
+                    if (std::string_view(id) == "omemo-bundle")
                         target_node = "urn:xmpp:omemo:2:bundles";
-                    else if (strcmp(id, "omemo-legacy-bundle") == 0)
+                    else if (std::string_view(id) == "omemo-legacy-bundle")
                         target_node = fmt::format("eu.siacs.conversations.axolotl.bundles:{}",
                                                   account.omemo.device_id);
-                    else if (strcmp(id, "announce1") == 0)
+                    else if (std::string_view(id) == "announce1")
                         target_node = "urn:xmpp:omemo:2:devices";
-                    else if (strcmp(id, "announce-legacy1") == 0)
+                    else if (std::string_view(id) == "announce-legacy1")
                         target_node = "eu.siacs.conversations.axolotl.devicelist";
                 }
 
@@ -3445,9 +3445,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (dl_items)
             {
                 const char *dl_node = xmpp_stanza_get_attribute(dl_items, "node");
-                if (dl_node && strcmp(dl_node, "urn:xmpp:omemo:2:devices") == 0)
+                if (dl_node && std::string_view(dl_node) == "urn:xmpp:omemo:2:devices")
                     is_omemo2_devicelist_err = true;
-                if (dl_node && strcmp(dl_node, "eu.siacs.conversations.axolotl.devicelist") == 0)
+                if (dl_node && std::string_view(dl_node) == "eu.siacs.conversations.axolotl.devicelist")
                     is_legacy_devicelist_err = true;
             }
         }

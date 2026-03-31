@@ -24,15 +24,15 @@ int picker_nav_cb(const void * /*pointer*/, void * /*data*/,
     if (argc < 2 || !picker_base::s_active)
         return WEECHAT_RC_OK_EAT;
 
-    const char *dir = argv[1];
+    const std::string_view dir_sv { argv[1] };
 
-    if (strcmp(dir, "up") == 0)
+    if (dir_sv == "up")
         picker_base::s_active->navigate(-1);
-    else if (strcmp(dir, "down") == 0)
+    else if (dir_sv == "down")
         picker_base::s_active->navigate(+1);
-    else if (strcmp(dir, "enter") == 0)
+    else if (dir_sv == "enter")
         picker_base::s_active->confirm();
-    else if (strcmp(dir, "quit") == 0)
+    else if (dir_sv == "quit")
         picker_base::s_active->cancel();
 
     return WEECHAT_RC_OK_EAT;

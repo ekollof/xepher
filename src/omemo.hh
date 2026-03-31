@@ -164,9 +164,9 @@ namespace weechat {
                         // Check if a session exists with a particular remote device.
                         bool has_session(const char *jid, std::uint32_t remote_device_id);
 
-                        // Decode an OMEMO-encrypted message returning cleartext (heap-allocated).
-                        // Returns nullptr if decryption fails; caller must free via free().
-                        char *decode(weechat::account *account,
+                         // Decode an OMEMO-encrypted message returning cleartext.
+                         // Returns std::nullopt if decryption fails.
+                         std::optional<std::string> decode(weechat::account *account,
                                      struct t_gui_buffer *buffer,
                                      const char *jid,
                                      xmpp_stanza_t *encrypted);

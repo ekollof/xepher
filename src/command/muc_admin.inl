@@ -105,11 +105,11 @@ int command__spoiler(const void *pointer, void *data,
     const char *text = argv_eol[1];
 
     // Check if "hint: message" form is used
-    if (argc >= 3 && argv[1][strlen(argv[1])-1] == ':')
+    if (argc >= 3 && std::string_view(argv[1]).back() == ':')
     {
         const char *hint = argv[1];
         // Strip trailing colon
-        std::string hint_str(hint, strlen(hint)-1);
+        std::string hint_str(hint, std::string_view(hint).size()-1);
         text = argv_eol[2];
 
         xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
@@ -339,10 +339,11 @@ int command__adhoc(const void *pointer, void *data,
     for (int i = 4; i < argc; i++)
     {
         // Parse "field=value" pairs
-        const char *eq = strchr(argv[i], '=');
-        if (!eq) continue;
-        std::string field_var(argv[i], eq - argv[i]);
-        const char *field_val = eq + 1;
+        std::string_view arg_sv(argv[i]);
+        auto eq_pos = arg_sv.find('=');
+        if (eq_pos == std::string_view::npos) continue;
+        std::string field_var(arg_sv.substr(0, eq_pos));
+        const char *field_val = argv[i] + eq_pos + 1;
 
         xmpp_stanza_t *field = xmpp_stanza_new(ptr_account->context);
         xmpp_stanza_set_name(field, "field");

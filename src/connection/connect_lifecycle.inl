@@ -115,7 +115,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         char *cap_hash_raw = nullptr;
         caps = this->get_caps(caps, &cap_hash_raw);
         xmpp_stanza_release(caps);
-        std::unique_ptr<char, decltype(&free)> cap_hash(cap_hash_raw, &free);
+        std::unique_ptr<char[]> cap_hash(cap_hash_raw);
         xmpp_stanza_set_attribute(pres__c, "ver", cap_hash.get());
 
         children[0] = pres__c;
@@ -525,7 +525,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 const char *ptr_remote_jid = weechat_buffer_get_string(ptr_buffer, "localvar_remote_jid");
 
                 // Restore PM buffers only (MUCs will be restored via bookmarks)
-                if (ptr_type && strcmp(ptr_type, "private") == 0 &&
+                if (ptr_type && std::string_view(ptr_type) == "private" &&
                     ptr_account_name && account.name == ptr_account_name &&
                     ptr_remote_jid && ptr_remote_jid[0])
                 {
@@ -542,7 +542,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 }
                 // Restore FEED buffers from previous session that weren't
                 // already handled by the LMDB list above.
-                else if (ptr_type && strcmp(ptr_type, "feed") == 0 &&
+                else if (ptr_type && std::string_view(ptr_type) == "feed" &&
                          ptr_account_name && account.name == ptr_account_name &&
                          ptr_remote_jid && ptr_remote_jid[0])
                 {
@@ -687,7 +687,7 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
     m_conn.set_keepalive(ka_timeout_sec, ka_timeout_ivl);
 
     const char *resource = account.resource().data();
-    if (!(resource && strlen(resource)))
+    if (!(resource && !std::string_view(resource).empty()))
     {
         const std::string rand = rand_string(8);
         auto ident = fmt::format("weechat.{}", rand);

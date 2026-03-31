@@ -201,12 +201,14 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
         const char *name = xmpp_stanza_get_name(child);
         if (!name) continue;
 
-        bool is_block = (strcmp(name, "p") == 0
-                      || strcmp(name, "div") == 0
-                      || strcmp(name, "li") == 0);
-        bool is_br         = (strcmp(name, "br") == 0);
-        bool is_blockquote = (strcmp(name, "blockquote") == 0);
-        bool is_pre        = (strcmp(name, "pre") == 0);
+        std::string_view name_sv(name);
+
+        bool is_block = (name_sv == "p"
+                      || name_sv == "div"
+                      || name_sv == "li");
+        bool is_br         = (name_sv == "br");
+        bool is_blockquote = (name_sv == "blockquote");
+        bool is_pre        = (name_sv == "pre");
 
         if (is_br)
         {
@@ -250,7 +252,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             continue;
         }
 
-        if (strcmp(name, "b") == 0 || strcmp(name, "strong") == 0)
+        if (name_sv == "b" || name_sv == "strong")
         {
             result += weechat_color("bold");
             result += xhtml_to_weechat(child, in_blockquote);
@@ -258,7 +260,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             continue;
         }
 
-        if (strcmp(name, "i") == 0 || strcmp(name, "em") == 0)
+        if (name_sv == "i" || name_sv == "em")
         {
             result += weechat_color("italic");
             result += xhtml_to_weechat(child, in_blockquote);
@@ -266,7 +268,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             continue;
         }
 
-        if (strcmp(name, "u") == 0)
+        if (name_sv == "u")
         {
             result += weechat_color("underline");
             result += xhtml_to_weechat(child, in_blockquote);
@@ -274,7 +276,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             continue;
         }
 
-        if (strcmp(name, "del") == 0 || strcmp(name, "s") == 0 || strcmp(name, "strike") == 0)
+        if (name_sv == "del" || name_sv == "s" || name_sv == "strike")
         {
             result += weechat_color("darkgray");
             result += xhtml_to_weechat(child, in_blockquote);
@@ -282,7 +284,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             continue;
         }
 
-        if (strcmp(name, "code") == 0 || strcmp(name, "tt") == 0)
+        if (name_sv == "code" || name_sv == "tt")
         {
             result += weechat_color("gray");
             result += xhtml_to_weechat(child, in_blockquote);
@@ -290,7 +292,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             continue;
         }
 
-        if (strcmp(name, "span") == 0)
+        if (name_sv == "span")
         {
             const char *style_attr = xmpp_stanza_get_attribute(child, "style");
             auto [open, close] = css_style_to_weechat(style_attr);
@@ -300,7 +302,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             continue;
         }
 
-        if (strcmp(name, "a") == 0)
+        if (name_sv == "a")
         {
             const char *href = xmpp_stanza_get_attribute(child, "href");
             std::string link_text = xhtml_to_weechat(child, in_blockquote);
@@ -340,7 +342,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             continue;
         }
 
-        if (strcmp(name, "img") == 0)
+        if (name_sv == "img")
         {
             const char *alt = xmpp_stanza_get_attribute(child, "alt");
             result += weechat_color("darkgray");

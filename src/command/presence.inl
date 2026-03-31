@@ -504,7 +504,7 @@ int command__selfping(const void *pointer, void *data,
 
     // Check if this is a MUC channel
     const char *buffer_type = weechat_buffer_get_string(ptr_channel->buffer, "localvar_type");
-    if (!buffer_type || strcmp(buffer_type, "channel") != 0)
+    if (!buffer_type || std::string_view(buffer_type) != "channel")
     {
         weechat_printf(buffer, "%s%s: this command must be used in a MUC buffer",
                       weechat_prefix("error"),

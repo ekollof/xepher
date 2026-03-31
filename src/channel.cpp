@@ -127,12 +127,12 @@ struct t_gui_buffer *weechat::channel::search_buffer(weechat::channel::chat_type
             if (ptr_type && ptr_type[0]
                 && ptr_account_name && ptr_account_name[0]
                 && ptr_remote_jid && ptr_remote_jid[0]
-                && (   ((  (type == weechat::channel::chat_type::MUC))
-                        && (strcmp(ptr_type, "channel") == 0))
-                    || ((  (type == weechat::channel::chat_type::PM))
-                        && (strcmp(ptr_type, "private") == 0))
-                    || ((  (type == weechat::channel::chat_type::FEED))
-                        && (strcmp(ptr_type, "feed") == 0)))
+                 && (   ((  (type == weechat::channel::chat_type::MUC))
+                         && (std::string_view(ptr_type) == "channel"))
+                     || ((  (type == weechat::channel::chat_type::PM))
+                         && (std::string_view(ptr_type) == "private"))
+                     || ((  (type == weechat::channel::chat_type::FEED))
+                         && (std::string_view(ptr_type) == "feed")))
                 && (ptr_account_name == account.name)
                 && (weechat_strcasecmp(ptr_remote_jid, name) == 0))
             {
@@ -174,7 +174,9 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
 
     if (buffer_created)
     {
-        char *res = (char*)strrchr(name, '/');
+        std::string_view name_sv(name);
+        auto slash_pos = name_sv.rfind('/');
+        const char *res = (slash_pos != std::string_view::npos) ? name + slash_pos + 1 : nullptr;
         if (!weechat_buffer_get_integer(ptr_buffer, "short_name_is_set"))
         {
             // For FEED buffers pass the full feed_key so channel_short_name
@@ -192,7 +194,7 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
                                                      "localvar_remote_jid");
 
         if (!short_name ||
-            (localvar_remote_jid && (strcmp(localvar_remote_jid, short_name) == 0)))
+            (localvar_remote_jid && (std::string_view(localvar_remote_jid) == short_name)))
         {
             char *node = xmpp_jid_node(account.context, name);
             auto short_name_value = (type == weechat::channel::chat_type::FEED)

@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <memory>
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>
 
@@ -67,21 +68,44 @@ char *buffer__encryption_bar_cb(const void *pointer, void *data,
     buffer__get_account_and_channel(buffer, &account, &channel);
 
     if (!channel)
-        return strdup("");
+    {
+        auto buf = std::make_unique<char[]>(1);
+        buf[0] = '\0';
+        return buf.release();
+    }
 
     // Check encryption status
     if (channel->omemo.enabled)
-        return strdup("🔒OMEMO");
+    {
+        std::string_view sv = "🔒OMEMO";
+        auto buf = std::make_unique<char[]>(sv.size() + 1);
+        sv.copy(buf.get(), sv.size());
+        buf[sv.size()] = '\0';
+        return buf.release();
+    }
     else if (channel->pgp.enabled)
-        return strdup("🔒PGP");
+    {
+        std::string_view sv = "🔒PGP";
+        auto buf = std::make_unique<char[]>(sv.size() + 1);
+        sv.copy(buf.get(), sv.size());
+        buf[sv.size()] = '\0';
+        return buf.release();
+    }
     else if (channel->transport != weechat::channel::transport::PLAIN)
     {
         std::string status = "🔒";
         status += weechat::channel::transport_name(channel->transport);
-        return strdup(status.c_str());
+        auto buf = std::make_unique<char[]>(status.size() + 1);
+        status.copy(buf.get(), status.size());
+        buf[status.size()] = '\0';
+        return buf.release();
     }
     else
-        return strdup("");
+    {
+        auto buf = std::make_unique<char[]>(1);
+        buf[0] = '\0';
+        return buf.release();
+    }
 }
 
 int buffer__switch_cb(const void *pointer, void *data,

@@ -168,8 +168,7 @@ static int ibr_set_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     if (!st || st->done) return 0;
 
     const char *type = xmpp_stanza_get_type(stanza);
-    if (type && strcmp(type, "result") == 0) {
-        // Success — save the account
+    if (type && std::string_view(type) == "result") {
         weechat_printf(st->buffer,
                        _("%s%s: registration successful for %s — adding account"),
                        weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
@@ -205,7 +204,7 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     if (!st || st->done) return 0;
 
     const char *type = xmpp_stanza_get_type(stanza);
-    if (!type || strcmp(type, "result") != 0) {
+    if (!type || std::string_view(type) != "result") {
         // Server returned an error to our field-list query
         const char *condition = "unknown";
         xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
@@ -281,7 +280,7 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
         for (xmpp_stanza_t *field = xmpp_stanza_get_children(xdata);
              field; field = xmpp_stanza_get_next(field)) {
             if (!xmpp_stanza_get_name(field) ||
-                strcmp(xmpp_stanza_get_name(field), "field") != 0) continue;
+                std::string_view(xmpp_stanza_get_name(field)) != "field") continue;
             const char *var   = xmpp_stanza_get_attribute(field, "var");
             const char *label = xmpp_stanza_get_attribute(field, "label");
             if (var) {
@@ -313,11 +312,11 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
             if (!cname) continue;
             bool is_known = false;
             for (int i = 0; known_fields[i]; ++i) {
-                if (strcmp(cname, known_fields[i]) == 0) { is_known = true; break; }
+                if (std::string_view(cname) == known_fields[i]) { is_known = true; break; }
             }
             // Skip housekeeping elements
-            if (strcmp(cname, "registered") == 0 || strcmp(cname, "instructions") == 0 ||
-                strcmp(cname, "x") == 0) continue;
+            if (std::string_view sv{cname};
+                sv == "registered" || sv == "instructions" || sv == "x") continue;
             if (!is_known) {
                 weechat_printf(st->buffer,
                                _("%s%s: IBR: server requires unknown field <%s/>"
@@ -755,7 +754,7 @@ static int ibr_unregister_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *
     if (!ctx) return 0;
 
     const char *type = xmpp_stanza_get_type(stanza);
-    if (type && strcmp(type, "result") == 0) {
+    if (type && std::string_view(type) == "result") {
         weechat_printf(ctx->buffer,
                        _("%s%s: account cancelled on server — deleting local account"),
                        weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
@@ -857,7 +856,7 @@ static int ibr_passwd_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *stan
     if (!ctx) return 0;
 
     const char *type = xmpp_stanza_get_type(stanza);
-    if (type && strcmp(type, "result") == 0) {
+    if (type && std::string_view(type) == "result") {
         ctx->account->password(ctx->new_password);
         weechat::config::write();
         weechat_printf(ctx->buffer,

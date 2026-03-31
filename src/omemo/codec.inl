@@ -9,7 +9,7 @@ bool weechat::xmpp::omemo::has_session(const char *jid, std::uint32_t remote_dev
     return signal_protocol_session_contains_session(store_context, &address.address) == 1;
 }
 
-char *weechat::xmpp::omemo::decode(weechat::account *account,
+std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *account,
                                    struct t_gui_buffer *buffer,
                                    const char *jid,
                                    xmpp_stanza_t *encrypted)
@@ -21,7 +21,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
     if (!account || !jid || !encrypted)
     {
         print_error(buffer, "OMEMO decode received invalid input.");
-        return nullptr;
+        return std::nullopt;
     }
 
     xmpp_stanza_t *header = xmpp_stanza_get_child_by_name(encrypted, "header");
@@ -29,7 +29,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
     if (!header)
     {
         print_error(buffer, "OMEMO message is missing header.");
-        return nullptr;
+        return std::nullopt;
     }
 
     const auto sender_device_id = parse_uint32(
@@ -39,7 +39,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
     if (!sender_device_id)
     {
         print_error(buffer, "OMEMO message header is missing a valid sender sid.");
-        return nullptr;
+        return std::nullopt;
     }
 
     // payload_stanza may be absent for KeyTransportElement (XEP-0384 §7.3).
@@ -52,7 +52,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
     if (payload_stanza && payload.empty())
     {
         print_error(buffer, "OMEMO payload is present but empty or invalid base64.");
-        return nullptr;
+        return std::nullopt;
     }
 
     xmpp_string_guard own_bare_g(*account->context,
@@ -265,7 +265,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
         }
         else
             print_error(buffer, "OMEMO transport key decryption failed.");
-        return nullptr;
+        return std::nullopt;
     }
 
     // Key-transport element: no payload, nothing more to decrypt.
@@ -273,7 +273,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
     if (!payload_stanza || payload.empty())
     {
         print_info(buffer, "OMEMO: received KeyTransportElement — session established.");
-        return nullptr;
+        return std::nullopt;
     }
 
     // Legacy format: AES-128-GCM decrypt path (no SCE wrapping)
@@ -284,7 +284,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
         if (iv_vec.size() != 12)
         {
             print_error(buffer, "OMEMO (legacy): IV element has wrong size (expected 12 bytes).");
-            return nullptr;
+            return std::nullopt;
         }
         std::array<std::uint8_t, 12> iv {};
         std::copy_n(iv_vec.begin(), 12, iv.begin());
@@ -293,7 +293,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
         if (!result)
         {
             print_error(buffer, "OMEMO (legacy) payload decryption failed.");
-            return nullptr;
+            return std::nullopt;
         }
         if (used_prekey_id && account)
         {
@@ -317,14 +317,14 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
                 }
             }
         }
-        return strdup(result->c_str());
+        return std::string(*result);
     }
 
     const auto decrypted_xml = omemo2_decrypt(transport_key->first, transport_key->second, payload);
     if (!decrypted_xml)
     {
         print_error(buffer, "OMEMO payload decryption failed.");
-        return nullptr;
+        return std::nullopt;
     }
 
     // Attempt SCE (XEP-0420) unwrap first; fall back to treating the decrypted
@@ -334,9 +334,9 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
     {
         // Fallback: return the raw decrypted text directly.
         if (!decrypted_xml->empty())
-            return strdup(decrypted_xml->c_str());
+            return std::string(*decrypted_xml);
         print_error(buffer, "OMEMO SCE envelope unwrap failed and payload is empty.");
-        return nullptr;
+        return std::nullopt;
     }
 
     // Per XEP-0384 §7.3 and Signal protocol best practice: after successfully
@@ -372,7 +372,7 @@ char *weechat::xmpp::omemo::decode(weechat::account *account,
         }
     }
 
-    return strdup(body->c_str());
+    return std::string(*body);
 }
 
 xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,

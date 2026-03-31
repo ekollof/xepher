@@ -2,7 +2,7 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
 {
     // CRITICAL: Verify this is actually an SM stanza by checking xmlns
     const char *xmlns = xmpp_stanza_get_ns(stanza);
-    if (!xmlns || strcmp(xmlns, "urn:xmpp:sm:3") != 0)
+    if (!xmlns || std::string_view(xmlns) != "urn:xmpp:sm:3")
     {
         // Not an SM stanza, ignore
         return true;

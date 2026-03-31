@@ -269,7 +269,9 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_
         const char *child_name = xmpp_stanza_get_name(child);
         if (!child_name) continue;
 
-        if (strcmp(child_name, "span") == 0)
+        std::string_view child_name_sv(child_name);
+
+        if (child_name_sv == "span")
         {
             long start = get_long_attr(child, "start", -1);
             long end   = get_long_attr(child, "end",   -1);
@@ -282,16 +284,16 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_
             {
                 const char *sp_name = xmpp_stanza_get_name(sp);
                 if (!sp_name) continue;
-                if (strcmp(sp_name, "emphasis") == 0) {
+                if (std::string_view(sp_name) == "emphasis") {
                     open_code  = weechat_color("italic");
                     close_code = weechat_color("-italic");
-                } else if (strcmp(sp_name, "strong") == 0) {
+                } else if (std::string_view(sp_name) == "strong") {
                     open_code  = weechat_color("bold");
                     close_code = weechat_color("-bold");
-                } else if (strcmp(sp_name, "code") == 0) {
+                } else if (std::string_view(sp_name) == "code") {
                     open_code  = weechat_color("cyan");
                     close_code = weechat_color("resetcolor");
-                } else if (strcmp(sp_name, "deleted") == 0) {
+                } else if (std::string_view(sp_name) == "deleted") {
                     open_code  = weechat_color("8");   // dark grey ≈ strikethrough hint
                     close_code = weechat_color("resetcolor");
                 }
@@ -302,7 +304,7 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_
             events.push_back({cp_byte(start), 0, std::move(open_code)});
             events.push_back({cp_byte(end),   1, std::move(close_code)});
         }
-        else if (strcmp(child_name, "bcode") == 0)
+        else if (child_name_sv == "bcode")
         {
             long start = get_long_attr(child, "start", -1);
             long end   = get_long_attr(child, "end",   -1);
@@ -310,7 +312,7 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_
             events.push_back({cp_byte(start), 0, weechat_color("gray")});
             events.push_back({cp_byte(end),   1, weechat_color("resetcolor")});
         }
-        else if (strcmp(child_name, "bquote") == 0)
+        else if (child_name_sv == "bquote")
         {
             long start = get_long_attr(child, "start", -1);
             long end   = get_long_attr(child, "end",   -1);
@@ -327,14 +329,14 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_
             }
             events.push_back({cp_byte(end), 1, weechat_color("resetcolor")});
         }
-        else if (strcmp(child_name, "list") == 0)
+        else if (child_name_sv == "list")
         {
             // Each <li start="N"/> inserts a bullet marker at that codepoint.
             for (xmpp_stanza_t *li = xmpp_stanza_get_children(child);
                  li; li = xmpp_stanza_get_next(li))
             {
                 const char *li_name = xmpp_stanza_get_name(li);
-                if (!li_name || strcmp(li_name, "li") != 0) continue;
+                if (!li_name || std::string_view(li_name) != "li") continue;
                 long li_start = get_long_attr(li, "start", -1);
                 if (li_start < 0) continue;
                 // Insert "• " before the list item start

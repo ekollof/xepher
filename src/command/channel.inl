@@ -57,8 +57,7 @@ int command__enter(const void *pointer, void *data,
                     xmpp_jid_node(ptr_account->context, jid));
                 xmpp_string_guard pres_domain_g(ptr_account->context,
                     xmpp_jid_domain(ptr_account->context, jid));
-                const char *nick = ptr_account->nickname().data()
-                    && strlen(ptr_account->nickname().data())
+                const char *nick = !ptr_account->nickname().empty()
                     ? ptr_account->nickname().data()
                     : nullptr;
                 xmpp_string_guard fallback_nick_g(ptr_account->context,
@@ -183,11 +182,11 @@ int command__open(const void *pointer, void *data,
             // When in a MUC and given a bare nick (no '@'), build the full JID.
             // All three guards outlive the if-block via the enclosing for-body scope.
             xmpp_string_guard node_g(ptr_account->context,
-                ptr_channel && !strchr(effective_jid, '@')
+                ptr_channel && !std::string_view(effective_jid).contains('@')
                     ? xmpp_jid_node(ptr_account->context, ptr_channel->name.data())
                     : nullptr);
             xmpp_string_guard domain_g(ptr_account->context,
-                ptr_channel && !strchr(effective_jid, '@')
+                ptr_channel && !std::string_view(effective_jid).contains('@')
                     ? xmpp_jid_domain(ptr_account->context, ptr_channel->name.data())
                     : nullptr);
             xmpp_string_guard full_g(ptr_account->context,

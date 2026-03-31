@@ -64,8 +64,8 @@ int command__list(const void *pointer, void *data,
     if (argc >= 2)
     {
         // Heuristic: if the first arg contains a dot but no spaces, it's a JID/domain
-        bool first_arg_is_jid = (strchr(argv[1], '.') != nullptr)
-                                 && (strchr(argv[1], ' ') == nullptr);
+        bool first_arg_is_jid = std::string_view(argv[1]).contains('.')
+                                 && !std::string_view(argv[1]).contains(' ');
         if (first_arg_is_jid)
         {
             service_jid = argv[1];
@@ -147,7 +147,7 @@ std::optional<std::string> pick_file_interactive()
             {
                 pclose(fp);
                 // Remove trailing newline
-                size_t len = strlen(path);
+                size_t len = std::string_view(path).size();
                 if (len > 0 && path[len-1] == '\n')
                     path[len-1] = '\0';
                 if (path[0])
@@ -164,7 +164,7 @@ std::optional<std::string> pick_file_interactive()
             if (fgets(path, sizeof(path), fp))
             {
                 pclose(fp);
-                size_t len = strlen(path);
+                size_t len = std::string_view(path).size();
                 if (len > 0 && path[len-1] == '\n')
                     path[len-1] = '\0';
                 if (path[0])
@@ -182,7 +182,7 @@ std::optional<std::string> pick_file_interactive()
         if (fgets(path, sizeof(path), fp))
         {
             pclose(fp);
-            size_t len = strlen(path);
+            size_t len = std::string_view(path).size();
             if (len > 0 && path[len-1] == '\n')
                 path[len-1] = '\0';
             if (path[0])

@@ -194,7 +194,7 @@ std::string message__decode(weechat::account *account,
     // htmldecode in-place
     std::string htmldec(decoded_text.size(), '\0');
     message__htmldecode(htmldec.data(), decoded_text.c_str(), decoded_text.size() + 1);
-    htmldec.resize(strlen(htmldec.c_str()));
+    htmldec.resize(std::string_view(htmldec.c_str()).size());
 
     regfree(&reg);
     return htmldec;
