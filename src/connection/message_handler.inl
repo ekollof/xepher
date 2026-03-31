@@ -2102,6 +2102,7 @@ message_handler_after_omemo:
     {
         std::unique_ptr<char, decltype(&free)> orig_guard(nullptr, &free);
         char *orig = nullptr;
+        void *edit_line_data = nullptr; // line_data of the original message for in-place update
         void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
                                             channel->buffer, "lines");
         if (lines)
@@ -2151,6 +2152,9 @@ message_handler_after_omemo:
                             }
                             if (!sender_matches)
                                 break;  // Silently drop spoofed correction
+
+                            // Save this line_data for the in-place update below.
+                            edit_line_data = line_data;
 
                             auto arraylist_deleter = [](struct t_arraylist *al) {
                                 weechat_arraylist_free(al);
@@ -2267,6 +2271,20 @@ message_handler_after_omemo:
                 difftext = *visual;
                 weechat_string_dyn_free(visual, 1);
             }
+        }
+
+        // XEP-0308: Replace the original line in-place rather than appending a
+        // new "* " line.  Use the inline diff if available, otherwise plain text.
+        if (edit_line_data)
+        {
+            const char *new_msg = difftext.empty() ? text : difftext.c_str();
+            struct t_hashtable *ht = weechat_hashtable_new(4,
+                WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING,
+                nullptr, nullptr);
+            weechat_hashtable_set(ht, "message", new_msg);
+            weechat_hdata_update(weechat_hdata_get("line_data"), edit_line_data, ht);
+            weechat_hashtable_free(ht);
+            return 1;
         }
     }
 
