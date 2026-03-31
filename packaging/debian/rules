@@ -7,11 +7,8 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 	dh $@
 
 override_dh_auto_build:
-	git submodule update --init --recursive
+	[ -f deps/diff/Makefile ] || git submodule update --init --recursive
 	$(MAKE) weechat-xmpp
-
-override_dh_auto_install:
-	install -D -m 0755 xmpp.so $(CURDIR)/debian/weechat-xmpp/usr/lib/$(DEB_HOST_MULTIARCH)/weechat/plugins/xmpp.so
 
 override_dh_auto_clean:
 	$(MAKE) clean || true

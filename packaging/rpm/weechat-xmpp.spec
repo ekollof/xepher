@@ -1,3 +1,5 @@
+%global debug_package %{nil}
+
 Name:           xepher
 Version:        0.3.0
 Release:        1%{?dist}
@@ -56,7 +58,7 @@ Features include:
 #   tar czf xepher-%%{version}.tar.gz --exclude=.git xepher/
 
 %build
-%make_build
+%make_build weechat-xmpp
 
 %install
 install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
@@ -74,7 +76,7 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 - Raise minimum weechat version to 3.0
 - Fix: submodule bundling note in %%prep
 
-* Sun Jan 19 2026 Emiel Kollof <emiel@kollof.nl> - 0.2.0-1
+* Mon Jan 19 2026 Emiel Kollof <emiel@kollof.nl> - 0.2.0-1
 - Initial RPM package release
 - Feature: PM buffer close fix (prevents unwanted reopening)
 - Feature: Typing indicators show nicknames in MUC
