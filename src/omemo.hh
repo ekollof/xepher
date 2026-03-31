@@ -242,6 +242,12 @@ namespace weechat {
             // Drop a cached bundle for a remote device after a fresh bundle fetch
             // proves the server no longer has usable OMEMO:2 data for it.
             void clear_cached_bundle(std::string_view jid, std::uint32_t device_id);
+
+            // XEP-0450: Store an ATM trust decision for a key identified by its
+            // Base64-encoded SHA-256 fingerprint. level must be "trusted" or "distrusted".
+            // This is the public API called from the message handler when receiving
+            // an unencrypted trust message (XEP-0434).
+            void store_atm_trust_pub(const char *jid, const char *key_b64, const std::string &level);
         };
     }
 }

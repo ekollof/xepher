@@ -589,6 +589,23 @@ int identity_is_trusted(const signal_protocol_address *address, std::uint8_t *ke
     if (!self || !address || !key_data)
         return SG_ERR_INVAL;
 
+    // XEP-0450: if ATM trust level is stored, use it instead of plain TOFU.
+    if (weechat::config::instance && weechat_config_boolean(weechat::config::instance->look.omemo_atm))
+    {
+        const std::vector<std::uint8_t> incoming {key_data, key_data + key_len};
+        const std::string fp = atm_fingerprint_b64(incoming);
+        if (!fp.empty())
+        {
+            const auto trust = load_atm_trust(*self, signal_address_name(address), fp);
+            if (trust)
+            {
+                if (*trust == "trusted")   return 1;
+                if (*trust == "distrusted") return 0;
+                // "undecided" → fall through to TOFU below
+            }
+        }
+    }
+
     const auto stored = load_bytes(*self, key_for_identity(signal_address_name(address), address->device_id));
     if (!stored)
         return 1;

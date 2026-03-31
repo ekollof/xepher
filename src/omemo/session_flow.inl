@@ -63,6 +63,65 @@ static void send_key_transport(omemo &self,
                                const char *peer_jid,
                                std::uint32_t remote_device_id);
 
+// XEP-0450: send an unencrypted trust message (XEP-0434) to own bare JID
+// advertising that we authenticated key_b64 for key_owner_jid.
+static void send_atm_trust_message(omemo &self,
+                                   weechat::account &account,
+                                   const std::string &key_owner_jid,
+                                   const std::string &key_b64)
+{
+    if (!account.context || key_owner_jid.empty() || key_b64.empty())
+        return;
+
+    xmpp_string_guard own_bare_g(*account.context,
+                                 xmpp_jid_bare(*account.context, account.jid().data()));
+    const std::string own_bare_jid = own_bare_g.ptr && *own_bare_g.ptr
+        ? own_bare_g.ptr
+        : std::string(account.jid());
+
+    // Build <trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1' encryption='urn:xmpp:omemo:2'>
+    //   <key-owner jid='...'><trust>BASE64</trust></key-owner>
+    // </trust-message>
+    xmpp_stanza_t *trust_msg = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_name(trust_msg, "trust-message");
+    xmpp_stanza_set_ns(trust_msg, "urn:xmpp:tm:1");
+    xmpp_stanza_set_attribute(trust_msg, "usage", "urn:xmpp:atm:1");
+    xmpp_stanza_set_attribute(trust_msg, "encryption", "urn:xmpp:omemo:2");
+
+    xmpp_stanza_t *key_owner = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_name(key_owner, "key-owner");
+    xmpp_stanza_set_attribute(key_owner, "jid", key_owner_jid.c_str());
+
+    xmpp_stanza_t *trust_elem = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_name(trust_elem, "trust");
+    xmpp_stanza_t *trust_text = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_text(trust_text, key_b64.c_str());
+    xmpp_stanza_add_child(trust_elem, trust_text);
+    xmpp_stanza_release(trust_text);
+    xmpp_stanza_add_child(key_owner, trust_elem);
+    xmpp_stanza_release(trust_elem);
+
+    xmpp_stanza_add_child(trust_msg, key_owner);
+    xmpp_stanza_release(key_owner);
+
+    // Wrap in <message type='chat' to='{own_bare_jid}'> with <store/> hint
+    xmpp_stanza_t *message = xmpp_message_new(*account.context, "chat",
+                                              own_bare_jid.c_str(), nullptr);
+    xmpp_stanza_add_child(message, trust_msg);
+    xmpp_stanza_release(trust_msg);
+
+    xmpp_stanza_t *store_hint = xmpp_stanza_new(*account.context);
+    xmpp_stanza_set_name(store_hint, "store");
+    xmpp_stanza_set_ns(store_hint, "urn:xmpp:hints");
+    xmpp_stanza_add_child(message, store_hint);
+    xmpp_stanza_release(store_hint);
+
+    account.connection.send(message);
+    xmpp_stanza_release(message);
+
+    (void) self;
+}
+
 void weechat::xmpp::omemo::request_devicelist(weechat::account &account, std::string_view jid)
 {
     const std::string bare_jid = normalize_bare_jid(account.context, jid);
@@ -859,6 +918,32 @@ void weechat::xmpp::omemo::handle_bundle(weechat::account *account,
                     failed_session_bootstrap.insert({bare_jid, remote_device_id});
                 const bool session_is_fresh = !had_session_before
                     && has_session(bare_jid.c_str(), remote_device_id);
+
+                // XEP-0450: on first session establishment, record ATM trust and
+                // propagate to own endpoints via an unencrypted trust message.
+                if (session_is_fresh && account
+                    && weechat::config::instance
+                    && weechat_config_boolean(weechat::config::instance->look.omemo_atm))
+                {
+                    // Load the identity key stored by libsignal for this device.
+                    const auto ik_bytes = load_bytes(*this,
+                        key_for_identity(bare_jid, static_cast<std::int32_t>(remote_device_id)));
+                    if (ik_bytes && !ik_bytes->empty())
+                    {
+                        const std::string fp = atm_fingerprint_b64(*ik_bytes);
+                        if (!fp.empty())
+                        {
+                            // Only auto-trust if no explicit decision exists yet.
+                            const auto existing = load_atm_trust(*this, bare_jid, fp);
+                            if (!existing || *existing == "undecided")
+                            {
+                                store_atm_trust(*this, bare_jid, fp, "trusted");
+                                send_atm_trust_message(*this, *account, bare_jid, fp);
+                            }
+                        }
+                    }
+                }
+
                 if ((session_is_fresh || needs_key_transport) && account && buffer)
                 {
                     // Mark attempted regardless of defer/send so codec.inl

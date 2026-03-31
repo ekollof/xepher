@@ -35,6 +35,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "account.hh"
+#include "config.hh"
 #include "debug.hh"
 #include "gcrypt.hh"
 #include "omemo.hh"

@@ -1810,6 +1810,58 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         return 1;
     }
 
+    // XEP-0450 / XEP-0434: Automatic Trust Management — unencrypted trust messages.
+    // <trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1' encryption='urn:xmpp:omemo:2'>
+    //   <key-owner jid='...'><trust>BASE64</trust></key-owner>
+    // </trust-message>
+    {
+        xmpp_stanza_t *trust_msg = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "trust-message", "urn:xmpp:tm:1");
+        if (trust_msg
+            && account.omemo
+            && weechat::config::instance
+            && weechat_config_boolean(weechat::config::instance->look.omemo_atm))
+        {
+            const char *usage = xmpp_stanza_get_attribute(trust_msg, "usage");
+            const char *encryption = xmpp_stanza_get_attribute(trust_msg, "encryption");
+            if (usage && std::string_view(usage) == "urn:xmpp:atm:1"
+                && encryption && std::string_view(encryption) == "urn:xmpp:omemo:2")
+            {
+                // Walk <key-owner> children
+                xmpp_stanza_t *ko = xmpp_stanza_get_children(trust_msg);
+                while (ko)
+                {
+                    const char *ko_name = xmpp_stanza_get_name(ko);
+                    const char *ko_jid = ko_name && std::string_view(ko_name) == "key-owner"
+                        ? xmpp_stanza_get_attribute(ko, "jid") : nullptr;
+                    if (ko_jid)
+                    {
+                        xmpp_stanza_t *decision = xmpp_stanza_get_children(ko);
+                        while (decision)
+                        {
+                            const char *dname = xmpp_stanza_get_name(decision);
+                            if (dname && (std::string_view(dname) == "trust"
+                                          || std::string_view(dname) == "distrust"))
+                            {
+                                const char *fp = xmpp_stanza_get_text_ptr(decision);
+                                if (fp && *fp)
+                                {
+                                    const std::string level =
+                                        (std::string_view(dname) == "trust") ? "trusted" : "distrusted";
+                                    account.omemo.store_atm_trust_pub(ko_jid, fp, level);
+                                }
+                            }
+                            decision = xmpp_stanza_get_next(decision);
+                        }
+                    }
+                    ko = xmpp_stanza_get_next(ko);
+                }
+            }
+            // Trust messages must not be displayed; consume silently.
+            return 1;
+        }
+    }
+
     encrypted = xmpp_stanza_get_child_by_name_and_ns(stanza, "encrypted",
                                                      "urn:xmpp:omemo:2");
     if (!encrypted)
@@ -3497,6 +3549,8 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
         "urn:xmpp:ephemeral:0",
         // XEP-0448: Encrypted File Sharing
         "urn:xmpp:esfs:0",
+        // XEP-0434: Trust Messages (used by XEP-0450 ATM)
+        "urn:xmpp:tm:1",
     };
 
     std::vector<std::string> sorted_features;

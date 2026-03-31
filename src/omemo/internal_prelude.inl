@@ -377,6 +377,40 @@ void store_device_mode(omemo &self,
     return fmt::format("prekey:{}", id);
 }
 
+// XEP-0450: ATM trust level storage.
+// key_b64 is the Base64-encoded SHA-256 fingerprint of the raw identity key.
+[[nodiscard]] auto key_for_atm_trust(std::string_view jid, std::string_view key_b64) -> std::string
+{
+    return fmt::format("atm_trust:{}:{}", jid, key_b64);
+}
+
+// Values: "trusted", "distrusted", "undecided"
+void store_atm_trust(omemo &self,
+                     std::string_view jid,
+                     std::string_view key_b64,
+                     std::string_view level)
+{
+    if (!self.db_env || jid.empty() || key_b64.empty())
+        return;
+    auto txn = lmdb::txn::begin(self.db_env);
+    self.dbi.omemo.put(txn, key_for_atm_trust(jid, key_b64), std::string(level));
+    txn.commit();
+}
+
+[[nodiscard]] auto load_atm_trust(omemo &self,
+                                   std::string_view jid,
+                                   std::string_view key_b64)
+    -> std::optional<std::string>
+{
+    if (!self.db_env || jid.empty() || key_b64.empty())
+        return std::nullopt;
+    auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+    std::string_view value;
+    if (!self.dbi.omemo.get(txn, key_for_atm_trust(jid, key_b64), value))
+        return std::nullopt;
+    return std::string(value);
+}
+
 [[nodiscard]] auto key_for_signed_prekey_record(std::uint32_t id) -> std::string
 {
     return fmt::format("signed-prekey:{}", id);
@@ -418,6 +452,16 @@ void store_device_mode(omemo &self,
         return {};
     encoded.resize(static_cast<std::size_t>(written));
     return encoded;
+}
+
+// Compute Base64-encoded SHA-256 fingerprint of raw bytes — used as ATM key identifier.
+[[nodiscard]] auto atm_fingerprint_b64(const std::vector<std::uint8_t> &key_bytes) -> std::string
+{
+    if (key_bytes.empty())
+        return {};
+    unsigned char digest[32];
+    gcry_md_hash_buffer(GCRY_MD_SHA256, digest, key_bytes.data(), key_bytes.size());
+    return base64_encode_raw(digest, sizeof(digest));
 }
 
 [[nodiscard]] auto base64_decode(xmpp_ctx_t *context, std::string_view encoded)

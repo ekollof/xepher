@@ -663,6 +663,24 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0434.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.6.0</xmpp:version>
+        <xmpp:note xml:lang='en'>Trust Messages (XEP-0434) - unencrypted trust messages sent to own bare JID on first OMEMO session establishment; incoming &lt;trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1'&gt; parsed and applied to local trust store; urn:xmpp:tm:1 advertised in caps</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0450.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.4.0</xmpp:version>
+        <xmpp:note xml:lang='en'>Automatic Trust Management (XEP-0450) - TOFU: SHA-256 fingerprint of identity key stored as trusted on first OMEMO session; trust decisions propagated to own endpoints via unencrypted XEP-0434 trust messages; incoming trust/distrust decisions applied to LMDB trust store and used in identity_is_trusted; configurable via xmpp.look.omemo_atm</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0277.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.6.5</xmpp:version>

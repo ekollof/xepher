@@ -176,6 +176,13 @@ weechat::config::config()
                 "messages are tagged for hiding (0 = always tag)",
                 nullptr, 0, 10080,
                 "5", nullptr, false,
+                {}, {}, {}},
+            .omemo_atm{file, section_look, "omemo_atm", "boolean",
+                "enable XEP-0450 Automatic Trust Management for OMEMO keys: "
+                "automatically trust a key on first use (TOFU) and propagate trust decisions "
+                "to other own endpoints via unencrypted trust messages (urn:xmpp:tm:1)",
+                nullptr, 0, 0,
+                "on", nullptr, false,
                 {}, {}, {}}}
 {
 }

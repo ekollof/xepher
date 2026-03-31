@@ -1,3 +1,11 @@
+void weechat::xmpp::omemo::store_atm_trust_pub(const char *jid, const char *key_b64,
+                                               const std::string &level)
+{
+    if (!db_env || !jid || !key_b64)
+        return;
+    store_atm_trust(*this, jid, key_b64, level);
+}
+
 void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const char *jid)
 {
     if (jid)
