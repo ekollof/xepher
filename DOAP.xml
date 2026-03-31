@@ -511,28 +511,6 @@
 
     <implements>
       <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0444.html' />
-        <xmpp:status>complete</xmpp:status>
-        <xmpp:version>0.3.0</xmpp:version>
-        <xmpp:note
-                    xml:lang='en'
-                >Message Reactions - send and receive emoji reactions to messages</xmpp:note>
-      </xmpp:SupportedXep>
-    </implements>
-
-    <implements>
-      <xmpp:SupportedXep>
-        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0461.html' />
-        <xmpp:status>complete</xmpp:status>
-        <xmpp:version>0.2.1</xmpp:version>
-        <xmpp:note
-                    xml:lang='en'
-                >Message Replies - reply to messages with context and reference</xmpp:note>
-      </xmpp:SupportedXep>
-    </implements>
-
-    <implements>
-      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0422.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.2.0</xmpp:version>
