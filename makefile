@@ -7,7 +7,13 @@ IS_CLANG := $(shell $(CXX) --version 2>/dev/null | grep -i clang)
 ifeq ($(UNAME_S),Darwin)
 HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo /opt/homebrew)
 export PKG_CONFIG_PATH := $(HOMEBREW_PREFIX)/lib/pkgconfig:$(PKG_CONFIG_PATH)
+# bison, flex, and llvm are keg-only — prepend their bin dirs so make recipes
+# and $(shell) calls use the Homebrew versions, not the ancient macOS stubs.
+export PATH := $(HOMEBREW_PREFIX)/opt/bison/bin:$(HOMEBREW_PREFIX)/opt/flex/bin:$(HOMEBREW_PREFIX)/opt/llvm/bin:$(PATH)
 endif
+
+BISON ?= bison
+FLEX  ?= flex
 
 ifdef DEBUG
 	DBGCFLAGS=-DDEBUG -fno-omit-frame-pointer -fsanitize=address #-fsanitize=undefined -fsanitize=leak
@@ -192,7 +198,7 @@ sexp/sexp.a: sexp/parser.o sexp/lexer.o sexp/driver.o
 	ar -r $@ $^
 
 sexp/parser.o: sexp/parser.yy
-	cd sexp && bison -t -d -v parser.yy
+	cd sexp && $(BISON) -t -d -v parser.yy
 ifneq ($(IS_CLANG),)
 	$(CXX) $(CPPFLAGS) -fvisibility=default -Wno-unused-variable -c sexp/parser.tab.cc -o $@
 else
@@ -200,7 +206,7 @@ else
 endif
 
 sexp/lexer.o: sexp/lexer.l
-	cd sexp && flex -d --outfile=lexer.yy.cc lexer.l
+	cd sexp && $(FLEX) -d --outfile=lexer.yy.cc lexer.l
 	$(CXX) $(CPPFLAGS) -fvisibility=default -c sexp/lexer.yy.cc -o $@
 
 sexp/driver.o: sexp/driver.cpp
