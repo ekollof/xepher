@@ -185,6 +185,7 @@ struct urn {
         struct delegation { struct _2 : public xmlns { _2() : xmlns("urn:xmpp:delegation:2") {} }; };
         struct domain_based_name { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:domain-based-name:1") {} }; };
         struct dox { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:dox:0") {} }; };
+        struct ephemeral { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:ephemeral:0") {} }; };
         struct eventlog : public xmlns { eventlog() : xmlns("urn:xmpp:eventlog") {} };
         struct extdisco { struct _2 : public xmlns { _2() : xmlns("urn:xmpp:extdisco:2") {} }; };
         struct features {

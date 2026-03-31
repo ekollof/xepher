@@ -40,6 +40,7 @@
 #include "command/account.inl"
 #include "command/channel.inl"
 #include "command/messaging.inl"
+#include "command/ephemeral.inl"
 #include "command/archive.inl"
 #include "command/encryption.inl"
 #include "command/history.inl"
@@ -142,6 +143,16 @@ void command__init()
         NULL, &command__me, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /me");
+
+    hook = weechat_hook_command(
+        "ephemeral",
+        N_("send an ephemeral message that disappears after N seconds (XEP-0466)"),
+        N_("<seconds> <message>"),
+        N_("seconds: time in seconds before the message must be deleted\n"
+           "message: message text to send"),
+        NULL, &command__ephemeral, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /ephemeral");
 
     hook = weechat_hook_command(
         "invite",

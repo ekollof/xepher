@@ -1978,6 +1978,22 @@ message_handler_after_omemo:
         stanza, "spoiler", "urn:xmpp:spoiler:0");
     const char *spoiler_hint = spoiler_elem ? xmpp_stanza_get_text(spoiler_elem) : nullptr;
 
+    // XEP-0466: Ephemeral Messages — detect timer value
+    xmpp_stanza_t *ephemeral_elem = xmpp_stanza_get_child_by_name_and_ns(
+        stanza, "ephemeral", "urn:xmpp:ephemeral:0");
+    long ephemeral_timer = 0;
+    if (ephemeral_elem)
+    {
+        const char *timer_attr = xmpp_stanza_get_attribute(ephemeral_elem, "timer");
+        if (timer_attr)
+        {
+            char *endp = nullptr;
+            long v = std::strtol(timer_attr, &endp, 10);
+            if (endp && *endp == '\0' && v > 0)
+                ephemeral_timer = v;
+        }
+    }
+
     if (replace)
     {
         std::unique_ptr<char, decltype(&free)> orig_guard(nullptr, &free);
@@ -3216,7 +3232,19 @@ message_handler_after_omemo:
         final_text = spoiler_prefix + final_text;
         display_text = final_text.c_str();
     }
-    
+
+    // XEP-0466: Ephemeral Messages — prepend timer indicator before the body
+    if (ephemeral_timer > 0)
+    {
+        std::string eph_prefix = std::string(weechat_color("magenta"))
+            + "[⏱ " + std::to_string(ephemeral_timer) + "s] "
+            + weechat_color("resetcolor");
+        if (final_text.empty())
+            final_text = display_text ? display_text : "";
+        final_text = eph_prefix + final_text;
+        display_text = final_text.c_str();
+    }
+
     // Append OOB URL if present
     if (!oob_suffix.empty())
     {
@@ -3271,6 +3299,15 @@ message_handler_after_omemo:
         channel->record_speak(nick);
         // After the user speaks, clear the joining flag so we don't keep suppressing
         channel->joining = false;
+    }
+
+    // XEP-0466: schedule tombstone timer if this was an ephemeral message.
+    // Timer starts when the message is displayed (now), fires after ephemeral_timer seconds.
+    if (ephemeral_timer > 0 && stable_id && *stable_id)
+    {
+        g_ephemeral_pending.push_back({ channel->buffer, std::string(stable_id) });
+        weechat_hook_timer(ephemeral_timer * 1000, 0, 1,
+                           ephemeral_tombstone_cb, &g_ephemeral_pending.back(), nullptr);
     }
 
     weechat_string_dyn_free(dyn_tags, 1);
@@ -3363,6 +3400,8 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
         "urn:xmpp:mam:2#pubsub",
         // XEP-0413: Order-By for MAM queries
         "urn:xmpp:order-by:1",
+        // XEP-0466: Ephemeral Messages
+        "urn:xmpp:ephemeral:0",
     };
 
     std::vector<std::string> sorted_features;

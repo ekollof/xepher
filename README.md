@@ -579,6 +579,7 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 | `/query <jid> [msg]` | Alias for `/open` |
 | `/msg <text>` | Send a message to the current buffer |
 | `/me <text>` | Send a `/me` action (XEP-0245) |
+| `/ephemeral <seconds> <text>` | Send an ephemeral message that disappears after N seconds (XEP-0466) |
 | `/invite <jid> [reason]` | Invite a user to the current MUC (XEP-0249) |
 | `/selfping` | Verify MUC membership (XEP-0410) |
 | `/edit` | Picker: choose a sent message to correct (XEP-0308) |
@@ -943,6 +944,7 @@ Please keep to the existing indentation style (C++23, clang-format enforced).
  - ⚡ XEP-0442: Pubsub MAM (Experimental — on reconnect, disco#info probes each pubsub service; if `urn:xmpp:mam:2` is supported, fetches feed history via MAM with `node=` filter and XEP-0413 Order-By; falls back to XEP-0060 `max_items` for servers without pubsub MAM support; Atom entries extracted from forwarded MAM result messages and rendered to the feed buffer with dedup and alias assignment; RSM cursor persisted to LMDB)
  - ⚡ XEP-0452: MUC Mention Notifications (Experimental — receive side: `<addresses type='mentioned'>` notification messages from MUC service detected and forwarded message body rendered to the MUC buffer with highlight, so missed @mentions surface even when not present in the room)
  - ⚡ XEP-0441: MAM Preferences (Experimental — `/mam prefs` displays current server default policy and always/never JID lists; `/mam prefs default <always|never|roster>` sets default; `/mam prefs always <jid>` / `/mam prefs never <jid>` add JIDs to the respective list)
+ - ⚡ XEP-0466: Ephemeral Messages (Experimental — send: `/ephemeral <seconds> <message>` attaches `<ephemeral timer='N'/>` + `<no-permanent-store/>` hint; receive: timer value displayed as `[⏱ Ns]` prefix, message automatically tombstoned after N seconds; `urn:xmpp:ephemeral:0` advertised in caps)
  - ⚡ XEP-0472: Pubsub Social Feed (Experimental — publishes `pubsub#type=urn:xmpp:microblog:0`, advertises `urn:xmpp:pubsub-social-feed:1` in caps; `thr:in-reply-to@ref` uses real Atom entry IRI; feed-level `<feed>` metadata items rendered; XHTML/HTML Atom content properly rendered)
 - ⚡ XEP-0433: Extended Channel Search (Searcher role; Search Service role not implemented)
 

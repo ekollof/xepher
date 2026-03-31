@@ -636,6 +636,15 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0466.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.1.0</xmpp:version>
+        <xmpp:note xml:lang='en'>Ephemeral Messages (Experimental) - send: /ephemeral &lt;seconds&gt; &lt;message&gt; sends a message with &lt;ephemeral xmlns='urn:xmpp:ephemeral:0' timer='N'/&gt; and a &lt;no-permanent-store/&gt; hint; receive: &lt;ephemeral&gt; element detected, timer value shown as [⏱ Ns] prefix, weechat_hook_timer scheduled to tombstone the message text after N seconds; urn:xmpp:ephemeral:0 advertised in caps</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0277.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.6.5</xmpp:version>
