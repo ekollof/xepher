@@ -264,6 +264,18 @@
       <h3>Ad-hoc Commands</h3>
       <p>XEP-0050 data forms rendered inline. Multi-step sessions with field validation.</p>
     </div>
+    <div class="feature">
+      <h3>Ephemeral Messages</h3>
+      <p>XEP-0466 — send messages that auto-delete after N seconds. Tombstoned locally on both ends.</p>
+    </div>
+    <div class="feature">
+      <h3>Automatic Trust Management</h3>
+      <p>XEP-0450 + XEP-0434 — TOFU OMEMO trust with cross-device propagation via trust messages.</p>
+    </div>
+    <div class="feature">
+      <h3>Encrypted File Sharing</h3>
+      <p>XEP-0448 — AES-256-GCM encrypt files before upload; decrypt on receive automatically.</p>
+    </div>
   </div>
 
   <div class="install">
@@ -324,10 +336,21 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
         <tr><td>XEP-0425</td><td>Message Moderation</td><td></td></tr>
         <tr><td>XEP-0428</td><td>Fallback Indication</td><td></td></tr>
         <tr><td>XEP-0433</td><td>Extended Channel Search</td><td></td></tr>
+        <tr><td>XEP-0394</td><td>Message Markup</td><td>Receive-only; takes precedence over XEP-0393</td></tr>
+        <tr><td>XEP-0413</td><td>Order-By</td><td>Newest-first ordering for pubsub MAM queries</td></tr>
+        <tr><td>XEP-0434</td><td>Trust Messages</td><td>Propagate OMEMO trust decisions to own devices</td></tr>
+        <tr><td>XEP-0441</td><td>MAM Preferences</td><td>/mam prefs — view and set archiving policy</td></tr>
+        <tr><td>XEP-0442</td><td>Pubsub MAM</td><td>Fetch feed history via MAM with RSM cursor persistence</td></tr>
         <tr><td>XEP-0444</td><td>Message Reactions</td><td></td></tr>
         <tr><td>XEP-0447</td><td>Stateless File Sharing</td><td></td></tr>
+        <tr><td>XEP-0448</td><td>Encrypted File Sharing</td><td>AES-256-GCM encrypt/decrypt for OMEMO channels</td></tr>
+        <tr><td>XEP-0450</td><td>Automatic Trust Management</td><td>TOFU + cross-device trust propagation via XEP-0434</td></tr>
+        <tr><td>XEP-0452</td><td>MUC Mention Notifications</td><td>Receive missed @mention notifications from MUC service</td></tr>
         <tr><td>XEP-0461</td><td>Message Replies</td><td></td></tr>
+        <tr><td>XEP-0466</td><td>Ephemeral Messages</td><td>/ephemeral &lt;seconds&gt; &lt;text&gt; — auto-tombstone after timer</td></tr>
         <tr><td>XEP-0472</td><td>PubSub Social Feed</td><td></td></tr>
+        <tr><td>XEP-0490</td><td>Message Displayed Synchronization</td><td>Sync read state across own devices</td></tr>
+        <tr><td>XEP-0492</td><td>Chat Notification Settings</td><td>/notify [jid] [always|on-mention|never]</td></tr>
         <tr><td>XEP-0511</td><td>OpenGraph Link Previews</td><td></td></tr>
       </tbody>
     </table>
