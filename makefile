@@ -10,6 +10,9 @@ export PKG_CONFIG_PATH := $(HOMEBREW_PREFIX)/lib/pkgconfig:$(PKG_CONFIG_PATH)
 # bison, flex, and llvm are keg-only — prepend their bin dirs so make recipes
 # and $(shell) calls use the Homebrew versions, not the ancient macOS stubs.
 export PATH := $(HOMEBREW_PREFIX)/opt/bison/bin:$(HOMEBREW_PREFIX)/opt/flex/bin:$(HOMEBREW_PREFIX)/opt/llvm/bin:$(PATH)
+# Use Homebrew clang/clang++ by default on macOS (overridable: CC=... make)
+CC  ?= $(HOMEBREW_PREFIX)/opt/llvm/bin/clang
+CXX ?= $(HOMEBREW_PREFIX)/opt/llvm/bin/clang++
 endif
 
 BISON ?= bison
