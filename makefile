@@ -23,6 +23,7 @@ RM ?= rm -f
 FIND ?= find
 
 INCLUDES=-Ilibstrophe -Ideps/lmdbxx -Ideps -Isrc -I. \
+	 $(shell pkg-config --cflags libstrophe) \
 	 $(shell xml2-config --cflags) \
 	 $(shell pkg-config --cflags gpgme) \
 	 $(shell pkg-config --cflags libsignal-protocol-c) \
@@ -71,13 +72,13 @@ endif
 LDFLAGS+=$(DBGLDFLAGS) \
 	 -std=c++23 $(DWARF_FLAG) \
 	 $(DBGCFLAGS)
-LDLIBS=-lstrophe \
+LDLIBS=$(shell pkg-config --libs libstrophe) \
 	   -lpthread \
-	   -lcurl \
-	   -lcrypto \
+	   $(shell pkg-config --libs libcurl) \
+	   $(shell pkg-config --libs openssl) \
 	   $(shell xml2-config --libs) \
 	   $(shell pkg-config --libs gpgme) \
-		   $(shell pkg-config --libs libomemo-c) \
+	   $(shell pkg-config --libs libomemo-c) \
 	   -lgcrypt \
 	   -llmdb -lfmt
 
