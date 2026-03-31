@@ -71,6 +71,9 @@ namespace weechat
             std::string name;
             std::string nick;
             bool autojoin;
+            // XEP-0492: per-chat notification preference ("always", "on-mention", "never").
+            // Empty string means unset (default: "always" for direct/private, "on-mention" for public MUC).
+            std::string notify_setting;
         };
 
         struct upload_request

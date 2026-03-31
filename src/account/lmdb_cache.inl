@@ -552,6 +552,29 @@ std::vector<std::string> weechat::account::feed_open_list()
             xmpp_stanza_release(nick);
         }
 
+        // XEP-0492: persist per-chat notification preference in <extensions>.
+        if (!bookmark.notify_setting.empty())
+        {
+            xmpp_stanza_t *extensions = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(extensions, "extensions");
+
+            xmpp_stanza_t *notify_elem = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(notify_elem, "notify");
+            xmpp_stanza_set_ns(notify_elem, "urn:xmpp:notification-settings:1");
+
+            // Fallback element without identity-category/identity-type.
+            xmpp_stanza_t *setting_elem = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(setting_elem, bookmark.notify_setting.c_str());
+
+            xmpp_stanza_add_child(notify_elem, setting_elem);
+            xmpp_stanza_add_child(extensions, notify_elem);
+            xmpp_stanza_add_child(conference, extensions);
+
+            xmpp_stanza_release(setting_elem);
+            xmpp_stanza_release(notify_elem);
+            xmpp_stanza_release(extensions);
+        }
+
         xmpp_stanza_add_child(item, conference);
         xmpp_stanza_add_child(publish, item);
         xmpp_stanza_release(conference);

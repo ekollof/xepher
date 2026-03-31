@@ -916,6 +916,37 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         account.bookmarks[item_id].name = name ? name : "";
                         account.bookmarks[item_id].nick = nick_text ? nick_text : "";
                         account.bookmarks[item_id].autojoin = do_autojoin;
+
+                        // XEP-0492: read notification setting from <extensions><notify>.
+                        xmpp_stanza_t *extensions_elem = xmpp_stanza_get_child_by_name(
+                            conference, "extensions");
+                        if (extensions_elem)
+                        {
+                            xmpp_stanza_t *notify_elem = xmpp_stanza_get_child_by_name_and_ns(
+                                extensions_elem, "notify", "urn:xmpp:notification-settings:1");
+                            if (notify_elem)
+                            {
+                                // Pick the most specific fallback element (no identity attrs).
+                                // Priority: <always>, <on-mention>, <never> (fallback without attrs).
+                                static constexpr const char *levels[] = { "always", "on-mention", "never" };
+                                for (const char *lvl : levels)
+                                {
+                                    xmpp_stanza_t *child = xmpp_stanza_get_children(notify_elem);
+                                    while (child)
+                                    {
+                                        const char *cname = xmpp_stanza_get_name(child);
+                                        if (cname && weechat_strcasecmp(cname, lvl) == 0
+                                            && !xmpp_stanza_get_attribute(child, "identity-category"))
+                                        {
+                                            account.bookmarks[item_id].notify_setting = lvl;
+                                            goto xep0492_done;
+                                        }
+                                        child = xmpp_stanza_get_next(child);
+                                    }
+                                }
+                                xep0492_done:;
+                            }
+                        }
                         
                         if (nick_text)
                             xmpp_free(account.context, nick_text);

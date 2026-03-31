@@ -645,6 +645,15 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0492.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.2.0</xmpp:version>
+        <xmpp:note xml:lang='en'>Chat Notification Settings (Experimental) - per-chat preference (always/on-mention/never) stored in XEP-0402 bookmark &lt;extensions&gt;&lt;notify xmlns='urn:xmpp:notification-settings:1'&gt;; /notify [jid] [always|on-mention|never] gets or sets preference and re-publishes bookmark; fallback element without identity-category/identity-type used for cross-client interop</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0277.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.6.5</xmpp:version>

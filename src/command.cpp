@@ -41,6 +41,7 @@
 #include "command/channel.inl"
 #include "command/messaging.inl"
 #include "command/ephemeral.inl"
+#include "command/notify.inl"
 #include "command/archive.inl"
 #include "command/encryption.inl"
 #include "command/history.inl"
@@ -153,6 +154,19 @@ void command__init()
         NULL, &command__ephemeral, NULL, NULL);
     if (!hook)
         weechat_printf(NULL, "Failed to setup command /ephemeral");
+
+    hook = weechat_hook_command(
+        "notify",
+        N_("get or set per-chat notification preference (XEP-0492)"),
+        N_("[<jid>] [always|on-mention|never]"),
+        N_("    jid: JID of the chat (defaults to current buffer)\n"
+           "  level: 'always' (default), 'on-mention', or 'never'\n"
+           "\n"
+           "Without arguments, shows the current setting for this buffer.\n"
+           "Saves the preference into the XEP-0402 bookmark <extensions>."),
+        NULL, &command__notify, NULL, NULL);
+    if (!hook)
+        weechat_printf(NULL, "Failed to setup command /notify");
 
     hook = weechat_hook_command(
         "invite",

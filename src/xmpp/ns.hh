@@ -255,6 +255,7 @@ struct urn {
         struct muc {
             struct conditions { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:muc:conditions:1") {} }; };
         };
+        struct notification_settings { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:notification-settings:1") {} }; };
         struct omemo { struct _2 : public xmlns { _2() : xmlns("urn:xmpp:omemo:2") {} }; };
         struct order_by { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:order-by:1") {} }; };
         struct pie { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:pie:0") {} }; };
