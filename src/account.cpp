@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>
+#include <algorithm>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 #include <libxml/xmlwriter.h>
@@ -767,4 +768,361 @@ void weechat::account::load_pgp_keys()
 // WeeChat timer / event callbacks (idle, activity, SM ack, upload fd).
 // ---------------------------------------------------------------------------
 #include "account/callbacks.inl"
+
+// ---------------------------------------------------------------------------
+// Feed draft saving: writes a pending_feed_post back to disk so the user
+// can recover their work if an embed upload fails.
+// ---------------------------------------------------------------------------
+std::string weechat::account::save_feed_draft(const xepher::pending_feed_post &post)
+{
+    const char *data_dir = weechat_info_get("weechat_data_dir", nullptr);
+    if (!data_dir)
+        return {};
+
+    // Ensure drafts directory exists
+    std::string drafts_dir = fmt::format("{}/xmpp/drafts", data_dir);
+    std::filesystem::create_directories(std::filesystem::path(drafts_dir));
+
+    // Filename: <account>-<timestamp>.md
+    std::string path = fmt::format("{}/{}-{}.md", drafts_dir, name, post.timestamp);
+    // Replace colons in timestamp (Windows-safe, also avoids shell issues)
+    for (auto &c : path)
+        if (c == ':') c = '-';
+
+    FILE *f = fopen(path.c_str(), "w");
+    if (!f)
+        return {};
+
+    // YAML-like frontmatter so the user knows where to re-post
+    fprintf(f, "---\n");
+    fprintf(f, "service: %s\n", post.service.c_str());
+    fprintf(f, "node: %s\n", post.node.c_str());
+    if (!post.title.empty())
+        fprintf(f, "title: %s\n", post.title.c_str());
+    if (post.is_reply && !post.reply_to_id.empty())
+        fprintf(f, "reply_to: %s\n", post.reply_to_id.c_str());
+    fprintf(f, "---\n");
+    fprintf(f, "%s\n", post.raw_body_template.c_str());
+    fclose(f);
+
+    return path;
+}
+
+// Build and publish an Atom <entry> for a completed pending_feed_post.
+// Called after all embed uploads have finished (or immediately for tag-free posts).
+void weechat::account::build_and_publish_post(const xepher::pending_feed_post &post)
+{
+    // Render the body (substitute {{ }} tags with Markdown)
+    const std::string body = xepher::render_body(post.raw_body_template, post.embeds);
+
+    // Convenience alias
+    const std::string &pub_service       = post.service;
+    const std::string &pub_node          = post.node;
+    const std::string &reply_to_id       = post.reply_to_id;
+    const std::string &reply_target_service = post.reply_target_service;
+    const std::string &reply_target_node = post.reply_target_node;
+    const std::string &item_uuid         = post.item_uuid;
+    const std::string &atom_id           = post.atom_id;
+    const std::string &post_title        = post.title;
+    const std::string &ts_str            = post.timestamp;
+    const bool         access_open       = post.access_open;
+    const bool         is_comment        = !reply_to_id.empty();
+
+    // Build Atom <entry>
+    auto make_text_el = [this](const char *tag, const char *text) -> xmpp_stanza_t *
+    {
+        xmpp_stanza_t *el = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(el, tag);
+        xmpp_stanza_t *t = xmpp_stanza_new(context);
+        xmpp_stanza_set_text(t, text);
+        xmpp_stanza_add_child(el, t);
+        xmpp_stanza_release(t);
+        return el;
+    };
+
+    xmpp_stanza_t *entry = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(entry, "entry");
+    xmpp_stanza_set_ns(entry, "http://www.w3.org/2005/Atom");
+
+    // <title type='text'>
+    // For comments (XEP-0277 §3.2) the body goes into <title> and there is no
+    // <content> element.  For regular posts a title is only emitted when one
+    // was explicitly provided by the user.
+    if (!post_title.empty() || is_comment)
+    {
+        const char *title_text = is_comment ? body.c_str() : post_title.c_str();
+        xmpp_stanza_t *title_el = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(title_el, "title");
+        xmpp_stanza_set_attribute(title_el, "type", "text");
+        {
+            xmpp_stanza_t *t = xmpp_stanza_new(context);
+            xmpp_stanza_set_text(t, title_text);
+            xmpp_stanza_add_child(title_el, t);
+            xmpp_stanza_release(t);
+        }
+        xmpp_stanza_add_child(entry, title_el);
+        xmpp_stanza_release(title_el);
+    }
+
+    // <id>
+    {
+        xmpp_stanza_t *id_el = make_text_el("id", atom_id.c_str());
+        xmpp_stanza_add_child(entry, id_el);
+        xmpp_stanza_release(id_el);
+    }
+
+    // <published> <updated>
+    {
+        xmpp_stanza_t *pub_el = make_text_el("published", ts_str.c_str());
+        xmpp_stanza_add_child(entry, pub_el);
+        xmpp_stanza_release(pub_el);
+        xmpp_stanza_t *upd_el = make_text_el("updated", ts_str.c_str());
+        xmpp_stanza_add_child(entry, upd_el);
+        xmpp_stanza_release(upd_el);
+    }
+
+    // <author>
+    {
+        xmpp_string_guard bare_g(context,
+                                 xmpp_jid_bare(context, jid().data()));
+        xmpp_stanza_t *author_el = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(author_el, "author");
+        {
+            xmpp_stanza_t *name_el = make_text_el("name",
+                bare_g.ptr ? bare_g.ptr : jid().data());
+            xmpp_stanza_add_child(author_el, name_el);
+            xmpp_stanza_release(name_el);
+            std::string xmpp_uri = fmt::format("xmpp:{}", bare_g.ptr ? bare_g.ptr : "");
+            xmpp_stanza_t *uri_el = make_text_el("uri", xmpp_uri.c_str());
+            xmpp_stanza_add_child(author_el, uri_el);
+            xmpp_stanza_release(uri_el);
+        }
+        xmpp_stanza_add_child(entry, author_el);
+        xmpp_stanza_release(author_el);
+    }
+
+    // <content type='text'> — omitted for comments (body is in <title> per XEP-0277 §3.2)
+    if (!is_comment)
+    {
+        xmpp_stanza_t *content_el = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(content_el, "content");
+        xmpp_stanza_set_attribute(content_el, "type", "text");
+        xmpp_stanza_t *ct = xmpp_stanza_new(context);
+        xmpp_stanza_set_text(ct, body.c_str());
+        xmpp_stanza_add_child(content_el, ct);
+        xmpp_stanza_release(ct);
+        xmpp_stanza_add_child(entry, content_el);
+        xmpp_stanza_release(content_el);
+    }
+
+    // <file-sharing xmlns='urn:xmpp:sfs:0'> for each embed (XEP-0447)
+    for (const auto &emb : post.embeds)
+    {
+        if (!emb.uploaded()) continue;
+
+        xmpp_stanza_t *fs = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(fs, "file-sharing");
+        xmpp_stanza_set_ns(fs, "urn:xmpp:sfs:0");
+        xmpp_stanza_set_attribute(fs, "disposition", emb.disposition());
+
+        // <file>
+        xmpp_stanza_t *file_el = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(file_el, "file");
+        {
+            xmpp_stanza_t *name_el = make_text_el("name", emb.filename.c_str());
+            xmpp_stanza_add_child(file_el, name_el);
+            xmpp_stanza_release(name_el);
+        }
+        if (!emb.mime.empty())
+        {
+            xmpp_stanza_t *mt_el = make_text_el("media-type", emb.mime.c_str());
+            xmpp_stanza_add_child(file_el, mt_el);
+            xmpp_stanza_release(mt_el);
+        }
+        if (emb.size > 0)
+        {
+            std::string sz = fmt::format("{}", emb.size);
+            xmpp_stanza_t *sz_el = make_text_el("size", sz.c_str());
+            xmpp_stanza_add_child(file_el, sz_el);
+            xmpp_stanza_release(sz_el);
+        }
+        if (!emb.sha256_b64.empty())
+        {
+            xmpp_stanza_t *hash_el = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(hash_el, "hash");
+            xmpp_stanza_set_ns(hash_el, "urn:xmpp:hashes:2");
+            xmpp_stanza_set_attribute(hash_el, "algo", "sha-256");
+            xmpp_stanza_t *ht = xmpp_stanza_new(context);
+            xmpp_stanza_set_text(ht, emb.sha256_b64.c_str());
+            xmpp_stanza_add_child(hash_el, ht);
+            xmpp_stanza_release(ht);
+            xmpp_stanza_add_child(file_el, hash_el);
+            xmpp_stanza_release(hash_el);
+        }
+        if (emb.width > 0)
+        {
+            std::string ws = fmt::format("{}", emb.width);
+            xmpp_stanza_t *w_el = make_text_el("width", ws.c_str());
+            xmpp_stanza_add_child(file_el, w_el);
+            xmpp_stanza_release(w_el);
+        }
+        if (emb.height > 0)
+        {
+            std::string hs = fmt::format("{}", emb.height);
+            xmpp_stanza_t *h_el = make_text_el("height", hs.c_str());
+            xmpp_stanza_add_child(file_el, h_el);
+            xmpp_stanza_release(h_el);
+        }
+        xmpp_stanza_add_child(fs, file_el);
+        xmpp_stanza_release(file_el);
+
+        // <sources><url-data target='…'/></sources>
+        xmpp_stanza_t *sources_el = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(sources_el, "sources");
+        {
+            xmpp_stanza_t *ud = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(ud, "url-data");
+            xmpp_stanza_set_ns(ud, "http://jabber.org/protocol/url-data");
+            xmpp_stanza_set_attribute(ud, "target", emb.get_url.c_str());
+            xmpp_stanza_add_child(sources_el, ud);
+            xmpp_stanza_release(ud);
+        }
+        xmpp_stanza_add_child(fs, sources_el);
+        xmpp_stanza_release(sources_el);
+
+        xmpp_stanza_add_child(entry, fs);
+        xmpp_stanza_release(fs);
+    }
+
+    // <thr:in-reply-to> for replies
+    if (!reply_to_id.empty())
+    {
+        constexpr std::string_view kCommentsPfx2 = "urn:xmpp:microblog:0:comments/";
+        const std::string reply_ref_node =
+            (pub_node.rfind(kCommentsPfx2, 0) == 0)
+            ? "urn:xmpp:microblog:0"
+            : pub_node;
+        const std::string reply_feed_key = fmt::format("{}/{}", pub_service, reply_ref_node);
+        const std::string reply_xmpp_uri = fmt::format(
+            "xmpp:{}?;node={};item={}", pub_service, reply_ref_node, reply_to_id);
+        const std::string reply_atom_id = feed_atom_id_get(reply_feed_key, reply_to_id);
+        xmpp_stanza_t *reply_el = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(reply_el, "thr:in-reply-to");
+        xmpp_stanza_set_attribute(reply_el, "xmlns:thr",
+                                  "http://purl.org/syndication/thread/1.0");
+        xmpp_stanza_set_attribute(reply_el, "ref",
+                                  reply_atom_id.empty() ? reply_xmpp_uri.c_str()
+                                                        : reply_atom_id.c_str());
+        xmpp_stanza_set_attribute(reply_el, "href", reply_xmpp_uri.c_str());
+        xmpp_stanza_add_child(entry, reply_el);
+        xmpp_stanza_release(reply_el);
+    }
+
+    // Determine target service/node
+    constexpr std::string_view k_comments_pfx = "urn:xmpp:microblog:0:comments/";
+    const bool is_comments_node = (pub_node.rfind(k_comments_pfx, 0) == 0);
+    const std::string target_service = (!reply_target_service.empty())
+        ? reply_target_service : pub_service;
+    const std::string target_node    = (!reply_target_node.empty())
+        ? reply_target_node    : pub_node;
+
+    // <link rel='replies'>
+    if (reply_to_id.empty() && !is_comments_node)
+    {
+        const std::string comments_node_name =
+            fmt::format("urn:xmpp:microblog:0:comments/{}", item_uuid);
+        const std::string comments_xmpp_uri = fmt::format(
+            "xmpp:{}?;node={}", target_service, comments_node_name);
+        xmpp_stanza_t *replies_el = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(replies_el, "link");
+        xmpp_stanza_set_attribute(replies_el, "rel",   "replies");
+        xmpp_stanza_set_attribute(replies_el, "title", "comments");
+        xmpp_stanza_set_attribute(replies_el, "href",  comments_xmpp_uri.c_str());
+        xmpp_stanza_add_child(entry, replies_el);
+        xmpp_stanza_release(replies_el);
+    }
+
+    // <generator>
+    {
+        xmpp_stanza_t *gen_el = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(gen_el, "generator");
+        xmpp_stanza_set_attribute(gen_el, "uri", "https://github.com/ekollof/xepher");
+        xmpp_stanza_set_attribute(gen_el, "version", WEECHAT_XMPP_PLUGIN_VERSION);
+        {
+            xmpp_stanza_t *gt = xmpp_stanza_new(context);
+            xmpp_stanza_set_text(gt, "Xepher");
+            xmpp_stanza_add_child(gen_el, gt);
+            xmpp_stanza_release(gt);
+        }
+        xmpp_stanza_add_child(entry, gen_el);
+        xmpp_stanza_release(gen_el);
+    }
+
+    // Wrap in <item id='uuid'><entry/></item>
+    xmpp_stanza_t *item_children[2] = {entry, nullptr};
+    xmpp_stanza_t *item_el = stanza__iq_pubsub_publish_item(
+        context, nullptr, item_children, with_noop(item_uuid.c_str()));
+
+    xmpp_stanza_t *pub_children2[2] = {item_el, nullptr};
+    xmpp_stanza_t *publish_el = stanza__iq_pubsub_publish(
+        context, nullptr, pub_children2, with_noop(target_node.c_str()));
+
+    // publish-options
+    xmpp_stanza_t *pub_opts = nullptr;
+    if (access_open)
+    {
+        pub_opts = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(pub_opts, "publish-options");
+
+        xmpp_stanza_t *x = xmpp_stanza_new(context);
+        xmpp_stanza_set_name(x, "x");
+        xmpp_stanza_set_ns(x, "jabber:x:data");
+        xmpp_stanza_set_attribute(x, "type", "submit");
+
+        auto add_field = [&](const char *var, const char *val) {
+            xmpp_stanza_t *f = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(f, "field");
+            xmpp_stanza_set_attribute(f, "var", var);
+            xmpp_stanza_t *v = xmpp_stanza_new(context);
+            xmpp_stanza_set_name(v, "value");
+            xmpp_stanza_t *vt = xmpp_stanza_new(context);
+            xmpp_stanza_set_text(vt, val);
+            xmpp_stanza_add_child(v, vt); xmpp_stanza_release(vt);
+            xmpp_stanza_add_child(f, v);  xmpp_stanza_release(v);
+            xmpp_stanza_add_child(x, f);  xmpp_stanza_release(f);
+        };
+        add_field("FORM_TYPE", "http://jabber.org/protocol/pubsub#publish-options");
+        add_field("pubsub#access_model", "open");
+
+        xmpp_stanza_add_child(pub_opts, x);
+        xmpp_stanza_release(x);
+    }
+
+    xmpp_stanza_t *ps_children[3] = {publish_el, pub_opts, nullptr};
+    xmpp_stanza_t *pubsub_el = stanza__iq_pubsub(
+        context, nullptr, ps_children,
+        with_noop("http://jabber.org/protocol/pubsub"));
+
+    xmpp_string_guard uid_g(context, xmpp_uuid_gen(context));
+    xmpp_stanza_t *iq_children[2] = {pubsub_el, nullptr};
+    xmpp_stanza_t *iq = stanza__iq(context, nullptr, iq_children,
+                                   nullptr, uid_g.ptr,
+                                   jid().data(),
+                                   target_service.c_str(),
+                                   "set");
+    connection.send(iq);
+    xmpp_stanza_release(iq);
+
+    if (uid_g.ptr)
+        pubsub_publish_ids[uid_g.ptr] = {target_service, target_node, item_uuid, post.buffer};
+
+    if (post.is_reply)
+        weechat_printf(post.buffer, "%sPosted reply to %s on %s/%s",
+                       weechat_prefix("network"),
+                       reply_to_id.c_str(), target_service.c_str(), target_node.c_str());
+    else
+        weechat_printf(post.buffer, "%sPosted to %s/%s (id: %s)",
+                       weechat_prefix("network"),
+                       pub_service.c_str(), pub_node.c_str(), item_uuid.c_str());
+}
 

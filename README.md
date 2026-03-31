@@ -419,6 +419,37 @@ Sends an Atom `<entry>` to the PubSub node with `pubsub#type=urn:xmpp:microblog:
 and the `urn:xmpp:pubsub-social-feed:1` publish-option required by XEP-0472.
 Failed publishes are reported in the buffer with the server error condition.
 
+**Embedding media in a post (XEP-0363 + XEP-0447):**
+
+Top-level microblog posts (not comments) support Jinja2-style embed tags that
+upload files via HTTP File Upload and insert XEP-0447 `<file-sharing>` children
+into the Atom entry:
+
+```
+{{ embed "photo.jpg" }}                  # inline image → ![photo.jpg](url)
+{{ embed "photo.jpg" alt="sunset" }}     # with alt text
+{{ attach "paper.pdf" }}                 # download link → [paper.pdf](url)
+{{ attach "paper.pdf" alt="My Paper" }}
+{{ video "demo.mp4" }}                   # inline video → ![demo.mp4](url)
+{{ video "demo.mp4" alt="Demo" }}
+```
+
+- `embed` and `video` set `disposition='inline'`; `attach` sets `disposition='attachment'`
+- Files are uploaded one at a time (async); the Atom entry is published only when
+  all uploads have completed
+- On any upload failure the post is **aborted** and a draft is saved to
+  `$weechat_data_dir/xmpp/drafts/<account>-<timestamp>.md` with YAML frontmatter;
+  the draft path is printed in the feed buffer
+- Embed tags are not supported in comments nodes; attempting them prints an error
+
+Receiving clients that support XEP-0447 (Conversations, Dino, Gajim) render the
+media natively.  Xepher displays a summary line for each attachment:
+
+```
+[Image: photo.jpg (image/jpeg, 1.2 MB) https://…]
+[File:  paper.pdf (application/pdf, 340 KB) https://…]
+```
+
 **Replying to a post (threaded):**
 
 ```
@@ -795,9 +826,10 @@ automatically — install the ones you want by hand.
 Opens a temporary Markdown file in your editor.  For **posts** the file
 includes a YAML frontmatter block with an optional `title:` field — fill it in
 to set the Atom `<title>` headline, or leave it blank for a body-only post.
-For **replies** the frontmatter is omitted (comments have no titles).  On save
-the content is placed in the WeeChat input bar as a `/feed post …` or
-`/feed reply …` command ready to review and send.
+For **replies** and when run from a **comments buffer** the frontmatter is
+omitted automatically (comments carry no Atom title).  On save the content is
+placed in the WeeChat input bar as a `/feed post …` or `/feed reply …` command
+ready to review and send.
 
 The easiest way to invoke it is with the `--edit` flag:
 

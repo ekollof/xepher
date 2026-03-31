@@ -5,6 +5,7 @@
 #include "atom.hh"
 #include "xhtml.hh"
 
+#include <cstdlib>
 #include <strings.h>  // strcasecmp (POSIX)
 #include <strophe.h>
 
@@ -257,6 +258,77 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
                 e.geoloc += (e.geoloc.empty() ? "" : " - ") + region;
             if (!country.empty())
                 e.geoloc += (e.geoloc.empty() ? "" : ", ") + country;
+        }
+        else if (strcasecmp(child_name, "file-sharing") == 0)
+        {
+            // XEP-0447 Stateless File Sharing
+            // <file-sharing xmlns='urn:xmpp:sfs:0' disposition='inline|attachment'>
+            //   <file><name>…</name><size>…</size><media-type>…</media-type>
+            //         <hash xmlns='…' algo='sha-256'>…</hash>
+            //         <width>…</width><height>…</height></file>
+            //   <sources><url-data xmlns='…' target='https://…'/></sources>
+            // </file-sharing>
+            sfs_attachment att;
+
+            const char *disp = xmpp_stanza_get_attribute(child, "disposition");
+            if (disp) att.disposition = disp;
+
+            xmpp_stanza_t *file_el = xmpp_stanza_get_child_by_name(child, "file");
+            if (file_el)
+            {
+                att.filename   = atom_text_child(ctx, file_el, "name");
+                att.media_type = atom_text_child(ctx, file_el, "media-type");
+                {
+                    std::string sz = atom_text_child(ctx, file_el, "size");
+                    if (!sz.empty())
+                        att.size = static_cast<uint64_t>(std::strtoull(sz.c_str(), nullptr, 10));
+                }
+                {
+                    std::string w = atom_text_child(ctx, file_el, "width");
+                    if (!w.empty())
+                        att.width = std::atoi(w.c_str());
+                    std::string h = atom_text_child(ctx, file_el, "height");
+                    if (!h.empty())
+                        att.height = std::atoi(h.c_str());
+                }
+                // hash: look for <hash algo='sha-256'>
+                for (xmpp_stanza_t *hc = xmpp_stanza_get_children(file_el);
+                     hc; hc = xmpp_stanza_get_next(hc))
+                {
+                    const char *hname = xmpp_stanza_get_name(hc);
+                    if (!hname || strcasecmp(hname, "hash") != 0)
+                        continue;
+                    const char *algo = xmpp_stanza_get_attribute(hc, "algo");
+                    if (algo && strcasecmp(algo, "sha-256") == 0)
+                    {
+                        char *ht = xmpp_stanza_get_text(hc);
+                        if (ht) { att.sha256_b64 = ht; xmpp_free(ctx, ht); }
+                        break;
+                    }
+                }
+            }
+
+            // sources: <url-data target='https://…'/>
+            xmpp_stanza_t *sources_el = xmpp_stanza_get_child_by_name(child, "sources");
+            if (sources_el)
+            {
+                for (xmpp_stanza_t *src = xmpp_stanza_get_children(sources_el);
+                     src; src = xmpp_stanza_get_next(src))
+                {
+                    const char *sname = xmpp_stanza_get_name(src);
+                    if (!sname || strcasecmp(sname, "url-data") != 0)
+                        continue;
+                    const char *target = xmpp_stanza_get_attribute(src, "target");
+                    if (target && *target)
+                    {
+                        att.url = target;
+                        break;
+                    }
+                }
+            }
+
+            if (!att.url.empty())
+                e.attachments.push_back(std::move(att));
         }
     }
 

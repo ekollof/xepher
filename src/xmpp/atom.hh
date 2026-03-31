@@ -4,9 +4,23 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <strophe.h>
 #include <vector>
+
+// XEP-0447 Stateless File Sharing attachment parsed from <file-sharing> children.
+struct sfs_attachment
+{
+    std::string url;            // <url-data target='…'/>
+    std::string filename;       // <file><name>
+    std::string media_type;     // <file><media-type>
+    uint64_t    size      = 0;  // <file><size>
+    std::string sha256_b64;     // <file><hash xmlns='…' algo='sha-256'>
+    int         width     = 0;  // <file><width>  (image/video only)
+    int         height    = 0;  // <file><height> (image/video only)
+    std::string disposition;    // "inline" or "attachment"
+};
 
 // Parsed representation of an Atom <entry> element (RFC 4287 / XEP-0277 / XEP-0472).
 struct atom_entry
@@ -26,8 +40,9 @@ struct atom_entry
     std::string author_uri;     // <author><uri>…</uri></author>
     std::string reply_to;       // <thr:in-reply-to ref|href='…'>
     std::string item_id;        // atom <id> element text
-    std::vector<std::string> categories; // <category term='...'>
-    std::vector<std::string> enclosures; // <link rel='enclosure' href='...'>
+    std::vector<std::string> categories;     // <category term='...'>
+    std::vector<std::string> enclosures;     // <link rel='enclosure' href='...'>
+    std::vector<sfs_attachment> attachments; // <file-sharing xmlns='urn:xmpp:sfs:0'>
     std::string geoloc;         // compact XEP-0080 summary
 
     // Convenience: returns the best available body text.

@@ -329,7 +329,7 @@
         <xmpp:version>1.1.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >HTTP File Upload - /upload command with automatic HTTP PUT</xmpp:note>
+                >HTTP File Upload - /upload command with automatic HTTP PUT; also drives the async multi-file upload pipeline behind /feed post embed tags ({{ embed }}, {{ attach }}, {{ video }}), uploading each asset before the Atom entry is published</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -461,7 +461,7 @@
         <xmpp:version>0.3.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >Stateless File Sharing (SFS) - sends file-sharing stanza with disposition=inline, file metadata (including image width/height), and url-data source on upload; parses received SFS stanzas to display filename, MIME type, size, and download URL</xmpp:note>
+                >Stateless File Sharing (SFS) - sends file-sharing stanza with disposition=inline, file metadata (including image width/height), and url-data source on upload; parses received SFS stanzas to display filename, MIME type, size, and download URL; also emitted as &lt;file-sharing&gt; children on Atom entries published via /feed post embed tags ({{ embed }}, {{ attach }}, {{ video }}), and parsed on receive to render SFS summaries in microblog feed buffers</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -759,6 +759,16 @@
         <xmpp:note xml:lang='en'>In-Band Registration — §3.1 /account register &lt;name&gt; &lt;jid&gt; &lt;password&gt;: new account registration before authentication; supports username/password flat fields, already-registered detection, OOB-redirect, and x:data form detection with helpful abort message. §3.2 /account unregister &lt;account&gt;: cancels the account on the server while authenticated. §3.3 /account password &lt;account&gt; &lt;new-password&gt;: in-band password change while authenticated (TLS required). §10: advertises jabber:iq:register in disco#info.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
+
+    <release>
+      <Version>
+        <revision>0.6.0</revision>
+        <created>2026-03-31</created>
+        <xmpp:note
+                    xml:lang='en'
+                >Embed tags for /feed post: {{ embed }}, {{ attach }}, {{ video }} upload files via XEP-0363 and publish XEP-0447 &lt;file-sharing&gt; children in Atom entries; async multi-file upload pipeline with draft-save on failure; SFS summary rendering in feed and message buffers; comment Atom structure fix (body in &lt;title&gt;, no &lt;content&gt;, per XEP-0277 §3.2); feed_compose.py context-aware editor suppresses title frontmatter when run from a comments buffer</xmpp:note>
+      </Version>
+    </release>
 
     <release>
       <Version>

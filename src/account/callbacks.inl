@@ -120,6 +120,159 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     ptr_account->pending_uploads.erase(it);
 
     // Process result
+    if (!ctx->feed_post_upload_id.empty())
+    {
+        // This upload belongs to a pending feed post (embed tag).
+        auto post_it = ptr_account->pending_feed_posts.find(ctx->feed_post_upload_id);
+        if (post_it == ptr_account->pending_feed_posts.end())
+        {
+            // Stale: post was already cleaned up
+            return WEECHAT_RC_OK;
+        }
+
+        auto &post = post_it->second;
+        size_t idx = post.uploads_done;  // index of the just-completed embed
+
+        if (!ctx->success)
+        {
+            // Upload failed — save draft, notify user, erase
+            std::string draft_path = ptr_account->save_feed_draft(post);
+            weechat_printf(post.buffer,
+                "%s%s: embed upload failed (HTTP %ld): %s",
+                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                ctx->http_code,
+                ctx->curl_error.empty() ? "unknown error" : ctx->curl_error.c_str());
+            if (!draft_path.empty())
+                weechat_printf(post.buffer,
+                    "%sDraft saved: %s",
+                    weechat_prefix("network"), draft_path.c_str());
+            ptr_account->pending_feed_posts.erase(post_it);
+            return WEECHAT_RC_OK;
+        }
+
+        // Fill in the embed's result fields
+        if (idx < post.embeds.size())
+        {
+            auto &emb       = post.embeds[idx];
+            emb.get_url     = ctx->get_url;
+            emb.mime        = ctx->content_type;
+            emb.size        = ctx->file_size;
+            emb.sha256_b64  = ctx->sha256_hash;
+            emb.width       = static_cast<int>(ctx->image_width);
+            emb.height      = static_cast<int>(ctx->image_height);
+        }
+        post.uploads_done++;
+
+        if (post.uploads_done < post.embeds.size())
+        {
+            // More embeds to upload — kick off the next slot request
+            auto &next_emb = post.embeds[post.uploads_done];
+
+            // Content-type for next embed
+            std::string ct = "application/octet-stream";
+            {
+                size_t dp = next_emb.filename.find_last_of('.');
+                if (dp != std::string::npos)
+                {
+                    std::string ext = next_emb.filename.substr(dp + 1);
+                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    if (ext == "jpg" || ext == "jpeg") ct = "image/jpeg";
+                    else if (ext == "png")  ct = "image/png";
+                    else if (ext == "gif")  ct = "image/gif";
+                    else if (ext == "webp") ct = "image/webp";
+                    else if (ext == "mp4")  ct = "video/mp4";
+                    else if (ext == "webm") ct = "video/webm";
+                    else if (ext == "pdf")  ct = "application/pdf";
+                    else if (ext == "txt")  ct = "text/plain";
+                }
+            }
+            next_emb.mime = ct;
+
+            // Get file size
+            size_t fsz = 0;
+            {
+                FILE *f = fopen(next_emb.filepath.c_str(), "rb");
+                if (f)
+                {
+                    fseek(f, 0, SEEK_END);
+                    long r = ftell(f);
+                    fclose(f);
+                    if (r > 0) fsz = static_cast<size_t>(r);
+                }
+            }
+            next_emb.size = fsz;
+
+            // Sanitize filename
+            std::string san_name;
+            for (char c : next_emb.filename)
+            {
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_')
+                    san_name += c;
+                else
+                    san_name += '-';
+            }
+            {
+                size_t p2 = 0;
+                while ((p2 = san_name.find("--", p2)) != std::string::npos)
+                    san_name.erase(p2, 1);
+            }
+            while (!san_name.empty() && san_name.front() == '-') san_name.erase(0, 1);
+            while (!san_name.empty() && san_name.back() == '-') san_name.pop_back();
+            if (san_name.empty()) san_name = "file";
+
+            // Generate new slot request IQ id
+            xmpp_string_guard new_id_g(ptr_account->context,
+                                       xmpp_uuid_gen(ptr_account->context));
+            std::string new_id = new_id_g.ptr ? new_id_g.ptr : "embed-next";
+
+            // Register upload_request for iq_handler to pick up
+            ptr_account->upload_requests[new_id] = {
+                new_id,
+                next_emb.filepath,
+                san_name,
+                "",   // channel_id unused for feed posts
+                ct,
+                fsz,
+                ""
+            };
+
+            // Move the pending post under the new IQ id key
+            xepher::pending_feed_post moved_post = std::move(post);
+            ptr_account->pending_feed_posts.erase(post_it);
+            ptr_account->pending_feed_posts[new_id] = std::move(moved_post);
+
+            // Send slot request
+            xmpp_stanza_t *slot_iq = xmpp_iq_new(ptr_account->context, "get",
+                                                   new_id.c_str());
+            xmpp_stanza_set_to(slot_iq, ptr_account->upload_service.c_str());
+
+            xmpp_stanza_t *req_el = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(req_el, "request");
+            xmpp_stanza_set_ns(req_el, "urn:xmpp:http:upload:0");
+            xmpp_stanza_set_attribute(req_el, "filename", san_name.c_str());
+            auto sz_str = fmt::format("{}", fsz);
+            xmpp_stanza_set_attribute(req_el, "size", sz_str.c_str());
+            if (!ct.empty())
+                xmpp_stanza_set_attribute(req_el, "content-type", ct.c_str());
+            xmpp_stanza_add_child(slot_iq, req_el);
+            xmpp_stanza_release(req_el);
+            ptr_account->connection.send(slot_iq);
+            xmpp_stanza_release(slot_iq);
+
+            return WEECHAT_RC_OK;
+        }
+
+        // All uploads done — build and publish the Atom entry
+        xepher::pending_feed_post finished_post = std::move(post);
+        ptr_account->pending_feed_posts.erase(post_it);
+        weechat_printf(finished_post.buffer, "%sAll embeds uploaded, publishing post…",
+                       weechat_prefix("network"));
+        ptr_account->build_and_publish_post(finished_post);
+        return WEECHAT_RC_OK;
+    }
+
+    // Normal (non-embed) upload result
     if (!ctx->success)
     {
         weechat_printf(ptr_account->buffer,

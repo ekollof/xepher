@@ -933,6 +933,36 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                         "  %sAttachment:%s %s",
                                         dim, rst, enclosure.c_str());
 
+                                for (const auto &att : ae.attachments)
+                                {
+                                    bool is_image = !att.media_type.empty() &&
+                                                    att.media_type.rfind("image/", 0) == 0;
+                                    bool is_video = !att.media_type.empty() &&
+                                                    att.media_type.rfind("video/", 0) == 0;
+                                    std::string kind_str = (att.disposition == "attachment") ? "File"
+                                                         : is_image ? "Image"
+                                                         : is_video ? "Video"
+                                                         : "Media";
+                                    std::string size_str;
+                                    if (att.size > 0)
+                                    {
+                                        if (att.size >= 1024*1024)
+                                            size_str = fmt::format("{:.1f} MB", att.size / (1024.0*1024.0));
+                                        else if (att.size >= 1024)
+                                            size_str = fmt::format("{:.1f} KB", att.size / 1024.0);
+                                        else
+                                            size_str = fmt::format("{} B", att.size);
+                                    }
+                                    std::string meta;
+                                    if (!att.media_type.empty()) meta += att.media_type;
+                                    if (!size_str.empty()) meta += (meta.empty() ? "" : ", ") + size_str;
+                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
+                                        "  %s[%s: %s%s] %s%s",
+                                        dim, kind_str.c_str(), att.filename.c_str(),
+                                        meta.empty() ? "" : (" (" + meta + ")").c_str(),
+                                        att.url.c_str(), rst);
+                                }
+
                                 if (!geoloc.empty())
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed",
                                         "  %sLocation:%s %s",
@@ -1211,6 +1241,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 ctx->filename      = req_it->second.filename;
                 ctx->content_type  = content_type;
                 ctx->pipe_write_fd = pipe_fds[1];
+
+                // If this upload was triggered by an embed tag in a pending feed post,
+                // mark the context so upload_fd_cb routes to the feed-post path.
+                if (account.pending_feed_posts.count(id))
+                    ctx->feed_post_upload_id = id;
 
                 // Copy strings that will be used by the worker thread (the
                 // upload_requests entry will be erased below, so we must copy

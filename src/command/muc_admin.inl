@@ -1754,6 +1754,20 @@ int command__feed(const void *pointer, void *data,
          }
          const std::string body(body_raw);
 
+         // Parse template tags ({{ embed|attach|video "file" [alt="..."] }})
+         // Embed tags are only supported for top-level microblog posts, not
+         // comments (urn:xmpp:microblog:0:comments/<uuid> nodes).
+         constexpr std::string_view kCommentsPfx = "urn:xmpp:microblog:0:comments/";
+         const bool is_comments_post = (pub_node.rfind(kCommentsPfx, 0) == 0);
+         auto embed_tags = xepher::parse_embed_tags(body);
+         if (is_comments_post && !embed_tags.empty())
+         {
+             weechat_printf(buffer,
+                 "%s%s: embed tags ({{ embed/attach/video }}) are not supported in comments",
+                 weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+             return WEECHAT_RC_OK;
+         }
+
           // post_title is only set when the user explicitly provided --title (or
           // YAML frontmatter via feed_compose.py).  We intentionally do NOT fall
           // back to the first line of the body here: Movim and other microblog
@@ -1787,242 +1801,180 @@ int command__feed(const void *pointer, void *data,
                                                 domain_g.ptr ? domain_g.ptr : "xmpp",
                                                 date_buf, item_uuid);
 
-        // Build Atom <entry> element
-        auto make_text_el = [&](xmpp_ctx_t *ctx,
-                                const char *tag,
-                                const char *text) -> xmpp_stanza_t * {
-            xmpp_stanza_t *el = xmpp_stanza_new(ctx);
-            xmpp_stanza_set_name(el, tag);
-            xmpp_stanza_t *t = xmpp_stanza_new(ctx);
-            xmpp_stanza_set_text(t, text);
-            xmpp_stanza_add_child(el, t);
-            xmpp_stanza_release(t);
-            return el;
-        };
+        // Build a pending_feed_post struct with all needed metadata.
+        // This is used both for the embed-upload path (returned early, async)
+        // and for the immediate publish path (no embed tags).
+        xepher::pending_feed_post pfp;
+        pfp.account_name       = ptr_account->name;
+        pfp.service            = pub_service;
+        pfp.node               = pub_node;
+        pfp.is_reply           = !reply_to_id.empty();
+        pfp.reply_to_id        = reply_to_id;
+        pfp.reply_target_service = reply_target_service;
+        pfp.reply_target_node  = reply_target_node;
+        pfp.title              = post_title;
+        pfp.access_open        = access_open;
+        pfp.item_uuid          = item_uuid;
+        pfp.atom_id            = atom_id;
+        pfp.timestamp          = ts_buf;
+        pfp.raw_body_template  = body;
+        pfp.embeds             = std::move(embed_tags);
+        pfp.buffer             = buffer;
 
-        xmpp_stanza_t *entry = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(entry, "entry");
-        xmpp_stanza_set_ns(entry, "http://www.w3.org/2005/Atom");
-
-        // <title type='text'>…</title> — only emitted when the user explicitly
-        // provided a title.  Omitting it for untitled posts lets Movim and
-        // similar clients display the <content> body directly without treating
-        // a synthesised first-line as the post headline.
-        if (!post_title.empty())
+        if (!pfp.embeds.empty())
         {
-            xmpp_stanza_t *title_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(title_el, "title");
-            xmpp_stanza_set_attribute(title_el, "type", "text");
+            // Phase 1: validate files, check upload service, kick off first upload.
+            if (ptr_account->upload_service.empty())
             {
-                xmpp_stanza_t *t = xmpp_stanza_new(ptr_account->context);
-                xmpp_stanza_set_text(t, post_title.c_str());
-                xmpp_stanza_add_child(title_el, t);
-                xmpp_stanza_release(t);
+                weechat_printf(buffer,
+                    "%s%s: embed tags require an upload service — none discovered yet (try reconnecting)",
+                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
             }
-            xmpp_stanza_add_child(entry, title_el);
-            xmpp_stanza_release(title_el);
-        }
 
-        // <id>tag:…</id>
-        {
-            xmpp_stanza_t *id_el = make_text_el(ptr_account->context, "id", atom_id.c_str());
-            xmpp_stanza_add_child(entry, id_el);
-            xmpp_stanza_release(id_el);
-        }
-
-        // <published>timestamp</published>  <updated>timestamp</updated>
-        {
-            xmpp_stanza_t *pub_el = make_text_el(ptr_account->context, "published", ts_buf);
-            xmpp_stanza_add_child(entry, pub_el);
-            xmpp_stanza_release(pub_el);
-            xmpp_stanza_t *upd_el = make_text_el(ptr_account->context, "updated", ts_buf);
-            xmpp_stanza_add_child(entry, upd_el);
-            xmpp_stanza_release(upd_el);
-        }
-
-        // <author><name>…</name><uri>xmpp:jid</uri></author>
-        {
-            xmpp_string_guard bare_g(ptr_account->context,
-                                     xmpp_jid_bare(ptr_account->context,
-                                                   ptr_account->jid().data()));
-            xmpp_stanza_t *author_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(author_el, "author");
+            // Resolve filepaths (relative paths resolved against $HOME)
+            for (auto &emb : pfp.embeds)
             {
-                xmpp_stanza_t *name_el = make_text_el(ptr_account->context, "name",
-                                                       bare_g.ptr ? bare_g.ptr : ptr_account->jid().data());
-                xmpp_stanza_add_child(author_el, name_el);
-                xmpp_stanza_release(name_el);
-                std::string xmpp_uri = fmt::format("xmpp:{}", bare_g.ptr ? bare_g.ptr : "");
-                xmpp_stanza_t *uri_el = make_text_el(ptr_account->context, "uri", xmpp_uri.c_str());
-                xmpp_stanza_add_child(author_el, uri_el);
-                xmpp_stanza_release(uri_el);
+                if (emb.filepath.empty())
+                {
+                    // Try the filename as-is first
+                    FILE *f = fopen(emb.filename.c_str(), "rb");
+                    if (f) { fclose(f); emb.filepath = emb.filename; }
+                    else
+                    {
+                        // Try relative to $HOME
+                        const char *home = getenv("HOME");
+                        if (home)
+                        {
+                            std::string candidate = fmt::format("{}/{}", home, emb.filename);
+                            f = fopen(candidate.c_str(), "rb");
+                            if (f) { fclose(f); emb.filepath = std::move(candidate); }
+                        }
+                    }
+                }
+                if (emb.filepath.empty())
+                {
+                    weechat_printf(buffer,
+                        "%s%s: embed file not found: %s",
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                        emb.filename.c_str());
+                    // Save draft so user doesn't lose the post
+                    std::string draft_path = ptr_account->save_feed_draft(pfp);
+                    if (!draft_path.empty())
+                        weechat_printf(buffer,
+                            "%sDraft saved: %s",
+                            weechat_prefix("network"), draft_path.c_str());
+                    return WEECHAT_RC_OK;
+                }
             }
-            xmpp_stanza_add_child(entry, author_el);
-            xmpp_stanza_release(author_el);
-        }
 
-        // <content type='text'>body</content> — XEP-0472 §4.2 requires at least
-        // one <content> element so receiving clients have something to display.
-        {
-            xmpp_stanza_t *content_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(content_el, "content");
-            xmpp_stanza_set_attribute(content_el, "type", "text");
-            xmpp_stanza_t *ct = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_text(ct, body.c_str());
-            xmpp_stanza_add_child(content_el, ct);
-            xmpp_stanza_release(ct);
-            xmpp_stanza_add_child(entry, content_el);
-            xmpp_stanza_release(content_el);
-        }
+            // Kick off the first upload slot request (Phase 1 → Phase 2 chain)
+            auto &first_emb = pfp.embeds[0];
 
-        // <thr:in-reply-to> for replies (XEP-0472 §4.2)
-        if (!reply_to_id.empty())
-        {
-            // The ref/href must point at the parent *article* on the blog node,
-            // not at the comments node itself.  When posting from a comments buffer,
-            // pub_node is "urn:xmpp:microblog:0:comments/<id>" — use the bare
-            // microblog node instead so the URI resolves to the original post.
-            static constexpr std::string_view kCommentsPfx2 = "urn:xmpp:microblog:0:comments/";
-            const std::string reply_ref_node =
-                (pub_node.rfind(kCommentsPfx2, 0) == 0)
-                ? "urn:xmpp:microblog:0"
-                : pub_node;
-            const std::string reply_feed_key = fmt::format("{}/{}", pub_service, reply_ref_node);
-            const std::string reply_xmpp_uri = fmt::format(
-                "xmpp:{}?;node={};item={}", pub_service, reply_ref_node, reply_to_id);
-            const std::string reply_atom_id = ptr_account->feed_atom_id_get(reply_feed_key, reply_to_id);
-            xmpp_stanza_t *reply_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(reply_el, "thr:in-reply-to");
-            xmpp_stanza_set_attribute(reply_el, "xmlns:thr",
-                                      "http://purl.org/syndication/thread/1.0");
-            xmpp_stanza_set_attribute(reply_el, "ref",
-                                      reply_atom_id.empty() ? reply_xmpp_uri.c_str()
-                                                            : reply_atom_id.c_str());
-            xmpp_stanza_set_attribute(reply_el, "href", reply_xmpp_uri.c_str());
-            xmpp_stanza_add_child(entry, reply_el);
-            xmpp_stanza_release(reply_el);
-        }
-
-        // Determine the target service/node and whether this is a comments node.
-        // These are needed both for the <link rel='replies'> and for publish-options.
-        static constexpr std::string_view k_comments_pfx = "urn:xmpp:microblog:0:comments/";
-        const bool is_comments_node = (pub_node.rfind(k_comments_pfx, 0) == 0);
-        const std::string target_service = (!reply_target_service.empty())
-            ? reply_target_service : pub_service;
-        const std::string target_node    = (!reply_target_node.empty())
-            ? reply_target_node    : pub_node;
-
-        // <link rel='replies' title='comments' href='xmpp:…'/> for top-level posts (XEP-0277 §3).
-        // Only for top-level posts (not replies), and not when publishing to an already-existing
-        // comments node.  The comments node URI follows XEP-0277 §3: urn:xmpp:microblog:0:comments/<uuid>.
-        if (reply_to_id.empty() && !is_comments_node)
-        {
-            const std::string comments_node_name =
-                fmt::format("urn:xmpp:microblog:0:comments/{}", item_uuid);
-            const std::string comments_xmpp_uri = fmt::format(
-                "xmpp:{}?;node={}", target_service, comments_node_name);
-            xmpp_stanza_t *replies_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(replies_el, "link");
-            xmpp_stanza_set_attribute(replies_el, "rel",   "replies");
-            xmpp_stanza_set_attribute(replies_el, "title", "comments");
-            xmpp_stanza_set_attribute(replies_el, "href",  comments_xmpp_uri.c_str());
-            xmpp_stanza_add_child(entry, replies_el);
-            xmpp_stanza_release(replies_el);
-        }
-
-        // <generator> — identify the client (XEP-0277 / RFC 4287)
-        {
-            xmpp_stanza_t *gen_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(gen_el, "generator");
-            xmpp_stanza_set_attribute(gen_el, "uri",
-                "https://github.com/ekollof/xepher");
-            xmpp_stanza_set_attribute(gen_el, "version", WEECHAT_XMPP_PLUGIN_VERSION);
+            // Determine content-type and file size for first embed
+            std::string ct = "application/octet-stream";
             {
-                xmpp_stanza_t *gt = xmpp_stanza_new(ptr_account->context);
-                xmpp_stanza_set_text(gt, "Xepher");
-                xmpp_stanza_add_child(gen_el, gt);
-                xmpp_stanza_release(gt);
+                size_t dp = first_emb.filename.find_last_of('.');
+                if (dp != std::string::npos)
+                {
+                    std::string ext = first_emb.filename.substr(dp + 1);
+                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    if (ext == "jpg" || ext == "jpeg") ct = "image/jpeg";
+                    else if (ext == "png")  ct = "image/png";
+                    else if (ext == "gif")  ct = "image/gif";
+                    else if (ext == "webp") ct = "image/webp";
+                    else if (ext == "mp4")  ct = "video/mp4";
+                    else if (ext == "webm") ct = "video/webm";
+                    else if (ext == "pdf")  ct = "application/pdf";
+                    else if (ext == "txt")  ct = "text/plain";
+                }
             }
-            xmpp_stanza_add_child(entry, gen_el);
-            xmpp_stanza_release(gen_el);
-        }
+            first_emb.mime = ct;
 
-        // Wrap in <item id='uuid'><entry…/></item>
-        xmpp_stanza_t *item_children[2] = {entry, nullptr};
-        xmpp_stanza_t *item_el = stanza__iq_pubsub_publish_item(
-            ptr_account->context, nullptr, item_children, with_noop(item_uuid.c_str()));
+            FILE *ff = fopen(first_emb.filepath.c_str(), "rb");
+            if (!ff)
+            {
+                weechat_printf(buffer,
+                    "%s%s: cannot open embed file: %s",
+                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                    first_emb.filepath.c_str());
+                std::string draft_path = ptr_account->save_feed_draft(pfp);
+                if (!draft_path.empty())
+                    weechat_printf(buffer, "%sDraft saved: %s",
+                        weechat_prefix("network"), draft_path.c_str());
+                return WEECHAT_RC_OK;
+            }
+            fseek(ff, 0, SEEK_END);
+            long fsz = ftell(ff);
+            fclose(ff);
+            if (fsz < 0) fsz = 0;
+            first_emb.size = static_cast<uint64_t>(fsz);
 
-        // Wrap in <publish node='…'><item…/></publish>
-        // For replies, publish to the comments node, not the blog node (XEP-0472 §5).
-        xmpp_stanza_t *pub_children2[2] = {item_el, nullptr};
-        xmpp_stanza_t *publish_el = stanza__iq_pubsub_publish(
-            ptr_account->context, nullptr, pub_children2, with_noop(target_node.c_str()));
+            // Sanitize filename for the upload server
+            std::string san_name;
+            for (char c : first_emb.filename)
+            {
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_')
+                    san_name += c;
+                else
+                    san_name += '-';
+            }
+            // Collapse repeated dashes
+            {
+                size_t p2 = 0;
+                while ((p2 = san_name.find("--", p2)) != std::string::npos)
+                    san_name.erase(p2, 1);
+            }
+            while (!san_name.empty() && san_name.front() == '-') san_name.erase(0, 1);
+            while (!san_name.empty() && san_name.back() == '-') san_name.pop_back();
+            if (san_name.empty()) san_name = "file";
 
-        // publish-options: omitted in the common case because every asserted field
-        // must match the node's existing config exactly (XEP-0060 §7.1.5) and we
-        // cannot know the live config.  The sole exception is --open, which the user
-        // has explicitly asked us to assert so the server sets access_model=open.
-        xmpp_stanza_t *pub_opts = nullptr;
-        if (access_open)
-        {
-            pub_opts = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(pub_opts, "publish-options");
+            xmpp_string_guard slot_id_g(ptr_account->context,
+                                        xmpp_uuid_gen(ptr_account->context));
+            const std::string slot_id = slot_id_g.ptr ? slot_id_g.ptr : "embed-upload";
 
-            xmpp_stanza_t *x = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(x, "x");
-            xmpp_stanza_set_ns(x, "jabber:x:data");
-            xmpp_stanza_set_attribute(x, "type", "submit");
-
-            auto add_field = [&](const char *var, const char *val) {
-                xmpp_stanza_t *f = xmpp_stanza_new(ptr_account->context);
-                xmpp_stanza_set_name(f, "field");
-                xmpp_stanza_set_attribute(f, "var", var);
-                xmpp_stanza_t *v = xmpp_stanza_new(ptr_account->context);
-                xmpp_stanza_set_name(v, "value");
-                xmpp_stanza_t *vt = xmpp_stanza_new(ptr_account->context);
-                xmpp_stanza_set_text(vt, val);
-                xmpp_stanza_add_child(v, vt); xmpp_stanza_release(vt);
-                xmpp_stanza_add_child(f, v);  xmpp_stanza_release(v);
-                xmpp_stanza_add_child(x, f);  xmpp_stanza_release(f);
+            // Store the upload request (keyed by slot IQ id)
+            ptr_account->upload_requests[slot_id] = {
+                slot_id,
+                first_emb.filepath,
+                san_name,
+                "",   // channel_id unused for feed posts
+                ct,
+                static_cast<size_t>(fsz),
+                ""    // sha256 filled during upload
             };
 
-            add_field("FORM_TYPE", "http://jabber.org/protocol/pubsub#publish-options");
-            add_field("pubsub#access_model", "open");
+            // Store pending post (keyed by same slot_id)
+            ptr_account->pending_feed_posts[slot_id] = std::move(pfp);
 
-            xmpp_stanza_add_child(pub_opts, x);
-            xmpp_stanza_release(x);
+            // Build and send XEP-0363 slot request IQ
+            xmpp_stanza_t *slot_iq = xmpp_iq_new(ptr_account->context, "get",
+                                                   slot_id.c_str());
+            xmpp_stanza_set_to(slot_iq, ptr_account->upload_service.c_str());
+
+            xmpp_stanza_t *req_el = xmpp_stanza_new(ptr_account->context);
+            xmpp_stanza_set_name(req_el, "request");
+            xmpp_stanza_set_ns(req_el, "urn:xmpp:http:upload:0");
+            xmpp_stanza_set_attribute(req_el, "filename", san_name.c_str());
+            auto sz_str = fmt::format("{}", static_cast<size_t>(fsz));
+            xmpp_stanza_set_attribute(req_el, "size", sz_str.c_str());
+            if (!ct.empty())
+                xmpp_stanza_set_attribute(req_el, "content-type", ct.c_str());
+            xmpp_stanza_add_child(slot_iq, req_el);
+            xmpp_stanza_release(req_el);
+
+            ptr_account->connection.send(slot_iq);
+            xmpp_stanza_release(slot_iq);
+
+            weechat_printf(buffer,
+                "%sUploading %zu embed file(s) before posting…",
+                weechat_prefix("network"), ptr_account->pending_feed_posts[slot_id].embeds.size());
+            return WEECHAT_RC_OK;
         }
 
-        // Assemble: <pubsub><publish/>[<publish-options/>]</pubsub>
-        xmpp_stanza_t *ps_children[3] = {publish_el, pub_opts, nullptr};
-        xmpp_stanza_t *pubsub_el = stanza__iq_pubsub(
-            ptr_account->context, nullptr, ps_children,
-            with_noop("http://jabber.org/protocol/pubsub"));
-
-        // Wrap in <iq type='set'>
-        xmpp_string_guard uid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        xmpp_stanza_t *iq_children[2] = {pubsub_el, nullptr};
-        xmpp_stanza_t *iq = stanza__iq(ptr_account->context, nullptr, iq_children,
-                                       nullptr, uid_g.ptr,
-                                       ptr_account->jid().data(),
-                                       target_service.c_str(),
-                                       "set");
-
-        ptr_account->connection.send(iq);
-        xmpp_stanza_release(iq);
-
-        // Track publish IQ for error reporting
-        if (uid_g.ptr)
-            ptr_account->pubsub_publish_ids[uid_g.ptr] = {target_service, target_node, item_uuid, buffer};
-
-        if (subcmd == "reply")
-            weechat_printf(buffer, "%sPosted reply to %s on %s/%s",
-                           weechat_prefix("network"),
-                           reply_to_id.c_str(), target_service.c_str(), target_node.c_str());
-        else
-            weechat_printf(buffer, "%sPosted to %s/%s (id: %s)",
-                           weechat_prefix("network"),
-                           pub_service.c_str(), pub_node.c_str(), item_uuid.c_str());
+        // No embed tags — publish immediately.
+        ptr_account->build_and_publish_post(pfp);
 
         return WEECHAT_RC_OK;
     }

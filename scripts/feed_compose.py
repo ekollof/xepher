@@ -204,11 +204,18 @@ def _cmd_feed_compose(_data: str, buf: str, args: str) -> int:
 
     editor = _editor_cmd()
 
-    # Write frontmatter + initial body to a temp file
+    # Write frontmatter + initial body to a temp file.
+    # Suppress the title frontmatter when posting from a comments buffer —
+    # even without --reply, comments don't carry Atom <title> headlines.
+    remote_jid = weechat.buffer_get_string(buf, "localvar_remote_jid")
+    _, _, _node = remote_jid.partition("/")
+    in_comments = _node.startswith("urn:xmpp:microblog:0:comments/")
     try:
         fd, path = tempfile.mkstemp(suffix=".md", prefix="weechat-feed-")
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(_initial_content(initial_body, is_reply=bool(reply_id)))
+            fh.write(
+                _initial_content(initial_body, is_reply=bool(reply_id) or in_comments)
+            )
     except OSError as exc:
         weechat.prnt(buf, f"{SCRIPT_NAME}: cannot create temp file: {exc}")
         return weechat.WEECHAT_RC_ERROR

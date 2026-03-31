@@ -26,6 +26,7 @@
 #include "connection.hh"
 #include "user.hh"
 #include "ui/picker.hh"
+#include "xmpp/embed.hh"
 
 namespace weechat
 {
@@ -111,6 +112,9 @@ namespace weechat
             int pipe_write_fd = -1;     // write end (closed by thread after writing)
             struct t_hook *hook = nullptr; // weechat_hook_fd (filled after thread starts)
             std::thread worker;         // owns the background thread
+            // Non-empty when this upload belongs to a pending feed post (embed tag).
+            // Set to the upload slot IQ id that originated this upload.
+            std::string feed_post_upload_id;
         };
         // fd (read end) -> completion context
         std::unordered_map<int, std::shared_ptr<upload_completion>> pending_uploads;
@@ -241,6 +245,19 @@ namespace weechat
             bool is_retract = false;                // true → full node re-fetch on result
         };
         std::unordered_map<std::string, pubsub_publish_context> pubsub_publish_ids;
+
+        // Embed template: pending feed posts waiting for XEP-0363 uploads.
+        // Maps upload request IQ id → pending post state.
+        std::unordered_map<std::string, xepher::pending_feed_post> pending_feed_posts;
+
+        // Save a draft of a pending post to $weechat_data_dir/xmpp/drafts/ and
+        // return the path. Used when an embed upload fails so the user doesn't
+        // lose their work.
+        std::string save_feed_draft(const xepher::pending_feed_post &post);
+
+        // Build the Atom <entry> and publish it via XEP-0060 for a completed
+        // pending_feed_post (all embed uploads done, get_url filled in).
+        void build_and_publish_post(const xepher::pending_feed_post &post);
 
         // XEP-0060: pending subscribe/unsubscribe IQs.
         // Maps IQ id → {feed_key, originating_buffer}
