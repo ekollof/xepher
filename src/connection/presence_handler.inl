@@ -123,7 +123,47 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 case 110: // Self-Presence: [presence | Any room presence]: Inform user that presence refers to one of its own room occupants
                     // Status 110 is sent last in the initial presence flood — clear joining flag
                     if (channel)
+                    {
                         channel->joining = false;
+
+                        // MAM catch-up for MUC: fetch messages missed since last
+                        // disconnect.  Mirror the same pattern used for PM channels
+                        // in channel.cpp so we recover missed messages on reconnect.
+                        if (channel->type == weechat::channel::chat_type::MUC)
+                        {
+                            time_t now = time(NULL);
+                            time_t start;
+
+                            // Load persisted last-fetch timestamp from LMDB.
+                            if (channel->last_mam_fetch == 0)
+                                channel->last_mam_fetch =
+                                    account.mam_cache_get_last_timestamp(channel->id);
+
+                            // -1 means "channel was closed cleanly" — treat as fresh.
+                            if (channel->last_mam_fetch == static_cast<time_t>(-1))
+                            {
+                                channel->last_mam_fetch = 0;
+                                account.mam_cache_set_last_timestamp(channel->id, 0);
+                            }
+
+                            // Replay any LMDB-cached messages into the buffer first.
+                            if (channel->last_mam_fetch > 0)
+                                account.mam_cache_load_messages(channel->id, channel->buffer);
+
+                            // If we fetched recently, only request new messages.
+                            if (channel->last_mam_fetch > 0 &&
+                                (now - channel->last_mam_fetch) < 300)
+                                start = channel->last_mam_fetch;
+                            else
+                                start = now - (7 * 86400); // fallback: last 7 days
+
+                            time_t end = now;
+                            xmpp_string_guard mam_uuid_g(account.context,
+                                xmpp_uuid_gen(account.context));
+                            if (mam_uuid_g.ptr)
+                                channel->fetch_mam(mam_uuid_g.ptr, &start, &end, nullptr);
+                        }
+                    }
                     break;
                 case 170: // Logging Active: room logging enabled — privacy notice
                     if (channel)
