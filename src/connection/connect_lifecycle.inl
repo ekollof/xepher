@@ -14,9 +14,6 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
     {
         account.disconnected = 0;
 
-        xmpp_stanza_t *pres__c, *pres__status, *pres__status__text,
-            *pres__x, *pres__x__text;
-
         // Only add handlers once (they persist across reconnects via libstrophe)
         if (!account.sm_handlers_registered)
         {
@@ -101,92 +98,108 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         }
 
         /* Send initial <presence/> so that we appear online to contacts */
-        /* children layout: [0]=<c/> [1]=<status/> [2]=<x vcard-temp:x:update/> [3]=<x pgp/> [4]=nullptr */
-        auto children = std::make_unique<xmpp_stanza_t*[]>(4 + 1);
-
-        pres__c = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(pres__c, "c");
-        xmpp_stanza_set_ns(pres__c, "http://jabber.org/protocol/caps");
-        xmpp_stanza_set_attribute(pres__c, "hash", "sha-1");
-        xmpp_stanza_set_attribute(pres__c, "node", "http://weechat.org");
-
-        xmpp_stanza_t *caps = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(caps, "caps");
-        char *cap_hash_raw = nullptr;
-        caps = this->get_caps(caps, &cap_hash_raw);
-        xmpp_stanza_release(caps);
-        std::unique_ptr<char[]> cap_hash(cap_hash_raw);
-        xmpp_stanza_set_attribute(pres__c, "ver", cap_hash.get());
-
-        children[0] = pres__c;
-
-        pres__status = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(pres__status, "status");
-
-        pres__status__text = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_text(pres__status__text, account.status().data());
-        xmpp_stanza_add_child(pres__status, pres__status__text);
-        xmpp_stanza_release(pres__status__text);
-
-        children[1] = pres__status;
-
-        /* XEP-0153: vCard-Based Avatars — broadcast own photo hash in presence */
+        /* children: <c/> caps, <status/>, <x vcard-temp:x:update/>, optionally <x jabber:x:signed/> */
         {
-            xmpp_stanza_t *vcard_x = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(vcard_x, "x");
-            xmpp_stanza_set_ns(vcard_x, "vcard-temp:x:update");
+            // Compute entity caps hash
+            xmpp_stanza_t *caps_raw = xmpp_stanza_new(account.context);
+            xmpp_stanza_set_name(caps_raw, "caps");
+            char *cap_hash_raw = nullptr;
+            caps_raw = this->get_caps(caps_raw, &cap_hash_raw);
+            xmpp_stanza_release(caps_raw);
+            std::unique_ptr<char[]> cap_hash(cap_hash_raw);
 
-            xmpp_stanza_t *photo_elem = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(photo_elem, "photo");
+            struct caps_spec : stanza::spec {
+                caps_spec(const char *ver) : spec("c") {
+                    xmlns<jabber_org::protocol::caps>();
+                    attr("hash", "sha-1");
+                    attr("node", "http://weechat.org");
+                    attr("ver", ver ? ver : "");
+                }
+            } caps_ch(cap_hash.get());
 
+            struct status_spec : stanza::spec {
+                status_spec(std::string_view s) : spec("status") { text(s); }
+            } status_ch(account.status());
+
+            // XEP-0153: vCard-Based Avatars — broadcast own photo hash in presence
             weechat::user *self_user = weechat::user::search(&account, account.jid().data());
-            if (self_user && !self_user->profile.avatar_hash.empty())
+            struct vcard_x_spec : stanza::spec {
+                vcard_x_spec(const std::string &hash) : spec("x") {
+                    xmlns<vcard_temp::x::update>();
+                    struct photo_spec : stanza::spec {
+                        photo_spec(const std::string &h) : spec("photo") {
+                            if (!h.empty()) text(h);
+                        }
+                    } photo(hash);
+                    child(photo);
+                }
+            } vcard_ch(self_user && !self_user->profile.avatar_hash.empty()
+                       ? self_user->profile.avatar_hash : std::string{});
+
+            struct initial_presence : stanza::spec {
+                initial_presence(std::string_view from_jid,
+                                 caps_spec &c, status_spec &s, vcard_x_spec &v)
+                    : spec("presence") {
+                    attr("from", from_jid);
+                    child(c);
+                    child(s);
+                    child(v);
+                }
+            };
+
+            if (!account.pgp_keyid().empty())
             {
-                xmpp_stanza_t *photo_text = xmpp_stanza_new(account.context);
-                xmpp_stanza_set_text(photo_text, self_user->profile.avatar_hash.data());
-                xmpp_stanza_add_child(photo_elem, photo_text);
-                xmpp_stanza_release(photo_text);
+                auto signature = account.pgp.sign(account.buffer,
+                                                  account.pgp_keyid().data(),
+                                                  account.status().data());
+                struct pgp_x_spec : stanza::spec {
+                    pgp_x_spec(std::string_view sig) : spec("x") {
+                        xmlns<jabber::x::signed_>();
+                        text(sig);
+                    }
+                } pgp_ch(signature ? *signature : "");
+
+                struct pres_with_pgp : initial_presence {
+                    pres_with_pgp(std::string_view from_jid,
+                                  caps_spec &c, status_spec &s, vcard_x_spec &v,
+                                  pgp_x_spec &p)
+                        : initial_presence(from_jid, c, s, v) {
+                        child(p);
+                    }
+                } pres(account.jid(), caps_ch, status_ch, vcard_ch, pgp_ch);
+                this->send(pres.build(account.context).get());
             }
-
-            xmpp_stanza_add_child(vcard_x, photo_elem);
-            xmpp_stanza_release(photo_elem);
-
-            children[2] = vcard_x;
-        }
-
-        children[3] = nullptr;
-
-        if (!account.pgp_keyid().empty())
-        {
-            pres__x = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(pres__x, "x");
-            xmpp_stanza_set_ns(pres__x, "jabber:x:signed");
-
-            pres__x__text = xmpp_stanza_new(account.context);
-            auto signature = account.pgp.sign(account.buffer, account.pgp_keyid().data(), account.status().data());
-            xmpp_stanza_set_text(pres__x__text, signature ? signature->c_str() : "");
-            xmpp_stanza_add_child(pres__x, pres__x__text);
-            xmpp_stanza_release(pres__x__text);
-
-            children[3] = pres__x;
-            children[4] = nullptr;
-        }
-
-        {
-            xmpp_stanza_t *pres = stanza__presence(account.context, nullptr, children.get(),
-                                                    nullptr, account.jid().data(), nullptr, nullptr);
-            this->send(pres);
-            xmpp_stanza_release(pres);
+            else
+            {
+                initial_presence pres(account.jid(), caps_ch, status_ch, vcard_ch);
+                this->send(pres.build(account.context).get());
+            }
         }
 
         // XEP-0172: publish own nickname via PEP so contacts see a display name
         if (!account.nickname().empty())
         {
-            xmpp_stanza_t *nick_iq = ::xmpp::xep0172::publish_nick(
-                account.context, std::string(account.nickname()).c_str());
-            xmpp_stanza_set_from(nick_iq, account.jid().data());
-            this->send(nick_iq);
-            xmpp_stanza_release(nick_iq);
+            std::string nick_str(account.nickname());
+            struct nick_el : stanza::spec {
+                nick_el(std::string_view n) : spec("nick") {
+                    xmlns<jabber_org::protocol::nick>();
+                    text(n);
+                }
+            } nick_payload(nick_str);
+            stanza::xep0060::item nick_item;
+            nick_item.payload(nick_payload);
+            stanza::xep0060::publish nick_pub("http://jabber.org/protocol/nick");
+            nick_pub.item(nick_item);
+            stanza::xep0060::pubsub nick_ps;
+            nick_ps.publish(nick_pub);
+            this->send(stanza::iq()
+                        .from(account.jid())
+                        .type("set")
+                        .id(stanza::uuid(account.context))
+                        .xep0060()
+                        .pubsub(nick_ps)
+                        .build(account.context)
+                        .get());
         }
 
         this->send(stanza::iq()
@@ -218,24 +231,22 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                     .build(account.context)
                     .get());
 
-        children[1] = nullptr;
-
-        auto fetch_devicelist = [&](const char *node) {
-            children[0] =
-            stanza__iq_pubsub_items(account.context, nullptr, node);
-            children[0] =
-            stanza__iq_pubsub(account.context, nullptr, children.get(),
-                              with_noop("http://jabber.org/protocol/pubsub"));
-            xmpp_string_guard uid_g(account.context, xmpp_uuid_gen(account.context));
-            const char *uid = uid_g.ptr;
-            children[0] =
-            stanza__iq(account.context, nullptr, children.get(), nullptr, uid,
-                       account.jid().data(), account.jid().data(),
-                       "get");
-            if (uid && account.omemo)
+        auto fetch_devicelist = [&](std::string_view node) {
+            std::string uid = stanza::uuid(account.context);
+            stanza::xep0060::items items_spec(node);
+            stanza::xep0060::pubsub ps_spec;
+            ps_spec.items(items_spec);
+            this->send(stanza::iq()
+                        .from(account.jid())
+                        .to(account.jid())
+                        .type("get")
+                        .id(uid)
+                        .xep0060()
+                        .pubsub(ps_spec)
+                        .build(account.context)
+                        .get());
+            if (account.omemo)
                 account.omemo.pending_iq_jid[uid] = std::string(account.jid());
-            this->send(children[0]);
-            xmpp_stanza_release(children[0]);
         };
 
         fetch_devicelist("urn:xmpp:omemo:2:devices");
@@ -251,22 +262,22 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
 
             // Publish our bundle unconditionally on connect so remote clients
             // always have fresh pre-keys for our device.
-            children[0] =
+            xmpp_stanza_t *bundle_stanza =
             account.omemo.get_bundle(account.context, jid_str.data(), nullptr);
-            if (children[0])
+            if (bundle_stanza)
             {
-                this->send(children[0]);
-                xmpp_stanza_release(children[0]);
+                this->send(bundle_stanza);
+                xmpp_stanza_release(bundle_stanza);
             }
 
             // Also publish the legacy bundle node so OMEMO:1 clients can
             // target our current device id during first-contact bootstrap.
-            children[0] =
+            xmpp_stanza_t *legacy_bundle_stanza =
             account.omemo.get_legacy_bundle(account.context, jid_str.data(), nullptr);
-            if (children[0])
+            if (legacy_bundle_stanza)
             {
-                this->send(children[0]);
-                xmpp_stanza_release(children[0]);
+                this->send(legacy_bundle_stanza);
+                xmpp_stanza_release(legacy_bundle_stanza);
             }
 
             // Do NOT publish our devicelist here.  We first fetch the server's
@@ -279,25 +290,20 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
 
         // Discover HTTP File Upload service (XEP-0363)
         XDEBUG("Discovering upload service...");
-        
-        // Build disco#items query manually
-        xmpp_string_guard disco_items_id_g(account.context, xmpp_uuid_gen(account.context));
-        const char *disco_items_id = disco_items_id_g.ptr;
-        xmpp_stanza_t *items_iq = xmpp_iq_new(account.context, "get", disco_items_id);
-        char *server_domain = xmpp_jid_domain(account.context, account.jid().data());
-        xmpp_stanza_set_to(items_iq, server_domain);
-        xmpp_stanza_set_from(items_iq, account.jid().data());
-        
-        xmpp_stanza_t *items_query = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(items_query, "query");
-        xmpp_stanza_set_ns(items_query, "http://jabber.org/protocol/disco#items");
-        xmpp_stanza_add_child(items_iq, items_query);
-        xmpp_stanza_release(items_query);
-        
-        this->send(items_iq);
-        xmpp_stanza_release(items_iq);
-        xmpp_free(account.context, server_domain);
-        // freed by disco_items_id_g
+
+        {
+            char *server_domain_raw = xmpp_jid_domain(account.context, account.jid().data());
+            this->send(stanza::iq()
+                        .from(account.jid())
+                        .to(server_domain_raw ? server_domain_raw : "")
+                        .type("get")
+                        .id(stanza::uuid(account.context))
+                        .xep0030()
+                        .query_items()
+                        .build(account.context)
+                        .get());
+            xmpp_free(account.context, server_domain_raw);
+        }
 
         // Query MAM globally to discover recent conversations.
         // If we have a persisted RSM cursor from a previous session, use it as
@@ -308,72 +314,41 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         std::string global_mam_cursor = account.mam_cursor_get("global");
         const bool has_cursor = !global_mam_cursor.empty();
 
-        xmpp_string_guard global_mam_id_g(account.context, xmpp_uuid_gen(account.context));
-        const char *global_mam_id = global_mam_id_g.ptr;
-        account.add_mam_query(global_mam_id, "",  // Empty 'with' means global query
-                             has_cursor ? std::optional<time_t>{} : std::optional<time_t>(start),
-                             std::optional<time_t>(now));
-        // Defer OMEMO key-transport sends until all archived messages are
-        // replayed (Conversations-style postponed session completion).
-        account.omemo.global_mam_catchup = true;
-        
-        // Build MAM query manually (global query - no 'with' field)
-        xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", global_mam_id);
-        xmpp_stanza_set_id(iq, global_mam_id);
-        
-        xmpp_stanza_t *query = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(query, "query");
-        xmpp_stanza_set_ns(query, "urn:xmpp:mam:2");
-        
-        if (!has_cursor)
         {
-            // No cursor: use a data form with a start-time filter
-            xmpp_stanza_t *x = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(x, "x");
-            xmpp_stanza_set_ns(x, "jabber:x:data");
-            xmpp_stanza_set_attribute(x, "type", "submit");
-            
-            // FORM_TYPE field
+            std::string global_mam_id = stanza::uuid(account.context);
+            account.add_mam_query(global_mam_id.c_str(), "",  // Empty 'with' means global query
+                                 has_cursor ? std::optional<time_t>{} : std::optional<time_t>(start),
+                                 std::optional<time_t>(now));
+            // Defer OMEMO key-transport sends until all archived messages are
+            // replayed (Conversations-style postponed session completion).
+            account.omemo.global_mam_catchup = true;
+
+            stanza::xep0313::query mam_query;
+            if (!has_cursor)
             {
-                xmpp_stanza_t *f = stanza_make_field(account.context,
-                    "FORM_TYPE", "urn:xmpp:mam:2", "hidden");
-                xmpp_stanza_add_child(x, f);
-                xmpp_stanza_release(f);
-            }
-            
-            // Start time field
-            {
+                // No cursor: use a data form with a start-time filter
                 std::ostringstream time_ss;
                 time_ss << std::put_time(gmtime(&start), "%Y-%m-%dT%H:%M:%SZ");
-                xmpp_stanza_t *f = stanza_make_field(account.context, "start", time_ss.str().c_str());
-                xmpp_stanza_add_child(x, f);
-                xmpp_stanza_release(f);
+                stanza::xep0313::x_filter xf;
+                xf.start(time_ss.str());
+                mam_query.filter(xf);
             }
-            
-            xmpp_stanza_add_child(query, x);
-            xmpp_stanza_release(x);
+            else
+            {
+                // Have cursor: RSM <after> — no time filter, resume from last seen message
+                stanza::xep0059::set rsm_set;
+                rsm_set.after(global_mam_cursor);
+                mam_query.rsm(rsm_set);
+            }
+
+            this->send(stanza::iq()
+                        .type("set")
+                        .id(global_mam_id)
+                        .xep0313()
+                        .query(mam_query)
+                        .build(account.context)
+                        .get());
         }
-        else
-        {
-            // Have cursor: RSM <after> — no time filter, resume from last seen message
-            xmpp_stanza_t *rset = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(rset, "set");
-            xmpp_stanza_set_ns(rset, "http://jabber.org/protocol/rsm");
-            xmpp_stanza_t *after_el = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(after_el, "after");
-            xmpp_stanza_t *after_t = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_text(after_t, global_mam_cursor.c_str());
-            xmpp_stanza_add_child(after_el, after_t); xmpp_stanza_release(after_t);
-            xmpp_stanza_add_child(rset, after_el); xmpp_stanza_release(after_el);
-            xmpp_stanza_add_child(query, rset); xmpp_stanza_release(rset);
-        }
-        
-        xmpp_stanza_add_child(iq, query);
-        xmpp_stanza_release(query);
-        
-        this->send(iq);
-        xmpp_stanza_release(iq);
-        // freed by global_mam_id_g
 
         // Helper: send a XEP-0442 MAM query against a pubsub node.
         // Uses XEP-0413 Order-By (creation date descending) so we get the newest items.
@@ -383,49 +358,46 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                                          const std::string &node_name,
                                          int max_items)
         {
-            xmpp_string_guard uid_g(account.context, xmpp_uuid_gen(account.context));
-            const char *uid = uid_g.ptr;
-            if (!uid) return;
+            std::string uid = stanza::uuid(account.context);
 
-            xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", uid);
-            xmpp_stanza_set_to(iq, service_jid.c_str());
-            xmpp_stanza_set_from(iq, account.jid().data());
-
-            // <query xmlns='urn:xmpp:mam:2' node='node_name'>
-            xmpp_stanza_t *query = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(query, "query");
-            xmpp_stanza_set_ns(query, "urn:xmpp:mam:2");
-            xmpp_stanza_set_attribute(query, "node", node_name.c_str());
-
-            // <order xmlns='urn:xmpp:order-by:1'> (XEP-0413)
+            // <order xmlns='urn:xmpp:order-by:1' field='creation-date'/> (XEP-0413)
             // Request newest-first so the RSM <max> limit gives us the most recent items.
-            xmpp_stanza_t *order = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(order, "order");
-            xmpp_stanza_set_ns(order, "urn:xmpp:order-by:1");
-            xmpp_stanza_set_attribute(order, "field", "creation-date");
-            xmpp_stanza_add_child(query, order);
-            xmpp_stanza_release(order);
+            struct order_spec : stanza::spec {
+                order_spec() : spec("order") {
+                    xmlns<urn::xmpp::order_by::_1>();
+                    attr("field", "creation-date");
+                }
+            };
 
-            // RSM <set> to limit to max_items
-            xmpp_stanza_t *rset = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(rset, "set");
-            xmpp_stanza_set_ns(rset, "http://jabber.org/protocol/rsm");
-            xmpp_stanza_t *max_el = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(max_el, "max");
-            xmpp_stanza_t *max_t = xmpp_stanza_new(account.context);
-            std::string max_str = std::to_string(max_items);
-            xmpp_stanza_set_text(max_t, max_str.c_str());
-            xmpp_stanza_add_child(max_el, max_t); xmpp_stanza_release(max_t);
-            xmpp_stanza_add_child(rset, max_el);  xmpp_stanza_release(max_el);
-            xmpp_stanza_add_child(query, rset);   xmpp_stanza_release(rset);
+            stanza::xep0059::set rsm_set;
+            rsm_set.max(static_cast<unsigned>(max_items));
 
-            xmpp_stanza_add_child(iq, query);
-            xmpp_stanza_release(query);
+            struct pubsub_mam_query : stanza::xep0313::query {
+                pubsub_mam_query(std::string_view node_name_,
+                                 order_spec &ord,
+                                 stanza::xep0059::set &rsm)
+                    : spec("query") {
+                    xmlns<urn::xmpp::mam::_2>();
+                    attr("node", node_name_);
+                    child(ord);
+                    child(rsm);
+                }
+            };
+
+            order_spec ord;
+            pubsub_mam_query mam_q(node_name, ord, rsm_set);
 
             account.pubsub_mam_queries[uid] = {service_jid, node_name, {}, max_items};
 
-            this->send(iq);
-            xmpp_stanza_release(iq);
+            this->send(stanza::iq()
+                        .from(account.jid())
+                        .to(service_jid)
+                        .type("set")
+                        .id(uid)
+                        .xep0313()
+                        .query(mam_q)
+                        .build(account.context)
+                        .get());
         };
 
         // Helper: restore one feed buffer by its feed_key ("service/node").
@@ -469,21 +441,21 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             bool is_pep = service_jid.find('@') != std::string::npos;
             if (is_pep)
             {
-                std::array<xmpp_stanza_t *, 2> pub_ch = {nullptr, nullptr};
-                pub_ch[0] = stanza__iq_pubsub_items(account.context, nullptr,
-                                                     node_name.c_str(), max_items);
-                pub_ch[0] = stanza__iq_pubsub(account.context, nullptr, pub_ch.data(),
-                    with_noop("http://jabber.org/protocol/pubsub"));
-
-                xmpp_string_guard fuid_g(account.context, xmpp_uuid_gen(account.context));
-                const char *fuid = fuid_g.ptr;
-                pub_ch[0] = stanza__iq(account.context, nullptr, pub_ch.data(),
-                    nullptr, fuid,
-                    account.jid().data(), service_jid.c_str(), "get");
-                if (fuid)
-                    account.pubsub_fetch_ids[fuid] = {service_jid, node_name, {}, max_items};
-                account.connection.send(pub_ch[0]);
-                xmpp_stanza_release(pub_ch[0]);
+                std::string fuid = stanza::uuid(account.context);
+                stanza::xep0060::items pep_items(node_name);
+                pep_items.max_items(static_cast<unsigned>(max_items));
+                stanza::xep0060::pubsub pep_ps;
+                pep_ps.items(pep_items);
+                account.pubsub_fetch_ids[fuid] = {service_jid, node_name, {}, max_items};
+                account.connection.send(stanza::iq()
+                            .from(account.jid())
+                            .to(service_jid)
+                            .type("get")
+                            .id(fuid)
+                            .xep0060()
+                            .pubsub(pep_ps)
+                            .build(account.context)
+                            .get());
                 return;
             }
 
