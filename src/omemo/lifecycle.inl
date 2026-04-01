@@ -57,105 +57,130 @@ xmpp_stanza_t *weechat::xmpp::omemo::get_bundle(xmpp_ctx_t *context, char *from,
     XDEBUG("omemo: publishing bundle for device {} with {} prekeys",
            device_id, bundle->prekeys.size());
 
-    xmpp_stanza_t *text = nullptr;
-    xmpp_stanza_t *spk = nullptr;
-    xmpp_stanza_t *spks = nullptr;
-    xmpp_stanza_t *ik = nullptr;
-    xmpp_stanza_t *prekeys = nullptr;
-    xmpp_stanza_t *bundle_stanza = nullptr;
-    xmpp_stanza_t *item = nullptr;
-    xmpp_stanza_t *publish = nullptr;
-    xmpp_stanza_t *pubsub = nullptr;
-    xmpp_stanza_t *iq = nullptr;
+    // All intermediate nodes are shared_ptr (auto-released). The root iq is
+    // returned raw with ownership transfer to the caller.
+    auto mk = [&]() {
+        return std::shared_ptr<xmpp_stanza_t> { xmpp_stanza_new(context), xmpp_stanza_release };
+    };
 
-    text = xmpp_stanza_new(context);
-    xmpp_stanza_set_text(text, bundle->signed_pre_key.c_str());
-    xmpp_stanza_t *spk_children[] = {text, nullptr};
-    spk = stanza__iq_pubsub_publish_item_bundle_signedPreKeyPublic(
-        context, nullptr, spk_children, with_noop(bundle->signed_pre_key_id.c_str()));
+    // <signedPreKeyPublic signedPreKeyId='…'>base64</signedPreKeyPublic>
+    auto spk_text = mk();
+    xmpp_stanza_set_text(spk_text.get(), bundle->signed_pre_key.c_str());
+    auto spk = mk();
+    xmpp_stanza_set_name(spk.get(), "signedPreKeyPublic");
+    xmpp_stanza_set_attribute(spk.get(), "signedPreKeyId", bundle->signed_pre_key_id.c_str());
+    xmpp_stanza_set_ns(spk.get(), kOmemoNs.data());
+    xmpp_stanza_add_child(spk.get(), spk_text.get());
 
-    text = xmpp_stanza_new(context);
-    xmpp_stanza_set_text(text, bundle->signed_pre_key_signature.c_str());
-    xmpp_stanza_t *spks_children[] = {text, nullptr};
-    spks = stanza__iq_pubsub_publish_item_bundle_signedPreKeySignature(context, nullptr, spks_children);
+    // <signedPreKeySignature>base64</signedPreKeySignature>
+    auto spks_text = mk();
+    xmpp_stanza_set_text(spks_text.get(), bundle->signed_pre_key_signature.c_str());
+    auto spks = mk();
+    xmpp_stanza_set_name(spks.get(), "signedPreKeySignature");
+    xmpp_stanza_set_ns(spks.get(), kOmemoNs.data());
+    xmpp_stanza_add_child(spks.get(), spks_text.get());
 
-    text = xmpp_stanza_new(context);
-    xmpp_stanza_set_text(text, bundle->identity_key.c_str());
-    xmpp_stanza_t *ik_children[] = {text, nullptr};
-    ik = stanza__iq_pubsub_publish_item_bundle_identityKey(context, nullptr, ik_children);
+    // <identityKey>base64</identityKey>
+    auto ik_text = mk();
+    xmpp_stanza_set_text(ik_text.get(), bundle->identity_key.c_str());
+    auto ik = mk();
+    xmpp_stanza_set_name(ik.get(), "identityKey");
+    xmpp_stanza_set_ns(ik.get(), kOmemoNs.data());
+    xmpp_stanza_add_child(ik.get(), ik_text.get());
 
-    std::vector<xmpp_stanza_t *> prekey_stanzas;
-    prekey_stanzas.reserve(bundle->prekeys.size() + 1);
+    // <prekeys> loop
+    auto prekeys = mk();
+    xmpp_stanza_set_name(prekeys.get(), "prekeys");
+    xmpp_stanza_set_ns(prekeys.get(), kOmemoNs.data());
     for (const auto &[id, key] : bundle->prekeys)
     {
-        text = xmpp_stanza_new(context);
-        xmpp_stanza_set_text(text, key.c_str());
-        xmpp_stanza_t *pk_children[] = {text, nullptr};
-        prekey_stanzas.push_back(
-            stanza__iq_pubsub_publish_item_bundle_prekeys_preKeyPublic(
-                context, nullptr, pk_children, with_noop(id.c_str())));
+        auto pk_text = mk();
+        xmpp_stanza_set_text(pk_text.get(), key.c_str());
+        auto pk = mk();
+        xmpp_stanza_set_name(pk.get(), "preKeyPublic");
+        xmpp_stanza_set_attribute(pk.get(), "preKeyId", id.c_str());
+        xmpp_stanza_set_ns(pk.get(), kOmemoNs.data());
+        xmpp_stanza_add_child(pk.get(), pk_text.get());
+        xmpp_stanza_add_child(prekeys.get(), pk.get());
     }
-    prekey_stanzas.push_back(nullptr);
-    prekeys = stanza__iq_pubsub_publish_item_bundle_prekeys(context, nullptr, prekey_stanzas.data());
 
-    xmpp_stanza_t *bundle_children[] = {spk, spks, ik, prekeys, nullptr};
-    bundle_stanza = stanza__iq_pubsub_publish_item_bundle(context, nullptr, bundle_children,
-                                                          with_noop(kOmemoNs.data()));
-    xmpp_stanza_t *item_children[] = {bundle_stanza, nullptr};
+    // <bundle xmlns='urn:xmpp:omemo:2'>
+    auto bundle_stanza = mk();
+    xmpp_stanza_set_name(bundle_stanza.get(), "bundle");
+    xmpp_stanza_set_ns(bundle_stanza.get(), kOmemoNs.data());
+    xmpp_stanza_add_child(bundle_stanza.get(), spk.get());
+    xmpp_stanza_add_child(bundle_stanza.get(), spks.get());
+    xmpp_stanza_add_child(bundle_stanza.get(), ik.get());
+    xmpp_stanza_add_child(bundle_stanza.get(), prekeys.get());
+
+    // <item id='device_id'>
     const auto item_id = fmt::format("{}", device_id);
-    item = stanza__iq_pubsub_publish_item(context, nullptr, item_children, with_noop(item_id.c_str()));
-    xmpp_stanza_t *publish_children[] = {item, nullptr};
-    publish = stanza__iq_pubsub_publish(context, nullptr, publish_children, with_noop(kBundlesNode.data()));
-    xmpp_stanza_t *pubsub_children[] = {publish, nullptr};
-    pubsub = stanza__iq_pubsub(context, nullptr, pubsub_children, with_noop("http://jabber.org/protocol/pubsub"));
+    auto item = mk();
+    xmpp_stanza_set_name(item.get(), "item");
+    xmpp_stanza_set_attribute(item.get(), "id", item_id.c_str());
+    xmpp_stanza_add_child(item.get(), bundle_stanza.get());
+
+    // <publish node='…'>
+    auto publish = mk();
+    xmpp_stanza_set_name(publish.get(), "publish");
+    xmpp_stanza_set_attribute(publish.get(), "node", kBundlesNode.data());
+    xmpp_stanza_add_child(publish.get(), item.get());
+
+    // <pubsub xmlns='…'>
+    auto pubsub = mk();
+    xmpp_stanza_set_name(pubsub.get(), "pubsub");
+    xmpp_stanza_set_ns(pubsub.get(), "http://jabber.org/protocol/pubsub");
+    xmpp_stanza_add_child(pubsub.get(), publish.get());
 
     // Add publish-options (access_model=open) so the server allows contacts
     // to fetch our bundle.  Without this some servers default to a restricted
     // access model and silently reject the publish or make the bundle invisible.
     {
         auto make_field = [&](const char *var, const char *val, const char *type_attr = nullptr) {
-            xmpp_stanza_t *field = xmpp_stanza_new(context);
-            xmpp_stanza_set_name(field, "field");
-            xmpp_stanza_set_attribute(field, "var", var);
-            if (type_attr) xmpp_stanza_set_attribute(field, "type", type_attr);
-            xmpp_stanza_t *value = xmpp_stanza_new(context);
-            xmpp_stanza_set_name(value, "value");
-            xmpp_stanza_t *txt = xmpp_stanza_new(context);
-            xmpp_stanza_set_text(txt, val);
-            xmpp_stanza_add_child(value, txt);
-            xmpp_stanza_release(txt);
-            xmpp_stanza_add_child(field, value);
-            xmpp_stanza_release(value);
+            auto field = mk();
+            xmpp_stanza_set_name(field.get(), "field");
+            xmpp_stanza_set_attribute(field.get(), "var", var);
+            if (type_attr) xmpp_stanza_set_attribute(field.get(), "type", type_attr);
+            auto value = mk();
+            xmpp_stanza_set_name(value.get(), "value");
+            auto txt = mk();
+            xmpp_stanza_set_text(txt.get(), val);
+            xmpp_stanza_add_child(value.get(), txt.get());
+            xmpp_stanza_add_child(field.get(), value.get());
             return field;
         };
 
-        xmpp_stanza_t *x = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(x, "x");
-        xmpp_stanza_set_ns(x, "jabber:x:data");
-        xmpp_stanza_set_attribute(x, "type", "submit");
+        auto x = mk();
+        xmpp_stanza_set_name(x.get(), "x");
+        xmpp_stanza_set_ns(x.get(), "jabber:x:data");
+        xmpp_stanza_set_attribute(x.get(), "type", "submit");
 
-        xmpp_stanza_t *f1 = make_field("FORM_TYPE",
+        auto f1 = make_field("FORM_TYPE",
             "http://jabber.org/protocol/pubsub#publish-options", "hidden");
-        xmpp_stanza_t *f2 = make_field("pubsub#max_items", "max");
-        xmpp_stanza_t *f3 = make_field("pubsub#access_model", "open");
-        xmpp_stanza_t *f4 = make_field("pubsub#persist_items", "true");
+        auto f2 = make_field("pubsub#max_items", "max");
+        auto f3 = make_field("pubsub#access_model", "open");
+        auto f4 = make_field("pubsub#persist_items", "true");
 
-        xmpp_stanza_add_child(x, f1); xmpp_stanza_release(f1);
-        xmpp_stanza_add_child(x, f2); xmpp_stanza_release(f2);
-        xmpp_stanza_add_child(x, f3); xmpp_stanza_release(f3);
-        xmpp_stanza_add_child(x, f4); xmpp_stanza_release(f4);
+        xmpp_stanza_add_child(x.get(), f1.get());
+        xmpp_stanza_add_child(x.get(), f2.get());
+        xmpp_stanza_add_child(x.get(), f3.get());
+        xmpp_stanza_add_child(x.get(), f4.get());
 
-        xmpp_stanza_t *publish_options = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(publish_options, "publish-options");
-        xmpp_stanza_add_child(publish_options, x);
-        xmpp_stanza_release(x);
+        auto publish_options = mk();
+        xmpp_stanza_set_name(publish_options.get(), "publish-options");
+        xmpp_stanza_add_child(publish_options.get(), x.get());
 
-        xmpp_stanza_add_child(pubsub, publish_options);
-        xmpp_stanza_release(publish_options);
+        xmpp_stanza_add_child(pubsub.get(), publish_options.get());
     }
 
-    xmpp_stanza_t *iq_children[] = {pubsub, nullptr};
-    iq = stanza__iq(context, nullptr, iq_children, nullptr, "omemo-bundle", from, to, "set");
+    // Build <iq type='set' id='omemo-bundle'> — returned raw (caller owns)
+    xmpp_stanza_t *iq = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(iq, "iq");
+    xmpp_stanza_set_type(iq, "set");
+    xmpp_stanza_set_id(iq, "omemo-bundle");
+    if (from) xmpp_stanza_set_attribute(iq, "from", from);
+    if (to)   xmpp_stanza_set_attribute(iq, "to", to);
+    xmpp_stanza_add_child(iq, pubsub.get());
 
     return iq;
 }
@@ -207,113 +232,114 @@ xmpp_stanza_t *weechat::xmpp::omemo::get_legacy_bundle(xmpp_ctx_t *context, char
     XDEBUG("omemo: publishing legacy bundle for device {} with {} prekeys",
            device_id, bundle->prekeys.size());
 
+    auto mk_leg = [&]() {
+        return std::shared_ptr<xmpp_stanza_t> { xmpp_stanza_new(context), xmpp_stanza_release };
+    };
+
     auto make_text_node = [&](const char *name, const std::string &text,
                               const char *attr_name = nullptr,
                               const std::string *attr_value = nullptr) {
-        xmpp_stanza_t *node = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(node, name);
+        auto node = mk_leg();
+        xmpp_stanza_set_name(node.get(), name);
         if (attr_name && attr_value)
-            xmpp_stanza_set_attribute(node, attr_name, attr_value->c_str());
-
-        xmpp_stanza_t *txt = xmpp_stanza_new(context);
-        xmpp_stanza_set_text(txt, text.c_str());
-        xmpp_stanza_add_child(node, txt);
-        xmpp_stanza_release(txt);
+            xmpp_stanza_set_attribute(node.get(), attr_name, attr_value->c_str());
+        auto txt = mk_leg();
+        xmpp_stanza_set_text(txt.get(), text.c_str());
+        xmpp_stanza_add_child(node.get(), txt.get());
         return node;
     };
 
-    xmpp_stanza_t *bundle_stanza = xmpp_stanza_new(context);
-    xmpp_stanza_set_name(bundle_stanza, "bundle");
-    xmpp_stanza_set_ns(bundle_stanza, kLegacyOmemoNs.data());
+    auto bundle_stanza = mk_leg();
+    xmpp_stanza_set_name(bundle_stanza.get(), "bundle");
+    xmpp_stanza_set_ns(bundle_stanza.get(), kLegacyOmemoNs.data());
 
-    xmpp_stanza_t *spk = make_text_node("signedPreKeyPublic",
-                                        bundle->signed_pre_key,
-                                        "signedPreKeyId",
-                                        &bundle->signed_pre_key_id);
-    xmpp_stanza_add_child(bundle_stanza, spk);
-    xmpp_stanza_release(spk);
+    auto spk = make_text_node("signedPreKeyPublic",
+                              bundle->signed_pre_key,
+                              "signedPreKeyId",
+                              &bundle->signed_pre_key_id);
+    xmpp_stanza_add_child(bundle_stanza.get(), spk.get());
 
-    xmpp_stanza_t *spks = make_text_node("signedPreKeySignature",
-                                         bundle->signed_pre_key_signature);
-    xmpp_stanza_add_child(bundle_stanza, spks);
-    xmpp_stanza_release(spks);
+    auto spks = make_text_node("signedPreKeySignature",
+                               bundle->signed_pre_key_signature);
+    xmpp_stanza_add_child(bundle_stanza.get(), spks.get());
 
-    xmpp_stanza_t *ik = make_text_node("identityKey", bundle->identity_key);
-    xmpp_stanza_add_child(bundle_stanza, ik);
-    xmpp_stanza_release(ik);
+    auto ik = make_text_node("identityKey", bundle->identity_key);
+    xmpp_stanza_add_child(bundle_stanza.get(), ik.get());
 
-    xmpp_stanza_t *prekeys = xmpp_stanza_new(context);
-    xmpp_stanza_set_name(prekeys, "prekeys");
-    xmpp_stanza_set_ns(prekeys, kLegacyOmemoNs.data());
+    auto prekeys = mk_leg();
+    xmpp_stanza_set_name(prekeys.get(), "prekeys");
+    xmpp_stanza_set_ns(prekeys.get(), kLegacyOmemoNs.data());
     for (const auto &[id, key] : bundle->prekeys)
     {
-        xmpp_stanza_t *pk = make_text_node("preKeyPublic", key, "preKeyId", &id);
-        xmpp_stanza_add_child(prekeys, pk);
-        xmpp_stanza_release(pk);
+        auto pk = make_text_node("preKeyPublic", key, "preKeyId", &id);
+        xmpp_stanza_add_child(prekeys.get(), pk.get());
     }
-    xmpp_stanza_add_child(bundle_stanza, prekeys);
-    xmpp_stanza_release(prekeys);
+    xmpp_stanza_add_child(bundle_stanza.get(), prekeys.get());
 
-    xmpp_stanza_t *item_children[] = {bundle_stanza, nullptr};
     const auto item_id = fmt::format("{}", device_id);
-    xmpp_stanza_t *item = stanza__iq_pubsub_publish_item(
-        context, nullptr, item_children, with_noop(item_id.c_str()));
+    auto item = mk_leg();
+    xmpp_stanza_set_name(item.get(), "item");
+    xmpp_stanza_set_attribute(item.get(), "id", item_id.c_str());
+    xmpp_stanza_add_child(item.get(), bundle_stanza.get());
 
     const auto node = fmt::format("{}{}", kLegacyBundlesNodePrefix, device_id);
-    xmpp_stanza_t *publish_children[] = {item, nullptr};
-    xmpp_stanza_t *publish = stanza__iq_pubsub_publish(
-        context, nullptr, publish_children, with_noop(node.c_str()));
+    auto publish = mk_leg();
+    xmpp_stanza_set_name(publish.get(), "publish");
+    xmpp_stanza_set_attribute(publish.get(), "node", node.c_str());
+    xmpp_stanza_add_child(publish.get(), item.get());
 
-    xmpp_stanza_t *pubsub_children[] = {publish, nullptr};
-    xmpp_stanza_t *pubsub = stanza__iq_pubsub(
-        context, nullptr, pubsub_children, with_noop("http://jabber.org/protocol/pubsub"));
+    auto pubsub = mk_leg();
+    xmpp_stanza_set_name(pubsub.get(), "pubsub");
+    xmpp_stanza_set_ns(pubsub.get(), "http://jabber.org/protocol/pubsub");
+    xmpp_stanza_add_child(pubsub.get(), publish.get());
 
     // Keep legacy bundle node readable to interop clients.
     {
         auto make_field = [&](const char *var, const char *val, const char *type_attr = nullptr) {
-            xmpp_stanza_t *field = xmpp_stanza_new(context);
-            xmpp_stanza_set_name(field, "field");
-            xmpp_stanza_set_attribute(field, "var", var);
-            if (type_attr) xmpp_stanza_set_attribute(field, "type", type_attr);
-            xmpp_stanza_t *value = xmpp_stanza_new(context);
-            xmpp_stanza_set_name(value, "value");
-            xmpp_stanza_t *txt = xmpp_stanza_new(context);
-            xmpp_stanza_set_text(txt, val);
-            xmpp_stanza_add_child(value, txt);
-            xmpp_stanza_release(txt);
-            xmpp_stanza_add_child(field, value);
-            xmpp_stanza_release(value);
+            auto field = mk_leg();
+            xmpp_stanza_set_name(field.get(), "field");
+            xmpp_stanza_set_attribute(field.get(), "var", var);
+            if (type_attr) xmpp_stanza_set_attribute(field.get(), "type", type_attr);
+            auto value = mk_leg();
+            xmpp_stanza_set_name(value.get(), "value");
+            auto txt = mk_leg();
+            xmpp_stanza_set_text(txt.get(), val);
+            xmpp_stanza_add_child(value.get(), txt.get());
+            xmpp_stanza_add_child(field.get(), value.get());
             return field;
         };
 
-        xmpp_stanza_t *x = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(x, "x");
-        xmpp_stanza_set_ns(x, "jabber:x:data");
-        xmpp_stanza_set_attribute(x, "type", "submit");
+        auto x = mk_leg();
+        xmpp_stanza_set_name(x.get(), "x");
+        xmpp_stanza_set_ns(x.get(), "jabber:x:data");
+        xmpp_stanza_set_attribute(x.get(), "type", "submit");
 
-        xmpp_stanza_t *f1 = make_field("FORM_TYPE",
+        auto f1 = make_field("FORM_TYPE",
             "http://jabber.org/protocol/pubsub#publish-options", "hidden");
-        xmpp_stanza_t *f2 = make_field("pubsub#max_items", "max");
-        xmpp_stanza_t *f3 = make_field("pubsub#access_model", "open");
-        xmpp_stanza_t *f4 = make_field("pubsub#persist_items", "true");
+        auto f2 = make_field("pubsub#max_items", "max");
+        auto f3 = make_field("pubsub#access_model", "open");
+        auto f4 = make_field("pubsub#persist_items", "true");
 
-        xmpp_stanza_add_child(x, f1); xmpp_stanza_release(f1);
-        xmpp_stanza_add_child(x, f2); xmpp_stanza_release(f2);
-        xmpp_stanza_add_child(x, f3); xmpp_stanza_release(f3);
-        xmpp_stanza_add_child(x, f4); xmpp_stanza_release(f4);
+        xmpp_stanza_add_child(x.get(), f1.get());
+        xmpp_stanza_add_child(x.get(), f2.get());
+        xmpp_stanza_add_child(x.get(), f3.get());
+        xmpp_stanza_add_child(x.get(), f4.get());
 
-        xmpp_stanza_t *publish_options = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(publish_options, "publish-options");
-        xmpp_stanza_add_child(publish_options, x);
-        xmpp_stanza_release(x);
+        auto publish_options = mk_leg();
+        xmpp_stanza_set_name(publish_options.get(), "publish-options");
+        xmpp_stanza_add_child(publish_options.get(), x.get());
 
-        xmpp_stanza_add_child(pubsub, publish_options);
-        xmpp_stanza_release(publish_options);
+        xmpp_stanza_add_child(pubsub.get(), publish_options.get());
     }
 
-    xmpp_stanza_t *iq_children[] = {pubsub, nullptr};
-    xmpp_stanza_t *iq = stanza__iq(context, nullptr, iq_children,
-                                   nullptr, "omemo-legacy-bundle", from, to, "set");
+    // Build <iq type='set' id='omemo-legacy-bundle'> — returned raw (caller owns)
+    xmpp_stanza_t *iq = xmpp_stanza_new(context);
+    xmpp_stanza_set_name(iq, "iq");
+    xmpp_stanza_set_type(iq, "set");
+    xmpp_stanza_set_id(iq, "omemo-legacy-bundle");
+    if (from) xmpp_stanza_set_attribute(iq, "from", from);
+    if (to)   xmpp_stanza_set_attribute(iq, "to", to);
+    xmpp_stanza_add_child(iq, pubsub.get());
 
     return iq;
 }
