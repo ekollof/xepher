@@ -192,8 +192,7 @@ int command__adhoc(const void *pointer, void *data,
         *p_holder = p;
         (void) p;
 
-        xmpp_string_guard query_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        const char *query_id = query_id_g.ptr;
+        std::string query_id = stanza::uuid(ptr_account->context);
 
         weechat::account::adhoc_query_info info;
         info.target_jid = target_jid;
@@ -202,18 +201,11 @@ int command__adhoc(const void *pointer, void *data,
         info.picker = *p_holder;
         ptr_account->adhoc_queries[query_id] = info;
 
-        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", query_id);
-        xmpp_stanza_set_to(iq, target_jid);
-        xmpp_stanza_t *query_stanza = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(query_stanza, "query");
-        xmpp_stanza_set_ns(query_stanza, "http://jabber.org/protocol/disco#items");
-        xmpp_stanza_set_attribute(query_stanza, "node",
-                                  "http://jabber.org/protocol/commands");
-        xmpp_stanza_add_child(iq, query_stanza);
-        xmpp_stanza_release(query_stanza);
-        ptr_account->connection.send(iq);
-        xmpp_stanza_release(iq);
-        // freed by query_id_g
+        ptr_account->connection.send(
+            stanza::iq().type("get").id(query_id).to(target_jid)
+            .xep0030()
+            .query_items(stanza::xep0030::query_items("http://jabber.org/protocol/commands"))
+            .build(ptr_account->context).get());
 
         return WEECHAT_RC_OK;
     }
@@ -223,8 +215,7 @@ int command__adhoc(const void *pointer, void *data,
     if (argc == 3)
     {
         // Execute a command (first step)
-        xmpp_string_guard exec_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        const char *exec_id = exec_id_g.ptr;
+        std::string exec_id = stanza::uuid(ptr_account->context);
 
         weechat::account::adhoc_query_info info;
         info.target_jid = target_jid;
@@ -233,18 +224,23 @@ int command__adhoc(const void *pointer, void *data,
         info.node = node;
         ptr_account->adhoc_queries[exec_id] = info;
 
-        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", exec_id);
-        xmpp_stanza_set_to(iq, target_jid);
-        xmpp_stanza_t *command = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(command, "command");
-        xmpp_stanza_set_ns(command, "http://jabber.org/protocol/commands");
-        xmpp_stanza_set_attribute(command, "node", node);
-        xmpp_stanza_set_attribute(command, "action", "execute");
-        xmpp_stanza_add_child(iq, command);
-        xmpp_stanza_release(command);
-        ptr_account->connection.send(iq);
-        xmpp_stanza_release(iq);
-        // freed by exec_id_g
+        struct adhoc_exec_spec : stanza::spec {
+            adhoc_exec_spec(const std::string &id, const char *to,
+                            const char *n) : spec("iq") {
+                attr("type", "set");
+                attr("id", id);
+                attr("to", to);
+                struct command_spec : stanza::spec {
+                    command_spec(const char *n) : spec("command") {
+                        attr("xmlns", "http://jabber.org/protocol/commands");
+                        attr("node", n);
+                        attr("action", "execute");
+                    }
+                } cmd(n);
+                child(cmd);
+            }
+        } adhoc_exec_iq(exec_id, target_jid, node);
+        ptr_account->connection.send(adhoc_exec_iq.build(ptr_account->context).get());
 
         weechat_printf(buffer, "%sxmpp: executing command %s on %s…",
                       weechat_prefix("network"), node, target_jid);
@@ -254,8 +250,7 @@ int command__adhoc(const void *pointer, void *data,
     // argc >= 4: submit a form step
     // argv[3] = sessionid, argv[4..] = field=value pairs
     const char *session_id = argv[3];
-    xmpp_string_guard submit_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    const char *submit_id = submit_id_g.ptr;
+    std::string submit_id = stanza::uuid(ptr_account->context);
 
     weechat::account::adhoc_query_info info;
     info.target_jid = target_jid;
@@ -265,52 +260,44 @@ int command__adhoc(const void *pointer, void *data,
     info.session_id = session_id;
     ptr_account->adhoc_queries[submit_id] = info;
 
-    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", submit_id);
-    xmpp_stanza_set_to(iq, target_jid);
-    xmpp_stanza_t *command = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(command, "command");
-    xmpp_stanza_set_ns(command, "http://jabber.org/protocol/commands");
-    xmpp_stanza_set_attribute(command, "node", node);
-    xmpp_stanza_set_attribute(command, "sessionid", session_id);
-    xmpp_stanza_set_attribute(command, "action", "execute");
-
-    // Build x data form with provided field=value pairs
-    xmpp_stanza_t *x_form = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(x_form, "x");
-    xmpp_stanza_set_ns(x_form, "jabber:x:data");
-    xmpp_stanza_set_attribute(x_form, "type", "submit");
-
-    for (int i = 4; i < argc; i++)
+    // Build IQ with command + x:data form using RAII shared_ptr stanzas
     {
-        // Parse "field=value" pairs
-        std::string_view arg_sv(argv[i]);
-        auto eq_pos = arg_sv.find('=');
-        if (eq_pos == std::string_view::npos) continue;
-        std::string field_var(arg_sv.substr(0, eq_pos));
-        const char *field_val = argv[i] + eq_pos + 1;
-
-        xmpp_stanza_t *field = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(field, "field");
-        xmpp_stanza_set_attribute(field, "var", field_var.c_str());
-        xmpp_stanza_t *value = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(value, "value");
-        xmpp_stanza_t *value_text = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_text(value_text, field_val);
-        xmpp_stanza_add_child(value, value_text);
-        xmpp_stanza_release(value_text);
-        xmpp_stanza_add_child(field, value);
-        xmpp_stanza_release(value);
-        xmpp_stanza_add_child(x_form, field);
-        xmpp_stanza_release(field);
+        xmpp_ctx_t *ctx = ptr_account->context;
+        std::shared_ptr<xmpp_stanza_t> iq {xmpp_iq_new(ctx, "set", submit_id.c_str()),
+                                            xmpp_stanza_release};
+        xmpp_stanza_set_to(iq.get(), target_jid);
+        std::shared_ptr<xmpp_stanza_t> command {xmpp_stanza_new(ctx), xmpp_stanza_release};
+        xmpp_stanza_set_name(command.get(), "command");
+        xmpp_stanza_set_ns(command.get(), "http://jabber.org/protocol/commands");
+        xmpp_stanza_set_attribute(command.get(), "node", node);
+        xmpp_stanza_set_attribute(command.get(), "sessionid", session_id);
+        xmpp_stanza_set_attribute(command.get(), "action", "execute");
+        std::shared_ptr<xmpp_stanza_t> x_form {xmpp_stanza_new(ctx), xmpp_stanza_release};
+        xmpp_stanza_set_name(x_form.get(), "x");
+        xmpp_stanza_set_ns(x_form.get(), "jabber:x:data");
+        xmpp_stanza_set_attribute(x_form.get(), "type", "submit");
+        for (int i = 4; i < argc; i++)
+        {
+            std::string_view arg_sv(argv[i]);
+            auto eq_pos = arg_sv.find('=');
+            if (eq_pos == std::string_view::npos) continue;
+            std::string field_var(arg_sv.substr(0, eq_pos));
+            const char *field_val = argv[i] + eq_pos + 1;
+            std::shared_ptr<xmpp_stanza_t> field {xmpp_stanza_new(ctx), xmpp_stanza_release};
+            xmpp_stanza_set_name(field.get(), "field");
+            xmpp_stanza_set_attribute(field.get(), "var", field_var.c_str());
+            std::shared_ptr<xmpp_stanza_t> value {xmpp_stanza_new(ctx), xmpp_stanza_release};
+            xmpp_stanza_set_name(value.get(), "value");
+            std::shared_ptr<xmpp_stanza_t> vtext {xmpp_stanza_new(ctx), xmpp_stanza_release};
+            xmpp_stanza_set_text(vtext.get(), field_val);
+            xmpp_stanza_add_child(value.get(), vtext.get());
+            xmpp_stanza_add_child(field.get(), value.get());
+            xmpp_stanza_add_child(x_form.get(), field.get());
+        }
+        xmpp_stanza_add_child(command.get(), x_form.get());
+        xmpp_stanza_add_child(iq.get(), command.get());
+        ptr_account->connection.send(iq.get());
     }
-
-    xmpp_stanza_add_child(command, x_form);
-    xmpp_stanza_release(x_form);
-    xmpp_stanza_add_child(iq, command);
-    xmpp_stanza_release(command);
-    ptr_account->connection.send(iq);
-    xmpp_stanza_release(iq);
-    // freed by submit_id_g
 
     weechat_printf(buffer, "%sxmpp: submitting form for command %s (session %s)…",
                   weechat_prefix("network"), node, session_id);
@@ -538,11 +525,8 @@ int command__muc_nick(const void *pointer, void *data,
 
     /* Send presence to room@muc/newnick — the server will respond with
      * a presence from room@muc/newnick that updates our local nick. */
-    const char *new_full_jid = xmpp_jid_new(
-        ptr_account->context,
-        xmpp_jid_node(ptr_account->context, ptr_channel->id.data()),
-        xmpp_jid_domain(ptr_account->context, ptr_channel->id.data()),
-        new_nick);
+    ::jid ch_jid(nullptr, ptr_channel->id);
+    std::string new_full_jid = fmt::format("{}@{}/{}", ch_jid.local, ch_jid.domain, new_nick);
 
     auto nick_pres = stanza::presence().from(ptr_account->jid()).to(new_full_jid);
     ptr_account->connection.send(nick_pres.build(ptr_account->context).get());
@@ -598,24 +582,13 @@ int command__feed(const void *pointer, void *data,
             weechat_printf(buffer,
                            "%sFetching subscribed PubSub feeds from %s…",
                            weechat_prefix("network"), svc.c_str());
-            xmpp_string_guard uid_g(ptr_account->context,
-                                    xmpp_uuid_gen(ptr_account->context));
-            const char *uid = uid_g.ptr;
-            xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", uid);
-            xmpp_stanza_set_to(iq, svc.c_str());
-            xmpp_stanza_t *pubsub = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(pubsub, "pubsub");
-            xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
-            xmpp_stanza_t *subs_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(subs_el, "subscriptions");
-            xmpp_stanza_add_child(pubsub, subs_el);
-            xmpp_stanza_release(subs_el);
-            xmpp_stanza_add_child(iq, pubsub);
-            xmpp_stanza_release(pubsub);
-            if (uid)
-                ptr_account->pubsub_subscriptions_queries[uid] = svc;
-            ptr_account->connection.send(iq);
-            xmpp_stanza_release(iq);
+            std::string uid = stanza::uuid(ptr_account->context);
+            ptr_account->pubsub_subscriptions_queries[uid] = svc;
+            ptr_account->connection.send(
+                stanza::iq().type("get").id(uid).to(svc)
+                .xep0060().pubsub(stanza::xep0060::pubsub()
+                    .subscriptions(stanza::xep0060::subscriptions()))
+                .build(ptr_account->context).get());
         }
         return WEECHAT_RC_OK;
     }
@@ -659,20 +632,12 @@ int command__feed(const void *pointer, void *data,
                 weechat_printf(buffer,
                                "%sDiscovering all PubSub nodes on %s…",
                                weechat_prefix("network"), svc.c_str());
-                xmpp_string_guard uid_g(ptr_account->context,
-                                        xmpp_uuid_gen(ptr_account->context));
-                const char *uid = uid_g.ptr;
-                xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", uid);
-                xmpp_stanza_set_to(iq, svc.c_str());
-                xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
-                xmpp_stanza_set_name(query, "query");
-                xmpp_stanza_set_ns(query, "http://jabber.org/protocol/disco#items");
-                xmpp_stanza_add_child(iq, query);
-                xmpp_stanza_release(query);
-                if (uid)
-                    ptr_account->pubsub_disco_queries[uid] = svc;
-                ptr_account->connection.send(iq);
-                xmpp_stanza_release(iq);
+                std::string uid = stanza::uuid(ptr_account->context);
+                ptr_account->pubsub_disco_queries[uid] = svc;
+                ptr_account->connection.send(
+                    stanza::iq().type("get").id(uid).to(svc)
+                    .xep0030().query_items()
+                    .build(ptr_account->context).get());
             }
         }
         else
@@ -683,24 +648,13 @@ int command__feed(const void *pointer, void *data,
                 weechat_printf(buffer,
                                "%sFetching subscribed PubSub feeds from %s…",
                                weechat_prefix("network"), svc.c_str());
-                xmpp_string_guard uid_g(ptr_account->context,
-                                        xmpp_uuid_gen(ptr_account->context));
-                const char *uid = uid_g.ptr;
-                xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", uid);
-                xmpp_stanza_set_to(iq, svc.c_str());
-                xmpp_stanza_t *pubsub = xmpp_stanza_new(ptr_account->context);
-                xmpp_stanza_set_name(pubsub, "pubsub");
-                xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
-                xmpp_stanza_t *subs = xmpp_stanza_new(ptr_account->context);
-                xmpp_stanza_set_name(subs, "subscriptions");
-                xmpp_stanza_add_child(pubsub, subs);
-                xmpp_stanza_release(subs);
-                xmpp_stanza_add_child(iq, pubsub);
-                xmpp_stanza_release(pubsub);
-                if (uid)
-                    ptr_account->pubsub_subscriptions_queries[uid] = svc;
-                ptr_account->connection.send(iq);
-                xmpp_stanza_release(iq);
+                std::string uid = stanza::uuid(ptr_account->context);
+                ptr_account->pubsub_subscriptions_queries[uid] = svc;
+                ptr_account->connection.send(
+                    stanza::iq().type("get").id(uid).to(svc)
+                    .xep0060().pubsub(stanza::xep0060::pubsub()
+                        .subscriptions(stanza::xep0060::subscriptions()))
+                    .build(ptr_account->context).get());
             }
         }
         return WEECHAT_RC_OK;
@@ -722,10 +676,7 @@ int command__feed(const void *pointer, void *data,
         const std::string node = argv[3];
         const std::string feed_key = fmt::format("{}/{}", svc, node);
 
-        xmpp_string_guard bare_g(ptr_account->context,
-                                 xmpp_jid_bare(ptr_account->context,
-                                               ptr_account->jid().data()));
-        const std::string my_jid = bare_g.ptr ? bare_g.ptr : ptr_account->jid().data();
+        const std::string my_jid = ptr_account->jid();
 
         const std::string uid = stanza::uuid(ptr_account->context);
 
@@ -781,29 +732,13 @@ int command__feed(const void *pointer, void *data,
         }
 
         const std::string svc = argv[2];
-        xmpp_string_guard uid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        const char *uid = uid_g.ptr;
-
-        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", uid);
-        xmpp_stanza_set_to(iq, svc.c_str());
-
-        xmpp_stanza_t *pubsub = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(pubsub, "pubsub");
-        xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
-
-        xmpp_stanza_t *subs_el = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(subs_el, "subscriptions");
-        xmpp_stanza_add_child(pubsub, subs_el);
-        xmpp_stanza_release(subs_el);
-
-        xmpp_stanza_add_child(iq, pubsub);
-        xmpp_stanza_release(pubsub);
-
-        if (uid)
-            ptr_account->pubsub_subscriptions_queries[uid] = svc;
-
-        ptr_account->connection.send(iq);
-        xmpp_stanza_release(iq);
+        std::string uid = stanza::uuid(ptr_account->context);
+        ptr_account->pubsub_subscriptions_queries[uid] = svc;
+        ptr_account->connection.send(
+            stanza::iq().type("get").id(uid).to(svc)
+            .xep0060().pubsub(stanza::xep0060::pubsub()
+                .subscriptions(stanza::xep0060::subscriptions()))
+            .build(ptr_account->context).get());
 
         weechat_printf(buffer, "%sFetching subscriptions from %s…",
                        weechat_prefix("network"), svc.c_str());
@@ -882,154 +817,133 @@ int command__feed(const void *pointer, void *data,
         const std::string via_uri = fmt::format(
             "xmpp:{}?;node={};item={}", rep_service, rep_node, rep_item_id);
 
-        xmpp_string_guard item_uuid_g(ptr_account->context,
-                                      xmpp_uuid_gen(ptr_account->context));
-        const std::string item_uuid = item_uuid_g.ptr ? item_uuid_g.ptr : "repeat";
+        const std::string item_uuid = stanza::uuid(ptr_account->context);
 
         std::time_t now_ts = std::time(nullptr);
         const std::string ts_buf = fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", fmt::gmtime(now_ts));
 
-        xmpp_string_guard domain_g(ptr_account->context,
-                                   xmpp_jid_domain(ptr_account->context,
-                                                   ptr_account->jid().data()));
+        const std::string acct_domain = ::jid(nullptr, ptr_account->jid()).domain;
         const std::string date_buf = fmt::format("{:%Y-%m-%d}", fmt::gmtime(now_ts));
         const std::string atom_id = fmt::format("tag:{},{};posts/{}",
-                                                domain_g.ptr ? domain_g.ptr : "xmpp",
+                                                acct_domain.empty() ? "xmpp" : acct_domain,
                                                 date_buf, item_uuid);
 
-        auto make_text_el_r = [&](xmpp_ctx_t *ctx,
-                                  const char *tag,
-                                  const char *text) -> xmpp_stanza_t * {
-            xmpp_stanza_t *el = xmpp_stanza_new(ctx);
-            xmpp_stanza_set_name(el, tag);
-            xmpp_stanza_t *t = xmpp_stanza_new(ctx);
-            xmpp_stanza_set_text(t, text);
-            xmpp_stanza_add_child(el, t);
-            xmpp_stanza_release(t);
+        // Helper: build <tag>text</tag> with RAII
+        auto make_text_el = [&](const char *tag, const char *text)
+            -> std::shared_ptr<xmpp_stanza_t> {
+            std::shared_ptr<xmpp_stanza_t> el {xmpp_stanza_new(ptr_account->context),
+                                                xmpp_stanza_release};
+            xmpp_stanza_set_name(el.get(), tag);
+            std::shared_ptr<xmpp_stanza_t> t {xmpp_stanza_new(ptr_account->context),
+                                               xmpp_stanza_release};
+            xmpp_stanza_set_text(t.get(), text);
+            xmpp_stanza_add_child(el.get(), t.get());
             return el;
         };
 
-        xmpp_stanza_t *entry = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(entry, "entry");
-        xmpp_stanza_set_ns(entry, "http://www.w3.org/2005/Atom");
+        std::shared_ptr<xmpp_stanza_t> entry {xmpp_stanza_new(ptr_account->context),
+                                               xmpp_stanza_release};
+        xmpp_stanza_set_name(entry.get(), "entry");
+        xmpp_stanza_set_ns(entry.get(), "http://www.w3.org/2005/Atom");
 
         // <title>Shared: item-id [— comment]</title>
         {
             std::string repeat_title = rep_comment.empty()
                 ? fmt::format("Shared: {}", rep_item_id)
                 : fmt::format("Shared: {} — {}", rep_item_id, rep_comment);
-            xmpp_stanza_t *title_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(title_el, "title");
-            xmpp_stanza_set_attribute(title_el, "type", "text");
-            xmpp_stanza_t *t = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_text(t, repeat_title.c_str());
-            xmpp_stanza_add_child(title_el, t);
-            xmpp_stanza_release(t);
-            xmpp_stanza_add_child(entry, title_el);
-            xmpp_stanza_release(title_el);
+            std::shared_ptr<xmpp_stanza_t> title_el {xmpp_stanza_new(ptr_account->context),
+                                                       xmpp_stanza_release};
+            xmpp_stanza_set_name(title_el.get(), "title");
+            xmpp_stanza_set_attribute(title_el.get(), "type", "text");
+            std::shared_ptr<xmpp_stanza_t> t {xmpp_stanza_new(ptr_account->context),
+                                               xmpp_stanza_release};
+            xmpp_stanza_set_text(t.get(), repeat_title.c_str());
+            xmpp_stanza_add_child(title_el.get(), t.get());
+            xmpp_stanza_add_child(entry.get(), title_el.get());
         }
 
-        {
-            xmpp_stanza_t *id_el = make_text_el_r(ptr_account->context, "id", atom_id.c_str());
-            xmpp_stanza_add_child(entry, id_el);
-            xmpp_stanza_release(id_el);
-            xmpp_stanza_t *pub_el = make_text_el_r(ptr_account->context, "published", ts_buf.c_str());
-            xmpp_stanza_add_child(entry, pub_el);
-            xmpp_stanza_release(pub_el);
-            xmpp_stanza_t *upd_el = make_text_el_r(ptr_account->context, "updated", ts_buf.c_str());
-            xmpp_stanza_add_child(entry, upd_el);
-            xmpp_stanza_release(upd_el);
-        }
+        xmpp_stanza_add_child(entry.get(), make_text_el("id", atom_id.c_str()).get());
+        xmpp_stanza_add_child(entry.get(), make_text_el("published", ts_buf.c_str()).get());
+        xmpp_stanza_add_child(entry.get(), make_text_el("updated", ts_buf.c_str()).get());
 
         // <author>
         {
-            xmpp_string_guard bare_g(ptr_account->context,
-                                     xmpp_jid_bare(ptr_account->context,
-                                                   ptr_account->jid().data()));
-            xmpp_stanza_t *author_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(author_el, "author");
-            xmpp_stanza_t *name_el = make_text_el_r(ptr_account->context, "name",
-                bare_g.ptr ? bare_g.ptr : ptr_account->jid().data());
-            xmpp_stanza_add_child(author_el, name_el);
-            xmpp_stanza_release(name_el);
-            std::string xmpp_uri = fmt::format("xmpp:{}", bare_g.ptr ? bare_g.ptr : "");
-            xmpp_stanza_t *uri_el = make_text_el_r(ptr_account->context, "uri", xmpp_uri.c_str());
-            xmpp_stanza_add_child(author_el, uri_el);
-            xmpp_stanza_release(uri_el);
-            xmpp_stanza_add_child(entry, author_el);
-            xmpp_stanza_release(author_el);
+            const std::string my_bare = ptr_account->jid();
+            const std::string xmpp_uri = fmt::format("xmpp:{}", my_bare);
+            std::shared_ptr<xmpp_stanza_t> author_el {xmpp_stanza_new(ptr_account->context),
+                                                        xmpp_stanza_release};
+            xmpp_stanza_set_name(author_el.get(), "author");
+            xmpp_stanza_add_child(author_el.get(), make_text_el("name", my_bare.c_str()).get());
+            xmpp_stanza_add_child(author_el.get(), make_text_el("uri", xmpp_uri.c_str()).get());
+            xmpp_stanza_add_child(entry.get(), author_el.get());
         }
 
         // <link rel='via' href='xmpp:…' ref='atom-id'/>  (XEP-0472 §4.5 boost/repeat)
-        // 'href' = XMPP URI of original item; 'ref' = Atom <id> of original (if known).
         {
             const std::string rep_feed_key = fmt::format("{}/{}", rep_service, rep_node);
             const std::string rep_atom_id  = ptr_account->feed_atom_id_get(rep_feed_key, rep_item_id);
-            xmpp_stanza_t *via_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(via_el, "link");
-            xmpp_stanza_set_attribute(via_el, "rel",  "via");
-            xmpp_stanza_set_attribute(via_el, "href", via_uri.c_str());
+            std::shared_ptr<xmpp_stanza_t> via_el {xmpp_stanza_new(ptr_account->context),
+                                                    xmpp_stanza_release};
+            xmpp_stanza_set_name(via_el.get(), "link");
+            xmpp_stanza_set_attribute(via_el.get(), "rel",  "via");
+            xmpp_stanza_set_attribute(via_el.get(), "href", via_uri.c_str());
             if (!rep_atom_id.empty())
-                xmpp_stanza_set_attribute(via_el, "ref", rep_atom_id.c_str());
-            xmpp_stanza_add_child(entry, via_el);
-            xmpp_stanza_release(via_el);
+                xmpp_stanza_set_attribute(via_el.get(), "ref", rep_atom_id.c_str());
+            xmpp_stanza_add_child(entry.get(), via_el.get());
         }
 
         // Optional <content>comment</content>
         if (!rep_comment.empty())
         {
-            xmpp_stanza_t *content_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(content_el, "content");
-            xmpp_stanza_set_attribute(content_el, "type", "text");
-            xmpp_stanza_t *t = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_text(t, rep_comment.c_str());
-            xmpp_stanza_add_child(content_el, t);
-            xmpp_stanza_release(t);
-            xmpp_stanza_add_child(entry, content_el);
-            xmpp_stanza_release(content_el);
+            std::shared_ptr<xmpp_stanza_t> content_el {xmpp_stanza_new(ptr_account->context),
+                                                         xmpp_stanza_release};
+            xmpp_stanza_set_name(content_el.get(), "content");
+            xmpp_stanza_set_attribute(content_el.get(), "type", "text");
+            std::shared_ptr<xmpp_stanza_t> t {xmpp_stanza_new(ptr_account->context),
+                                               xmpp_stanza_release};
+            xmpp_stanza_set_text(t.get(), rep_comment.c_str());
+            xmpp_stanza_add_child(content_el.get(), t.get());
+            xmpp_stanza_add_child(entry.get(), content_el.get());
         }
 
         // <generator>
         {
-            xmpp_stanza_t *gen_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(gen_el, "generator");
-            xmpp_stanza_set_attribute(gen_el, "uri",
+            std::shared_ptr<xmpp_stanza_t> gen_el {xmpp_stanza_new(ptr_account->context),
+                                                     xmpp_stanza_release};
+            xmpp_stanza_set_name(gen_el.get(), "generator");
+            xmpp_stanza_set_attribute(gen_el.get(), "uri",
                 "https://github.com/ekollof/xepher");
-            xmpp_stanza_set_attribute(gen_el, "version", WEECHAT_XMPP_PLUGIN_VERSION);
-            xmpp_stanza_t *gt = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_text(gt, "Xepher");
-            xmpp_stanza_add_child(gen_el, gt);
-            xmpp_stanza_release(gt);
-            xmpp_stanza_add_child(entry, gen_el);
-            xmpp_stanza_release(gen_el);
+            xmpp_stanza_set_attribute(gen_el.get(), "version", WEECHAT_XMPP_PLUGIN_VERSION);
+            xmpp_stanza_add_child(gen_el.get(), make_text_el("", "Xepher").get());
+            xmpp_stanza_add_child(entry.get(), gen_el.get());
         }
 
-        xmpp_stanza_t *item_children_r[2] = {entry, nullptr};
-        xmpp_stanza_t *item_el_r = stanza__iq_pubsub_publish_item(
-            ptr_account->context, nullptr, item_children_r, with_noop(item_uuid.c_str()));
+        // Publish the repeat entry via PubSub
+        std::string uid_r = stanza::uuid(ptr_account->context);
+        ptr_account->pubsub_publish_ids[uid_r] = {rep_service, rep_node, item_uuid, buffer};
 
-        xmpp_stanza_t *pub_children_r[2] = {item_el_r, nullptr};
-        xmpp_stanza_t *publish_el_r = stanza__iq_pubsub_publish(
-            ptr_account->context, nullptr, pub_children_r, with_noop(rep_node.c_str()));
-
-        // publish-options omitted — see /feed post comment above.
-        xmpp_stanza_t *ps_r[2] = {publish_el_r, nullptr};
-        xmpp_stanza_t *pubsub_el_r = stanza__iq_pubsub(
-            ptr_account->context, nullptr, ps_r,
-            with_noop("http://jabber.org/protocol/pubsub"));
-
-        xmpp_string_guard uid_r(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        xmpp_stanza_t *iq_r_children[2] = {pubsub_el_r, nullptr};
-        xmpp_stanza_t *iq_r = stanza__iq(ptr_account->context, nullptr, iq_r_children,
-                                         nullptr, uid_r.ptr,
-                                         ptr_account->jid().data(),
-                                         rep_service.c_str(), "set");
-
-        if (uid_r.ptr)
-            ptr_account->pubsub_publish_ids[uid_r.ptr] = {rep_service, rep_node, item_uuid, buffer};
-
-        ptr_account->connection.send(iq_r);
-        xmpp_stanza_release(iq_r);
+        auto entry_item = stanza::xep0060::item().id(item_uuid);
+        // entry_item.payload() needs the built entry stanza — use raw approach for payload
+        auto repeat_iq_built = stanza::iq().type("set").id(uid_r)
+            .from(ptr_account->jid()).to(rep_service)
+            .xep0060().pubsub(stanza::xep0060::pubsub()
+                .publish(stanza::xep0060::publish(rep_node)))
+            .build(ptr_account->context);
+        // Attach the entry to the item inside the publish
+        {
+            xmpp_stanza_t *ps = xmpp_stanza_get_child_by_name(repeat_iq_built.get(), "pubsub");
+            xmpp_stanza_t *pub = ps ? xmpp_stanza_get_child_by_name(ps, "publish") : nullptr;
+            if (pub)
+            {
+                std::shared_ptr<xmpp_stanza_t> item_s {xmpp_stanza_new(ptr_account->context),
+                                                         xmpp_stanza_release};
+                xmpp_stanza_set_name(item_s.get(), "item");
+                xmpp_stanza_set_id(item_s.get(), item_uuid.c_str());
+                xmpp_stanza_add_child(item_s.get(), entry.get());
+                xmpp_stanza_add_child(pub, item_s.get());
+            }
+        }
+        ptr_account->connection.send(repeat_iq_built.get());
 
         weechat_printf(buffer, "%sRepeated %s/%s item %s (id: %s)",
                        weechat_prefix("network"),
@@ -1357,43 +1271,21 @@ int command__feed(const void *pointer, void *data,
                     retract_id = std::string(arg4);
             }
 
-            xmpp_string_guard retract_uid_g(ptr_account->context,
-                                            xmpp_uuid_gen(ptr_account->context));
-            xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set",
-                                             retract_uid_g.ptr);
-            xmpp_stanza_set_to(iq, pub_service.c_str());
-            xmpp_stanza_set_from(iq, ptr_account->jid().data());
-
-            xmpp_stanza_t *pubsub = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(pubsub, "pubsub");
-            xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
-
-            xmpp_stanza_t *retract_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(retract_el, "retract");
-            xmpp_stanza_set_attribute(retract_el, "node", pub_node.c_str());
-            xmpp_stanza_set_attribute(retract_el, "notify", "true");
-
-            xmpp_stanza_t *item_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(item_el, "item");
-            xmpp_stanza_set_id(item_el, retract_id.c_str());
-            xmpp_stanza_add_child(retract_el, item_el);
-            xmpp_stanza_release(item_el);
-
-            xmpp_stanza_add_child(pubsub, retract_el);
-            xmpp_stanza_release(retract_el);
-            xmpp_stanza_add_child(iq, pubsub);
-            xmpp_stanza_release(pubsub);
-
-            // Track the IQ so the error handler can report server-side failures
-            // (e.g. item-not-found, forbidden) instead of silently dropping them.
+            std::string retract_uid = stanza::uuid(ptr_account->context);
+            // Track the IQ so the error handler can report server-side failures.
             // is_retract=true makes trigger_publish_refetch do a full node re-fetch
             // on success (the retracted item is gone; fetching it by ID returns nothing).
-            if (retract_uid_g.ptr)
-                ptr_account->pubsub_publish_ids[retract_uid_g.ptr] = {
-                    pub_service, pub_node, retract_id, buffer, /*is_retract=*/true};
+            ptr_account->pubsub_publish_ids[retract_uid] = {
+                pub_service, pub_node, retract_id, buffer, /*is_retract=*/true};
 
-            ptr_account->connection.send(iq);
-            xmpp_stanza_release(iq);
+            ptr_account->connection.send(
+                stanza::iq().type("set").id(retract_uid)
+                .to(pub_service).from(ptr_account->jid())
+                .xep0060().pubsub(stanza::xep0060::pubsub()
+                    .retract(stanza::xep0060::retract(pub_node)
+                        .notify(true)
+                        .item(stanza::xep0060::item().id(retract_id))))
+                .build(ptr_account->context).get());
 
             weechat_printf(buffer, "%sRetracted item %s from %s/%s",
                            weechat_prefix("network"),
@@ -1624,21 +1516,17 @@ int command__feed(const void *pointer, void *data,
           // <title> from the Atom entry, letting <content> carry everything.
 
          // Generate a stable UUID for the item
-        xmpp_string_guard item_uuid_g(ptr_account->context,
-                                      xmpp_uuid_gen(ptr_account->context));
-        const std::string item_uuid = item_uuid_g.ptr ? item_uuid_g.ptr : "post";
+        const std::string item_uuid = stanza::uuid(ptr_account->context);
 
         // ISO-8601 timestamp (UTC)
         std::time_t now_ts = std::time(nullptr);
         const std::string ts_buf = fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", fmt::gmtime(now_ts));
 
         // Atom tag URI: tag:<domain>,<date>:posts/<uuid>
-        xmpp_string_guard domain_g(ptr_account->context,
-                                   xmpp_jid_domain(ptr_account->context,
-                                                   ptr_account->jid().data()));
+        const std::string acct_domain = ::jid(nullptr, ptr_account->jid()).domain;
         const std::string date_buf = fmt::format("{:%Y-%m-%d}", fmt::gmtime(now_ts));
         const std::string atom_id = fmt::format("tag:{},{};posts/{}",
-                                                domain_g.ptr ? domain_g.ptr : "xmpp",
+                                                acct_domain.empty() ? "xmpp" : acct_domain,
                                                 date_buf, item_uuid);
 
         // Build a pending_feed_post struct with all needed metadata.
@@ -1770,9 +1658,7 @@ int command__feed(const void *pointer, void *data,
             while (!san_name.empty() && san_name.back() == '-') san_name.pop_back();
             if (san_name.empty()) san_name = "file";
 
-            xmpp_string_guard slot_id_g(ptr_account->context,
-                                        xmpp_uuid_gen(ptr_account->context));
-            const std::string slot_id = slot_id_g.ptr ? slot_id_g.ptr : "embed-upload";
+            const std::string slot_id = stanza::uuid(ptr_account->context);
 
             // Store the upload request (keyed by slot IQ id)
             ptr_account->upload_requests[slot_id] = {
@@ -1789,23 +1675,29 @@ int command__feed(const void *pointer, void *data,
             ptr_account->pending_feed_posts[slot_id] = std::move(pfp);
 
             // Build and send XEP-0363 slot request IQ
-            xmpp_stanza_t *slot_iq = xmpp_iq_new(ptr_account->context, "get",
-                                                   slot_id.c_str());
-            xmpp_stanza_set_to(slot_iq, ptr_account->upload_service.c_str());
-
-            xmpp_stanza_t *req_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(req_el, "request");
-            xmpp_stanza_set_ns(req_el, "urn:xmpp:http:upload:0");
-            xmpp_stanza_set_attribute(req_el, "filename", san_name.c_str());
-            auto sz_str = fmt::format("{}", static_cast<size_t>(fsz));
-            xmpp_stanza_set_attribute(req_el, "size", sz_str.c_str());
-            if (!ct.empty())
-                xmpp_stanza_set_attribute(req_el, "content-type", ct.c_str());
-            xmpp_stanza_add_child(slot_iq, req_el);
-            xmpp_stanza_release(req_el);
-
-            ptr_account->connection.send(slot_iq);
-            xmpp_stanza_release(slot_iq);
+            {
+                std::size_t sz_val = static_cast<std::size_t>(fsz);
+                struct slot_req_spec : stanza::spec {
+                    slot_req_spec(const std::string &id, const std::string &to,
+                                  const std::string &fname, std::size_t sz,
+                                  const std::string &ct) : spec("iq") {
+                        attr("type", "get");
+                        attr("id", id);
+                        attr("to", to);
+                        struct request_spec : stanza::spec {
+                            request_spec(const std::string &fn, std::size_t sz,
+                                         const std::string &ct) : spec("request") {
+                                attr("xmlns", "urn:xmpp:http:upload:0");
+                                attr("filename", fn);
+                                attr("size", fmt::format("{}", sz));
+                                if (!ct.empty()) attr("content-type", ct);
+                            }
+                        } req(fname, sz, ct);
+                        child(req);
+                    }
+                } slot_iq_spec(slot_id, ptr_account->upload_service, san_name, sz_val, ct);
+                ptr_account->connection.send(slot_iq_spec.build(ptr_account->context).get());
+            }
 
             weechat_printf(buffer,
                 "%sUploading %zu embed file(s) before posting…",
@@ -1923,23 +1815,12 @@ int command__feed(const void *pointer, void *data,
         weechat_printf(buffer, "%sDiscovering all PubSub nodes on %s…",
                        weechat_prefix("network"), service_jid.c_str());
 
-        xmpp_string_guard uid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        const char *uid = uid_g.ptr;
-
-        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", uid);
-        xmpp_stanza_set_to(iq, service_jid.c_str());
-
-        xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(query, "query");
-        xmpp_stanza_set_ns(query, "http://jabber.org/protocol/disco#items");
-        xmpp_stanza_add_child(iq, query);
-        xmpp_stanza_release(query);
-
-        if (uid)
-            ptr_account->pubsub_disco_queries[uid] = service_jid;
-
-        ptr_account->connection.send(iq);
-        xmpp_stanza_release(iq);
+        std::string uid = stanza::uuid(ptr_account->context);
+        ptr_account->pubsub_disco_queries[uid] = service_jid;
+        ptr_account->connection.send(
+            stanza::iq().type("get").id(uid).to(service_jid)
+            .xep0030().query_items()
+            .build(ptr_account->context).get());
     }
     else
     {
@@ -1947,34 +1828,13 @@ int command__feed(const void *pointer, void *data,
         weechat_printf(buffer, "%sFetching subscribed PubSub feeds from %s…",
                        weechat_prefix("network"), service_jid.c_str());
 
-        xmpp_string_guard uid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        const char *uid = uid_g.ptr;
-
-        // <iq type="get" to="service">
-        //   <pubsub xmlns="http://jabber.org/protocol/pubsub">
-        //     <subscriptions/>
-        //   </pubsub>
-        // </iq>
-        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", uid);
-        xmpp_stanza_set_to(iq, service_jid.c_str());
-
-        xmpp_stanza_t *pubsub = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(pubsub, "pubsub");
-        xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
-
-        xmpp_stanza_t *subs = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(subs, "subscriptions");
-        xmpp_stanza_add_child(pubsub, subs);
-        xmpp_stanza_release(subs);
-
-        xmpp_stanza_add_child(iq, pubsub);
-        xmpp_stanza_release(pubsub);
-
-        if (uid)
-            ptr_account->pubsub_subscriptions_queries[uid] = service_jid;
-
-        ptr_account->connection.send(iq);
-        xmpp_stanza_release(iq);
+        std::string uid = stanza::uuid(ptr_account->context);
+        ptr_account->pubsub_subscriptions_queries[uid] = service_jid;
+        ptr_account->connection.send(
+            stanza::iq().type("get").id(uid).to(service_jid)
+            .xep0060().pubsub(stanza::xep0060::pubsub()
+                .subscriptions(stanza::xep0060::subscriptions()))
+            .build(ptr_account->context).get());
     }
 
     return WEECHAT_RC_OK;

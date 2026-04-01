@@ -91,6 +91,14 @@ namespace stanza {
             retract& item(xep0060::item i) { child(i); return *this; }
         };
 
+        // <subscriptions/> — fetches all subscriptions for the requesting JID
+        struct subscriptions : virtual public spec {
+            subscriptions() : spec("subscriptions") {}
+            subscriptions(std::string_view node_sv) : spec("subscriptions") {
+                if (!node_sv.empty()) attr("node", node_sv);
+            }
+        };
+
         // <pubsub xmlns='http://jabber.org/protocol/pubsub'>
         struct pubsub : virtual public spec {
             pubsub() : spec("pubsub") {
@@ -103,6 +111,7 @@ namespace stanza {
             pubsub& subscribe(xep0060::subscribe s) { child(s); return *this; }
             pubsub& unsubscribe(xep0060::unsubscribe s) { child(s); return *this; }
             pubsub& retract(xep0060::retract r) { child(r); return *this; }
+            pubsub& subscriptions(xep0060::subscriptions s) { child(s); return *this; }
             // RSM <set> sibling of <items> (for paginated fetches)
             pubsub& rsm(xep0059::set s) { child(s); return *this; }
         };

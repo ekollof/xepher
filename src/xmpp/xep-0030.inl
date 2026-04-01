@@ -26,6 +26,10 @@ namespace stanza {
             query_items() : spec("query") {
                 xmlns<jabber_org::protocol::disco::items>();
             }
+            query_items(std::string_view node_sv) : spec("query") {
+                xmlns<jabber_org::protocol::disco::items>();
+                if (!node_sv.empty()) attr("node", node_sv);
+            }
         };
 
         struct iq : virtual public spec {
