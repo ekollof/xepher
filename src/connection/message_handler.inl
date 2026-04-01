@@ -12,6 +12,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     const char *text = nullptr;
     xmpp_string_guard intext_g { account.context, nullptr };
     char *&intext = intext_g.ptr;
+    std::string from_bare_main_storage; // owns main from_bare string
+    std::string to_bare_main_storage;   // owns main to_bare string
      std::string omemo_cleartext_storage; // owns OMEMO-decrypted text
      std::string pgp_cleartext_storage; // owns PGP-decrypted text (avoids strdup)
      char *cleartext = nullptr;
@@ -88,10 +90,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         from = xmpp_stanza_get_from(stanza);
         if (from == nullptr)
             return 1;
-        xmpp_string_guard from_bare_g { account.context, xmpp_jid_bare(account.context, from) };
-            xmpp_string_guard from_resource_g { account.context, xmpp_jid_resource(account.context, from) };
-            from_bare = from_bare_g.ptr;
-            from = from_resource_g.ptr;
+        std::string from_bare_s = ::jid(nullptr, from).bare;
+            std::string from_resource_s = ::jid(nullptr, from).resource;
+            from_bare = from_bare_s.c_str();
+            from = from_resource_s.c_str();
             channel = account.channels.contains(from_bare)
                 ? &account.channels.find(from_bare)->second : nullptr;
             if (!channel)
@@ -132,10 +134,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
             from = xmpp_stanza_get_from(stanza);
             if (from == nullptr)
                 return 1;
-            xmpp_string_guard cs_from_bare_g { account.context, xmpp_jid_bare(account.context, from) };
-            xmpp_string_guard cs_nick_g { account.context, xmpp_jid_resource(account.context, from) };
-            from_bare = cs_from_bare_g.ptr;
-            nick = cs_nick_g.ptr;
+            std::string cs_from_bare_s = ::jid(nullptr, from).bare;
+            std::string cs_nick_s = ::jid(nullptr, from).resource;
+            from_bare = cs_from_bare_s.c_str();
+            nick = cs_nick_s.c_str();
             channel = account.channels.contains(from_bare)
                 ? &account.channels.find(from_bare)->second : nullptr;
             if (!channel)
@@ -190,10 +192,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
             const char *carbon_from = xmpp_stanza_get_from(stanza);
             if (!carbon_from)
                 return 1;
-            xmpp_string_guard carbon_from_bare_g { account.context,
-                xmpp_jid_bare(account.context, carbon_from) };
-            if (!carbon_from_bare_g.ptr ||
-                weechat_strcasecmp(carbon_from_bare_g.ptr, account.jid().data()) != 0)
+            std::string carbon_from_bare_s = ::jid(nullptr, carbon_from).bare;
+            if (carbon_from_bare_s.empty() ||
+                weechat_strcasecmp(carbon_from_bare_s.c_str(), account.jid().data()) != 0)
                 return 1;
 
             xmpp_stanza_t *message = xmpp_stanza_get_child_by_name(forwarded, "message");
@@ -261,11 +262,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                             const char *mmn_text = mmn_body_text_g.ptr;
 
                             const char *mmn_from = xmpp_stanza_get_from(mmn_msg);
-                            xmpp_string_guard mmn_nick_g(account.context,
-                                mmn_from ? xmpp_jid_resource(account.context, mmn_from)
-                                         : nullptr);
-                            const char *mmn_nick = mmn_nick_g.ptr
-                                ? mmn_nick_g.ptr : "(unknown)";
+                            std::string mmn_nick_s = mmn_from ? ::jid(nullptr, mmn_from).resource : std::string{};
+                            const char *mmn_nick = !mmn_nick_s.empty()
+                                ? mmn_nick_s.c_str() : "(unknown)";
 
                             // Parse timestamp from <delay> if present
                             time_t mmn_ts = 0;
@@ -555,15 +554,17 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     // of this function (lines ~76-77) before reaching here.
                     if (!debug_type || weechat_strcasecmp(debug_type, "groupchat") != 0)
                     {
-                        const char *from_bare = debug_from ? xmpp_jid_bare(account.context, debug_from) : nullptr;
-                        const char *to_bare = debug_to ? xmpp_jid_bare(account.context, debug_to) : nullptr;
+                        const std::string from_bare_s = debug_from ? ::jid(nullptr, debug_from).bare : std::string {};
+                        const std::string to_bare_s   = debug_to   ? ::jid(nullptr, debug_to).bare   : std::string {};
+                        const char *from_bare_cs = from_bare_s.empty() ? nullptr : from_bare_s.c_str();
+                        const char *to_bare_cs   = to_bare_s.empty()   ? nullptr : to_bare_s.c_str();
                         
                         // Determine the conversation partner JID
                         const char *partner_jid = nullptr;
-                        if (from_bare && weechat_strcasecmp(from_bare, account.jid().data()) != 0)
-                            partner_jid = from_bare;  // Message FROM someone else
-                        else if (to_bare && weechat_strcasecmp(to_bare, account.jid().data()) != 0)
-                            partner_jid = to_bare;  // Message TO someone else (sent by us)
+                        if (from_bare_cs && weechat_strcasecmp(from_bare_cs, account.jid().data()) != 0)
+                            partner_jid = from_bare_cs;  // Message FROM someone else
+                        else if (to_bare_cs && weechat_strcasecmp(to_bare_cs, account.jid().data()) != 0)
+                            partner_jid = to_bare_cs;  // Message TO someone else (sent by us)
                         
                         // Create PM channel if it doesn't exist
                         if (partner_jid && !account.channels.contains(partner_jid))
@@ -577,11 +578,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                     }));
 
                         }
-                        
-                        if (from_bare)
-                            xmpp_free(account.context, (void*)from_bare);
-                        if (to_bare)
-                            xmpp_free(account.context, (void*)to_bare);
                     }
                     
                     // Extract message details for caching
@@ -589,7 +585,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     const char *msg_from = xmpp_stanza_get_from(message);
                     const char *msg_to = xmpp_stanza_get_to(message);
                     xmpp_stanza_t *msg_body = xmpp_stanza_get_child_by_name(message, "body");
-                    char *msg_text = msg_body ? xmpp_stanza_get_text(msg_body) : nullptr;
+                    xmpp_string_guard msg_text_g(account.context,
+                        msg_body ? xmpp_stanza_get_text(msg_body) : nullptr);
+                    const char *msg_text = msg_text_g.ptr;
                     
                     delay = xmpp_stanza_get_child_by_name_and_ns(
                         forwarded, "delay", "urn:xmpp:delay");
@@ -607,25 +605,17 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     // Cache the message if we have all required fields
                     if (msg_id && msg_from && msg_text && msg_timestamp > 0)
                     {
-                        const char *from_bare = xmpp_jid_bare(account.context, msg_from);
-                        const char *to_bare = msg_to ? xmpp_jid_bare(account.context, msg_to) : nullptr;
+                        std::string from_bare_s2 = ::jid(nullptr, msg_from).bare;                        std::string to_bare_s2 = msg_to ? ::jid(nullptr, msg_to).bare : std::string{};
                         
                         // Determine channel JID (from_bare for received, to_bare for sent)
-                        const char *channel_jid = from_bare;
-                        if (to_bare && weechat_strcasecmp(to_bare, account.jid().data()) != 0)
-                            channel_jid = to_bare;
+                        const char *channel_jid = from_bare_s2.c_str();
+                        if (!to_bare_s2.empty() && weechat_strcasecmp(to_bare_s2.c_str(), account.jid().data()) != 0)
+                            channel_jid = to_bare_s2.c_str();
                         
-                        account.mam_cache_message(channel_jid, msg_id, from_bare, 
+                        account.mam_cache_message(channel_jid, msg_id, from_bare_s2.c_str(), 
                                                   msg_timestamp, msg_text);
-                        
-                        xmpp_free(account.context, (void*)from_bare);
-                        if (to_bare)
-                            xmpp_free(account.context, (void*)to_bare);
                     }
                     
-                    if (msg_text)
-                        xmpp_free(account.context, msg_text);
-
                     // XEP-0313: Dedup MAM results against already-displayed live messages.
                     // The <result id='...'> archive ID equals the server-assigned stanza-id
                     // that live delivery tags each buffer line with ("stanza_id_<id>").
@@ -634,14 +624,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (archive_id && *archive_id)
                     {
                         // Resolve channel JID from the forwarded message addresses
-                        const char *chk_from = msg_from
-                            ? xmpp_jid_bare(account.context, msg_from) : nullptr;
-                        const char *chk_to   = msg_to
-                            ? xmpp_jid_bare(account.context, msg_to)   : nullptr;
+                        std::string chk_from_s = msg_from ? ::jid(nullptr, msg_from).bare : std::string{};
+                        std::string chk_to_s   = msg_to   ? ::jid(nullptr, msg_to).bare   : std::string{};
 
-                        const char *channel_jid_chk = chk_from;
-                        if (chk_to && weechat_strcasecmp(chk_to, account.jid().data()) != 0)
-                            channel_jid_chk = chk_to;
+                        const char *channel_jid_chk = !chk_from_s.empty() ? chk_from_s.c_str() : nullptr;
+                        if (!chk_to_s.empty() && weechat_strcasecmp(chk_to_s.c_str(), account.jid().data()) != 0)
+                            channel_jid_chk = chk_to_s.c_str();
 
                         struct t_gui_buffer *chk_buf = nullptr;
                         if (channel_jid_chk && account.channels.contains(channel_jid_chk))
@@ -678,9 +666,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                 }
                             }
                         }
-
-                        if (chk_from) xmpp_free(account.context, (void*)chk_from);
-                        if (chk_to)   xmpp_free(account.context, (void*)chk_to);
 
                         if (already_displayed)
                             return 1;
@@ -801,7 +786,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         
                             if (data_elem)
                             {
-                                char *b64_data = xmpp_stanza_get_text(data_elem);
+                        xmpp_string_guard b64_data_g(account.context, xmpp_stanza_get_text(data_elem));
+                                char *b64_data = b64_data_g.ptr;
                                 if (b64_data)
                                 {
                                     // Decode base64 avatar data
@@ -841,16 +827,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                         user->profile.avatar_rendered = 
                                             weechat::avatar::render_unicode_blocks(image_data, 
                                                                                    avatar_data.meta.type);
-                                    }
-                                    
-                                    XDEBUG("Avatar data received from {} ({} bytes, hash verified: {})",
-                                           from_jid,
-                                           actual_len,
-                                           hash);
-                                }
-                                
-                                xmpp_free(account.context, b64_data);
-                            }
+                                 }
+                                 
+                                 XDEBUG("Avatar data received from {} ({} bytes, hash verified: {})",
+                                        from_jid,
+                                        actual_len,
+                                        hash);
+                                 }
+                             }
                         }
                     }
                 }
@@ -913,9 +897,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         const char *autojoin = xmpp_stanza_get_attribute(conference, "autojoin");
                         
                         xmpp_stanza_t *nick_elem = xmpp_stanza_get_child_by_name(conference, "nick");
-                        char *nick_text = nullptr;
-                        if (nick_elem)
-                            nick_text = xmpp_stanza_get_text(nick_elem);
+                        xmpp_string_guard nick_text_g(account.context,
+                            nick_elem ? xmpp_stanza_get_text(nick_elem) : nullptr);
+                        const char *nick_text = nick_text_g.ptr;
 
                         bool do_autojoin = autojoin &&
                             (weechat_strcasecmp(autojoin, "true") == 0 ||
@@ -957,9 +941,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                 xep0492_done:;
                             }
                         }
-                        
-                        if (nick_text)
-                            xmpp_free(account.context, nick_text);
                         
                         // Autodisco the room
                         account.connection.send(stanza::iq()
@@ -1054,12 +1035,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
 
                         // Only act on events from other devices of our own account
                         const char *event_from = from ? from : account.jid().data();
-                        const char *own_bare = xmpp_jid_bare(account.context, account.jid().data());
-                        const char *event_bare = xmpp_jid_bare(account.context, event_from);
-                        bool is_own = own_bare && event_bare &&
-                            (weechat_strcasecmp(own_bare, event_bare) == 0);
-                        xmpp_free(account.context, (void*)own_bare);
-                        xmpp_free(account.context, (void*)event_bare);
+                        std::string own_bare_s  = ::jid(nullptr, account.jid().data()).bare;
+                        std::string event_bare_s = ::jid(nullptr, event_from).bare;
+                        bool is_own = !own_bare_s.empty() && !event_bare_s.empty() &&
+                            (weechat_strcasecmp(own_bare_s.c_str(), event_bare_s.c_str()) == 0);
 
                         if (!is_own)
                             continue;
@@ -1115,12 +1094,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 bool from_self = false;
                 if (!feed_service_sv.empty())
                 {
-                    xmpp_string_guard own_bare_g(account.context,
-                        xmpp_jid_bare(account.context, account.jid().data()));
-                    xmpp_string_guard from_bare_g(account.context,
-                        xmpp_jid_bare(account.context, std::string(feed_service_sv).c_str()));
-                    from_self = own_bare_g.ptr && from_bare_g.ptr &&
-                                weechat_strcasecmp(own_bare_g.ptr, from_bare_g.ptr) == 0;
+                    std::string own_bare_fs  = ::jid(nullptr, account.jid().data()).bare;
+                    std::string from_bare_fs = ::jid(nullptr, std::string(feed_service_sv).c_str()).bare;
+                    from_self = !own_bare_fs.empty() && !from_bare_fs.empty() &&
+                                weechat_strcasecmp(own_bare_fs.c_str(), from_bare_fs.c_str()) == 0;
                 }
 
                 if (!node_sv.empty() && !feed_service_sv.empty() && !node_is_uri && !from_self
@@ -1580,15 +1557,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 const char *acked_id = xmpp_stanza_get_id(receipt_received);
                 if (receipt_from && acked_id)
                 {
-                    const char *bare = xmpp_jid_bare(account.context, receipt_from);
-                    weechat::channel *ch = account.channels.contains(bare)
-                        ? &account.channels.find(bare)->second : nullptr;
+                    std::string bare_s = ::jid(nullptr, receipt_from).bare;
+                    weechat::channel *ch = account.channels.contains(bare_s)
+                        ? &account.channels.find(bare_s)->second : nullptr;
                     if (ch && ch->type != weechat::channel::chat_type::MUC)
                     {
                         // Find the sent message line tagged id_<acked_id> and update glyph ⌛→✓
                         update_line_glyph(ch, acked_id, " ✓");
                     }
-                    xmpp_free(account.context, (void*)bare);
                 }
                 return 1;
             }
@@ -1607,15 +1583,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 const char *acked_id = xmpp_stanza_get_id(marker);
                 if (marker_from && acked_id)
                 {
-                    const char *bare = xmpp_jid_bare(account.context, marker_from);
-                    weechat::channel *ch = account.channels.contains(bare)
-                        ? &account.channels.find(bare)->second : nullptr;
+                    std::string bare_s = ::jid(nullptr, marker_from).bare;
+                    weechat::channel *ch = account.channels.contains(bare_s)
+                        ? &account.channels.find(bare_s)->second : nullptr;
                     if (ch && ch->type != weechat::channel::chat_type::MUC)
                     {
                         // Find the sent message line tagged id_<acked_id> and update glyph ⌛/✓→✓✓
                         update_line_glyph(ch, acked_id, " ✓✓");
                     }
-                    xmpp_free(account.context, (void*)bare);
                 }
                 return 1;
             }
@@ -1630,22 +1605,21 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 const char *attn_from = xmpp_stanza_get_from(stanza);
                 if (attn_from)
                 {
-                    const char *bare = xmpp_jid_bare(account.context, attn_from);
-                    weechat::channel *ch = account.channels.contains(bare)
-                        ? &account.channels.find(bare)->second : nullptr;
+                    std::string bare_s = ::jid(nullptr, attn_from).bare;
+                    weechat::channel *ch = account.channels.contains(bare_s)
+                        ? &account.channels.find(bare_s)->second : nullptr;
                     if (!ch)
                     {
                         // Create PM channel for the buzz
                         ch = &account.channels.emplace(
-                            std::make_pair(bare, weechat::channel {
-                                    account, weechat::channel::chat_type::PM, bare, bare
+                            std::make_pair(bare_s, weechat::channel {
+                                    account, weechat::channel::chat_type::PM, bare_s, bare_s
                                 })).first->second;
                     }
                     weechat_printf_date_tags(ch->buffer, 0, "xmpp_attention,notify_highlight",
                                             "%s%s is requesting your attention! (/buzz)",
                                             weechat_prefix("network"),
-                                            bare);
-                    xmpp_free(account.context, (void*)bare);
+                                            bare_s.c_str());
                 }
                 return 1;
             }
@@ -1659,13 +1633,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     from = xmpp_stanza_get_from(stanza);
     if (from == nullptr)
         return 1;
-    from_bare = xmpp_jid_bare(account.context, from);
-    xmpp_string_guard from_bare_main_g { account.context, const_cast<char*>(from_bare) };
+    from_bare_main_storage = ::jid(nullptr, from).bare;
+    from_bare = from_bare_main_storage.c_str();
     to = xmpp_stanza_get_to(stanza);
     if (to == nullptr)
         to = account.jid().data();
-    to_bare = to ? xmpp_jid_bare(account.context, to) : nullptr;
-    xmpp_string_guard to_bare_main_g { account.context, const_cast<char*>(to_bare) };
+    to_bare_main_storage = to ? ::jid(nullptr, to).bare : std::string{};
+    to_bare = !to_bare_main_storage.empty() ? to_bare_main_storage.c_str() : nullptr;
     const bool is_self_outbound_copy = from_bare && to_bare
         && weechat_strcasecmp(from_bare, account.jid().data()) == 0
         && weechat_strcasecmp(to_bare, account.jid().data()) != 0;
@@ -1764,9 +1738,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         if (room_jid)
         {
             from = xmpp_stanza_get_from(stanza);
-            xmpp_string_guard invite_from_bare_g { account.context,
-                from ? xmpp_jid_bare(account.context, from) : nullptr };
-            from_bare = invite_from_bare_g.ptr ? invite_from_bare_g.ptr : "unknown";
+            std::string invite_from_bare_s = from ? ::jid(nullptr, from).bare : std::string{};
+            from_bare = !invite_from_bare_s.empty() ? invite_from_bare_s.c_str() : "unknown";
             
             weechat_printf(account.buffer,
                           _("%s%s invited you to %s%s%s"),
@@ -1969,12 +1942,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
 message_handler_after_omemo:
     if (x)
     {
-        char *ciphertext = xmpp_stanza_get_text(x);
+        xmpp_string_guard ciphertext_g(account.context, xmpp_stanza_get_text(x));
+        const char *ciphertext = ciphertext_g.ptr;
         if (auto decrypted = account.pgp.decrypt(channel->buffer, ciphertext)) {
             pgp_cleartext_storage = std::move(*decrypted);
             cleartext = pgp_cleartext_storage.data();
         }
-        xmpp_free(account.context, ciphertext);
     }
     text = cleartext ? cleartext : intext;
 
@@ -2089,13 +2062,12 @@ message_handler_after_omemo:
                              // XEP-0308 §3: Verify the correcting sender matches
                              // the original message author before applying the edit.
                             // Compute expected nick tag value (same logic as display path).
-                            const char *corr_nick = from;
-                            xmpp_string_guard corr_resource_g { account.context,
-                                (channel && channel->type == weechat::channel::chat_type::MUC)
-                                    ? xmpp_jid_resource(account.context, from)
-                                    : nullptr };
-                            if (corr_resource_g.ptr)
-                                corr_nick = corr_resource_g.ptr;
+                             const char *corr_nick = from;
+                             std::string corr_resource_s;
+                             if (channel && channel->type == weechat::channel::chat_type::MUC)
+                                 corr_resource_s = ::jid(nullptr, from).resource;
+                             if (!corr_resource_s.empty())
+                                 corr_nick = corr_resource_s.c_str();
 
                             bool sender_matches = false;
                             for (int chk = 0; chk < tags_count; chk++)
@@ -2254,6 +2226,7 @@ message_handler_after_omemo:
                                                                     "urn:xmpp:fasten:0");
     const char *moderate_id = nullptr;
     const char *moderate_reason = nullptr;
+    xmpp_string_guard moderate_reason_g { account.context, nullptr };
     
     if (apply_to)
     {
@@ -2266,8 +2239,8 @@ message_handler_after_omemo:
             xmpp_stanza_t *reason_elem = xmpp_stanza_get_child_by_name(moderate, "reason");
             if (reason_elem)
             {
-                char *reason_text = xmpp_stanza_get_text(reason_elem);
-                moderate_reason = reason_text;  // Will be freed later
+                moderate_reason_g = xmpp_string_guard(account.context, xmpp_stanza_get_text(reason_elem));
+                moderate_reason = moderate_reason_g.ptr;
             }
             
             // Save moderation to MAM cache
@@ -2330,8 +2303,6 @@ message_handler_after_omemo:
                                         weechat_prefix("network"),
                                         from_bare);
                                 
-                                if (moderate_reason)
-                                    xmpp_free(account.context, (void*)moderate_reason);
                                 return 1;
                             }
                         }
@@ -2354,9 +2325,7 @@ message_handler_after_omemo:
                     weechat_prefix("network"),
                     from_bare);
             
-            if (moderate_reason)
-                xmpp_free(account.context, (void*)moderate_reason);
-                                 return 1;
+            return 1;
         }
     }
 
@@ -2453,12 +2422,12 @@ message_handler_after_omemo:
             const char *name = xmpp_stanza_get_name(reaction_elem);
             if (name && weechat_strcasecmp(name, "reaction") == 0)
             {
-                char *emoji = xmpp_stanza_get_text(reaction_elem);
+                xmpp_string_guard emoji_g(account.context, xmpp_stanza_get_text(reaction_elem));
+                const char *emoji = emoji_g.ptr;
                 if (emoji)
                 {
                     if (!first) weechat_string_dyn_concat(dyn_emojis, " ", -1);
                     weechat_string_dyn_concat(dyn_emojis, emoji, -1);
-                    xmpp_free(account.context, emoji);
                     first = false;
                 }
             }
@@ -2543,13 +2512,13 @@ message_handler_after_omemo:
     std::string nick_str; // owns the nick string when extracted from a scoped guard
     if (weechat_strcasecmp(type, "groupchat") == 0)
     {
-        xmpp_string_guard gc_bare_g { account.context, xmpp_jid_bare(account.context, from) };
-        xmpp_string_guard gc_resource_g { account.context, xmpp_jid_resource(account.context, from) };
+        std::string gc_bare_s   = ::jid(nullptr, from).bare;
+        std::string gc_resource_s = ::jid(nullptr, from).resource;
         // Use case-insensitive compare: JIDs are case-insensitive per RFC 6122
-        if (gc_bare_g.ptr && weechat_strcasecmp(channel->name.c_str(), gc_bare_g.ptr) == 0
-            && gc_resource_g.ptr && *gc_resource_g.ptr)
+        if (!gc_bare_s.empty() && weechat_strcasecmp(channel->name.c_str(), gc_bare_s.c_str()) == 0
+            && !gc_resource_s.empty())
         {
-            nick_str = gc_resource_g.ptr; // copy into surviving std::string
+            nick_str = gc_resource_s; // copy into surviving std::string
             nick = nick_str.c_str();
         }
         // else nick stays as `from` (the full JID)
@@ -2557,12 +2526,12 @@ message_handler_after_omemo:
     }
     else if (parent_channel && parent_channel->type == weechat::channel::chat_type::MUC)
     {
-        xmpp_string_guard muc_resource_g { account.context, xmpp_jid_resource(account.context, from) };
+        std::string muc_resource_s = ::jid(nullptr, from).resource;
         // Use case-insensitive compare: JIDs are case-insensitive per RFC 6122
         if (weechat_strcasecmp(channel->name.c_str(), from) == 0
-            && muc_resource_g.ptr && *muc_resource_g.ptr)
+            && !muc_resource_s.empty())
         {
-            nick_str = muc_resource_g.ptr;
+            nick_str = muc_resource_s;
             nick = nick_str.c_str();
         }
         // else nick stays as `from`
@@ -2766,10 +2735,9 @@ message_handler_after_omemo:
             auto slash = mentioned_jid.find('/');
             if (slash != std::string::npos)
                 mentioned_jid = mentioned_jid.substr(0, slash);
-            char *local_bare = xmpp_jid_bare(account.context, account.jid().data());
-            if (local_bare && weechat_strcasecmp(mentioned_jid.c_str(), local_bare) == 0)
+            std::string local_bare_s = ::jid(nullptr, account.jid().data()).bare;
+            if (!local_bare_s.empty() && weechat_strcasecmp(mentioned_jid.c_str(), local_bare_s.c_str()) == 0)
                 xep0372_mentioned = true;
-            xmpp_free(account.context, local_bare);
         }
         if (xep0372_mentioned)
             weechat_string_dyn_concat(dyn_tags, ",notify_highlight", -1);
@@ -2972,12 +2940,15 @@ message_handler_after_omemo:
         xmpp_stanza_t *url_elem = xmpp_stanza_get_child_by_name(oob_x, "url");
         if (url_elem)
         {
-            char *url_text = xmpp_stanza_get_text(url_elem);
+            xmpp_string_guard url_text_g(account.context, xmpp_stanza_get_text(url_elem));
+            const char *url_text = url_text_g.ptr;
             if (url_text)
             {
                 // Optionally get description
                 xmpp_stanza_t *desc_elem = xmpp_stanza_get_child_by_name(oob_x, "desc");
-                char *desc_text = desc_elem ? xmpp_stanza_get_text(desc_elem) : nullptr;
+                xmpp_string_guard desc_text_g(account.context,
+                    desc_elem ? xmpp_stanza_get_text(desc_elem) : nullptr);
+                const char *desc_text = desc_text_g.ptr;
                 
                 // Format: [URL: url] or [URL: description (url)]
                 if (desc_text && !std::string_view(desc_text).empty())
@@ -2995,8 +2966,6 @@ message_handler_after_omemo:
                                             weechat_color("resetcolor"));
                 }
                 
-                xmpp_free(account.context, url_text);
-                if (desc_text) xmpp_free(account.context, desc_text);
             }
         }
     }
@@ -3030,9 +2999,9 @@ message_handler_after_omemo:
             xmpp_stanza_t *mime_e = xmpp_stanza_get_child_by_name(file_elem, "media-type");
             xmpp_stanza_t *size_e = xmpp_stanza_get_child_by_name(file_elem, "size");
 
-            if (name_e) { char *t = xmpp_stanza_get_text(name_e); if (t) { sims_name = t; xmpp_free(account.context, t); } }
-            if (mime_e) { char *t = xmpp_stanza_get_text(mime_e); if (t) { sims_mime = t; xmpp_free(account.context, t); } }
-            if (size_e) { char *t = xmpp_stanza_get_text(size_e); if (t) { sims_size_str = t; xmpp_free(account.context, t); } }
+            if (name_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(name_e)); if (t_g.ptr) sims_name = t_g.ptr; }
+            if (mime_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(mime_e)); if (t_g.ptr) sims_mime = t_g.ptr; }
+            if (size_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(size_e)); if (t_g.ptr) sims_size_str = t_g.ptr; }
         }
 
         // Extract first source URL from <sources>
@@ -3120,9 +3089,9 @@ message_handler_after_omemo:
             xmpp_stanza_t *mime_e = xmpp_stanza_get_child_by_name(file_elem, "media-type");
             xmpp_stanza_t *size_e = xmpp_stanza_get_child_by_name(file_elem, "size");
 
-            if (name_e) { char *t = xmpp_stanza_get_text(name_e); if (t) { sfs_name = t; xmpp_free(account.context, t); } }
-            if (mime_e) { char *t = xmpp_stanza_get_text(mime_e); if (t) { sfs_mime = t; xmpp_free(account.context, t); } }
-            if (size_e) { char *t = xmpp_stanza_get_text(size_e); if (t) { sfs_size_str = t; xmpp_free(account.context, t); } }
+            if (name_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(name_e)); if (t_g.ptr) sfs_name = t_g.ptr; }
+            if (mime_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(mime_e)); if (t_g.ptr) sfs_mime = t_g.ptr; }
+            if (size_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(size_e)); if (t_g.ptr) sfs_size_str = t_g.ptr; }
         }
 
         // <sources><url-data xmlns='http://jabber.org/protocol/url-data' target='https://...'/>
@@ -3146,8 +3115,8 @@ message_handler_after_omemo:
                     std::string esfs_key, esfs_iv, esfs_ct_url;
                     xmpp_stanza_t *key_el = xmpp_stanza_get_child_by_name(src, "key");
                     xmpp_stanza_t *iv_el  = xmpp_stanza_get_child_by_name(src, "iv");
-                    if (key_el) { char *t = xmpp_stanza_get_text(key_el); if (t) { esfs_key = t; xmpp_free(account.context, t); } }
-                    if (iv_el)  { char *t = xmpp_stanza_get_text(iv_el);  if (t) { esfs_iv  = t; xmpp_free(account.context, t); } }
+                    if (key_el) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(key_el)); if (t_g.ptr) esfs_key = t_g.ptr; }
+                    if (iv_el)  { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(iv_el));  if (t_g.ptr) esfs_iv  = t_g.ptr; }
 
                     xmpp_stanza_t *inner_sources = xmpp_stanza_get_child_by_name(src, "sources");
                     if (inner_sources)
@@ -3277,7 +3246,8 @@ message_handler_after_omemo:
                 if (!prop_name || !prop_ns) continue;
                 if (std::string_view(prop_ns) != "https://ogp.me/ns#") continue;
 
-                char *val = xmpp_stanza_get_text(prop);
+                xmpp_string_guard val_g(account.context, xmpp_stanza_get_text(prop));
+                const char *val = val_g.ptr;
                 if (!val) continue;
 
                 if (std::string_view(prop_name) == "title" && og_title.empty())
@@ -3292,7 +3262,6 @@ message_handler_after_omemo:
                     if (std::string_view(val).starts_with("http"))
                         og_image = val;
                 }
-                xmpp_free(account.context, val);
             }
 
             if (!og_title.empty() || !og_desc.empty() || !og_url.empty())

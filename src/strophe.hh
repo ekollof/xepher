@@ -28,6 +28,10 @@ struct xmpp_string_guard {
     xmpp_string_guard(const xmpp_string_guard&) = delete;
     xmpp_string_guard& operator=(const xmpp_string_guard&) = delete;
     xmpp_string_guard(xmpp_string_guard&& o) noexcept : ctx(o.ctx), ptr(o.ptr) { o.ptr = nullptr; }
+    xmpp_string_guard& operator=(xmpp_string_guard&& o) noexcept {
+        if (this != &o) { if (ptr) xmpp_free(ctx, ptr); ctx = o.ctx; ptr = o.ptr; o.ptr = nullptr; }
+        return *this;
+    }
 
     explicit operator bool() const { return ptr != nullptr; }
     const char *c_str() const { return ptr; }

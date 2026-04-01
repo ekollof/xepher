@@ -150,29 +150,33 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         if (moved_elem)
         {
             const char *new_jid = xmpp_stanza_get_attribute(moved_elem, "new-jid");
-            xmpp_string_guard new_jid_text_g { account.context, nullptr };
+            std::string new_jid_text_storage;
             if (!new_jid)
             {
                 // Some implementations put the new JID as text content
-                new_jid_text_g.ptr = xmpp_stanza_get_text(moved_elem);
-                new_jid = new_jid_text_g.ptr;
+                xmpp_string_guard new_jid_text_g { account.context,
+                    xmpp_stanza_get_text(moved_elem) };
+                if (new_jid_text_g.ptr)
+                {
+                    new_jid_text_storage = new_jid_text_g.ptr;
+                    new_jid = new_jid_text_storage.c_str();
+                }
             }
             const char *old_jid_full = binding.from ? binding.from->full.data() : "unknown";
-            char *old_jid_bare = binding.from
-                ? xmpp_jid_bare(account.context, binding.from->full.data()) : nullptr;
+            const std::string old_jid_bare_s = binding.from
+                ? ::jid(nullptr, binding.from->full).bare : std::string {};
+            const char *old_jid_bare_p = old_jid_bare_s.empty() ? nullptr : old_jid_bare_s.c_str();
             if (new_jid)
                 weechat_printf_date_tags(account.buffer, 0, "xmpp_presence,notify_highlight",
                                          "%s%sContact %s%s%s has moved to %s%s%s — update your roster",
                                          weechat_prefix("network"),
                                          weechat_color("yellow"),
                                          weechat_color("bold"),
-                                         old_jid_bare ? old_jid_bare : old_jid_full,
+                                         old_jid_bare_p ? old_jid_bare_p : old_jid_full,
                                          weechat_color("reset"),
                                          weechat_color("bold"),
                                          new_jid,
                                          weechat_color("reset"));
-            if (old_jid_bare)
-                xmpp_free(account.context, old_jid_bare);
         }
     }
 
@@ -2441,44 +2445,46 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         return true;
                     }
 
-                    xmpp_string_guard submit_id_g(account.context, xmpp_uuid_gen(account.context));
-                    const char *submit_id = submit_id_g.ptr;
+                    const std::string submit_id = stanza::uuid(account.context);
 
                     weechat::account::channel_search_query_info next_info = cs_info;
                     next_info.form_requested = false;
                     account.channel_search_queries[submit_id] = next_info;
 
-                    // Build search submit based on XEP-0433 fields.
-                    xmpp_stanza_t *submit_iq = xmpp_iq_new(account.context, "get", submit_id);
-                    xmpp_stanza_set_to(submit_iq, cs_info.service_jid.c_str());
+                    // Build search submit based on XEP-0433 fields — RAII.
+                    xmpp_ctx_t *ctx = account.context;
+                    auto mk = [&](const char */*name*/) {
+                        return std::shared_ptr<xmpp_stanza_t> {
+                            xmpp_stanza_new(ctx), xmpp_stanza_release };
+                    };
+                    auto submit_iq = std::shared_ptr<xmpp_stanza_t> {
+                        xmpp_iq_new(ctx, "get", submit_id.c_str()), xmpp_stanza_release };
+                    xmpp_stanza_set_to(submit_iq.get(), cs_info.service_jid.c_str());
 
-                    xmpp_stanza_t *submit_search = xmpp_stanza_new(account.context);
-                    xmpp_stanza_set_name(submit_search, "search");
-                    xmpp_stanza_set_ns(submit_search, "urn:xmpp:channel-search:0:search");
+                    auto submit_search = mk("search");
+                    xmpp_stanza_set_name(submit_search.get(), "search");
+                    xmpp_stanza_set_ns(submit_search.get(), "urn:xmpp:channel-search:0:search");
 
-                    xmpp_stanza_t *submit_form = xmpp_stanza_new(account.context);
-                    xmpp_stanza_set_name(submit_form, "x");
-                    xmpp_stanza_set_ns(submit_form, "jabber:x:data");
-                    xmpp_stanza_set_attribute(submit_form, "type", "submit");
+                    auto submit_form = mk("x");
+                    xmpp_stanza_set_name(submit_form.get(), "x");
+                    xmpp_stanza_set_ns(submit_form.get(), "jabber:x:data");
+                    xmpp_stanza_set_attribute(submit_form.get(), "type", "submit");
 
                     auto add_field = [&](const char *var, const char *value,
                                          const char *type_attr = nullptr) {
-                        xmpp_stanza_t *field = xmpp_stanza_new(account.context);
-                        xmpp_stanza_set_name(field, "field");
-                        xmpp_stanza_set_attribute(field, "var", var);
+                        auto field = mk("field");
+                        xmpp_stanza_set_name(field.get(), "field");
+                        xmpp_stanza_set_attribute(field.get(), "var", var);
                         if (type_attr)
-                            xmpp_stanza_set_attribute(field, "type", type_attr);
+                            xmpp_stanza_set_attribute(field.get(), "type", type_attr);
 
-                        xmpp_stanza_t *val = xmpp_stanza_new(account.context);
-                        xmpp_stanza_set_name(val, "value");
-                        xmpp_stanza_t *txt = xmpp_stanza_new(account.context);
-                        xmpp_stanza_set_text(txt, value);
-                        xmpp_stanza_add_child(val, txt);
-                        xmpp_stanza_release(txt);
-                        xmpp_stanza_add_child(field, val);
-                        xmpp_stanza_release(val);
-                        xmpp_stanza_add_child(submit_form, field);
-                        xmpp_stanza_release(field);
+                        auto val = mk("value");
+                        xmpp_stanza_set_name(val.get(), "value");
+                        auto txt = mk("text");
+                        xmpp_stanza_set_text(txt.get(), value);
+                        xmpp_stanza_add_child(val.get(), txt.get());
+                        xmpp_stanza_add_child(field.get(), val.get());
+                        xmpp_stanza_add_child(submit_form.get(), field.get());
                     };
 
                     add_field("FORM_TYPE", "urn:xmpp:channel-search:0:search-params", "hidden");
@@ -2496,13 +2502,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // Restrict to MUC channels when service supports the field.
                     add_field("types", "xep-0045", "list-multi");
 
-                    xmpp_stanza_add_child(submit_search, submit_form);
-                    xmpp_stanza_release(submit_form);
-                    xmpp_stanza_add_child(submit_iq, submit_search);
-                    xmpp_stanza_release(submit_search);
+                    xmpp_stanza_add_child(submit_search.get(), submit_form.get());
+                    xmpp_stanza_add_child(submit_iq.get(), submit_search.get());
 
-                    account.connection.send(submit_iq);
-                    xmpp_stanza_release(submit_iq);
+                    account.connection.send(submit_iq.get());
 
                     account.channel_search_queries.erase(cs_id);
                     return true;
@@ -3335,55 +3338,66 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         "configuring node and retrying",
                         weechat_prefix("network"), target_node.c_str());
 
-                    // Build node configure IQ.
-                    auto make_field = [&](const char *var, const char *val,
-                                         const char *type_attr = nullptr) {
-                        return stanza_make_field(account.context, var, val, type_attr);
+                    // Build node configure IQ using RAII shared_ptr.
+                    xmpp_ctx_t *ctx = account.context;
+                    auto mk = [&](const char */*name*/) {
+                        return std::shared_ptr<xmpp_stanza_t> {
+                            xmpp_stanza_new(ctx), xmpp_stanza_release };
+                    };
+                    auto mk_field = [&](const char *var, const char *val,
+                                        const char *type_attr = nullptr) {
+                        auto f  = mk("field");
+                        auto v  = mk("value");
+                        auto tv = mk("text");
+                        xmpp_stanza_set_name(f.get(), "field");
+                        xmpp_stanza_set_attribute(f.get(), "var", var);
+                        if (type_attr)
+                            xmpp_stanza_set_attribute(f.get(), "type", type_attr);
+                        xmpp_stanza_set_name(v.get(), "value");
+                        xmpp_stanza_set_name(tv.get(), "text");
+                        xmpp_stanza_set_text(tv.get(), val);
+                        xmpp_stanza_add_child(v.get(), tv.get());
+                        xmpp_stanza_add_child(f.get(), v.get());
+                        return f;
                     };
 
-                    xmpp_stanza_t *x = xmpp_stanza_new(account.context);
-                    xmpp_stanza_set_name(x, "x");
-                    xmpp_stanza_set_ns(x, "jabber:x:data");
-                    xmpp_stanza_set_attribute(x, "type", "submit");
-
-                    xmpp_stanza_t *f1 = make_field("FORM_TYPE",
+                    auto x = mk("x");
+                    xmpp_stanza_set_name(x.get(), "x");
+                    xmpp_stanza_set_ns(x.get(), "jabber:x:data");
+                    xmpp_stanza_set_attribute(x.get(), "type", "submit");
+                    auto f1 = mk_field("FORM_TYPE",
                         "http://jabber.org/protocol/pubsub#meta-data", "hidden");
-                    xmpp_stanza_t *f2 = make_field("pubsub#access_model", "open");
-                    xmpp_stanza_t *f3 = make_field("pubsub#persist_items", "true");
-                    xmpp_stanza_t *f4 = make_field("pubsub#max_items", "max");
-                    xmpp_stanza_add_child(x, f1); xmpp_stanza_release(f1);
-                    xmpp_stanza_add_child(x, f2); xmpp_stanza_release(f2);
-                    xmpp_stanza_add_child(x, f3); xmpp_stanza_release(f3);
-                    xmpp_stanza_add_child(x, f4); xmpp_stanza_release(f4);
+                    auto f2 = mk_field("pubsub#access_model", "open");
+                    auto f3 = mk_field("pubsub#persist_items", "true");
+                    auto f4 = mk_field("pubsub#max_items", "max");
+                    xmpp_stanza_add_child(x.get(), f1.get());
+                    xmpp_stanza_add_child(x.get(), f2.get());
+                    xmpp_stanza_add_child(x.get(), f3.get());
+                    xmpp_stanza_add_child(x.get(), f4.get());
 
-                    xmpp_stanza_t *configure = xmpp_stanza_new(account.context);
-                    xmpp_stanza_set_name(configure, "configure");
-                    xmpp_stanza_add_child(configure, x);
-                    xmpp_stanza_release(x);
+                    auto configure = mk("configure");
+                    xmpp_stanza_set_name(configure.get(), "configure");
+                    xmpp_stanza_set_attribute(configure.get(), "node", target_node.c_str());
+                    xmpp_stanza_add_child(configure.get(), x.get());
 
-                    xmpp_stanza_t *cfg_pubsub = xmpp_stanza_new(account.context);
-                    xmpp_stanza_set_name(cfg_pubsub, "pubsub");
-                    xmpp_stanza_set_ns(cfg_pubsub,
+                    auto cfg_pubsub = mk("pubsub");
+                    xmpp_stanza_set_name(cfg_pubsub.get(), "pubsub");
+                    xmpp_stanza_set_ns(cfg_pubsub.get(),
                         "http://jabber.org/protocol/pubsub#owner");
-                    xmpp_stanza_set_attribute(configure, "node", target_node.c_str());
-                    xmpp_stanza_add_child(cfg_pubsub, configure);
-                    xmpp_stanza_release(configure);
+                    xmpp_stanza_add_child(cfg_pubsub.get(), configure.get());
 
-                    xmpp_string_guard cfg_uuid_g(account.context,
-                        xmpp_uuid_gen(account.context));
-                    const char *cfg_uuid = cfg_uuid_g.ptr;
+                    const std::string cfg_uuid = stanza::uuid(account.context);
 
-                    xmpp_stanza_t *cfg_iq = xmpp_iq_new(account.context, "set", cfg_uuid);
-                    xmpp_stanza_set_to(cfg_iq, account.jid().data());
-                    xmpp_stanza_add_child(cfg_iq, cfg_pubsub);
-                    xmpp_stanza_release(cfg_pubsub);
+                    auto cfg_iq = std::shared_ptr<xmpp_stanza_t> {
+                        xmpp_iq_new(ctx, "set", cfg_uuid.c_str()), xmpp_stanza_release };
+                    xmpp_stanza_set_to(cfg_iq.get(), account.jid().data());
+                    xmpp_stanza_add_child(cfg_iq.get(), cfg_pubsub.get());
 
                     // Remember which node to re-publish after the configure succeeds.
-                    if (cfg_uuid)
+                    if (!cfg_uuid.empty())
                         account.omemo.pending_configure_retry[cfg_uuid] = target_node;
 
-                    account.connection.send(cfg_iq);
-                    xmpp_stanza_release(cfg_iq);
+                    account.connection.send(cfg_iq.get());
                 }
             }
         }
@@ -3427,10 +3441,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
             else if (from)
             {
-                xmpp_string_guard dl_from_bare_g(account.context,
-                    xmpp_jid_bare(account.context, from));
-                if (dl_from_bare_g.ptr && *dl_from_bare_g.ptr)
-                    dl_target_jid = dl_from_bare_g.ptr;
+                const std::string dl_from_bare = ::jid(nullptr, from).bare;
+                if (!dl_from_bare.empty())
+                    dl_target_jid = dl_from_bare;
             }
 
             if (!dl_target_jid.empty())
@@ -3549,16 +3562,19 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
             }
             if (owner.empty()) {
-                xmpp_string_guard from_bare_g(account.context,
-                    from ? xmpp_jid_bare(account.context, from) : nullptr);
-                if (from_bare_g.ptr && *from_bare_g.ptr)
-                    owner = from_bare_g.ptr;
+                if (from) {
+                    const std::string bare = ::jid(nullptr, from).bare;
+                    if (!bare.empty())
+                        owner = bare;
+                }
             }
             if (owner.empty()) {
-                xmpp_string_guard to_bare_g(account.context,
-                    to ? xmpp_jid_bare(account.context, to) : nullptr);
-                owner = (to_bare_g.ptr && *to_bare_g.ptr)
-                    ? to_bare_g.ptr : account.jid().data();
+                if (to) {
+                    const std::string bare = ::jid(nullptr, to).bare;
+                    owner = bare.empty() ? account.jid() : bare;
+                } else {
+                    owner = account.jid();
+                }
             }
             return owner;
         };
@@ -3580,11 +3596,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     {
                         std::string node_owner_str = resolve_node_owner();
                         const char *node_owner = node_owner_str.c_str();
-                        xmpp_string_guard account_bare_g(account.context,
-                            xmpp_jid_bare(account.context, account.jid().data()));
-                        const std::string account_bare = (account_bare_g.ptr && *account_bare_g.ptr)
-                            ? std::string(account_bare_g.ptr)
-                            : std::string(account.jid());
+                        const std::string account_bare_s = ::jid(nullptr, account.jid()).bare;
+                        const std::string account_bare = account_bare_s.empty()
+                            ? account.jid() : account_bare_s;
                         bool is_own_devicelist = (account_bare == node_owner);
 
                         account.omemo.handle_devicelist(&account, node_owner, items);
@@ -3899,11 +3913,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // Recover the correct JID using the same logic as OMEMO:2.
                 std::string node_owner_str = resolve_node_owner();
 
-                xmpp_string_guard account_bare_g(account.context,
-                    xmpp_jid_bare(account.context, account.jid().data()));
-                const std::string account_bare = (account_bare_g.ptr && *account_bare_g.ptr)
-                    ? std::string(account_bare_g.ptr)
-                    : std::string(account.jid());
+                const std::string account_bare_s = ::jid(nullptr, account.jid()).bare;
+                const std::string account_bare = account_bare_s.empty()
+                    ? account.jid() : account_bare_s;
                 const bool is_own_devicelist = (account_bare == node_owner_str);
 
                 if (account.omemo)
