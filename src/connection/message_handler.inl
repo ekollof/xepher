@@ -3653,25 +3653,29 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
     xmpp_stanza_set_type(reply, "result");
     xmpp_stanza_add_child(reply, query);
 
+    // XEP-0115 requires SHA-1; use EVP_Digest (present in both OpenSSL and
+    // LibreSSL) instead of the libstrophe-specific xmpp_sha1_* API.
     unsigned char digest[20];
-    xmpp_sha1_t *sha1 = xmpp_sha1_new(account.context);
-    xmpp_sha1_update(sha1, (unsigned char*)*serial, std::string_view(*serial).size());
-    xmpp_sha1_final(sha1);
+    unsigned int digest_len = sizeof(digest);
+    std::string_view serial_sv(*serial);
+    EVP_Digest(serial_sv.data(), serial_sv.size(), digest, &digest_len,
+               EVP_sha1(), nullptr);
     weechat_string_dyn_free(serial, 1);
-    xmpp_sha1_to_digest(sha1, digest);
-    xmpp_sha1_free(sha1);
 
     if (hash)
     {
-        char *cap_hash = xmpp_base64_encode(account.context, digest, 20);
-        if (cap_hash) {
-            std::string_view sv(cap_hash);
-            auto buf = std::make_unique<char[]>(sv.size() + 1);
-            sv.copy(buf.get(), sv.size());
-            buf.get()[sv.size()] = '\0';
+        const int encoded_size = 4 * static_cast<int>((digest_len + 2) / 3) + 1;
+        std::string encoded(static_cast<std::size_t>(encoded_size), '\0');
+        const int written = weechat_string_base_encode(
+            "64", reinterpret_cast<const char *>(digest),
+            static_cast<int>(digest_len), encoded.data());
+        if (written > 0) {
+            encoded.resize(static_cast<std::size_t>(written));
+            auto buf = std::make_unique<char[]>(encoded.size() + 1);
+            encoded.copy(buf.get(), encoded.size());
+            buf.get()[encoded.size()] = '\0';
             *hash = buf.release(); // caller owns, must delete[]
         }
-        xmpp_free(account.context, cap_hash);
     }
 
     return reply;
