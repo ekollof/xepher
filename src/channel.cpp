@@ -1902,45 +1902,19 @@ void weechat::channel::send_reads()
         // (chat for PM, groupchat for MUC) so the server routes them correctly.
         const char *marker_type = (this->type == weechat::channel::chat_type::MUC)
                                    ? "groupchat" : "chat";
-        xmpp_stanza_t *message = xmpp_message_new(account.context, marker_type,
-                                                    id.data(), nullptr);
-
-        xmpp_stanza_t *message__displayed = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(message__displayed, "displayed");
-        xmpp_stanza_set_ns(message__displayed, "urn:xmpp:chat-markers:0");
         // XEP-0333 §4.3: In a MUC that supports XEP-0359, MUST use the
         // MUC-assigned stanza-id, NOT the sender's message id attribute.
-        const char *displayed_id = unread->id.c_str();
-        if (this->type == weechat::channel::chat_type::MUC
-                && unread->stanza_id.has_value())
-            displayed_id = unread->stanza_id->c_str();
-        xmpp_stanza_set_id(message__displayed, displayed_id);
+        const std::string displayed_id =
+            (this->type == weechat::channel::chat_type::MUC
+             && unread->stanza_id.has_value())
+            ? *unread->stanza_id : unread->id;
+        stanza::message msg;
+        msg.to(id).type(marker_type)
+           .chat_marker_displayed(displayed_id)
+           .no_store();  // XEP-0334: chat marker replies MUST NOT be stored
         if (unread->thread.has_value())
-        {
-            xmpp_stanza_t *message__thread = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_name(message__thread, "thread");
-
-            xmpp_stanza_t *message__thread__text = xmpp_stanza_new(account.context);
-            xmpp_stanza_set_text(message__thread__text, unread->thread->c_str());
-            xmpp_stanza_add_child(message__thread, message__thread__text);
-            xmpp_stanza_release(message__thread__text);
-
-            xmpp_stanza_add_child(message, message__thread);
-            xmpp_stanza_release(message__thread);
-        }
-
-        xmpp_stanza_add_child(message, message__displayed);
-        xmpp_stanza_release(message__displayed);
-
-        // XEP-0334: <no-store/> hint — chat marker replies MUST NOT be stored
-        xmpp_stanza_t *no_store = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(no_store, "no-store");
-        xmpp_stanza_set_ns(no_store, "urn:xmpp:hints");
-        xmpp_stanza_add_child(message, no_store);
-        xmpp_stanza_release(no_store);
-
-        account.connection.send( message);
-        xmpp_stanza_release(message);
+            msg.thread(*unread->thread);
+        account.connection.send(msg.build(account.context).get());
 
         i = unreads.erase(i);
     }
@@ -2060,26 +2034,12 @@ void weechat::channel::send_reads()
 
 void weechat::channel::send_chat_state(weechat::user *user, const char *state)
 {
-    xmpp_stanza_t *message = xmpp_message_new(account.context,
-                                              type == weechat::channel::chat_type::MUC
-                                              ? "groupchat" : "chat",
-                                              (user ? user->id : id).data(), nullptr);
-
-    xmpp_stanza_t *state_stanza = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(state_stanza, state);
-    xmpp_stanza_set_ns(state_stanza, "http://jabber.org/protocol/chatstates");
-    xmpp_stanza_add_child(message, state_stanza);
-    xmpp_stanza_release(state_stanza);
-
-    // XEP-0334: Don't store chat state notifications
-    xmpp_stanza_t *no_store = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(no_store, "no-store");
-    xmpp_stanza_set_ns(no_store, "urn:xmpp:hints");
-    xmpp_stanza_add_child(message, no_store);
-    xmpp_stanza_release(no_store);
-
-    account.connection.send(message);
-    xmpp_stanza_release(message);
+    stanza::message msg;
+    msg.to(user ? user->id : id)
+       .type(type == weechat::channel::chat_type::MUC ? "groupchat" : "chat");
+    msg.chatstate(state);
+    msg.no_store();  // XEP-0334: don't store chat state notifications
+    account.connection.send(msg.build(account.context).get());
 }
 
 void weechat::channel::send_active(weechat::user *user)
@@ -2167,80 +2127,48 @@ void weechat::channel::send_gone(weechat::user *user)
 
 void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, const char* after)
 {
-    char *gen_id = id ? nullptr : xmpp_uuid_gen(account.context);
-    std::string mam_id_str = id ? id : gen_id;
-    if (gen_id) { xmpp_free(account.context, gen_id); gen_id = nullptr; }
-    const char *mam_id = mam_id_str.c_str();
-    xmpp_stanza_t *iq = xmpp_iq_new(account.context, "set", mam_id);
+    std::string mam_id = id ? id : stanza::uuid(account.context);
+
     // XEP-0313: MUC MAM is addressed to the room JID; PM MAM goes to the
     // user's own bare JID (personal archive), NOT the bare server domain.
     // Sending to the bare domain causes <service-unavailable/> errors.
+    std::string mam_to;
     if (type == weechat::channel::chat_type::MUC)
-        xmpp_stanza_set_to(iq, this->id.data());
+    {
+        mam_to = this->id;
+    }
     else
     {
-        char *bare_jid = xmpp_jid_bare(account.context, account.jid().data());
-        if (bare_jid) xmpp_stanza_set_to(iq, bare_jid);
-        xmpp_free(account.context, bare_jid);
+        xmpp_string_guard bare_g {
+            account.context,
+            xmpp_jid_bare(account.context, account.jid().data())
+        };
+        if (bare_g.ptr) mam_to = bare_g.ptr;
     }
 
-    xmpp_stanza_t *query = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(query, "query");
-    xmpp_stanza_set_ns(query, "urn:xmpp:mam:2");
-
-    xmpp_stanza_t *x = xmpp_stanza_new(account.context);
-    xmpp_stanza_set_name(x, "x");
-    xmpp_stanza_set_ns(x, "jabber:x:data");
-    xmpp_stanza_set_attribute(x, "type", "submit");
-
-    auto add_field = [&](xmpp_stanza_t *parent, const char *var,
-                         const char *val, const char *type_attr = nullptr) {
-        xmpp_stanza_t *f = stanza_make_field(account.context, var, val, type_attr);
-        xmpp_stanza_add_child(parent, f);
-        xmpp_stanza_release(f);
-    };
-
-    add_field(x, "FORM_TYPE", "urn:xmpp:mam:2", "hidden");
-    add_field(x, "with", this->id.data());
-
+    stanza::xep0313::x_filter xf;
+    xf.with(this->id);
     if (start)
     {
         std::ostringstream oss;
         oss << std::put_time(gmtime(start), "%Y-%m-%dT%H:%M:%SZ");
-        add_field(x, "start", oss.str().c_str());
+        xf.start(oss.str());
     }
-
     if (end)
     {
         std::ostringstream oss;
         oss << std::put_time(gmtime(end), "%Y-%m-%dT%H:%M:%SZ");
-        add_field(x, "end", oss.str().c_str());
+        xf.end(oss.str());
     }
 
-    xmpp_stanza_add_child(query, x);
-    xmpp_stanza_release(x);
+    stanza::xep0313::query q;
+    q.queryid(mam_id).filter(xf);
 
     if (after)
     {
-        xmpp_stanza_t *set, *set__after, *set__after__text;
-
-        set = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(set, "set");
-        xmpp_stanza_set_ns(set, "http://jabber.org/protocol/rsm");
-
-        set__after = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_name(set__after, "after");
-
-        set__after__text = xmpp_stanza_new(account.context);
-        xmpp_stanza_set_text(set__after__text, after);
-        xmpp_stanza_add_child(set__after, set__after__text);
-        xmpp_stanza_release(set__after__text);
-
-        xmpp_stanza_add_child(set, set__after);
-        xmpp_stanza_release(set__after);
-
-        xmpp_stanza_add_child(query, set);
-        xmpp_stanza_release(set);
+        stanza::xep0059::set rsm;
+        rsm.after(after);
+        q.rsm(rsm);
     }
     else
     {
@@ -2249,9 +2177,9 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
                 end ? std::optional(*end) : std::optional<time_t>());
     }
 
-    xmpp_stanza_add_child(iq, query);
-    xmpp_stanza_release(query);
-
-    account.connection.send(iq);
-    xmpp_stanza_release(iq);
+    stanza::iq iq_s;
+    iq_s.id(mam_id).type("set");
+    if (!mam_to.empty()) iq_s.to(mam_to);
+    iq_s.xep0313().query(q);
+    account.connection.send(iq_s.build(account.context).get());
 }

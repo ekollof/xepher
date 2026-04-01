@@ -173,6 +173,7 @@ namespace stanza {
 };
 
 #include "xep-0027.inl"
+#include "xep-0085.inl"
 #include "xep-0030.inl"
 #include "xep-0045.inl"
 #include "xep-0045-admin.inl"
@@ -226,6 +227,7 @@ namespace stanza {
     };
 
     struct message : virtual public spec,
+                     public xep0085::message,
                      public xep0184::message,
                      public xep0224::message,
                      public xep0249::message,
