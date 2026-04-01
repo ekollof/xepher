@@ -48,10 +48,6 @@
 #include "xmpp/xep-0172.inl"
 #include "xmpp/xep-0292.inl"
 
-extern "C" {
-#include "diff/diff.h"
-}
-
 namespace {
 
 [[nodiscard]] auto parse_omemo_device_id(const char *value) -> std::optional<std::uint32_t>

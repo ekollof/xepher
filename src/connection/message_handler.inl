@@ -17,7 +17,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
      std::string omemo_cleartext_storage; // owns OMEMO-decrypted text
      std::string pgp_cleartext_storage; // owns PGP-decrypted text (avoids strdup)
      char *cleartext = nullptr;
-     std::string difftext;
     struct tm time = {0};
     time_t date = 0;
 
@@ -2151,65 +2150,13 @@ message_handler_after_omemo:
             }
         }
 
-        if (orig)
-        {
-            struct diff result;
-            if (diff(&result, char_cmp, 1, orig, std::string_view(orig).size(), text, std::string_view(text).size()) > 0)
-            {
-                std::unique_ptr<void, decltype(&free)> ses_guard(result.ses, &free);
-                std::unique_ptr<void, decltype(&free)> lcs_guard(result.lcs, &free);
-                char **visual = weechat_string_dyn_alloc(256);
-                char ch[2] = {0};
-                int retention = 0;
-                int modification = 0;
-
-                for (size_t i = 0; i < result.sessz; i++)
-                    switch (result.ses[i].type)
-                    {
-                        case DIFF_ADD:
-                            weechat_string_dyn_concat(visual, weechat_color("green"), -1);
-                            *ch = *(const char *)result.ses[i].e;
-                            weechat_string_dyn_concat(visual, ch, -1);
-                            modification++;
-                            break;
-                        case DIFF_DELETE:
-                            weechat_string_dyn_concat(visual, weechat_color("red"), -1);
-                            *ch = *(const char *)result.ses[i].e;
-                            weechat_string_dyn_concat(visual, ch, -1);
-                            modification++;
-                            break;
-                        case DIFF_COMMON:
-                        default:
-                            weechat_string_dyn_concat(visual, weechat_color("resetcolor"), -1);
-                            *ch = *(const char *)result.ses[i].e;
-
-                            weechat_string_dyn_concat(visual, ch, -1);
-                            retention++;
-                            break;
-                    }
-
-                if ((modification > 20) && (modification > retention)) {
-                    weechat_string_dyn_free(visual, 1);
-                    visual = weechat_string_dyn_alloc(256);
-                    weechat_string_dyn_concat(visual, weechat_color("red"), -1);
-                    if (std::string_view(orig).size() >= 16) {
-                        weechat_string_dyn_concat(visual, orig, 16);
-                        weechat_string_dyn_concat(visual, "...", -1);
-                    } else
-                        weechat_string_dyn_concat(visual, orig, -1);
-                    weechat_string_dyn_concat(visual, weechat_color("green"), -1);
-                    weechat_string_dyn_concat(visual, text, -1);
-                }
-                difftext = *visual;
-                weechat_string_dyn_free(visual, 1);
-            }
-        }
+        (void)orig; // diff display removed; corrected text shown as-is
 
         // XEP-0308: Replace the original line in-place rather than appending a
         // new "* " line.  Use the inline diff if available, otherwise plain text.
         if (edit_line_data)
         {
-            const char *new_msg = difftext.empty() ? text : difftext.c_str();
+            const char *new_msg = text;
             struct t_hashtable *ht = weechat_hashtable_new(4,
                 WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING,
                 nullptr, nullptr);
@@ -3315,17 +3262,13 @@ message_handler_after_omemo:
     std::string styled_text;
     bool has_unstyled = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "unstyled", "urn:xmpp:styling:0") != nullptr;
-    if (text && difftext.empty() && !has_unstyled)  // Don't style diffs (already styled)
+    if (text && !has_unstyled)  // Apply styling
     {
         // XEP-0394: Message Markup takes precedence over XEP-0393 ad-hoc styling.
         styled_text = apply_xep394_markup(stanza, text);
         if (styled_text.empty())
             styled_text = apply_xep393_styling(text);
         display_text = styled_text.c_str();
-    }
-    else if (!difftext.empty())
-    {
-        display_text = difftext.c_str();
     }
 
     std::string final_text; // used by spoiler / ephemeral / oob suffix blocks below
@@ -3413,7 +3356,7 @@ message_handler_after_omemo:
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s %s%s",
                                  edit, weechat_prefix("action"), display_prefix.data(),
                                  encrypted_glyph,
-                                 !difftext.empty() ? difftext.c_str()+4 : display_text ? display_text+4 : "");
+                                 display_text ? display_text+4 : "");
     else
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s%s",
                                  edit, display_prefix.data(),
