@@ -1,18 +1,9 @@
 // Send a MUC join presence stanza to `to_jid` (room@domain/nick) from the account.
 static void send_muc_join_presence(weechat::account *account, const char *to_jid)
 {
-    xmpp_stanza_t *pres = xmpp_presence_new(account->context);
-    xmpp_stanza_set_to(pres, to_jid);
-    xmpp_stanza_set_from(pres, account->jid().data());
-
-    xmpp_stanza_t *pres__x = xmpp_stanza_new(account->context);
-    xmpp_stanza_set_name(pres__x, "x");
-    xmpp_stanza_set_ns(pres__x, "http://jabber.org/protocol/muc");
-    xmpp_stanza_add_child(pres, pres__x);
-    xmpp_stanza_release(pres__x);
-
-    account->connection.send(pres);
-    xmpp_stanza_release(pres);
+    auto join_pres = stanza::presence().to(to_jid).from(account->jid());
+    static_cast<stanza::xep0045::presence&>(join_pres).muc_join();
+    account->connection.send(join_pres.build(account->context).get());
 }
 
 int command__enter(const void *pointer, void *data,
@@ -149,7 +140,6 @@ int command__open(const void *pointer, void *data,
 {
     weechat::account *ptr_account = nullptr;
     weechat::channel *ptr_channel = nullptr;
-    xmpp_stanza_t *pres;
     char *jid, *text;
 
     (void) pointer;
@@ -207,11 +197,8 @@ int command__open(const void *pointer, void *data,
                 && ptr_channel->type == weechat::channel::chat_type::MUC;
             if (!is_muc_occupant_jid)
             {
-                pres = xmpp_presence_new(ptr_account->context);
-                xmpp_stanza_set_to(pres, jid);
-                xmpp_stanza_set_from(pres, ptr_account->jid().data());
-                ptr_account->connection.send(pres);
-                xmpp_stanza_release(pres);
+                auto open_pres = stanza::presence().to(jid).from(ptr_account->jid());
+                ptr_account->connection.send(open_pres.build(ptr_account->context).get());
             }
 
             auto channel = ptr_account->channels.find(jid);

@@ -28,12 +28,20 @@ namespace stanza {
             }
         };
 
+        // <no-permanent-store xmlns='urn:xmpp:hints'/>
+        struct no_permanent_store : virtual public spec {
+            no_permanent_store() : spec("no-permanent-store") {
+                xmlns<urn::xmpp::hints>();
+            }
+        };
+
         // stanza::message mixin
         struct message : virtual public spec {
             message() : spec("message") {}
 
             message& store() { xep0333::store s; child(s); return *this; }
             message& no_store() { xep0333::no_store ns; child(ns); return *this; }
+            message& no_permanent_store() { xep0333::no_permanent_store nps; child(nps); return *this; }
         };
     };
 

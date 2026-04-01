@@ -4,8 +4,7 @@ static void xep0433_send_search(weechat::account *account,
                                 const char *keywords,
                                 weechat::ui::picker<std::string> *picker_ptr = nullptr)
 {
-    xmpp_string_guard search_id_g(account->context, xmpp_uuid_gen(account->context));
-    const char *search_id = search_id_g.ptr;
+    std::string search_id = stanza::uuid(account->context);
 
     weechat::account::channel_search_query_info info;
     info.service_jid = service_jid;
@@ -17,18 +16,22 @@ static void xep0433_send_search(weechat::account *account,
 
     // Build: <iq type='get' to='service' id='...'><search xmlns='urn:xmpp:channel-search:0:search'/></iq>
     // and let iq_handler submit the actual form query based on this response.
-    xmpp_stanza_t *iq = xmpp_iq_new(account->context, "get", search_id);
-    xmpp_stanza_set_to(iq, service_jid);
+    struct channel_search_iq : stanza::spec {
+        channel_search_iq(std::string_view to_, std::string_view id_) : spec("iq") {
+            attr("type", "get");
+            attr("to", to_);
+            attr("id", id_);
+            struct search_child : stanza::spec {
+                search_child() : spec("search") {
+                    xmlns<urn::xmpp::channel_search::_0>();
+                }
+            } s;
+            child(s);
+        }
+    };
 
-    xmpp_stanza_t *search_el = xmpp_stanza_new(account->context);
-    xmpp_stanza_set_name(search_el, "search");
-    xmpp_stanza_set_ns(search_el, "urn:xmpp:channel-search:0:search");
-    xmpp_stanza_add_child(iq, search_el);
-    xmpp_stanza_release(search_el);
-
-    account->connection.send(iq);
-    xmpp_stanza_release(iq);
-    // freed by search_id_g
+    channel_search_iq iq_s(service_jid, search_id);
+    account->connection.send(iq_s.build(account->context).get());
 }
 
 int command__list(const void *pointer, void *data,
@@ -301,8 +304,8 @@ int command__upload(const void *pointer, void *data,
                   weechat_prefix("network"), filename.c_str(), filesize);
     
     // Generate request ID
-    xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    const char *id = id_g.ptr;
+    std::string upload_id = stanza::uuid(ptr_account->context);
+    const char *id = upload_id.c_str();
     
     // Extract just the filename (no path)
     size_t last_slash = filename.find_last_of("/\\");
@@ -388,31 +391,31 @@ int command__upload(const void *pointer, void *data,
     };
     
     // Build upload slot request (XEP-0363 v0.3.0+)
-    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", id);
-    xmpp_stanza_set_to(iq, ptr_account->upload_service.c_str());
-    
-    xmpp_stanza_t *request = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(request, "request");
-    xmpp_stanza_set_ns(request, "urn:xmpp:http:upload:0");
-    
-    // In XEP-0363 v0.3.0+, filename and size are attributes, not child elements
-    xmpp_stanza_set_attribute(request, "filename", sanitized_basename.c_str());
-    
+    struct upload_request_iq : stanza::spec {
+        upload_request_iq(std::string_view to_, std::string_view id_,
+                          std::string_view filename_, std::string_view size_,
+                          std::string_view content_type_) : spec("iq") {
+            attr("type", "get");
+            attr("to", to_);
+            attr("id", id_);
+            struct req : stanza::spec {
+                req(std::string_view fn, std::string_view sz, std::string_view ct) : spec("request") {
+                    xmlns<urn::xmpp::http::upload::_0>();
+                    attr("filename", fn);
+                    attr("size", sz);
+                    if (!ct.empty())
+                        attr("content-type", ct);
+                }
+            } r(filename_, size_, content_type_);
+            child(r);
+        }
+    };
+
     auto size_str = fmt::format("{}", file_size);
-    xmpp_stanza_set_attribute(request, "size", size_str.c_str());
-    
-    // Add content-type attribute if applicable
-    if (!content_type.empty())
-    {
-        xmpp_stanza_set_attribute(request, "content-type", content_type.c_str());
-    }
-    
-    xmpp_stanza_add_child(iq, request);
-    xmpp_stanza_release(request);
-    
-    ptr_account->connection.send(iq);
-    xmpp_stanza_release(iq);
-    // freed by id_g
+    upload_request_iq upload_iq(ptr_account->upload_service, upload_id,
+                                sanitized_basename, size_str, content_type);
+    ptr_account->connection.send(upload_iq.build(ptr_account->context).get());
+    // freed by upload_id (std::string)
 
     return WEECHAT_RC_OK;
 }

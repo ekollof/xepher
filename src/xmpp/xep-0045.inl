@@ -370,3 +370,29 @@ namespace xml {
     };
 
 }
+
+namespace stanza {
+
+    /* Multi-User Chat (XEP-0045) — stanza builder side */
+    struct xep0045 {
+
+        // <x xmlns='http://jabber.org/protocol/muc'/>  — used in MUC join presence
+        struct join_x : virtual public spec {
+            join_x() : spec("x") {
+                xmlns<jabber_org::protocol::muc>();
+            }
+        };
+
+        // stanza::presence mixin — adds a bare <x xmlns='...muc'/> child for room joining
+        struct presence : virtual public spec {
+            presence() : spec("presence") {}
+
+            presence& muc_join() {
+                xep0045::join_x x;
+                child(x);
+                return *this;
+            }
+        };
+    };
+
+}

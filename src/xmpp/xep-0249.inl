@@ -23,6 +23,19 @@ namespace stanza {
             }
         };
 
+        // stanza::message mixin
+        struct message : virtual public spec {
+            message() : spec("message") {}
+
+            message& invite(const char *room_jid,
+                            const char *password = nullptr,
+                            const char *reason = nullptr) {
+                xep0249::x inv(room_jid, password, reason);
+                child(inv);
+                return *this;
+            }
+        };
+
     };
 
 }

@@ -199,6 +199,7 @@ namespace stanza {
 #include "xep-0428.inl"
 #include "xep-0444.inl"
 #include "xep-0461.inl"
+#include "xep-0466.inl"
 #include "rfc-6121.inl"
 
 namespace stanza {
@@ -218,6 +219,7 @@ namespace stanza {
 
     struct message : virtual public spec,
                      public xep0224::message,
+                     public xep0249::message,
                      public xep0308::message,
                      public xep0333::message,
                      public xep0359::message,
@@ -227,7 +229,8 @@ namespace stanza {
                      public xep0425::message,
                      public xep0428::message,
                      public xep0444::message,
-                     public xep0461::message {
+                     public xep0461::message,
+                     public xep0466::message {
         message() : spec("message") {}
 
         message& id(std::string_view s) { attr("id", s); return *this; }
@@ -243,7 +246,8 @@ namespace stanza {
         message& subject() { stanza::subject s; child(s); return *this; }
     };
 
-    struct presence : virtual public spec {
+    struct presence : virtual public spec,
+                      public xep0045::presence {
         presence() : spec("presence") {}
 
         presence& id(std::string_view s) { attr("id", s); return *this; }

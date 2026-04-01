@@ -4,8 +4,6 @@ int command__msg(const void *pointer, void *data,
 {
     weechat::account *ptr_account = nullptr;
     weechat::channel *ptr_channel = nullptr;
-    xmpp_stanza_t *message;
-    char *text;
 
     (void) pointer;
     (void) data;
@@ -35,14 +33,12 @@ int command__msg(const void *pointer, void *data,
 
     if (argc > 1)
     {
-        text = argv_eol[1];
+        const char *text = argv_eol[1];
+        const char *msg_type = ptr_channel->type == weechat::channel::chat_type::MUC
+                               ? "groupchat" : "chat";
 
-        message = xmpp_message_new(ptr_account->context,
-                                   ptr_channel->type == weechat::channel::chat_type::MUC ? "groupchat" : "chat",
-                                   ptr_channel->name.data(), nullptr);
-        xmpp_message_set_body(message, text);
-        ptr_account->connection.send( message);
-        xmpp_stanza_release(message);
+        auto msg_s = stanza::message().type(msg_type).to(ptr_channel->name).body(text);
+        ptr_account->connection.send(msg_s.build(ptr_account->context).get());
         if (ptr_channel->type != weechat::channel::chat_type::MUC)
             weechat_printf_date_tags(ptr_channel->buffer, 0,
                                      "xmpp_message,message,private,notify_none,self_msg,log1",
@@ -140,21 +136,10 @@ int command__invite(const void *pointer, void *data,
     const char *invitee_jid = argv[1];
     const char *reason = argc > 2 ? argv_eol[2] : nullptr;
 
-    // Build invitation message using XEP-0249
-    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, nullptr, invitee_jid, nullptr);
-    
-    xmpp_stanza_t *x = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(x, "x");
-    xmpp_stanza_set_ns(x, "jabber:x:conference");
-    xmpp_stanza_set_attribute(x, "jid", ptr_channel->name.data());
-    if (reason)
-        xmpp_stanza_set_attribute(x, "reason", reason);
-    
-    xmpp_stanza_add_child(message, x);
-    xmpp_stanza_release(x);
-    
-    ptr_account->connection.send(message);
-    xmpp_stanza_release(message);
+    auto inv_msg = stanza::message().to(invitee_jid);
+    static_cast<stanza::xep0249::message&>(inv_msg).invite(
+        ptr_channel->name.data(), nullptr, reason);
+    ptr_account->connection.send(inv_msg.build(ptr_account->context).get());
 
     weechat_printf(buffer,
                     _("%sInvited %s to %s"),

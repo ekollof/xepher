@@ -55,30 +55,10 @@ int command__ephemeral(const void *pointer, void *data,
     const char *msg_type = ptr_channel->type == weechat::channel::chat_type::MUC
                            ? "groupchat" : "chat";
 
-    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
-                                               msg_type,
-                                               ptr_channel->name.data(),
-                                               nullptr);
-    xmpp_message_set_body(message, text);
-
-    // Add <ephemeral xmlns='urn:xmpp:ephemeral:0' timer='N'/>
-    xmpp_stanza_t *eph = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(eph, "ephemeral");
-    xmpp_stanza_set_ns(eph, "urn:xmpp:ephemeral:0");
-    std::string timer_str = std::to_string(timer_secs);
-    xmpp_stanza_set_attribute(eph, "timer", timer_str.c_str());
-    xmpp_stanza_add_child(message, eph);
-    xmpp_stanza_release(eph);
-
-    // Add <no-permanent-store xmlns='urn:xmpp:hints'/> so servers don't archive it
-    xmpp_stanza_t *hint = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(hint, "no-permanent-store");
-    xmpp_stanza_set_ns(hint, "urn:xmpp:hints");
-    xmpp_stanza_add_child(message, hint);
-    xmpp_stanza_release(hint);
-
-    ptr_account->connection.send(message);
-    xmpp_stanza_release(message);
+    auto eph_msg = stanza::message().type(msg_type).to(ptr_channel->name).body(text);
+    static_cast<stanza::xep0466::message&>(eph_msg).ephemeral(timer_secs);
+    static_cast<stanza::xep0333::message&>(eph_msg).no_permanent_store();
+    ptr_account->connection.send(eph_msg.build(ptr_account->context).get());
 
     // Echo locally for PM buffers (not MUC — server echoes those back)
     if (ptr_channel->type != weechat::channel::chat_type::MUC)
