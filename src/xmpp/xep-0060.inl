@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "node.hh"
+#include "xep-0059.inl"
 #pragma GCC visibility push(default)
 #include "ns.hh"
 #pragma GCC visibility pop
@@ -101,6 +102,8 @@ namespace stanza {
             pubsub& subscribe(xep0060::subscribe s) { child(s); return *this; }
             pubsub& unsubscribe(xep0060::unsubscribe s) { child(s); return *this; }
             pubsub& retract(xep0060::retract r) { child(r); return *this; }
+            // RSM <set> sibling of <items> (for paginated fetches)
+            pubsub& rsm(xep0059::set s) { child(s); return *this; }
         };
 
         // Helper: stanza::iq mixin

@@ -57,6 +57,16 @@ namespace stanza {
                 child(el);
                 return *this;
             }
+
+            // Positional: <index>N</index>
+            set& index(unsigned n) {
+                struct index_el : virtual public spec {
+                    index_el(std::string v) : spec("index") { text(v); }
+                };
+                index_el el(std::to_string(n));
+                child(el);
+                return *this;
+            }
         };
     };
 
