@@ -222,9 +222,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             if (san_name.empty()) san_name = "file";
 
             // Generate new slot request IQ id
-            xmpp_string_guard new_id_g(ptr_account->context,
-                                       xmpp_uuid_gen(ptr_account->context));
-            std::string new_id = new_id_g.ptr ? new_id_g.ptr : "embed-next";
+            std::string new_id = stanza::uuid(ptr_account->context);
 
             // Register upload_request for iq_handler to pick up
             ptr_account->upload_requests[new_id] = {
@@ -242,23 +240,27 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             ptr_account->pending_feed_posts.erase(post_it);
             ptr_account->pending_feed_posts[new_id] = std::move(moved_post);
 
-            // Send slot request
-            xmpp_stanza_t *slot_iq = xmpp_iq_new(ptr_account->context, "get",
-                                                   new_id.c_str());
-            xmpp_stanza_set_to(slot_iq, ptr_account->upload_service.c_str());
-
-            xmpp_stanza_t *req_el = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(req_el, "request");
-            xmpp_stanza_set_ns(req_el, "urn:xmpp:http:upload:0");
-            xmpp_stanza_set_attribute(req_el, "filename", san_name.c_str());
-            auto sz_str = fmt::format("{}", fsz);
-            xmpp_stanza_set_attribute(req_el, "size", sz_str.c_str());
-            if (!ct.empty())
-                xmpp_stanza_set_attribute(req_el, "content-type", ct.c_str());
-            xmpp_stanza_add_child(slot_iq, req_el);
-            xmpp_stanza_release(req_el);
-            ptr_account->connection.send(slot_iq);
-            xmpp_stanza_release(slot_iq);
+            // Send slot request (XEP-0363 HTTP Upload)
+            struct slot_iq_spec : stanza::spec {
+                slot_iq_spec(const std::string &id, const std::string &to,
+                             const std::string &fname, std::size_t sz,
+                             const std::string &ct) : spec("iq") {
+                    attr("type", "get");
+                    attr("id", id);
+                    attr("to", to);
+                    struct request_spec : stanza::spec {
+                        request_spec(const std::string &fname, std::size_t sz,
+                                     const std::string &ct) : spec("request") {
+                            attr("xmlns", "urn:xmpp:http:upload:0");
+                            attr("filename", fname);
+                            attr("size", fmt::format("{}", sz));
+                            if (!ct.empty()) attr("content-type", ct);
+                        }
+                    } req(fname, sz, ct);
+                    child(req);
+                }
+            } slot_iq(new_id, ptr_account->upload_service, san_name, fsz, ct);
+            ptr_account->connection.send(slot_iq.build(ptr_account->context).get());
 
             return WEECHAT_RC_OK;
         }

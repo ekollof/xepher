@@ -17,6 +17,7 @@
 #include "user.hh"
 #include "plugin.hh"
 #include "xmpp/stanza.hh"
+#include "xmpp/node.hh"
 #include "xmpp/xep-0084.inl"
 
 std::string weechat::avatar::calculate_hash(const std::vector<uint8_t>& data)
@@ -200,9 +201,8 @@ void weechat::avatar::request_data(account& acc, const char *jid,
     }
 
     // Cache miss — fetch from server
-    char *raw_id = xmpp_uuid_gen(acc.context);
-    xmpp_stanza_t *iq = weechat::xep0084::request_avatar_data(acc.context, jid, raw_id);
-    xmpp_free(acc.context, raw_id);
+    std::string raw_id = stanza::uuid(acc.context);
+    xmpp_stanza_t *iq = weechat::xep0084::request_avatar_data(acc.context, jid, raw_id.c_str());
     acc.connection.send(iq);
     xmpp_stanza_release(iq);
 }
@@ -336,19 +336,19 @@ bool weechat::avatar::publish(account& acc, const std::string& filepath)
 
     // Publish data node
     {
-        xmpp_stanza_t *iq = weechat::xep0084::publish_avatar_data(
-            acc.context, b64.c_str(), hash.c_str());
-        acc.connection.send(iq);
-        xmpp_stanza_release(iq);
+        std::shared_ptr<xmpp_stanza_t> iq {
+            weechat::xep0084::publish_avatar_data(acc.context, b64.c_str(), hash.c_str()),
+            xmpp_stanza_release};
+        acc.connection.send(iq.get());
     }
 
     // Publish metadata node
     {
-        xmpp_stanza_t *iq = weechat::xep0084::publish_avatar_metadata(
-            acc.context, hash.c_str(), mime_type.c_str(),
-            image_bytes.size(), img_width, img_height);
-        acc.connection.send(iq);
-        xmpp_stanza_release(iq);
+        std::shared_ptr<xmpp_stanza_t> iq {
+            weechat::xep0084::publish_avatar_metadata(acc.context, hash.c_str(),
+                mime_type.c_str(), image_bytes.size(), img_width, img_height),
+            xmpp_stanza_release};
+        acc.connection.send(iq.get());
     }
 
     // Save to local cache so we don't re-fetch what we just published

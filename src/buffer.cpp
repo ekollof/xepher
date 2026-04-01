@@ -6,9 +6,12 @@
 #include <string.h>
 #include <memory>
 #include <strophe.h>
+#include <fmt/core.h>
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "xmpp/stanza.hh"
+#include "xmpp/node.hh"
 #include "account.hh"
 #include "channel.hh"
 #include "buffer.hh"
@@ -227,31 +230,22 @@ int buffer__close_cb(const void *pointer, void *data,
                 // Send unavailable presence to leave MUC
                 if (ptr_channel->type == weechat::channel::chat_type::MUC)
                 {
-                    xmpp_stanza_t *pres = xmpp_presence_new(ptr_account->context);
-                    xmpp_stanza_set_type(pres, "unavailable");
-                    
                     // Build full JID with resource (room@server/nick)
-                    const char* nick = weechat_buffer_get_string(buffer, "localvar_nick");
+                    const char *nick = weechat_buffer_get_string(buffer, "localvar_nick");
+                    std::string to_jid;
                     if (nick && nick[0])
                     {
-                        xmpp_string_guard node_g(ptr_account->context,
-                            xmpp_jid_node(ptr_account->context, ptr_channel->id.data()));
-                        xmpp_string_guard domain_g(ptr_account->context,
-                            xmpp_jid_domain(ptr_account->context, ptr_channel->id.data()));
-                        xmpp_string_guard pres_jid_g(ptr_account->context,
-                            xmpp_jid_new(ptr_account->context,
-                                node_g.c_str(), domain_g.c_str(), nick));
-                        xmpp_stanza_set_to(pres, pres_jid_g.c_str());
+                        ::jid ch(nullptr, ptr_channel->id);
+                        to_jid = fmt::format("{}@{}/{}", ch.local, ch.domain, nick);
                     }
                     else
-                    {
-                        xmpp_stanza_set_to(pres, ptr_channel->id.data());
-                    }
-                    
-                    xmpp_stanza_set_from(pres, ptr_account->jid().data());
-                    
-                    ptr_account->connection.send( pres);
-                    xmpp_stanza_release(pres);
+                        to_jid = std::string(ptr_channel->id);
+
+                    auto pres = stanza::presence()
+                        .type("unavailable")
+                        .to(to_jid)
+                        .from(ptr_account->jid());
+                    ptr_account->connection.send(pres.build(ptr_account->context).get());
                 }
                 
                 ptr_account->channels.erase(ptr_channel->name);
