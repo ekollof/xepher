@@ -3348,19 +3348,20 @@ message_handler_after_omemo:
     const char *encrypted_glyph = (encrypted || x) ? "🔒 " : "";
 
     if (channel_id == from_bare && to == channel->id)
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t[to %s]: %s%s",
-                                 edit, display_prefix.data(),
-                                 to, encrypted_glyph,
+        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s[to %s]: %s%s",
+                                 display_prefix.data(),
+                                 edit, to, encrypted_glyph,
                                  display_text ? display_text : "");
     else if (weechat_string_match(text, "/me *", 0))
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s %s%s",
-                                 edit, weechat_prefix("action"), display_prefix.data(),
+        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s%s %s%s",
+                                 weechat_prefix("action"),
+                                 edit, display_prefix.data(),
                                  encrypted_glyph,
                                  display_text ? display_text+4 : "");
     else
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s%s\t%s%s",
-                                 edit, display_prefix.data(),
-                                 encrypted_glyph,
+        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s%s%s",
+                                 display_prefix.data(),
+                                 edit, encrypted_glyph,
                                  display_text ? display_text : "");
 
     // Smart filter: record that this nick spoke, so future presence lines are shown.
