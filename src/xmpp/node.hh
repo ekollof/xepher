@@ -175,6 +175,7 @@ namespace stanza {
 #include "xep-0027.inl"
 #include "xep-0030.inl"
 #include "xep-0045.inl"
+#include "xep-0045-admin.inl"
 #include "xep-0049.inl"
 #include "xep-0059.inl"
 #include "xep-0060.inl"
@@ -182,6 +183,7 @@ namespace stanza {
 #include "xep-0191.inl"
 #include "xep-0198.inl"
 #include "xep-0199.inl"
+#include "xep-0224.inl"
 #include "xep-0249.inl"
 #include "xep-0280.inl"
 #include "xep-0308.inl"
@@ -190,6 +192,7 @@ namespace stanza {
 #include "xep-0333.inl"
 #include "xep-0352.inl"
 #include "xep-0359.inl"
+#include "xep-0382.inl"
 #include "xep-0422.inl"
 #include "xep-0424.inl"
 #include "xep-0425.inl"
@@ -206,10 +209,19 @@ namespace stanza {
         }
     };
 
+    struct subject : virtual public spec {
+        subject() : spec("subject") {}
+        subject(std::string_view s) : spec("subject") {
+            text(s);
+        }
+    };
+
     struct message : virtual public spec,
+                     public xep0224::message,
                      public xep0308::message,
                      public xep0333::message,
                      public xep0359::message,
+                     public xep0382::message,
                      public xep0422::message,
                      public xep0424::message,
                      public xep0425::message,
@@ -225,6 +237,10 @@ namespace stanza {
 
         message& body(stanza::body b) { child(b); return *this; }
         message& body(std::string_view s) { return body(stanza::body(s)); }
+
+        message& subject(stanza::subject s) { child(s); return *this; }
+        message& subject(std::string_view s) { return subject(stanza::subject(s)); }
+        message& subject() { stanza::subject s; child(s); return *this; }
     };
 
     struct presence : virtual public spec {
@@ -239,6 +255,7 @@ namespace stanza {
 
     struct iq : virtual public spec,
                 public xep0030::iq,
+                public xep0045admin::iq,
                 public xep0049::iq,
                 public xep0060::iq,
                 public xep0191::iq,

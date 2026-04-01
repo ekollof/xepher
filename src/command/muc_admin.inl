@@ -39,22 +39,10 @@ int command__buzz(const void *pointer, void *data,
     }
 
     // Send <message> with <attention> element (XEP-0224)
-    xmpp_stanza_t *message = xmpp_message_new(ptr_account->context, "chat",
-                                               ptr_channel->id.data(), nullptr);
-
-    xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    const char *id = id_g.ptr;
-    xmpp_stanza_set_id(message, id);
-    // freed by id_g
-
-    xmpp_stanza_t *attention = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(attention, "attention");
-    xmpp_stanza_set_ns(attention, "urn:xmpp:attention:0");
-    xmpp_stanza_add_child(message, attention);
-    xmpp_stanza_release(attention);
-
-    ptr_account->connection.send(message);
-    xmpp_stanza_release(message);
+    std::string buzz_id = stanza::uuid(ptr_account->context);
+    auto buzz_msg = stanza::message().type("chat").to(ptr_channel->id).id(buzz_id);
+    buzz_msg.attention();
+    ptr_account->connection.send(buzz_msg.build(ptr_account->context).get());
 
     weechat_printf(buffer, "%sxmpp: buzz sent to %s",
                   weechat_prefix("network"), ptr_channel->id.data());
@@ -112,69 +100,25 @@ int command__spoiler(const void *pointer, void *data,
         std::string hint_str(hint, std::string_view(hint).size()-1);
         text = argv_eol[2];
 
-        xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
-                        ptr_channel->type == weechat::channel::chat_type::MUC
-                        ? "groupchat" : "chat",
-                        ptr_channel->id.data(), nullptr);
-
-        xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        const char *id = id_g.ptr;
-        xmpp_stanza_set_id(message, id);
-        // freed by id_g
-
-        xmpp_message_set_body(message, text);
-
-        xmpp_stanza_t *spoiler = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(spoiler, "spoiler");
-        xmpp_stanza_set_ns(spoiler, "urn:xmpp:spoiler:0");
-        // Set hint text as text node child
-        xmpp_stanza_t *hint_node = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_text(hint_node, hint_str.c_str());
-        xmpp_stanza_add_child(spoiler, hint_node);
-        xmpp_stanza_release(hint_node);
-        xmpp_stanza_add_child(message, spoiler);
-        xmpp_stanza_release(spoiler);
-
-        // Add store hint
-        xmpp_stanza_t *store = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(store, "store");
-        xmpp_stanza_set_ns(store, "urn:xmpp:hints");
-        xmpp_stanza_add_child(message, store);
-        xmpp_stanza_release(store);
-
-        ptr_account->connection.send(message);
-        xmpp_stanza_release(message);
+        const char *msg_type = (ptr_channel->type == weechat::channel::chat_type::MUC)
+                               ? "groupchat" : "chat";
+        std::string spoiler_id = stanza::uuid(ptr_account->context);
+        auto spoiler_msg = stanza::message().type(msg_type).to(ptr_channel->id)
+                                            .id(spoiler_id).body(text);
+        spoiler_msg.spoiler(hint_str);
+        spoiler_msg.store();
+        ptr_account->connection.send(spoiler_msg.build(ptr_account->context).get());
     }
     else
     {
-        xmpp_stanza_t *message = xmpp_message_new(ptr_account->context,
-                        ptr_channel->type == weechat::channel::chat_type::MUC
-                        ? "groupchat" : "chat",
-                        ptr_channel->id.data(), nullptr);
-
-        xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        const char *id = id_g.ptr;
-        xmpp_stanza_set_id(message, id);
-        // freed by id_g
-
-        xmpp_message_set_body(message, text);
-
-        // <spoiler/> with no hint
-        xmpp_stanza_t *spoiler = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(spoiler, "spoiler");
-        xmpp_stanza_set_ns(spoiler, "urn:xmpp:spoiler:0");
-        xmpp_stanza_add_child(message, spoiler);
-        xmpp_stanza_release(spoiler);
-
-        // Add store hint
-        xmpp_stanza_t *store = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(store, "store");
-        xmpp_stanza_set_ns(store, "urn:xmpp:hints");
-        xmpp_stanza_add_child(message, store);
-        xmpp_stanza_release(store);
-
-        ptr_account->connection.send(message);
-        xmpp_stanza_release(message);
+        const char *msg_type = (ptr_channel->type == weechat::channel::chat_type::MUC)
+                               ? "groupchat" : "chat";
+        std::string spoiler_id = stanza::uuid(ptr_account->context);
+        auto spoiler_msg = stanza::message().type(msg_type).to(ptr_channel->id)
+                                            .id(spoiler_id).body(text);
+        spoiler_msg.spoiler();
+        spoiler_msg.store();
+        ptr_account->connection.send(spoiler_msg.build(ptr_account->context).get());
     }
 
     weechat_printf(buffer, "%sxmpp: spoiler message sent",
@@ -420,38 +364,15 @@ int command__kick(const void *pointer, void *data,
     const char *reason = argc > 2 ? argv_eol[2] : nullptr;
 
     /* IQ set to room: <query xmlns='…muc#admin'><item nick='NICK' role='none'/></query> */
-    xmpp_string_guard kick_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", kick_id_g.c_str());
-    xmpp_stanza_set_to(iq, ptr_channel->id.data());
-
-    xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(query, "query");
-    xmpp_stanza_set_ns(query, "http://jabber.org/protocol/muc#admin");
-
-    xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(item, "item");
-    xmpp_stanza_set_attribute(item, "nick", nick);
-    xmpp_stanza_set_attribute(item, "role", "none");
-
+    stanza::xep0045admin::item_by_nick kick_item(nick, "none");
     if (reason)
-    {
-        xmpp_stanza_t *reason_elem = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(reason_elem, "reason");
-        xmpp_stanza_t *reason_text = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_text(reason_text, reason);
-        xmpp_stanza_add_child(reason_elem, reason_text);
-        xmpp_stanza_release(reason_text);
-        xmpp_stanza_add_child(item, reason_elem);
-        xmpp_stanza_release(reason_elem);
-    }
-
-    xmpp_stanza_add_child(query, item);
-    xmpp_stanza_release(item);
-    xmpp_stanza_add_child(iq, query);
-    xmpp_stanza_release(query);
-
-    ptr_account->connection.send(iq);
-    xmpp_stanza_release(iq);
+        kick_item.reason(reason);
+    stanza::xep0045admin::query kick_query;
+    kick_query.item(kick_item);
+    std::string kick_id = stanza::uuid(ptr_account->context);
+    auto kick_iq = stanza::iq().type("set").to(ptr_channel->id).id(kick_id);
+    kick_iq.muc_admin(kick_query);
+    ptr_account->connection.send(kick_iq.build(ptr_account->context).get());
 
     weechat_printf(buffer, _("%sKicked %s from %s%s%s"),
                    weechat_prefix("network"), nick,
@@ -505,38 +426,15 @@ int command__ban(const void *pointer, void *data,
     const char *reason = argc > 2 ? argv_eol[2] : nullptr;
 
     /* IQ set to room: <query xmlns='…muc#admin'><item jid='JID' affiliation='outcast'/></query> */
-    xmpp_string_guard ban_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", ban_id_g.c_str());
-    xmpp_stanza_set_to(iq, ptr_channel->id.data());
-
-    xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(query, "query");
-    xmpp_stanza_set_ns(query, "http://jabber.org/protocol/muc#admin");
-
-    xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(item, "item");
-    xmpp_stanza_set_attribute(item, "jid", target_jid);
-    xmpp_stanza_set_attribute(item, "affiliation", "outcast");
-
+    stanza::xep0045admin::item_by_jid ban_item(target_jid, "outcast");
     if (reason)
-    {
-        xmpp_stanza_t *reason_elem = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(reason_elem, "reason");
-        xmpp_stanza_t *reason_text = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_text(reason_text, reason);
-        xmpp_stanza_add_child(reason_elem, reason_text);
-        xmpp_stanza_release(reason_text);
-        xmpp_stanza_add_child(item, reason_elem);
-        xmpp_stanza_release(reason_elem);
-    }
-
-    xmpp_stanza_add_child(query, item);
-    xmpp_stanza_release(item);
-    xmpp_stanza_add_child(iq, query);
-    xmpp_stanza_release(query);
-
-    ptr_account->connection.send(iq);
-    xmpp_stanza_release(iq);
+        ban_item.reason(reason);
+    stanza::xep0045admin::query ban_query;
+    ban_query.item(ban_item);
+    std::string ban_id = stanza::uuid(ptr_account->context);
+    auto ban_iq = stanza::iq().type("set").to(ptr_channel->id).id(ban_id);
+    ban_iq.muc_admin(ban_query);
+    ptr_account->connection.send(ban_iq.build(ptr_account->context).get());
 
     weechat_printf(buffer, _("%sBanned %s from %s%s%s"),
                    weechat_prefix("network"), target_jid,
@@ -583,25 +481,12 @@ int command__topic(const void *pointer, void *data,
      * An empty <subject/> clears the topic. */
     const char *new_topic = argc > 1 ? argv_eol[1] : "";
 
-    xmpp_stanza_t *msg = xmpp_message_new(ptr_account->context,
-                                           "groupchat", ptr_channel->id.data(), nullptr);
-
-    xmpp_stanza_t *subject = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(subject, "subject");
-
+    auto topic_msg = stanza::message().type("groupchat").to(ptr_channel->id);
     if (argc > 1)
-    {
-        xmpp_stanza_t *subject_text = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_text(subject_text, new_topic);
-        xmpp_stanza_add_child(subject, subject_text);
-        xmpp_stanza_release(subject_text);
-    }
-
-    xmpp_stanza_add_child(msg, subject);
-    xmpp_stanza_release(subject);
-
-    ptr_account->connection.send(msg);
-    xmpp_stanza_release(msg);
+        topic_msg.subject(new_topic);
+    else
+        topic_msg.subject();
+    ptr_account->connection.send(topic_msg.build(ptr_account->context).get());
 
     return WEECHAT_RC_OK;
 }
@@ -659,12 +544,8 @@ int command__muc_nick(const void *pointer, void *data,
         xmpp_jid_domain(ptr_account->context, ptr_channel->id.data()),
         new_nick);
 
-    xmpp_stanza_t *pres = xmpp_presence_new(ptr_account->context);
-    xmpp_stanza_set_from(pres, ptr_account->jid().data());
-    xmpp_stanza_set_to(pres, new_full_jid);
-
-    ptr_account->connection.send(pres);
-    xmpp_stanza_release(pres);
+    auto nick_pres = stanza::presence().from(ptr_account->jid()).to(new_full_jid);
+    ptr_account->connection.send(nick_pres.build(ptr_account->context).get());
 
     return WEECHAT_RC_OK;
 }
