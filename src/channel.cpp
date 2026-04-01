@@ -375,9 +375,8 @@ weechat::channel::channel(weechat::account& account,
         }
         
         time_t end = now;
-        char *mam_uuid = xmpp_uuid_gen(account.context);
-        fetch_mam(mam_uuid, &start, &end, nullptr);
-        xmpp_free(account.context, mam_uuid);
+        std::string mam_uuid = stanza::uuid(account.context);
+        fetch_mam(mam_uuid.c_str(), &start, &end, nullptr);
         } // PM-only MAM block
     }
 }
