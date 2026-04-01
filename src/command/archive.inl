@@ -106,10 +106,8 @@ int command__mam(const void *pointer, void *data,
     end = time(nullptr);
     start = end - (days * 24 * 60 * 60);
     
-    xmpp_string_guard mam_uuid_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    const char *mam_uuid = mam_uuid_g.ptr;
-    ptr_channel->fetch_mam(mam_uuid, &start, &end, nullptr);
-    // freed by mam_uuid_g
+    const std::string mam_uuid = stanza::uuid(ptr_account->context);
+    ptr_channel->fetch_mam(mam_uuid.c_str(), &start, &end, nullptr);
 
     return WEECHAT_RC_OK;
 }

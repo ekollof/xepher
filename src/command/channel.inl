@@ -156,9 +156,8 @@ int command__open(const void *pointer, void *data,
         char **jids = weechat_string_split(argv[1], ",", nullptr, 0, 0, &n_jid);
         for (int i = 0; i < n_jid; i++)
         {
-            xmpp_string_guard bare_g(ptr_account->context,
-                                     xmpp_jid_bare(ptr_account->context, jids[i]));
-            const char *effective_jid = bare_g.c_str();
+            const std::string bare_jid = ::jid(nullptr, jids[i]).bare;
+            const char *effective_jid = bare_jid.empty() ? jids[i] : bare_jid.c_str();
 
             // When in a MUC and given a bare nick (no '@'), build the full JID.
             std::string full_jid_s;

@@ -407,33 +407,24 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
     return view;
 }
 
-[[nodiscard]] auto deserialize_public_key(std::string_view encoded, xmpp_ctx_t *context,
+[[nodiscard]] auto deserialize_public_key(std::string_view encoded,
                                           signal_context *signal_context_ptr)
     -> std::optional<libsignal::public_key>
 {
-    unsigned char *decoded = nullptr;
-    size_t decoded_size = 0;
-    xmpp_base64_decode_bin(context, encoded.data(), encoded.size(), &decoded, &decoded_size);
-    if (!decoded || decoded_size == 0)
+    const auto decoded = base64_decode(nullptr, encoded);
+    if (decoded.empty())
         return std::nullopt;
 
-    struct xmpp_bin_guard {
-        xmpp_ctx_t *context;
-        unsigned char *data;
-        ~xmpp_bin_guard() { if (data) xmpp_free(context, data); }
-    } guard {context, decoded};
-
-    return libsignal::public_key(decoded, decoded_size, signal_context_ptr);
+    return libsignal::public_key(decoded.data(), decoded.size(), signal_context_ptr);
 }
 
-[[nodiscard]] auto establish_session_from_bundle(omemo &self, xmpp_ctx_t *context,
+[[nodiscard]] auto establish_session_from_bundle(omemo &self, xmpp_ctx_t * /*context*/,
                                                  std::string_view jid,
                                                  std::uint32_t remote_device_id)
     -> bool
 {
     OMEMO_ASSERT(self.context, "signal context must exist before building a session from a bundle");
     OMEMO_ASSERT(self.store_context, "signal store context must exist before building a session from a bundle");
-    OMEMO_ASSERT(context != nullptr, "xmpp context must exist before decoding bundle keys");
     OMEMO_ASSERT(!jid.empty(), "peer jid must be present when building a session from a bundle");
     OMEMO_ASSERT(remote_device_id != 0, "peer device id must be non-zero when building a session from a bundle");
 
@@ -459,9 +450,9 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
         return false;
     }
 
-    auto identity_key = deserialize_public_key(bundle->identity_key, context, self.context);
-    auto signed_pre_key = deserialize_public_key(bundle->signed_pre_key, context, self.context);
-    auto one_time_pre_key = deserialize_public_key(bundle->prekeys.front().second, context, self.context);
+    auto identity_key = deserialize_public_key(bundle->identity_key, self.context);
+    auto signed_pre_key = deserialize_public_key(bundle->signed_pre_key, self.context);
+    auto one_time_pre_key = deserialize_public_key(bundle->prekeys.front().second, self.context);
     if (!identity_key || !signed_pre_key || !one_time_pre_key)
     {
         weechat_printf(nullptr,
@@ -471,7 +462,7 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
         return false;
     }
 
-    auto signature = base64_decode(context, bundle->signed_pre_key_signature);
+    auto signature = base64_decode(nullptr, bundle->signed_pre_key_signature);
     if (signature.empty())
     {
         weechat_printf(nullptr,
@@ -481,7 +472,7 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
         return false;
     }
 
-    const auto signed_pre_key_raw = base64_decode(context, bundle->signed_pre_key);
+    const auto signed_pre_key_raw = base64_decode(nullptr, bundle->signed_pre_key);
     if (signed_pre_key_raw.empty())
     {
         weechat_printf(nullptr,

@@ -465,22 +465,18 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             if (!disco_in_flight)
             {
                 // Send a fresh disco#info to learn whether this service supports MAM.
-                xmpp_string_guard disco_id_g(account.context, xmpp_uuid_gen(account.context));
-                const char *disco_id = disco_id_g.ptr;
-                if (disco_id)
-                {
-                    account.pubsub_mam_disco_queries[disco_id] = service_jid;
+                const std::string disco_id = stanza::uuid(account.context);
+                account.pubsub_mam_disco_queries[disco_id] = service_jid;
 
-                    account.connection.send(stanza::iq()
-                                .from(account.jid())
-                                .to(service_jid)
-                                .type("get")
-                                .id(disco_id)
-                                .xep0030()
-                                .query()
-                                .build(account.context)
-                                .get());
-                }
+                account.connection.send(stanza::iq()
+                            .from(account.jid())
+                            .to(service_jid)
+                            .type("get")
+                            .id(disco_id)
+                            .xep0030()
+                            .query()
+                            .build(account.context)
+                            .get());
             }
 
             // Defer the actual fetch until the disco#info result arrives.
