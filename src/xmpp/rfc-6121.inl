@@ -16,10 +16,21 @@ namespace stanza {
 
     /* Instant Messaging and Presence */
     struct rfc6121 {
+        struct item : virtual public spec {
+            item(std::string_view jid_s) : spec("item") {
+                attr("jid", jid_s);
+            }
+
+            item& name(std::string_view s) { attr("name", s); return *this; }
+            item& subscription(std::string_view s) { attr("subscription", s); return *this; }
+        };
+
         struct query : virtual public spec {
             query() : spec("query") {
                 xmlns<jabber::iq::roster>();
             }
+
+            query& item(rfc6121::item i) { child(i); return *this; }
         };
 
         struct iq : virtual public spec {

@@ -215,6 +215,7 @@ namespace stanza {
         presence& id(std::string_view s) { attr("id", s); return *this; }
         presence& from(std::string_view s) { attr("from", s); return *this; }
         presence& to(std::string_view s) { attr("to", s); return *this; }
+        presence& type(std::string_view s) { attr("type", s); return *this; }
         presence& lang(std::string_view s) { attr("lang", s); return *this; }
     };
 

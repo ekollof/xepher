@@ -4,7 +4,6 @@ int command__block(const void *pointer, void *data,
 {
     weechat::account *ptr_account = nullptr;
     weechat::channel *ptr_channel = nullptr;
-    xmpp_stanza_t *iq;
 
     (void) pointer;
     (void) data;
@@ -33,31 +32,19 @@ int command__block(const void *pointer, void *data,
     // Block the specified JID(s)
     const char **jids = (const char **)&argv[1];
     int count = argc - 1;
-    
-    xmpp_string_guard iq_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    iq = xmpp_iq_new(ptr_account->context, "set", iq_id_g.ptr);
-    
-    xmpp_stanza_t *block = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(block, "block");
-    xmpp_stanza_set_ns(block, "urn:xmpp:blocking");
-    
+
+    stanza::xep0191::block blk;
     for (int i = 0; i < count; i++)
     {
-        xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(item, "item");
-        xmpp_stanza_set_attribute(item, "jid", jids[i]);
-        xmpp_stanza_add_child(block, item);
-        xmpp_stanza_release(item);
-        
+        blk.item(jids[i]);
         weechat_printf(buffer, "%sBlocking %s...",
                        weechat_prefix("network"), jids[i]);
     }
-    
-    xmpp_stanza_add_child(iq, block);
-    xmpp_stanza_release(block);
-    
-    ptr_account->connection.send(iq);
-    xmpp_stanza_release(iq);
+
+    std::string id = stanza::uuid(ptr_account->context);
+    auto iq_s = stanza::iq().type("set").id(id);
+    iq_s.block(blk);
+    ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
     return WEECHAT_RC_OK;
 }
@@ -68,7 +55,6 @@ int command__unblock(const void *pointer, void *data,
 {
     weechat::account *ptr_account = nullptr;
     weechat::channel *ptr_channel = nullptr;
-    xmpp_stanza_t *iq;
 
     (void) pointer;
     (void) data;
@@ -86,29 +72,17 @@ int command__unblock(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    {
-    xmpp_string_guard iq_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    iq = xmpp_iq_new(ptr_account->context, "set", iq_id_g.ptr);
-    }
-    
-    xmpp_stanza_t *unblock = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(unblock, "unblock");
-    xmpp_stanza_set_ns(unblock, "urn:xmpp:blocking");
-    
+    stanza::xep0191::unblock ublk;
+
     if (argc > 1)
     {
         // Unblock specific JID(s)
         const char **jids = (const char **)&argv[1];
         int count = argc - 1;
-        
+
         for (int i = 0; i < count; i++)
         {
-            xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
-            xmpp_stanza_set_name(item, "item");
-            xmpp_stanza_set_attribute(item, "jid", jids[i]);
-            xmpp_stanza_add_child(unblock, item);
-            xmpp_stanza_release(item);
-            
+            ublk.item(jids[i]);
             weechat_printf(buffer, "%sUnblocking %s...",
                            weechat_prefix("network"), jids[i]);
         }
@@ -119,12 +93,11 @@ int command__unblock(const void *pointer, void *data,
         weechat_printf(buffer, "%sUnblocking all JIDs...",
                        weechat_prefix("network"));
     }
-    
-    xmpp_stanza_add_child(iq, unblock);
-    xmpp_stanza_release(unblock);
-    
-    ptr_account->connection.send(iq);
-    xmpp_stanza_release(iq);
+
+    std::string id = stanza::uuid(ptr_account->context);
+    auto iq_s = stanza::iq().type("set").id(id);
+    iq_s.unblock(ublk);
+    ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
     return WEECHAT_RC_OK;
 }
@@ -172,26 +145,12 @@ int command__blocklist(const void *pointer, void *data,
         {},  // populated async by IQ handler
         [acct](const std::string &jid) {
             // on_select: send unblock IQ for selected JID
-            xmpp_stanza_t *iq;
-            {
-                xmpp_string_guard iq_id_g(acct->context, xmpp_uuid_gen(acct->context));
-                iq = xmpp_iq_new(acct->context, "set", iq_id_g.ptr);
-            }
-            xmpp_stanza_t *unblock = xmpp_stanza_new(acct->context);
-            xmpp_stanza_set_name(unblock, "unblock");
-            xmpp_stanza_set_ns(unblock, "urn:xmpp:blocking");
-
-            xmpp_stanza_t *item = xmpp_stanza_new(acct->context);
-            xmpp_stanza_set_name(item, "item");
-            xmpp_stanza_set_attribute(item, "jid", jid.c_str());
-            xmpp_stanza_add_child(unblock, item);
-            xmpp_stanza_release(item);
-
-            xmpp_stanza_add_child(iq, unblock);
-            xmpp_stanza_release(unblock);
-
-            acct->connection.send(iq);
-            xmpp_stanza_release(iq);
+            stanza::xep0191::unblock ublk;
+            ublk.item(jid);
+            std::string id = stanza::uuid(acct->context);
+            auto iq_s = stanza::iq().type("set").id(id);
+            iq_s.unblock(ublk);
+            acct->connection.send(iq_s.build(acct->context).get());
 
             weechat_printf(acct->buffer, "%sUnblocking %s…",
                            weechat_prefix("network"), jid.c_str());
@@ -207,21 +166,10 @@ int command__blocklist(const void *pointer, void *data,
     ptr_account->blocklist_picker = p;
 
     // Request the block list from the server.
-    xmpp_stanza_t *iq;
-    {
-        xmpp_string_guard iq_id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        iq = xmpp_iq_new(ptr_account->context, "get", iq_id_g.ptr);
-    }
-
-    xmpp_stanza_t *blocklist_el = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(blocklist_el, "blocklist");
-    xmpp_stanza_set_ns(blocklist_el, "urn:xmpp:blocking");
-
-    xmpp_stanza_add_child(iq, blocklist_el);
-    xmpp_stanza_release(blocklist_el);
-
-    ptr_account->connection.send(iq);
-    xmpp_stanza_release(iq);
+    std::string bl_id = stanza::uuid(ptr_account->context);
+    auto bl_iq = stanza::iq().type("get").id(bl_id);
+    bl_iq.blocklist();
+    ptr_account->connection.send(bl_iq.build(ptr_account->context).get());
 
     return WEECHAT_RC_OK;
 }
@@ -260,32 +208,20 @@ int command__disco(const void *pointer, void *data,
     else
         target = xmpp_jid_domain(ptr_account->context, ptr_account->jid().data());
 
-    xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-    const char *id = id_g.ptr;
+    std::string id = stanza::uuid(ptr_account->context);
 
-    xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "get", id);
-    xmpp_stanza_set_to(iq, target);
-
-    xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
-    xmpp_stanza_set_name(query, "query");
-
+    auto iq_s = stanza::iq().type("get").id(id).to(target);
     if (do_items)
     {
-        xmpp_stanza_set_ns(query, "http://jabber.org/protocol/disco#items");
+        static_cast<stanza::xep0030::iq&>(iq_s).query_items();
         ptr_account->user_disco_items_queries.insert(id);
     }
     else
     {
-        xmpp_stanza_set_ns(query, "http://jabber.org/protocol/disco#info");
+        static_cast<stanza::xep0030::iq&>(iq_s).query();
         ptr_account->user_disco_queries.insert(id);
     }
-
-    xmpp_stanza_add_child(iq, query);
-    xmpp_stanza_release(query);
-
-    ptr_account->connection.send(iq);
-    xmpp_stanza_release(iq);
-    // freed by id_g
+    ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
     weechat_printf(buffer, "Querying service discovery (%s) for %s...",
                    do_items ? "items" : "info", target);
@@ -366,74 +302,42 @@ int command__roster(const void *pointer, void *data,
         const char *jid = argv[2];
         const char *name = (argc >= 4) ? argv_eol[3] : nullptr;
 
-        xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        const char *id = id_g.ptr;
-        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", id);
-        // freed by id_g
-        
-        xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(query, "query");
-        xmpp_stanza_set_ns(query, "jabber:iq:roster");
-        
-        xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(item, "item");
-        xmpp_stanza_set_attribute(item, "jid", jid);
-        if (name)
-            xmpp_stanza_set_attribute(item, "name", name);
-        
-        xmpp_stanza_add_child(query, item);
-        xmpp_stanza_add_child(iq, query);
-        
-        ptr_account->connection.send( iq);
-        
-        xmpp_stanza_release(item);
-        xmpp_stanza_release(query);
-        xmpp_stanza_release(iq);
+        std::string id = stanza::uuid(ptr_account->context);
+        stanza::rfc6121::item it(jid);
+        if (name) it.name(name);
+        stanza::rfc6121::query q;
+        q.item(it);
+        auto iq_s = stanza::iq().type("set").id(id);
+        static_cast<stanza::rfc6121::iq&>(iq_s).query(q);
+        ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
-        weechat_printf(buffer, "%sAdding %s to roster...", 
+        weechat_printf(buffer, "%sAdding %s to roster...",
                       weechat_prefix("network"), jid);
 
         // Also send presence subscription request
-        xmpp_stanza_t *presence = xmpp_presence_new(ptr_account->context);
-        xmpp_stanza_set_type(presence, "subscribe");
-        xmpp_stanza_set_to(presence, jid);
-        ptr_account->connection.send( presence);
-        xmpp_stanza_release(presence);
+        auto sub = stanza::presence().type("subscribe").to(jid);
+        ptr_account->connection.send(sub.build(ptr_account->context).get());
 
         return WEECHAT_RC_OK;
     }
 
     // /roster del <jid>
-    if (argc >= 3 && (weechat_strcasecmp(argv[1], "del") == 0 || 
+    if (argc >= 3 && (weechat_strcasecmp(argv[1], "del") == 0 ||
                        weechat_strcasecmp(argv[1], "delete") == 0 ||
                        weechat_strcasecmp(argv[1], "remove") == 0))
     {
         const char *jid = argv[2];
 
-        xmpp_string_guard id_g(ptr_account->context, xmpp_uuid_gen(ptr_account->context));
-        const char *id = id_g.ptr;
-        xmpp_stanza_t *iq = xmpp_iq_new(ptr_account->context, "set", id);
-        // freed by id_g
-        
-        xmpp_stanza_t *query = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(query, "query");
-        xmpp_stanza_set_ns(query, "jabber:iq:roster");
-        
-        xmpp_stanza_t *item = xmpp_stanza_new(ptr_account->context);
-        xmpp_stanza_set_name(item, "item");
-        xmpp_stanza_set_attribute(item, "jid", jid);
-        xmpp_stanza_set_attribute(item, "subscription", "remove");
-        
-        xmpp_stanza_add_child(query, item);
-        xmpp_stanza_add_child(iq, query);
-        
-        ptr_account->connection.send( iq);
-        
-        xmpp_stanza_release(item);
-        xmpp_stanza_release(query);
-        xmpp_stanza_release(iq);
+        std::string id = stanza::uuid(ptr_account->context);
+        stanza::rfc6121::item it(jid);
+        it.subscription("remove");
+        stanza::rfc6121::query q;
+        q.item(it);
+        auto iq_s = stanza::iq().type("set").id(id);
+        static_cast<stanza::rfc6121::iq&>(iq_s).query(q);
+        ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
-        weechat_printf(buffer, "%sRemoving %s from roster...", 
+        weechat_printf(buffer, "%sRemoving %s from roster...",
                       weechat_prefix("network"), jid);
 
         return WEECHAT_RC_OK;

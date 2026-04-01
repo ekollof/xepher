@@ -22,12 +22,19 @@ namespace stanza {
             }
         };
 
+        struct query_items : virtual public spec {
+            query_items() : spec("query") {
+                xmlns<jabber_org::protocol::disco::items>();
+            }
+        };
+
         struct iq : virtual public spec {
             iq() : spec("iq") {}
 
             iq& xep0030() { return *this; }
 
             iq& query(xep0030::query q = {}) { child(q); return *this; }
+            iq& query_items(xep0030::query_items q = {}) { child(q); return *this; }
         };
     };
 
