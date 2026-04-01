@@ -257,23 +257,19 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
         // Print the form title/instructions if present
         xmpp_stanza_t *title_el = xmpp_stanza_get_child_by_name(xdata, "title");
         if (title_el) {
-            char *title_txt = xmpp_stanza_get_text(title_el);
-            if (title_txt) {
+            xmpp_string_guard title_g(st->ctx, xmpp_stanza_get_text(title_el));
+            if (title_g)
                 weechat_printf(st->buffer, _("%s%s: IBR form title: %s"),
                                weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                               title_txt);
-                xmpp_free(st->ctx, title_txt);
-            }
+                               title_g.c_str());
         }
         xmpp_stanza_t *instr_el = xmpp_stanza_get_child_by_name(xdata, "instructions");
         if (instr_el) {
-            char *instr_txt = xmpp_stanza_get_text(instr_el);
-            if (instr_txt) {
+            xmpp_string_guard instr_g(st->ctx, xmpp_stanza_get_text(instr_el));
+            if (instr_g)
                 weechat_printf(st->buffer, _("%s%s: IBR form instructions: %s"),
                                weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                               instr_txt);
-                xmpp_free(st->ctx, instr_txt);
-            }
+                               instr_g.c_str());
         }
 
         // Print each field's var and label so the user can identify what's needed
@@ -332,12 +328,11 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     if (!oob) oob = xmpp_stanza_get_child_by_ns(query, "jabber:x:oob");
     if (oob) {
         xmpp_stanza_t *url_el = xmpp_stanza_get_child_by_name(oob, "url");
-        char *url_text = url_el ? xmpp_stanza_get_text(url_el) : nullptr;
+        xmpp_string_guard url_g(st->ctx, url_el ? xmpp_stanza_get_text(url_el) : nullptr);
         weechat_printf(st->buffer,
                        _("%s%s: IBR: server requires out-of-band registration: %s"),
                        weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                       url_text ? url_text : "(no URL provided)");
-        if (url_text) xmpp_free(st->ctx, url_text);
+                       url_g ? url_g.c_str() : "(no URL provided)");
         xmpp_disconnect(conn);
         st->done = true;
         return 1;
@@ -345,44 +340,37 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
 
     // Build the <iq type='set'> registration request
     xmpp_ctx_t *ctx = st->ctx;
-    xmpp_stanza_t *iq = xmpp_iq_new(ctx, "set", "ibr-set");
-    xmpp_stanza_set_to(iq, st->server.c_str());
+    std::string username = jid(nullptr, st->jid).local;
+    if (username.empty()) username = st->jid;
 
-    xmpp_stanza_t *q = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(q, "query");
-    xmpp_stanza_set_ns(q, "jabber:iq:register");
-
-    // Extract local part of JID for username
-    char *node = xmpp_jid_node(ctx, st->jid.c_str());
-
-    xmpp_stanza_t *username_el = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(username_el, "username");
-    xmpp_stanza_t *username_text = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_text(username_text, node ? node : st->jid.c_str());
-    xmpp_stanza_add_child(username_el, username_text);
-    xmpp_stanza_release(username_text);
-    xmpp_stanza_add_child(q, username_el);
-    xmpp_stanza_release(username_el);
-
-    xmpp_stanza_t *password_el = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(password_el, "password");
-    xmpp_stanza_t *password_text = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_text(password_text, st->password.c_str());
-    xmpp_stanza_add_child(password_el, password_text);
-    xmpp_stanza_release(password_text);
-    xmpp_stanza_add_child(q, password_el);
-    xmpp_stanza_release(password_el);
-
-    if (node) xmpp_free(ctx, node);
-
-    xmpp_stanza_add_child(iq, q);
-    xmpp_stanza_release(q);
+    struct ibr_set_spec : stanza::spec {
+        ibr_set_spec(const std::string &uname, const std::string &pass) : spec("iq") {
+            attr("type", "set");
+            attr("id", "ibr-set");
+            struct query_spec : stanza::spec {
+                query_spec(const std::string &u, const std::string &p) : spec("query") {
+                    attr("xmlns", "jabber:iq:register");
+                    struct text_el : stanza::spec {
+                        text_el(std::string_view tag, std::string_view val) : spec(tag) {
+                            text(val);
+                        }
+                    };
+                    text_el un("username", u);
+                    text_el pw("password", p);
+                    child(un);
+                    child(pw);
+                }
+            } q(uname, pass);
+            child(q);
+        }
+    } ibr_iq(username, st->password);
+    auto built = ibr_iq.build(ctx);
+    xmpp_stanza_set_to(built.get(), st->server.c_str());
 
     // Register result handler for the set IQ before sending
     xmpp_id_handler_add(conn, ibr_set_result_handler, "ibr-set", st);
 
-    xmpp_send(conn, iq);
-    xmpp_stanza_release(iq);
+    xmpp_send(conn, built.get());
 
     return 1; // consume
 }
@@ -405,19 +393,20 @@ static void ibr_conn_handler(xmpp_conn_t *conn, xmpp_conn_event_t status,
         // Stream is open, authenticated feature negotiation skipped.
         // Send IBR field-list query.
         xmpp_ctx_t *ctx = st->ctx;
-        xmpp_stanza_t *iq = xmpp_iq_new(ctx, "get", "ibr-get");
-        xmpp_stanza_set_to(iq, st->server.c_str());
-
-        xmpp_stanza_t *query = xmpp_stanza_new(ctx);
-        xmpp_stanza_set_name(query, "query");
-        xmpp_stanza_set_ns(query, "jabber:iq:register");
-        xmpp_stanza_add_child(iq, query);
-        xmpp_stanza_release(query);
-
+        struct ibr_get_spec : stanza::spec {
+            ibr_get_spec() : spec("iq") {
+                attr("type", "get");
+                attr("id", "ibr-get");
+                struct query_spec : stanza::spec {
+                    query_spec() : spec("query") { attr("xmlns", "jabber:iq:register"); }
+                } q;
+                child(q);
+            }
+        } ibr_get_iq;
+        auto built = ibr_get_iq.build(ctx);
+        xmpp_stanza_set_to(built.get(), st->server.c_str());
         xmpp_id_handler_add(conn, ibr_get_result_handler, "ibr-get", st);
-
-        xmpp_send(conn, iq);
-        xmpp_stanza_release(iq);
+        xmpp_send(conn, built.get());
         return;
     }
 
@@ -455,9 +444,7 @@ static void ibr_register(const char *account_name, const char *jid, const char *
                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
         return;
     }
-    char *domain_raw = xmpp_jid_domain(tmp_ctx, jid);
-    std::string server = domain_raw ? domain_raw : "";
-    if (domain_raw) xmpp_free(tmp_ctx, domain_raw);
+    std::string server = ::jid(nullptr, jid).domain;
     xmpp_ctx_free(tmp_ctx);
 
     if (server.empty()) {
@@ -570,10 +557,8 @@ void command__add_account(const char *name, const char *jid, const char *passwor
         account->jid(jid);
     if (password)
         account->password(password);
-    if (jid) {
-        xmpp_string_guard jid_node_g(account->context, xmpp_jid_node(account->context, jid));
-        account->nickname(jid_node_g.c_str());
-    }
+    if (jid)
+        account->nickname(::jid(nullptr, jid).local);
 
     weechat_printf(
         nullptr,
@@ -809,29 +794,32 @@ void command__account_unregister(struct t_gui_buffer *buffer, int argc, char **a
     }
 
     xmpp_ctx_t *ctx = account->context;
+    std::string domain = ::jid(nullptr, account->jid()).domain;
 
-    xmpp_stanza_t *iq = xmpp_iq_new(ctx, "set", "ibr-unregister");
-    xmpp_string_guard domain_g(ctx, xmpp_jid_domain(ctx, account->jid().data()));
-    if (domain_g.c_str())
-        xmpp_stanza_set_to(iq, domain_g.c_str());
-
-    xmpp_stanza_t *query = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(query, "query");
-    xmpp_stanza_set_ns(query, "jabber:iq:register");
-
-    xmpp_stanza_t *remove_el = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(remove_el, "remove");
-    xmpp_stanza_add_child(query, remove_el);
-    xmpp_stanza_release(remove_el);
-
-    xmpp_stanza_add_child(iq, query);
-    xmpp_stanza_release(query);
+    struct ibr_unregister_spec : stanza::spec {
+        ibr_unregister_spec() : spec("iq") {
+            attr("type", "set");
+            attr("id", "ibr-unregister");
+            struct query_spec : stanza::spec {
+                query_spec() : spec("query") {
+                    attr("xmlns", "jabber:iq:register");
+                    struct remove_spec : stanza::spec {
+                        remove_spec() : spec("remove") {}
+                    } rm;
+                    child(rm);
+                }
+            } q;
+            child(q);
+        }
+    } unreg_iq;
+    auto built = unreg_iq.build(ctx);
+    if (!domain.empty())
+        xmpp_stanza_set_to(built.get(), domain.c_str());
 
     auto uctx = std::make_unique<ibr_unregister_context>(ibr_unregister_context{ account, buffer });
     xmpp_id_handler_add(account->connection, ibr_unregister_result_handler,
                         "ibr-unregister", uctx.release());
-    account->connection.send(iq);
-    xmpp_stanza_release(iq);
+    account->connection.send(built.get());
 
     weechat_printf(buffer,
                    _("%s%s: IBR: sending account cancellation request..."),
@@ -916,45 +904,38 @@ void command__account_passwd(struct t_gui_buffer *buffer, int argc, char **argv)
     }
 
     xmpp_ctx_t *ctx = account->context;
-    xmpp_string_guard node_g(ctx, xmpp_jid_node(ctx, account->jid().data()));
-    xmpp_string_guard domain_g(ctx, xmpp_jid_domain(ctx, account->jid().data()));
+    ::jid acct_jid(nullptr, account->jid());
+    std::string uname = acct_jid.local.empty() ? account->jid() : acct_jid.local;
 
-    xmpp_stanza_t *iq = xmpp_iq_new(ctx, "set", "ibr-passwd");
-    if (domain_g.c_str())
-        xmpp_stanza_set_to(iq, domain_g.c_str());
-
-    xmpp_stanza_t *query = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(query, "query");
-    xmpp_stanza_set_ns(query, "jabber:iq:register");
-
-    // <username>
-    xmpp_stanza_t *username_el = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(username_el, "username");
-    xmpp_stanza_t *username_txt = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_text(username_txt, node_g.c_str() ? node_g.c_str() : account->jid().data());
-    xmpp_stanza_add_child(username_el, username_txt);
-    xmpp_stanza_release(username_txt);
-    xmpp_stanza_add_child(query, username_el);
-    xmpp_stanza_release(username_el);
-
-    // <password>
-    xmpp_stanza_t *password_el = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(password_el, "password");
-    xmpp_stanza_t *password_txt = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_text(password_txt, argv[3]);
-    xmpp_stanza_add_child(password_el, password_txt);
-    xmpp_stanza_release(password_txt);
-    xmpp_stanza_add_child(query, password_el);
-    xmpp_stanza_release(password_el);
-
-    xmpp_stanza_add_child(iq, query);
-    xmpp_stanza_release(query);
+    struct ibr_passwd_spec : stanza::spec {
+        ibr_passwd_spec(const std::string &uname, const char *pass) : spec("iq") {
+            attr("type", "set");
+            attr("id", "ibr-passwd");
+            struct query_spec : stanza::spec {
+                query_spec(const std::string &u, const char *p) : spec("query") {
+                    attr("xmlns", "jabber:iq:register");
+                    struct text_el : stanza::spec {
+                        text_el(std::string_view tag, std::string_view val) : spec(tag) {
+                            text(val);
+                        }
+                    };
+                    text_el un("username", u);
+                    text_el pw("password", p ? p : "");
+                    child(un);
+                    child(pw);
+                }
+            } q(uname, pass);
+            child(q);
+        }
+    } passwd_iq(uname, argv[3]);
+    auto built = passwd_iq.build(ctx);
+    if (!acct_jid.domain.empty())
+        xmpp_stanza_set_to(built.get(), acct_jid.domain.c_str());
 
     auto pctx = std::make_unique<ibr_passwd_context>(ibr_passwd_context{ account, buffer, std::string(argv[3]) });
     xmpp_id_handler_add(account->connection, ibr_passwd_result_handler,
                         "ibr-passwd", pctx.release());
-    account->connection.send(iq);
-    xmpp_stanza_release(iq);
+    account->connection.send(built.get());
 
     weechat_printf(buffer,
                    _("%s%s: IBR: sending password change request..."),
