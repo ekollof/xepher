@@ -21,6 +21,7 @@
 #include "../src/util.hh"
 #include "../src/message.hh"
 #include "../src/color.hh"
+#include "../src/strophe.hh"
 #include "../src/xmpp/node.hh"
 
 // ── stdlib ────────────────────────────────────────────────────────────────────
@@ -329,6 +330,175 @@ TEST_CASE("presence show/status extraction")
 
         xmpp_stanza_release(root);
     }
+}
+
+// =============================================================================
+// TEST CASES – Group B2: MAM IQ stanza builder (src/xmpp/xep-0313.inl)
+// =============================================================================
+
+// Helper: serialise a built stanza to XML string and release the raw pointer.
+static std::string stanza_to_xml(xmpp_ctx_t *ctx, xmpp_stanza_t *raw)
+{
+    char *buf = nullptr;
+    size_t len = 0;
+    xmpp_stanza_to_text(raw, &buf, &len);
+    std::string result(buf ? buf : "");
+    if (buf) xmpp_free(ctx, buf);
+    return result;
+}
+
+TEST_CASE("MAM PM IQ stanza builder: structure and attributes")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    // Reproduce what fetch_mam() does for a PM channel
+    const std::string mam_id    = "test-uuid-1234";
+    const std::string partner   = "bob@example.org";
+    const std::string own_bare  = "alice@example.org";
+
+    stanza::xep0313::x_filter xf;
+    xf.with(partner);
+
+    stanza::xep0313::query q;
+    q.queryid(mam_id).filter(xf);
+
+    stanza::iq iq_s;
+    iq_s.id(mam_id).type("set").to(own_bare);
+    iq_s.xep0313().query(q);
+
+    auto built = iq_s.build(env.ctx);
+    REQUIRE(built != nullptr);
+    std::string xml = stanza_to_xml(env.ctx, built.get());
+
+    // Top-level IQ attributes
+    CHECK(xml.find("id=\"test-uuid-1234\"")  != std::string::npos);
+    CHECK(xml.find("type=\"set\"")            != std::string::npos);
+    CHECK(xml.find("to=\"alice@example.org\"") != std::string::npos);
+
+    // <query> element with MAM namespace and queryid
+    CHECK(xml.find("xmlns=\"urn:xmpp:mam:2\"") != std::string::npos);
+    CHECK(xml.find("queryid=\"test-uuid-1234\"") != std::string::npos);
+
+    // jabber:x:data form for the filter
+    CHECK(xml.find("xmlns=\"jabber:x:data\"") != std::string::npos);
+    CHECK(xml.find("type=\"submit\"")          != std::string::npos);
+
+    // FORM_TYPE hidden field
+    CHECK(xml.find("urn:xmpp:mam:2") != std::string::npos);
+
+    // <with> field for the partner JID
+    CHECK(xml.find("bob@example.org") != std::string::npos);
+}
+
+TEST_CASE("MAM PM IQ stanza: <with> field appears inside <query>")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    stanza::xep0313::x_filter xf;
+    xf.with("carol@example.org");
+
+    stanza::xep0313::query q;
+    q.queryid("qid-abc").filter(xf);
+
+    stanza::iq iq_s;
+    iq_s.id("qid-abc").type("set");
+    iq_s.xep0313().query(q);
+
+    auto built = iq_s.build(env.ctx);
+    std::string xml = stanza_to_xml(env.ctx, built.get());
+
+    // Parse with libstrophe to check structural nesting
+    xmpp_stanza_t *root = xmpp_stanza_new_from_string(env.ctx, xml.c_str());
+    REQUIRE(root != nullptr);
+
+    xmpp_stanza_t *query_el = xmpp_stanza_get_child_by_name_and_ns(
+        root, "query", "urn:xmpp:mam:2");
+    CHECK(query_el != nullptr);
+
+    if (query_el)
+    {
+        xmpp_stanza_t *x_el = xmpp_stanza_get_child_by_name_and_ns(
+            query_el, "x", "jabber:x:data");
+        CHECK(x_el != nullptr);
+
+        bool found_with_field = false;
+        if (x_el)
+        {
+            for (xmpp_stanza_t *field = xmpp_stanza_get_children(x_el);
+                 field; field = xmpp_stanza_get_next(field))
+            {
+                const char *var = xmpp_stanza_get_attribute(field, "var");
+                if (var && std::string_view(var) == "with")
+                {
+                    xmpp_stanza_t *val = xmpp_stanza_get_child_by_name(field, "value");
+                    if (val)
+                    {
+                        xmpp_string_guard text_g(env.ctx, xmpp_stanza_get_text(val));
+                        CHECK(text_g.ptr != nullptr);
+                        if (text_g.ptr)
+                            CHECK(std::string_view(text_g.ptr) == "carol@example.org");
+                    }
+                    found_with_field = true;
+                    break;
+                }
+            }
+        }
+        CHECK(found_with_field);
+    }
+
+    xmpp_stanza_release(root);
+}
+
+TEST_CASE("MAM RSM pagination IQ: <after> element present in <set>")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    // Reproduce the pagination branch in fetch_mam() (after != nullptr)
+    stanza::xep0313::x_filter xf;
+    xf.with("dave@example.org");
+
+    stanza::xep0313::query q;
+    q.queryid("page2-id").filter(xf);
+
+    stanza::xep0059::set rsm;
+    rsm.after("last-seen-uid-xyz");
+    q.rsm(rsm);
+
+    stanza::iq iq_s;
+    iq_s.id("page2-id").type("set");
+    iq_s.xep0313().query(q);
+
+    auto built = iq_s.build(env.ctx);
+    std::string xml = stanza_to_xml(env.ctx, built.get());
+
+    xmpp_stanza_t *root = xmpp_stanza_new_from_string(env.ctx, xml.c_str());
+    REQUIRE(root != nullptr);
+
+    xmpp_stanza_t *query_el = xmpp_stanza_get_child_by_name_and_ns(
+        root, "query", "urn:xmpp:mam:2");
+    REQUIRE(query_el != nullptr);
+
+    xmpp_stanza_t *set_el = xmpp_stanza_get_child_by_name_and_ns(
+        query_el, "set", "http://jabber.org/protocol/rsm");
+    CHECK(set_el != nullptr);
+
+    if (set_el)
+    {
+        xmpp_stanza_t *after_el = xmpp_stanza_get_child_by_name(set_el, "after");
+        CHECK(after_el != nullptr);
+        if (after_el)
+        {
+            xmpp_string_guard after_text_g(env.ctx, xmpp_stanza_get_text(after_el));
+            CHECK(after_text_g.ptr != nullptr);
+            if (after_text_g.ptr)
+                CHECK(std::string_view(after_text_g.ptr) == "last-seen-uid-xyz");
+        }
+    }
+
+    xmpp_stanza_release(root);
 }
 
 // =============================================================================

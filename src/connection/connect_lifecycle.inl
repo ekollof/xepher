@@ -545,6 +545,30 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             ptr_buffer = (struct t_gui_buffer*)weechat_hdata_move(hdata_buffer, ptr_buffer, 1);
         }
 
+        // Tertiary restore source: LMDB pm_open registry.
+        // Any JID registered via pm_open_register() (written when a PM MAM
+        // fetch completes) is a PM conversation to restore.  This handles the
+        // case where WeeChat was fully restarted (no open buffers) AND the
+        // global MAM catchup returned no new messages so no PM channels were
+        // created by the MAM result handler.
+        for (const auto &pm_jid : account.pm_open_list())
+        {
+            if (!account.channels.contains(pm_jid))
+            {
+                XDEBUG("restoring PM channel from LMDB cache: {}", pm_jid);
+                try {
+                    account.channels.emplace(
+                        std::make_pair(pm_jid, weechat::channel {
+                                account, weechat::channel::chat_type::PM,
+                                pm_jid, pm_jid
+                            }));
+                } catch (const std::exception &ex) {
+                    weechat_printf(nullptr, "%sxmpp: failed to restore PM channel %s: %s",
+                                   weechat_prefix("error"), pm_jid.c_str(), ex.what());
+                }
+            }
+        }
+
         // Initialize Client State Indication (XEP-0352)
         account.last_activity = time(nullptr);
         account.csi_active = true;

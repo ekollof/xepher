@@ -4181,6 +4181,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // MAM fetch complete, update last fetch timestamp
                     channel->second.last_mam_fetch = time(nullptr);
                     account.mam_cache_set_last_timestamp(channel->second.id, channel->second.last_mam_fetch);
+                    // Persist this PM JID so it can be restored on the next full restart
+                    if (channel->second.type == weechat::channel::chat_type::PM)
+                        account.pm_open_register(channel->second.id);
                     account.mam_query_remove(mam_query.id);
                 }
             }

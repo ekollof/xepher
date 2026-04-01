@@ -261,6 +261,76 @@ void weechat::account::mam_cache_clear_messages(const std::string& channel_jid)
     }
 }
 
+void weechat::account::pm_open_register(const std::string& pm_jid)
+{
+    if (!mam_db_env || pm_jid.empty()) return;
+
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+
+        std::string key = fmt::format("pm_open:{}", pm_jid);
+        std::string value = "1";
+        MDB_val k = {key.size(), (void*)key.data()};
+        MDB_val v = {value.size(), (void*)value.data()};
+        mdb_put(txn.handle(), mam_dbi.cursors.handle(), &k, &v, 0);
+
+        txn.commit();
+    } catch (const lmdb::error&) {}
+}
+
+void weechat::account::pm_open_unregister(const std::string& pm_jid)
+{
+    if (!mam_db_env || pm_jid.empty()) return;
+
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+
+        std::string key = fmt::format("pm_open:{}", pm_jid);
+        MDB_val k = {key.size(), (void*)key.data()};
+        mdb_del(txn.handle(), mam_dbi.cursors.handle(), &k, nullptr);
+
+        txn.commit();
+    } catch (const lmdb::error&) {}
+}
+
+std::vector<std::string> weechat::account::pm_open_list()
+{
+    std::vector<std::string> result;
+    if (!mam_db_env) return result;
+
+    static constexpr std::string_view prefix = "pm_open:";
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
+
+        MDB_cursor *cursor = nullptr;
+        if (mdb_cursor_open(txn.handle(), mam_dbi.cursors.handle(), &cursor) != 0)
+        {
+            txn.abort();
+            return result;
+        }
+
+        MDB_val k = {prefix.size(), (void*)prefix.data()};
+        MDB_val v;
+        int rc = mdb_cursor_get(cursor, &k, &v, MDB_SET_RANGE);
+        while (rc == 0)
+        {
+            std::string_view kv(static_cast<const char*>(k.mv_data), k.mv_size);
+            if (!kv.starts_with(prefix))
+                break;
+            result.emplace_back(kv.substr(prefix.size()));
+            rc = mdb_cursor_get(cursor, &k, &v, MDB_NEXT);
+        }
+
+        mdb_cursor_close(cursor);
+        txn.abort();
+    } catch (const lmdb::error&) {}
+
+    return result;
+}
+
 time_t weechat::account::mam_cache_get_last_timestamp(const std::string& channel_jid)
 {
     if (!mam_db_env) return 0;

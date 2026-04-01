@@ -383,7 +383,11 @@ namespace weechat
         void mam_cache_load_messages(const std::string& channel_jid, struct t_gui_buffer *buffer);
         void mam_cache_clear_messages(const std::string& channel_jid);
         time_t mam_cache_get_last_timestamp(const std::string& channel_jid);
-         void mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp);
+        void mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp);
+        // PM buffer persistence across restarts (stored in cursors LMDB table)
+        void pm_open_register(const std::string& pm_jid);
+        void pm_open_unregister(const std::string& pm_jid);
+        std::vector<std::string> pm_open_list();
         std::string mam_cursor_get(const std::string& key);
         void mam_cursor_set(const std::string& key, const std::string& cursor_id);
         void mam_cursor_clear(const std::string& key);  // delete saved cursor to return to latest page
