@@ -72,13 +72,14 @@ namespace weechat
                 this->on_deleted = std::bind(cb_delete, std::ref(*this));
         }
         operator struct t_config_option *() { return get(); }
+        operator struct t_config_option *() const { return get(); }
         std::function<bool(const char *)> check_value;
         std::function<void()> on_changed;
         std::function<void()> on_deleted;
         config_section& section;
         int operator =(std::string value) { return weechat_config_option_set(*this, value.data(), 1); }
         int clear() { return weechat_config_option_set(*this, nullptr, 1); }
-        std::string_view string() { return weechat_config_string(*this); }
+        std::string_view string() const { return weechat_config_string(*this); }
         int integer() { return weechat_config_integer(*this); }
         bool boolean() { return weechat_config_boolean(*this); }
         bool write() { return weechat_config_write_option(section.file, *this); }

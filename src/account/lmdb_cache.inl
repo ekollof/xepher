@@ -746,10 +746,7 @@ void weechat::account::peer_features_update(const std::string& jid,
 
     auto &merged = peer_features[bare];
     for (const auto &feature : features)
-    {
-        if (std::find(merged.begin(), merged.end(), feature) == merged.end())
-            merged.push_back(feature);
-    }
+        merged.insert(feature);
 }
 
 bool weechat::account::peer_supports_feature(const std::string& jid,
@@ -767,7 +764,7 @@ bool weechat::account::peer_supports_feature(const std::string& jid,
         return false;
 
     const auto &features = it->second;
-    return std::find(features.begin(), features.end(), feature) != features.end();
+    return features.contains(feature);
 }
 
 bool weechat::account::peer_has_legacy_axolotl_only(const std::string& jid) const

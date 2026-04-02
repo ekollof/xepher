@@ -13,6 +13,7 @@
 #include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <optional>
 #include <utility>
 #include <lmdb++.h>
@@ -325,7 +326,7 @@ namespace weechat
         // Capability cache (XEP-0115)
         std::unordered_map<std::string, std::vector<std::string>> caps_cache;  // verification_hash -> features
         // Last seen disco features per peer bare JID.
-        std::unordered_map<std::string, std::vector<std::string>> peer_features;
+        std::unordered_map<std::string, std::unordered_set<std::string>> peer_features;
         
         // MAM cache database
         lmdb::env mam_db_env = nullptr;
