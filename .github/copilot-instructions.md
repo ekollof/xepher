@@ -188,7 +188,75 @@ Critical for proper PM buffer lifecycle:
   - XEP versions should match spec version implemented
   - Use descriptive notes for clarity
 
-## Git Conventions
+## Release & Packaging
+
+### Version scheme
+
+Xepher follows **semantic versioning** (MAJOR.MINOR.PATCH):
+- `PATCH` bump — bug fixes, performance improvements, no new user-visible features
+- `MINOR` bump — new user-visible features or significant behaviour changes
+- `MAJOR` bump — breaking changes or major architectural rewrites
+
+### Release checklist
+
+1. **All commits pushed** and 15 unit tests passing (`make`).
+2. **Bump version** in the three packaging files (all must match):
+   - `packaging/arch/PKGBUILD` — `pkgver=X.Y.Z`
+   - `packaging/rpm/weechat-xmpp.spec` — `Version: X.Y.Z` + new `%changelog` entry
+   - `packaging/debian/changelog` — new stanza at the top
+3. **Commit** the version bump: `chore: bump packaging to vX.Y.Z`
+4. **Tag** the release: `git tag -a vX.Y.Z -m "vX.Y.Z — <one-line summary>"`
+5. **Push** commits and tag: `git push && git push origin vX.Y.Z`
+6. **Build packages** (see below).
+7. **Create GitHub release** and attach binaries (see below).
+
+### Building packages
+
+Use the distrobox build script — it spins up isolated containers for each
+distro, builds, then tears them down:
+
+```sh
+# Build all five formats (Debian, Fedora, Arch, Void, Alpine)
+bash packaging/distrobox-build.sh X.Y.Z
+
+# Build a single format
+bash packaging/distrobox-build.sh X.Y.Z --debian
+bash packaging/distrobox-build.sh X.Y.Z --fedora
+bash packaging/distrobox-build.sh X.Y.Z --arch
+bash packaging/distrobox-build.sh X.Y.Z --void
+bash packaging/distrobox-build.sh X.Y.Z --alpine
+```
+
+Output lands in `packaging/build/`. Prerequisites: `distrobox` + `docker` or
+`podman` installed and accessible to the current user.
+
+The Alpine and Void builds use `docker run` directly (no distrobox container)
+and must run as root inside the container — this is handled automatically.
+
+### Creating the GitHub release
+
+```sh
+gh release create vX.Y.Z \
+  --title "vX.Y.Z — <summary>" \
+  --notes "..." \
+  --target master \
+  packaging/build/xepher_X.Y.Z-1_amd64.deb \
+  packaging/build/xepher-dbgsym_X.Y.Z-1_amd64.deb \
+  packaging/build/xepher-X.Y.Z-1.fcNN.x86_64.rpm \
+  packaging/build/xepher-X.Y.Z-1-x86_64.pkg.tar.zst \
+  packaging/build/xepher-debug-X.Y.Z-1-x86_64.pkg.tar.zst \
+  packaging/build/xepher-X.Y.Z_1.x86_64.xbps \
+  packaging/build/xepher-X.Y.Z-r0.apk
+```
+
+### Branch protection
+
+`master` is protected on GitHub:
+- Force pushes and branch deletion are **blocked**.
+- Direct pushes from the sole maintainer are still allowed.
+- To change protection rules: `gh api repos/ekollof/xepher/branches/master/protection`
+
+
 
 ### Commit Message Format
 
