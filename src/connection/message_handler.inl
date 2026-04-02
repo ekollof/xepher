@@ -3213,6 +3213,8 @@ message_handler_after_omemo:
 
                 if (std::string_view(sname) == "url-data")
                 {
+                    const char *target = xmpp_stanza_get_attribute(src, "target");
+                    if (target) sfs_url = target;
                 }
                 else if (std::string_view(sname) == "reference")
                 {
