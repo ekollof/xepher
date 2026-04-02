@@ -8,6 +8,7 @@
 #include <string>
 
 #include "strophe.hh"
+#include "test_export.hh"
 
 #define STR(X) #X
 #define XSTR(X) STR(X)
@@ -29,13 +30,13 @@ namespace weechat {
         struct t_weechat_plugin *m_plugin_ptr; // packed first for hackery
 
     public:
-        plugin(struct t_weechat_plugin *plugin_ptr);
+        XMPP_TEST_EXPORT plugin(struct t_weechat_plugin *plugin_ptr);
         virtual ~plugin();
 
         void init(int argc, char *argv[]);
         void end();
 
-        static std::unique_ptr<plugin> instance;
+        XMPP_TEST_EXPORT static std::unique_ptr<plugin> instance;
 
         inline struct t_weechat_plugin * ptr() { return m_plugin_ptr; };
         inline operator struct t_weechat_plugin *() { return m_plugin_ptr; };

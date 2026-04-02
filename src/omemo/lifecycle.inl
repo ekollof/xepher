@@ -1,4 +1,4 @@
-weechat::xmpp::omemo::~omemo()
+XMPP_TEST_EXPORT weechat::xmpp::omemo::~omemo()
 {
     // Teardown order matters for libsignal ref-counted objects.
     // Drop identity first, then store context, then signal context.
@@ -185,7 +185,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::get_bundle(xmpp_ctx_t *context, char *from,
     return iq;
 }
 
-xmpp_stanza_t *weechat::xmpp::omemo::get_legacy_bundle(xmpp_ctx_t *context, char *from, char *to)
+XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ctx_t *context, char *from, char *to)
 {
     (void) from;
     (void) to;
@@ -344,7 +344,62 @@ xmpp_stanza_t *weechat::xmpp::omemo::get_legacy_bundle(xmpp_ctx_t *context, char
     return iq;
 }
 
-void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, const char *account_name)
+// One-time migration: rename legacy_devicelist:* → axolotl_devicelist:*
+// and legacy_bundle:* → axolotl_bundle:* in the LMDB database.
+// Called once on DB open; idempotent (old keys are deleted after being copied).
+static void migrate_legacy_keys(omemo &self)
+{
+    if (!self.db_env)
+        return;
+
+    // Collect keys to migrate in a read-only pass first (cursor invalidation safety).
+    std::vector<std::pair<std::string, std::string>> to_rename; // {old_key, new_key}
+    {
+        auto rtxn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+        auto cursor = lmdb::cursor::open(rtxn, self.dbi.omemo);
+        std::string_view key;
+        std::string_view value;
+        for (bool found = cursor.get(key, value, MDB_FIRST); found;
+             found = cursor.get(key, value, MDB_NEXT))
+        {
+            if (key.starts_with("legacy_devicelist:"))
+            {
+                const auto suffix = key.substr(std::string_view("legacy_devicelist:").size());
+                to_rename.emplace_back(std::string(key), fmt::format("axolotl_devicelist:{}", suffix));
+            }
+            else if (key.starts_with("legacy_bundle:"))
+            {
+                const auto suffix = key.substr(std::string_view("legacy_bundle:").size());
+                to_rename.emplace_back(std::string(key), fmt::format("axolotl_bundle:{}", suffix));
+            }
+        }
+        // rtxn aborts on scope exit (read-only, nothing to commit)
+    }
+
+    if (to_rename.empty())
+        return;
+
+    // Write pass: copy under new key then delete old key.
+    auto wtxn = lmdb::txn::begin(self.db_env);
+    for (const auto &[old_key, new_key] : to_rename)
+    {
+        std::string_view value;
+        if (self.dbi.omemo.get(wtxn, old_key, value))
+        {
+            self.dbi.omemo.put(wtxn, new_key, std::string(value));
+            self.dbi.omemo.del(wtxn, old_key);
+            XDEBUG("omemo: migrated LMDB key '{}' → '{}'", old_key, new_key);
+        }
+    }
+    wtxn.commit();
+
+    weechat_printf(nullptr,
+                   "%somemo: migrated %zu LMDB key(s) from legacy_* to axolotl_* prefix",
+                   weechat_prefix("network"),
+                   to_rename.size());
+}
+
+XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, const char *account_name)
 {
     try
     {
@@ -357,7 +412,7 @@ void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, const char *account
         pending_iq_jid.clear();
         pending_configure_retry.clear();
         missing_omemo2_devicelist.clear();
-        missing_legacy_devicelist.clear();
+        missing_axolotl_devicelist.clear();
         postponed_key_transports.clear();
         key_transport_bootstrap_attempted.clear();
         failed_session_bootstrap.clear();
@@ -368,6 +423,7 @@ void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, const char *account
 
         db_path = make_db_path(account_name ? account_name : "default");
         ensure_db_open(*this);
+        migrate_legacy_keys(*this);
 
         if (const auto stored_device_id = load_string(*this, kDeviceIdKey))
         {

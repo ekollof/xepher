@@ -12,6 +12,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include "test_export.hh"
+
 // RAII owner for malloc()/calloc()-allocated byte buffers.
 using heap_buf = std::unique_ptr<uint8_t[], decltype(&free)>;
 inline heap_buf make_heap_buf(uint8_t *p) { return {p, free}; }
@@ -39,7 +41,7 @@ namespace weechat {
             enum class peer_mode {
                 unknown,
                 omemo2,
-                legacy,
+                axolotl,
             };
 
             // IMPORTANT: C++ destroys members in reverse declaration order.
@@ -102,7 +104,7 @@ namespace weechat {
             // XEP-0450 §5.1: trust decisions received from senders whose own
             // key has not yet been authenticated.  Keyed by sender bare JID;
             // each entry is a list of (key_owner_jid, fingerprint_b64, level).
-            // Drained in handle_bundle() / handle_legacy_bundle() once the
+            // Drained in handle_bundle() / handle_axolotl_bundle() once the
             // sender's first device becomes ATM-trusted.
             std::unordered_map<std::string,
                 std::vector<std::tuple<std::string, std::string, std::string>>>
@@ -117,7 +119,7 @@ namespace weechat {
             // Peers for which the corresponding devicelist node returned
             // <item-not-found/>. Used to avoid request/error loops.
             std::unordered_set<std::string> missing_omemo2_devicelist;
-            std::unordered_set<std::string> missing_legacy_devicelist;
+            std::unordered_set<std::string> missing_axolotl_devicelist;
 
             // Maps configure-IQ id → node name for pending precondition-not-met
             // recovery.  When a bundle or devicelist publish fails with
@@ -146,21 +148,21 @@ namespace weechat {
                 bundle_request bundle_req;
             };
 
-            ~omemo();
+            XMPP_TEST_EXPORT ~omemo();
 
             inline operator bool() { return this->context && this->store_context &&
                     this->identity && this->device_id != 0; }
 
             xmpp_stanza_t *get_bundle(xmpp_ctx_t *context, char *from, char *to);
-            xmpp_stanza_t *get_legacy_bundle(xmpp_ctx_t *context, char *from, char *to);
+            XMPP_TEST_EXPORT xmpp_stanza_t *get_axolotl_bundle(xmpp_ctx_t *context, char *from, char *to);
 
-            void init(struct t_gui_buffer *buffer, const char *account_name);
+            XMPP_TEST_EXPORT void init(struct t_gui_buffer *buffer, const char *account_name);
 
             void handle_devicelist(weechat::account *account,
                                    const char *jid,
                                    xmpp_stanza_t *items);
 
-                        void handle_legacy_devicelist(weechat::account *account,
+                        XMPP_TEST_EXPORT void handle_axolotl_devicelist(weechat::account *account,
                                                                                     const char *jid,
                                                                                     xmpp_stanza_t *items);
 
@@ -171,13 +173,13 @@ namespace weechat {
 
                         // Like handle_bundle() but parses the legacy Conversations
                         // (eu.siacs.conversations.axolotl) bundle stanza format.
-                        void handle_legacy_bundle(weechat::account *account,
+                        void handle_axolotl_bundle(weechat::account *account,
                                                                             struct t_gui_buffer *buffer,
                                                                             const char *jid, std::uint32_t device_id,
                                                                             xmpp_stanza_t *items);
 
                         // Check if a session exists with a particular remote device.
-                        bool has_session(const char *jid, std::uint32_t remote_device_id);
+                        XMPP_TEST_EXPORT bool has_session(const char *jid, std::uint32_t remote_device_id);
 
                          // Decode an OMEMO-encrypted message returning cleartext.
                          // Returns std::nullopt if decryption fails.
@@ -193,7 +195,7 @@ namespace weechat {
                         // Encode using legacy OMEMO (eu.siacs.conversations.axolotl).
                         // Produces AES-128-GCM ciphertext with explicit IV.
                         // Used when the peer only publishes a legacy device list.
-                        xmpp_stanza_t *encode_legacy(weechat::account *account, struct t_gui_buffer *buffer,
+                        xmpp_stanza_t *encode_axolotl(weechat::account *account, struct t_gui_buffer *buffer,
                                                                                  const char *jid, const char *unencrypted);
 
 
@@ -225,7 +227,7 @@ namespace weechat {
             void request_devicelist(weechat::account &account, std::string_view jid);
 
             // Request only the legacy OMEMO devicelist namespace.
-            void request_legacy_devicelist(weechat::account &account, std::string_view jid);
+            void request_axolotl_devicelist(weechat::account &account, std::string_view jid);
 
             // Force a metadata refresh for a peer: always requests OMEMO:2 +
             // legacy devicelists, and optionally requests bundle(s).

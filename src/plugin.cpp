@@ -197,9 +197,9 @@ int weechat_plugin_end(struct t_weechat_plugin *plugin)
     return WEECHAT_RC_OK;
 }
 
-std::unique_ptr<weechat::plugin> weechat::plugin::instance;
+XMPP_TEST_EXPORT std::unique_ptr<weechat::plugin> weechat::plugin::instance;
 
-weechat::plugin::plugin(struct t_weechat_plugin *plugin)
+XMPP_TEST_EXPORT weechat::plugin::plugin(struct t_weechat_plugin *plugin)
     : m_plugin_ptr(plugin)
     , m_process_timer(nullptr)
     , m_encryption_bar_item(nullptr)
@@ -317,7 +317,7 @@ void weechat::plugin::end() {
     libstrophe::shutdown();
 }
 
-weechat::plugin::~plugin()
+XMPP_TEST_EXPORT weechat::plugin::~plugin()
 {
     // Note: instance is being destroyed here, so we can't check it
     // This destructor should be empty anyway
