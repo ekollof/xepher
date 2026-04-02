@@ -560,7 +560,7 @@
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0060.html' />
         <xmpp:status>partial</xmpp:status>
-        <xmpp:version>1.25.0</xmpp:version>
+        <xmpp:version>1.30.0</xmpp:version>
         <xmpp:note xml:lang='en'>Publish-Subscribe (PubSub) - passive feed reader receives and renders Atom items from arbitrary PubSub nodes into per-node WeeChat FEED buffers; /feed command fetches items on demand from any service/node pair; retract events trigger re-fetch; /feed subscribe, /feed unsubscribe, /feed subscriptions manage XEP-0060 subscriptions; LMDB deduplication prevents duplicate item display across IQ fetch and push paths; /feed discover lists server pubsub components discovered via XEP-0030 at connect time; /feed (no args) auto-fetches subscriptions from all discovered pubsub services</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
@@ -569,8 +569,8 @@
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0413.html' />
         <xmpp:status>partial</xmpp:status>
-        <xmpp:version>0.1.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Order-By for MAM queries (Experimental) - urn:xmpp:order-by:1 field='creation-date' element included in XEP-0442 pubsub MAM queries to request newest-first ordering; advertised in caps</xmpp:note>
+        <xmpp:version>0.2</xmpp:version>
+        <xmpp:note xml:lang='en'>Order-By for MAM and Pubsub queries (Experimental) - urn:xmpp:order-by:1 field='creation-date' element included in XEP-0442 pubsub MAM queries to request newest-first ordering; bare and scoped features advertised in caps per §6</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -794,7 +794,7 @@
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0490.html' />
         <xmpp:status>complete</xmpp:status>
-        <xmpp:version>0.3.0</xmpp:version>
+        <xmpp:version>1.0.1</xmpp:version>
         <xmpp:note xml:lang='en'>Message Displayed Synchronization - publishes MDS PEP item when messages are read (on send, type, and buffer switch); consumes MDS events from other own devices to sync read state</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
@@ -803,7 +803,7 @@
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0511.html' />
         <xmpp:status>complete</xmpp:status>
-        <xmpp:version>0.1.0</xmpp:version>
+        <xmpp:version>0.1.1</xmpp:version>
         <xmpp:note xml:lang='en'>Link Metadata - fetches and sends OpenGraph previews for outgoing URLs; renders incoming rdf:Description previews with title, description, URL, and image indicator</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
