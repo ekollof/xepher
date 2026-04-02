@@ -14,6 +14,13 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
     {
         account.disconnected = 0;
 
+        // Populate bare JID cache (avoids re-parsing bound JID on every stanza)
+        {
+            std::string full = xmpp_conn_get_bound_jid(static_cast<xmpp_conn_t*>(*this));
+            auto slash = full.find('/');
+            account.jid_bare_cache_ = (slash != std::string::npos) ? full.substr(0, slash) : std::move(full);
+        }
+
         // Only add handlers once (they persist across reconnects via libstrophe)
         if (!account.sm_handlers_registered)
         {
@@ -592,6 +599,8 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
     }
     else
     {
+        account.jid_bare_cache_.clear();
+
         const char *status_text = status == event::disconnect ? "disconnect" :
                                   status == event::fail ? "fail" :
                                   status == event::raw_connect ? "raw-connect" :
