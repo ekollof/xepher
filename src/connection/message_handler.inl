@@ -2064,14 +2064,19 @@ message_handler_after_omemo:
                              weechat_strcasecmp(tag + 3, replace_id) == 0)
                          {
                              // XEP-0308 §3: Verify the correcting sender matches
-                             // the original message author before applying the edit.
-                            // Compute expected nick tag value (same logic as display path).
-                             const char *corr_nick = from;
-                             std::string corr_resource_s;
-                             if (channel && channel->type == weechat::channel::chat_type::MUC)
-                                 corr_resource_s = ::jid(nullptr, from).resource;
-                             if (!corr_resource_s.empty())
-                                 corr_nick = corr_resource_s.c_str();
+                              // the original message author before applying the edit.
+                              // For MUC: compare MUC nick (resource part of full JID).
+                              // For PM:  compare bare JID — the nick_ tag may store a full
+                              //          JID with a different resource than the correction,
+                              //          so bare-JID matching is the only robust approach.
+                              const char *corr_nick = from_bare; // default: bare JID for PM
+                              std::string corr_resource_s;
+                              if (channel && channel->type == weechat::channel::chat_type::MUC)
+                              {
+                                  corr_resource_s = ::jid(nullptr, from).resource;
+                                  if (!corr_resource_s.empty())
+                                      corr_nick = corr_resource_s.c_str();
+                              }
 
                             bool sender_matches = false;
                             for (int chk = 0; chk < tags_count; chk++)
@@ -2499,6 +2504,13 @@ message_handler_after_omemo:
         }
         // else nick stays as `from`
         display_from = from;
+    }
+    else
+    {
+        // PM channel: use bare JID as nick so that XEP-0308 corrections from a
+        // different resource of the same contact still match (resource may vary
+        // between the original message and its correction).
+        nick = from_bare;
     }
     delay = xmpp_stanza_get_child_by_name_and_ns(stanza, "delay", "urn:xmpp:delay");
     timestamp = delay ? xmpp_stanza_get_attribute(delay, "stamp") : nullptr;
