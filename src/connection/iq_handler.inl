@@ -132,15 +132,89 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             else
             {
                 // Error response
+                xmpp_stanza_t *err_elem = xmpp_stanza_get_child_by_name(stanza, "error");
                 if (is_muc_selfping)
                 {
-                    weechat_printf(account.buffer, "%sMUC self-ping FAILED: no longer in %s",
-                                  weechat_prefix("error"), room_jid.c_str());
+                    // XEP-0410 §3.3: interpret error condition to decide whether we
+                    // are still joined or need to rejoin.
+                    //
+                    // Still joined (reflected-ping errors from MUC on behalf of a
+                    // client that doesn't support XMPP Ping, or nick-change race):
+                    //   <service-unavailable/>, <feature-not-implemented/>, <item-not-found/>
+                    //
+                    // Not joined — must rejoin:
+                    //   <not-acceptable/> (§3.2 "you are not in the room")
+                    //   <not-allowed/>, <bad-request/> (footnote 4 — some servers)
+                    //
+                    // Network errors — ambiguous, treat conservatively (no rejoin):
+                    //   <remote-server-not-found/>, <remote-server-timeout/>
+
+                    bool still_joined = false;
+                    bool ambiguous    = false;
+
+                    if (err_elem)
+                    {
+                        static constexpr const char *IETF_NS =
+                            "urn:ietf:params:xml:ns:xmpp-stanzas";
+
+                        auto has_cond = [&](const char *name) -> bool {
+                            return xmpp_stanza_get_child_by_name_and_ns(
+                                       err_elem, name, IETF_NS) != nullptr;
+                        };
+
+                        if (has_cond("service-unavailable") ||
+                            has_cond("feature-not-implemented") ||
+                            has_cond("item-not-found"))
+                        {
+                            still_joined = true;
+                        }
+                        else if (has_cond("remote-server-not-found") ||
+                                 has_cond("remote-server-timeout"))
+                        {
+                            ambiguous = true;
+                        }
+                        // not-acceptable / not-allowed / bad-request / anything else
+                        // → not joined → fall through to rejoin below
+                    }
+
+                    if (still_joined)
+                    {
+                        // Reflected ping: the pinged client doesn't support XMPP Ping
+                        // (or nick-change race) — we ARE still in the room.
+                        weechat_printf(account.buffer,
+                                       "%sMUC self-ping: still in %s (reflected error)",
+                                       weechat_prefix("network"), room_jid.c_str());
+                    }
+                    else if (ambiguous)
+                    {
+                        // Network-level error: cannot determine join state; skip rejoin.
+                        const char *etype = err_elem
+                            ? xmpp_stanza_get_attribute(err_elem, "type") : "unknown";
+                        weechat_printf(account.buffer,
+                                       "%sMUC self-ping to %s: network error (%s), skipping rejoin",
+                                       weechat_prefix("network"), room_jid.c_str(), etype);
+                    }
+                    else
+                    {
+                        // <not-acceptable/> or similar: we are NOT in the room.
+                        weechat_printf(account.buffer,
+                                       "%sMUC self-ping FAILED: no longer in %s — rejoining",
+                                       weechat_prefix("error"), room_jid.c_str());
+
+                        // Rejoin: send a fresh MUC join presence (room@domain/nick).
+                        std::string rejoin_jid = fmt::format("{}/{}", room_jid,
+                                                              account.nickname());
+                        auto join_pres = stanza::presence()
+                            .to(rejoin_jid.c_str())
+                            .from(account.jid());
+                        static_cast<stanza::xep0045::presence&>(join_pres).muc_join();
+                        account.connection.send(join_pres.build(account.context).get());
+                    }
                 }
                 else
                 {
-                    xmpp_stanza_t *error = xmpp_stanza_get_child_by_name(stanza, "error");
-                    const char *error_type = error ? xmpp_stanza_get_attribute(error, "type") : "unknown";
+                    const char *error_type = err_elem
+                        ? xmpp_stanza_get_attribute(err_elem, "type") : "unknown";
                     weechat_printf(account.buffer, "%sPing failed to %s: %s",
                                   weechat_prefix("error"), from_jid, error_type);
                 }
