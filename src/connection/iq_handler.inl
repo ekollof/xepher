@@ -1218,7 +1218,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             XDEBUG("PUT URL: {}", put_url ? put_url : "(null)");
             XDEBUG("GET URL: {}", get_url ? get_url : "(null)");
             
-            // Extract PUT headers (XEP-0363 allows Authorization and other headers)
+            // Extract PUT headers (XEP-0363 §9.2: only Authorization, Cookie, Expires
+            // are permitted — forwarding arbitrary headers is a header-injection risk).
+            // Also strip any CR/LF from values to prevent HTTP header injection.
+            static constexpr std::string_view allowed_headers[] = {
+                "authorization", "cookie", "expires"
+            };
             std::vector<std::string> put_headers;
             if (put_elem)
             {
@@ -1229,9 +1234,31 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     char *value = xmpp_stanza_get_text(header);
                     if (name && value)
                     {
-                        std::string header_str = fmt::format("{}: {}", name, value);
-                        put_headers.push_back(header_str);
-                        XDEBUG("PUT header: {}", header_str);
+                        // Only forward headers explicitly listed in §9.2
+                        bool allowed = false;
+                        for (const auto &allowed_name : allowed_headers)
+                        {
+                            if (weechat_strcasecmp(name, allowed_name.data()) == 0)
+                            {
+                                allowed = true;
+                                break;
+                            }
+                        }
+                        if (allowed)
+                        {
+                            // Strip CR and LF to prevent HTTP header injection
+                            std::string safe_value(value);
+                            safe_value.erase(std::remove_if(safe_value.begin(), safe_value.end(),
+                                [](char c) { return c == '\r' || c == '\n'; }),
+                                safe_value.end());
+                            std::string header_str = fmt::format("{}: {}", name, safe_value);
+                            put_headers.push_back(header_str);
+                            XDEBUG("PUT header: {}", header_str);
+                        }
+                        else
+                        {
+                            XDEBUG("PUT header '{}' not in XEP-0363 §9.2 allowlist — dropped", name);
+                        }
                     }
                     if (value) xmpp_free(account.context, value);
                     header = xmpp_stanza_get_next(header);
