@@ -63,32 +63,32 @@ xmpp_stanza_t *weechat::xmpp::omemo::get_bundle(xmpp_ctx_t *context, char *from,
         return std::shared_ptr<xmpp_stanza_t> { xmpp_stanza_new(context), xmpp_stanza_release };
     };
 
-    // <signedPreKeyPublic signedPreKeyId='…'>base64</signedPreKeyPublic>
+    // <spk id='…'>base64</spk>  (XEP-0384 §4.3 wire format)
     auto spk_text = mk();
     xmpp_stanza_set_text(spk_text.get(), bundle->signed_pre_key.c_str());
     auto spk = mk();
-    xmpp_stanza_set_name(spk.get(), "signedPreKeyPublic");
-    xmpp_stanza_set_attribute(spk.get(), "signedPreKeyId", bundle->signed_pre_key_id.c_str());
+    xmpp_stanza_set_name(spk.get(), "spk");
+    xmpp_stanza_set_attribute(spk.get(), "id", bundle->signed_pre_key_id.c_str());
     xmpp_stanza_set_ns(spk.get(), kOmemoNs.data());
     xmpp_stanza_add_child(spk.get(), spk_text.get());
 
-    // <signedPreKeySignature>base64</signedPreKeySignature>
+    // <spks>base64</spks>
     auto spks_text = mk();
     xmpp_stanza_set_text(spks_text.get(), bundle->signed_pre_key_signature.c_str());
     auto spks = mk();
-    xmpp_stanza_set_name(spks.get(), "signedPreKeySignature");
+    xmpp_stanza_set_name(spks.get(), "spks");
     xmpp_stanza_set_ns(spks.get(), kOmemoNs.data());
     xmpp_stanza_add_child(spks.get(), spks_text.get());
 
-    // <identityKey>base64</identityKey>
+    // <ik>base64</ik>
     auto ik_text = mk();
     xmpp_stanza_set_text(ik_text.get(), bundle->identity_key.c_str());
     auto ik = mk();
-    xmpp_stanza_set_name(ik.get(), "identityKey");
+    xmpp_stanza_set_name(ik.get(), "ik");
     xmpp_stanza_set_ns(ik.get(), kOmemoNs.data());
     xmpp_stanza_add_child(ik.get(), ik_text.get());
 
-    // <prekeys> loop
+    // <prekeys> loop — each prekey is <pk id='…'>base64</pk>
     auto prekeys = mk();
     xmpp_stanza_set_name(prekeys.get(), "prekeys");
     xmpp_stanza_set_ns(prekeys.get(), kOmemoNs.data());
@@ -97,8 +97,8 @@ xmpp_stanza_t *weechat::xmpp::omemo::get_bundle(xmpp_ctx_t *context, char *from,
         auto pk_text = mk();
         xmpp_stanza_set_text(pk_text.get(), key.c_str());
         auto pk = mk();
-        xmpp_stanza_set_name(pk.get(), "preKeyPublic");
-        xmpp_stanza_set_attribute(pk.get(), "preKeyId", id.c_str());
+        xmpp_stanza_set_name(pk.get(), "pk");
+        xmpp_stanza_set_attribute(pk.get(), "id", id.c_str());
         xmpp_stanza_set_ns(pk.get(), kOmemoNs.data());
         xmpp_stanza_add_child(pk.get(), pk_text.get());
         xmpp_stanza_add_child(prekeys.get(), pk.get());
