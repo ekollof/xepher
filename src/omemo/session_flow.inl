@@ -31,12 +31,12 @@ namespace {
     const std::string bare_jid = normalize_bare_jid(account.context, jid);
     const auto stored_mode = load_device_mode(self, bare_jid, device_id);
     const bool in_omemo2_list = devicelist_contains_device(self, key_for_devicelist(bare_jid), device_id);
-    const bool in_legacy_list = devicelist_contains_device(self, key_for_legacy_devicelist(bare_jid), device_id);
+    const bool in_axolotl_list = devicelist_contains_device(self, key_for_axolotl_devicelist(bare_jid), device_id);
 
-    if (in_omemo2_list && !in_legacy_list)
+    if (in_omemo2_list && !in_axolotl_list)
         return omemo::peer_mode::omemo2;
-    if (in_legacy_list && !in_omemo2_list)
-        return omemo::peer_mode::legacy;
+    if (in_axolotl_list && !in_omemo2_list)
+        return omemo::peer_mode::axolotl;
 
     if (preferred != omemo::peer_mode::unknown)
         return preferred;
@@ -45,12 +45,12 @@ namespace {
         return *stored_mode;
 
     if (account.peer_has_legacy_axolotl_only(bare_jid))
-        return omemo::peer_mode::legacy;
+        return omemo::peer_mode::axolotl;
 
     if (in_omemo2_list)
         return omemo::peer_mode::omemo2;
-    if (in_legacy_list)
-        return omemo::peer_mode::legacy;
+    if (in_axolotl_list)
+        return omemo::peer_mode::axolotl;
 
     return omemo::peer_mode::unknown;
 }
@@ -179,7 +179,7 @@ static bool send_atm_trust_message_omemo2(
 // XEP-0450 §4: send ATM trust message using legacy OMEMO encryption
 // (eu.siacs.conversations.axolotl namespace, AES-128-GCM, no SCE).
 // NOTE: legacy OMEMO has no SCE layer — the <trust-message> is the plaintext.
-static bool send_atm_trust_message_legacy(
+static bool send_atm_trust_message_axolotl(
     omemo &self,
     weechat::account &account,
     const std::string &trust_message_xml,
@@ -195,7 +195,7 @@ static bool send_atm_trust_message_legacy(
     }();
 
     // Legacy encrypts the raw plaintext (no SCE wrapper)
-    const auto ep = legacy_omemo_encrypt(std::string_view(trust_message_xml));
+    const auto ep = axolotl_omemo_encrypt(std::string_view(trust_message_xml));
     if (!ep)
         return false;
 
@@ -229,7 +229,7 @@ static bool send_atm_trust_message_legacy(
             if (!establish_session_from_bundle(self, *account.context, recipient_jid, *remote_id))
                 continue;
         }
-        const auto transport = encrypt_legacy_transport_key(self, recipient_jid, *remote_id, *ep);
+        const auto transport = encrypt_axolotl_transport_key(self, recipient_jid, *remote_id, *ep);
         if (!transport)
             continue;
         const auto enc_key = base64_encode(*account.context,
@@ -357,9 +357,9 @@ static void send_atm_trust_message(omemo &self,
         if (dl2 && !dl2->empty())
             send_atm_trust_message_omemo2(self, account, tm_omemo2, target_jid, *dl2);
 
-        const auto dll = load_string(self, key_for_legacy_devicelist(target_jid));
+        const auto dll = load_string(self, key_for_axolotl_devicelist(target_jid));
         if (dll && !dll->empty())
-            send_atm_trust_message_legacy(self, account, tm_legacy, target_jid, *dll);
+            send_atm_trust_message_axolotl(self, account, tm_legacy, target_jid, *dll);
     }
 }
 
@@ -401,9 +401,9 @@ static void send_atm_distrust_message(omemo &self,
         if (dl2 && !dl2->empty())
             send_atm_trust_message_omemo2(self, account, tm_omemo2, target_jid, *dl2);
 
-        const auto dll = load_string(self, key_for_legacy_devicelist(target_jid));
+        const auto dll = load_string(self, key_for_axolotl_devicelist(target_jid));
         if (dll && !dll->empty())
-            send_atm_trust_message_legacy(self, account, tm_legacy, target_jid, *dll);
+            send_atm_trust_message_axolotl(self, account, tm_legacy, target_jid, *dll);
     }
 }
 
@@ -440,12 +440,12 @@ void weechat::xmpp::omemo::request_devicelist(weechat::account &account, std::st
     // Probe both namespaces up front. Device support is resolved per-device
     // during bundle bootstrap rather than assumed peer-wide.
     ::request_devicelist(account, bare_jid);
-    ::request_legacy_devicelist(account, bare_jid);
+    ::request_axolotl_devicelist(account, bare_jid);
 }
 
-void weechat::xmpp::omemo::request_legacy_devicelist(weechat::account &account, std::string_view jid)
+void weechat::xmpp::omemo::request_axolotl_devicelist(weechat::account &account, std::string_view jid)
 {
-    ::request_legacy_devicelist(account, jid);
+    ::request_axolotl_devicelist(account, jid);
 }
 
 void weechat::xmpp::omemo::force_fetch(weechat::account &account,
@@ -473,7 +473,7 @@ void weechat::xmpp::omemo::force_fetch(weechat::account &account,
         }
 
         request_bundle(account, bare_jid, *device_id);
-        request_legacy_bundle(account, bare_jid, *device_id);
+        request_axolotl_bundle(account, bare_jid, *device_id);
         print_info(buffer ? buffer : account.buffer,
                    fmt::format("OMEMO: forced devicelist + bundle refresh for {}/{}.",
                                bare_jid, *device_id));
@@ -494,12 +494,12 @@ void weechat::xmpp::omemo::force_fetch(weechat::account &account,
     };
 
     collect_devices(load_string(*this, key_for_devicelist(bare_jid)));
-    collect_devices(load_string(*this, key_for_legacy_devicelist(bare_jid)));
+    collect_devices(load_string(*this, key_for_axolotl_devicelist(bare_jid)));
 
     for (const auto known_device_id : known_devices)
     {
         request_bundle(account, bare_jid, known_device_id);
-        request_legacy_bundle(account, bare_jid, known_device_id);
+        request_axolotl_bundle(account, bare_jid, known_device_id);
     }
 
     if (known_devices.empty())
@@ -554,7 +554,7 @@ void weechat::xmpp::omemo::force_kex(weechat::account &account,
         };
 
         collect_devices(load_string(*this, key_for_devicelist(bare_jid)));
-        collect_devices(load_string(*this, key_for_legacy_devicelist(bare_jid)));
+        collect_devices(load_string(*this, key_for_axolotl_devicelist(bare_jid)));
     }
 
     if (target_devices.empty())
@@ -599,7 +599,7 @@ void weechat::xmpp::omemo::force_kex(weechat::account &account,
 
         pending_key_transport.insert({bare_jid, remote_device_id});
         request_bundle(account, bare_jid, remote_device_id);
-        request_legacy_bundle(account, bare_jid, remote_device_id);
+        request_axolotl_bundle(account, bare_jid, remote_device_id);
         ++queued;
     }
 
@@ -634,7 +634,7 @@ auto weechat::xmpp::omemo::select_peer_mode(weechat::account &account,
 
     const std::string bare_jid = normalize_bare_jid(account.context, jid);
     const auto omemo2_list = load_string(*this, key_for_devicelist(bare_jid));
-    const auto legacy_list = load_string(*this, key_for_legacy_devicelist(bare_jid));
+    const auto axolotl_list = load_string(*this, key_for_axolotl_devicelist(bare_jid));
 
     std::unordered_set<std::uint32_t> all_devices;
     auto collect_devices = [&](const std::optional<std::string> &list)
@@ -651,40 +651,40 @@ auto weechat::xmpp::omemo::select_peer_mode(weechat::account &account,
     };
 
     collect_devices(omemo2_list);
-    collect_devices(legacy_list);
+    collect_devices(axolotl_list);
 
     std::size_t known_omemo2_devices = 0;
-    std::size_t known_legacy_devices = 0;
+    std::size_t known_axolotl_devices = 0;
     for (const auto device_id : all_devices)
     {
         const auto resolved_mode = resolve_device_mode(*this, account, bare_jid, device_id);
         if (resolved_mode == peer_mode::omemo2)
             ++known_omemo2_devices;
-        else if (resolved_mode == peer_mode::legacy)
-            ++known_legacy_devices;
+        else if (resolved_mode == peer_mode::axolotl)
+            ++known_axolotl_devices;
     }
 
-    if (known_omemo2_devices != 0 && known_legacy_devices == 0)
+    if (known_omemo2_devices != 0 && known_axolotl_devices == 0)
         return peer_mode::omemo2;
-    if (known_legacy_devices != 0 && known_omemo2_devices == 0)
-        return peer_mode::legacy;
+    if (known_axolotl_devices != 0 && known_omemo2_devices == 0)
+        return peer_mode::axolotl;
 
     const bool has_omemo2 = omemo2_list && !omemo2_list->empty();
-    const bool has_legacy = legacy_list && !legacy_list->empty();
+    const bool has_axolotl = axolotl_list && !axolotl_list->empty();
 
-    if (has_omemo2 && !has_legacy)
+    if (has_omemo2 && !has_axolotl)
         return peer_mode::omemo2;
-    if (has_legacy && !has_omemo2)
-        return peer_mode::legacy;
-    if (has_omemo2 && has_legacy)
+    if (has_axolotl && !has_omemo2)
+        return peer_mode::axolotl;
+    if (has_omemo2 && has_axolotl)
     {
         if (account.peer_has_legacy_axolotl_only(bare_jid))
-            return peer_mode::legacy;
+            return peer_mode::axolotl;
         return peer_mode::omemo2;
     }
 
     if (account.peer_has_legacy_axolotl_only(bare_jid))
-        return peer_mode::legacy;
+        return peer_mode::axolotl;
 
     return peer_mode::unknown;
 }
@@ -811,14 +811,14 @@ void weechat::xmpp::omemo::handle_devicelist(weechat::account *account,
         ch.flush_pending_omemo_messages();
 }
 
-void weechat::xmpp::omemo::handle_legacy_devicelist(weechat::account *account,
+XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::account *account,
                                                     const char *jid,
                                                     xmpp_stanza_t *items)
 {
     if (!db_env || !jid)
     {
         weechat_printf(nullptr,
-                       "%somemo: handle_legacy_devicelist: invalid args (jid=%s)",
+                       "%somemo: handle_axolotl_devicelist: invalid args (jid=%s)",
                        weechat_prefix("error"),
                        jid ? jid : "(null)");
         return;
@@ -858,17 +858,17 @@ void weechat::xmpp::omemo::handle_legacy_devicelist(weechat::account *account,
     }
 
     const auto devicelist_str = join(devices, ";");
-    missing_legacy_devicelist.erase(bare_jid);
-    store_string(*this, key_for_legacy_devicelist(bare_jid), devicelist_str);
+    missing_axolotl_devicelist.erase(bare_jid);
+    store_string(*this, key_for_axolotl_devicelist(bare_jid), devicelist_str);
     for (const auto &dev : devices)
     {
         const auto remote_device_id = parse_uint32(dev);
         if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
             continue;
-        store_device_mode(*this, bare_jid, *remote_device_id, peer_mode::legacy);
+        store_device_mode(*this, bare_jid, *remote_device_id, peer_mode::axolotl);
     }
 
-    XDEBUG("omemo: handle_legacy_devicelist for {}: storing {} device(s) [{}]",
+    XDEBUG("omemo: handle_axolotl_devicelist for {}: storing {} device(s) [{}]",
            bare_jid,
            devices.size(),
            devicelist_str.empty() ? "(empty)" : devicelist_str);
@@ -1041,7 +1041,7 @@ static void send_omemo2_key_transport(omemo &self,
     account.connection.send(message_o2.get());
 }
 
-static void send_legacy_key_transport(omemo &self,
+static void send_axolotl_key_transport(omemo &self,
                                       weechat::account &account,
                                       struct t_gui_buffer *buffer,
                                       const char *peer_jid,
@@ -1050,7 +1050,7 @@ static void send_legacy_key_transport(omemo &self,
     if (!self || !peer_jid)
         return;
 
-    const auto ep = legacy_omemo_encrypt(std::string_view("\x00", 1));
+    const auto ep = axolotl_omemo_encrypt(std::string_view("\x00", 1));
     if (!ep)
     {
         print_error(buffer, fmt::format(
@@ -1075,13 +1075,13 @@ static void send_legacy_key_transport(omemo &self,
     xmpp_stanza_set_name(header_leg.get(), "header");
     xmpp_stanza_set_attribute(header_leg.get(), "sid", fmt::format("{}", self.device_id).c_str());
 
-    auto add_legacy_key = [&](const std::string &target_jid,
+    auto add_axolotl_key = [&](const std::string &target_jid,
                               std::uint32_t target_device_id) -> bool
     {
         if (!is_valid_omemo_device_id(target_device_id))
             return false;
 
-        const auto target_transport = encrypt_legacy_transport_key(self, target_jid, target_device_id, *ep);
+        const auto target_transport = encrypt_axolotl_transport_key(self, target_jid, target_device_id, *ep);
         if (!target_transport)
             return false;
 
@@ -1102,7 +1102,7 @@ static void send_legacy_key_transport(omemo &self,
         return true;
     };
 
-    bool added_any_key = add_legacy_key(peer_jid, remote_device_id);
+    bool added_any_key = add_axolotl_key(peer_jid, remote_device_id);
 
     const std::string own_bare_jid = [&]{
         auto b = ::jid(nullptr, account.jid().data()).bare;
@@ -1123,16 +1123,16 @@ static void send_legacy_key_transport(omemo &self,
             if (!self.has_session(own_bare_jid.c_str(), *own_device)
                 && !establish_session_from_bundle(self, *account.context, own_bare_jid, *own_device))
             {
-                request_legacy_bundle(account, own_bare_jid, *own_device);
+                request_axolotl_bundle(account, own_bare_jid, *own_device);
                 continue;
             }
 
-            if (add_legacy_key(own_bare_jid, *own_device))
+            if (add_axolotl_key(own_bare_jid, *own_device))
                 added_any_key = true;
         }
     };
 
-    const auto own_legacy_devicelist = load_string(self, key_for_legacy_devicelist(own_bare_jid));
+    const auto own_legacy_devicelist = load_string(self, key_for_axolotl_devicelist(own_bare_jid));
     if (own_legacy_devicelist && !own_legacy_devicelist->empty())
     {
         add_own_legacy_targets(*own_legacy_devicelist);
@@ -1193,9 +1193,9 @@ static void send_key_transport(omemo &self,
     const auto mode = resolve_device_mode(self, account, bare_jid, remote_device_id,
                                           omemo::peer_mode::omemo2);
 
-    if (mode == omemo::peer_mode::legacy)
+    if (mode == omemo::peer_mode::axolotl)
     {
-        send_legacy_key_transport(self, account, buffer, peer_jid, remote_device_id);
+        send_axolotl_key_transport(self, account, buffer, peer_jid, remote_device_id);
         return;
     }
 
@@ -1350,7 +1350,7 @@ void weechat::xmpp::omemo::handle_bundle(weechat::account *account,
 
     // Identical logic to handle_bundle() but uses extract_legacy_bundle_from_items()
     // which parses the Conversations/axolotl stanza format.
-    void weechat::xmpp::omemo::handle_legacy_bundle(weechat::account *account,
+    void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::account *account,
                                                     struct t_gui_buffer *buffer,
                                                     const char *jid,
                                                     std::uint32_t remote_device_id,
@@ -1383,12 +1383,12 @@ void weechat::xmpp::omemo::handle_bundle(weechat::account *account,
             {
                 // Store under the legacy key prefix so we know it came from the
                 // axolotl namespace; the Signal session is shared with OMEMO:2.
-                store_string(*this, key_for_legacy_bundle(bare_jid, remote_device_id),
+                store_string(*this, key_for_axolotl_bundle(bare_jid, remote_device_id),
                              serialize_bundle(*bundle));
                 // Also store under the canonical bundle key so establish_session_from_bundle()
                 // can find it without knowing which namespace it came from.
                 store_bundle(*this, bare_jid, remote_device_id, *bundle);
-                store_device_mode(*this, bare_jid, remote_device_id, peer_mode::legacy);
+                store_device_mode(*this, bare_jid, remote_device_id, peer_mode::axolotl);
 
                 if (!is_own_device)
                 {

@@ -3567,7 +3567,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
                 if (is_legacy_devicelist_err)
                 {
-                    first_legacy_miss = account.omemo.missing_legacy_devicelist.insert(dl_target_jid).second;
+                    first_legacy_miss = account.omemo.missing_axolotl_devicelist.insert(dl_target_jid).second;
                 }
 
                 auto dl_ch_it = account.channels.find(dl_target_jid);
@@ -3598,7 +3598,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
 
                 if (is_omemo2_devicelist_err)
-                    account.omemo.request_legacy_devicelist(account, dl_target_jid);
+                    account.omemo.request_axolotl_devicelist(account, dl_target_jid);
             }
         }
     }
@@ -3645,7 +3645,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 std::string jid_str(account.jid());
                 xmpp_stanza_t *bundle_stanza =
-                    account.omemo.get_legacy_bundle(account.context, jid_str.data(), nullptr);
+                    account.omemo.get_axolotl_bundle(account.context, jid_str.data(), nullptr);
                 if (bundle_stanza)
                 {
                     account.connection.send(bundle_stanza);
@@ -4030,7 +4030,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 const bool is_own_devicelist = (account_bare == node_owner_str);
 
                 if (account.omemo)
-                    account.omemo.handle_legacy_devicelist(&account,
+                    account.omemo.handle_axolotl_devicelist(&account,
                                                            node_owner_str.c_str(),
                                                            items);
 
@@ -4170,7 +4170,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 if (type && weechat_strcasecmp(type, "result") == 0)
                 {
                     if (account.omemo && bundle_device_id != 0)
-                        account.omemo.handle_legacy_bundle(&account,
+                        account.omemo.handle_axolotl_bundle(&account,
                                                            account.buffer,
                                                            bundle_jid.c_str(),
                                                            bundle_device_id,

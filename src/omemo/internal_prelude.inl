@@ -283,20 +283,20 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
     return fmt::format("bundle:{}:{}", jid, device_id);
 }
 
-// Legacy OMEMO uses separate LMDB keys so we can distinguish which protocol
+// Axolotl OMEMO uses separate LMDB keys so we can distinguish which protocol
 // version a peer advertises (they may have both, though unlikely).
-[[nodiscard]] auto key_for_legacy_devicelist(std::string_view jid) -> std::string
+[[nodiscard]] auto key_for_axolotl_devicelist(std::string_view jid) -> std::string
 {
-    return fmt::format("legacy_devicelist:{}", jid);
+    return fmt::format("axolotl_devicelist:{}", jid);
 }
 
-// Legacy bundles share the same Signal session store as OMEMO:2 bundles — the
+// Axolotl bundles share the same Signal session store as OMEMO:2 bundles — the
 // Signal crypto is identical.  Only the XMPP stanza wrapping differs.
 // We use a separate LMDB key prefix so we can tell which namespace the bundle
 // came from when deciding which encode path to use.
-[[nodiscard]] auto key_for_legacy_bundle(std::string_view jid, std::uint32_t device_id) -> std::string
+[[nodiscard]] auto key_for_axolotl_bundle(std::string_view jid, std::uint32_t device_id) -> std::string
 {
-    return fmt::format("legacy_bundle:{}:{}", jid, device_id);
+    return fmt::format("axolotl_bundle:{}:{}", jid, device_id);
 }
 
 [[nodiscard]] auto key_for_device_mode(std::string_view jid, std::uint32_t device_id) -> std::string
@@ -315,8 +315,8 @@ void store_device_mode(omemo &self,
     const char *mode_value = nullptr;
     if (mode == omemo::peer_mode::omemo2)
         mode_value = "omemo2";
-    else if (mode == omemo::peer_mode::legacy)
-        mode_value = "legacy";
+    else if (mode == omemo::peer_mode::axolotl)
+        mode_value = "axolotl";
     else
         return;
 
@@ -346,8 +346,10 @@ void store_device_mode(omemo &self,
 
     if (mode_value == "omemo2")
         return omemo::peer_mode::omemo2;
-    if (mode_value == "legacy")
-        return omemo::peer_mode::legacy;
+    // Accept both "axolotl" (new) and "legacy" (old DB) so existing databases
+    // do not lose device-mode knowledge after the rename migration.
+    if (mode_value == "axolotl" || mode_value == "legacy")
+        return omemo::peer_mode::axolotl;
 
     return std::nullopt;
 }
@@ -508,12 +510,12 @@ void store_atm_trust(omemo &self,
 }
 
 // Request the legacy OMEMO device list (eu.siacs.conversations.axolotl.devicelist) for jid.
-void request_legacy_devicelist(weechat::account &account, std::string_view jid)
+void request_axolotl_devicelist(weechat::account &account, std::string_view jid)
 {
     const std::string target_jid = normalize_bare_jid(account.context, jid);
-    if (account.omemo.missing_legacy_devicelist.count(target_jid) != 0)
+    if (account.omemo.missing_axolotl_devicelist.count(target_jid) != 0)
         return;
-    account.omemo.missing_legacy_devicelist.insert(target_jid);
+    account.omemo.missing_axolotl_devicelist.insert(target_jid);
 
     const std::string uuid = stanza::uuid(account.context);
     if (!uuid.empty())
@@ -536,7 +538,7 @@ void request_legacy_devicelist(weechat::account &account, std::string_view jid)
 
 // Request a legacy OMEMO bundle (eu.siacs.conversations.axolotl.bundles:{device_id}) for jid.
 // Legacy bundles use a per-device node (device ID embedded in node name, not item ID).
-void request_legacy_bundle(weechat::account &account, std::string_view jid, std::uint32_t device_id)
+void request_axolotl_bundle(weechat::account &account, std::string_view jid, std::uint32_t device_id)
 {
     const std::string target_jid = normalize_bare_jid(account.context, jid);
     const std::string own_bare_jid = normalize_bare_jid(account.context, account.jid());

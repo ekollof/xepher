@@ -1198,10 +1198,10 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
             return { raw, xmpp_stanza_release };
         };
 
-        if (peer_mode == weechat::xmpp::omemo::peer_mode::legacy)
+        if (peer_mode == weechat::xmpp::omemo::peer_mode::axolotl)
         {
             encrypted = make_encrypted(
-                account.omemo.encode_legacy(&account, buffer, to_str.c_str(), body_str.c_str()));
+                account.omemo.encode_axolotl(&account, buffer, to_str.c_str(), body_str.c_str()));
             eme_namespace = "eu.siacs.conversations.axolotl";
         }
         else

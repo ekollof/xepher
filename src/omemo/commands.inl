@@ -37,7 +37,7 @@ bool weechat::xmpp::omemo::sender_atm_trusted_pub(const char *sender_bare_jid)
     };
 
     return check_devlist(load_string(*this, key_for_devicelist(sender_bare_jid)))
-        || check_devlist(load_string(*this, key_for_legacy_devicelist(sender_bare_jid)));
+        || check_devlist(load_string(*this, key_for_axolotl_devicelist(sender_bare_jid)));
 }
 
 // XEP-0450 §4: parse a <trust-message> from inside a decrypted SCE envelope,
@@ -184,7 +184,7 @@ void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const c
         };
 
         append_devices(load_string(*this, key_for_devicelist(jid)));
-        append_devices(load_string(*this, key_for_legacy_devicelist(jid)));
+        append_devices(load_string(*this, key_for_axolotl_devicelist(jid)));
         std::sort(devices.begin(), devices.end());
         devices.erase(std::unique(devices.begin(), devices.end()), devices.end());
 
@@ -259,7 +259,7 @@ void weechat::xmpp::omemo::send_atm_distrust_pub(weechat::account &account, cons
     };
 
     collect_devlist(load_string(*this, key_for_devicelist(jid)));
-    collect_devlist(load_string(*this, key_for_legacy_devicelist(jid)));
+    collect_devlist(load_string(*this, key_for_axolotl_devicelist(jid)));
 
     if (!pairs.empty())
         send_atm_distrust_message(*this, account, pairs);
@@ -352,7 +352,7 @@ void weechat::xmpp::omemo::approve_jid(struct t_gui_buffer *buffer,
     };
 
     collect(load_string(*this, key_for_devicelist(jid)));
-    collect(load_string(*this, key_for_legacy_devicelist(jid)));
+    collect(load_string(*this, key_for_axolotl_devicelist(jid)));
 
     if (pairs.empty())
     {
@@ -415,7 +415,7 @@ void weechat::xmpp::omemo::distrust_fp(struct t_gui_buffer *buffer,
     };
 
     collect(load_string(*this, key_for_devicelist(jid)));
-    collect(load_string(*this, key_for_legacy_devicelist(jid)));
+    collect(load_string(*this, key_for_axolotl_devicelist(jid)));
 
     if (pairs.empty())
     {
@@ -467,7 +467,7 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
     };
 
     append_devices(load_string(*this, key_for_devicelist(jid)));
-    append_devices(load_string(*this, key_for_legacy_devicelist(jid)));
+    append_devices(load_string(*this, key_for_axolotl_devicelist(jid)));
 
     std::sort(devices.begin(), devices.end());
     devices.erase(std::unique(devices.begin(), devices.end()), devices.end());

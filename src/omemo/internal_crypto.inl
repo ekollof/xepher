@@ -641,19 +641,19 @@ void crypto_unlock(void *user_data)
 // Transport key = AES-128 innerKey(16) || GCM authTag(16) = 32 bytes.
 // ---------------------------------------------------------------------------
 
-struct legacy_omemo_payload {
+struct axolotl_omemo_payload {
     std::array<std::uint8_t, 16> key {};     // AES-128 key (Signal-encrypted alongside authtag)
     std::array<std::uint8_t, 12> iv {};      // GCM nonce (transmitted in <iv> element in header)
     std::array<std::uint8_t, 16> authtag {}; // GCM auth tag (packed into Signal key, not payload)
     std::vector<std::uint8_t> payload;       // AES-128-GCM ciphertext (auth tag stripped)
 };
 
-[[nodiscard]] auto legacy_omemo_encrypt(std::string_view plaintext) -> std::optional<legacy_omemo_payload>
+[[nodiscard]] auto axolotl_omemo_encrypt(std::string_view plaintext) -> std::optional<axolotl_omemo_payload>
 {
     if (plaintext.empty())
         return std::nullopt;
 
-    legacy_omemo_payload result;
+    axolotl_omemo_payload result;
     gcry_randomize(result.key.data(), result.key.size(), GCRY_STRONG_RANDOM);
     gcry_randomize(result.iv.data(), result.iv.size(), GCRY_STRONG_RANDOM);
 
@@ -685,7 +685,7 @@ struct legacy_omemo_payload {
 }
 
 // Decrypt a legacy OMEMO payload.  The auth tag is checked internally by GCM.
-[[nodiscard]] auto legacy_omemo_decrypt(const std::array<std::uint8_t, 16> &key,
+[[nodiscard]] auto axolotl_omemo_decrypt(const std::array<std::uint8_t, 16> &key,
                                         const std::array<std::uint8_t, 12> &iv,
                                         const std::array<std::uint8_t, 16> &authtag,
                                         const std::vector<std::uint8_t> &ciphertext)
@@ -724,9 +724,9 @@ struct legacy_omemo_payload {
 }
 
 // Signal-encrypt the legacy transport key bundle: innerKey(16) || authTag(16) = 32 bytes.
-[[nodiscard]] auto encrypt_legacy_transport_key(omemo &self, std::string_view jid,
+[[nodiscard]] auto encrypt_axolotl_transport_key(omemo &self, std::string_view jid,
                                                 std::uint32_t remote_device_id,
-                                                const legacy_omemo_payload &ep)
+                                                const axolotl_omemo_payload &ep)
     -> std::optional<std::pair<std::vector<std::uint8_t>, bool>>
 {
     OMEMO_ASSERT(self.context, "signal context must be initialized");
@@ -765,7 +765,7 @@ struct legacy_omemo_payload {
 }
 
 // Signal-decrypt a legacy OMEMO transport key bundle → {innerKey(16), authTag(16)}.
-[[nodiscard]] auto decrypt_legacy_transport_key(omemo &self, std::string_view jid,
+[[nodiscard]] auto decrypt_axolotl_transport_key(omemo &self, std::string_view jid,
                                                 std::uint32_t remote_device_id,
                                                 const std::vector<std::uint8_t> &serialized,
                                                 bool is_prekey,

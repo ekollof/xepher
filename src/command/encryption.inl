@@ -100,7 +100,7 @@ int command__omemo(const void *pointer, void *data,
                                weechat_prefix("network"), ptr_account->omemo.device_id);
             }
 
-            xmpp_stanza_t *legacy_bundle_stanza = ptr_account->omemo.get_legacy_bundle(
+            xmpp_stanza_t *legacy_bundle_stanza = ptr_account->omemo.get_axolotl_bundle(
                 ptr_account->context, from_s.data(), nullptr);
             if (legacy_bundle_stanza)
             {

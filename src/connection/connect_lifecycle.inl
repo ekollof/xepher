@@ -277,7 +277,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             // Also publish the legacy bundle node so OMEMO:1 clients can
             // target our current device id during first-contact bootstrap.
             if (std::shared_ptr<xmpp_stanza_t> legacy_bundle_stanza {
-                    account.omemo.get_legacy_bundle(account.context, jid_str.data(), nullptr),
+                    account.omemo.get_axolotl_bundle(account.context, jid_str.data(), nullptr),
                     xmpp_stanza_release})
                 this->send(legacy_bundle_stanza.get());
 
