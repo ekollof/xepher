@@ -2062,7 +2062,7 @@ message_handler_after_omemo:
                         str_tag = fmt::format("{}|tags_array", n_tag);
                         const char *tag = weechat_hdata_string(hdata_line_data,
                                                                line_data, str_tag.c_str());
-                         if (std::string_view(tag).starts_with("id_") &&
+                         if (tag && std::string_view(tag).starts_with("id_") &&
                              weechat_strcasecmp(tag + 3, replace_id) == 0)
                          {
                              // XEP-0308 §3: Verify the correcting sender matches
@@ -2081,7 +2081,7 @@ message_handler_after_omemo:
                                 str_tag = fmt::format("{}|tags_array", chk);
                                 const char *chk_tag = weechat_hdata_string(
                                     hdata_line_data, line_data, str_tag.c_str());
-                                 if (std::string_view(chk_tag).starts_with("nick_") &&
+                                 if (chk_tag && std::string_view(chk_tag).starts_with("nick_") &&
                                     weechat_strcasecmp(chk_tag + 5, corr_nick) == 0)
                                 {
                                     sender_matches = true;
@@ -2125,7 +2125,7 @@ message_handler_after_omemo:
                                         str_tag = fmt::format("{}|tags_array", n_tag);
                                         tag = weechat_hdata_string(hdata_line_data,
                                                                    line_data, str_tag.c_str());
-                                         if (std::string_view(tag).starts_with("id_") &&
+                                         if (tag && std::string_view(tag).starts_with("id_") &&
                                             weechat_strcasecmp(tag + 3, replace_id) == 0)
                                         {
                                             msg = (char*)weechat_hdata_string(hdata_line_data,
@@ -2172,6 +2172,9 @@ message_handler_after_omemo:
             weechat_hashtable_free(ht);
             return 1;
         }
+        // Original message not in buffer (e.g. scrolled out or MAM replay) —
+        // drop the correction silently rather than printing a dangling ✏️ line.
+        return 1;
     }
 
     // XEP-0425: Message Moderation (extends XEP-0424)
@@ -2222,7 +2225,7 @@ message_handler_after_omemo:
                             str_tag = fmt::format("{}|tags_array", n_tag);
                             const char *tag = weechat_hdata_string(hdata_line_data,
                                                                    line_data, str_tag.c_str());
-                            if (std::string_view(tag).starts_with("id_") &&
+                            if (tag && std::string_view(tag).starts_with("id_") &&
                                 weechat_strcasecmp(tag + 3, moderate_id) == 0)
                             {
                                 // Found the message to moderate - update it with tombstone
@@ -2315,7 +2318,7 @@ message_handler_after_omemo:
                         str_tag = fmt::format("{}|tags_array", n_tag);
                         const char *tag = weechat_hdata_string(hdata_line_data,
                                                                line_data, str_tag.c_str());
-                        if (std::string_view(tag).starts_with("id_") &&
+                        if (tag && std::string_view(tag).starts_with("id_") &&
                             weechat_strcasecmp(tag + 3, retract_id) == 0)
                         {
                             // Found the message to retract - update it with tombstone
@@ -2412,7 +2415,7 @@ message_handler_after_omemo:
                             str_tag = fmt::format("{}|tags_array", n_tag);
                             const char *tag = weechat_hdata_string(hdata_line_data,
                                                                    line_data, str_tag.c_str());
-                            if (std::string_view(tag).starts_with("id_") &&
+                            if (tag && std::string_view(tag).starts_with("id_") &&
                                 weechat_strcasecmp(tag + 3, reactions_id) == 0)
                             {
                                 // Found the message.
@@ -2766,7 +2769,7 @@ message_handler_after_omemo:
                         str_tag = fmt::format("{}|tags_array", n_tag);
                         const char *tag = weechat_hdata_string(hdata_line_data,
                                                                line_data, str_tag.c_str());
-                        if (std::string_view(tag).starts_with("id_") &&
+                        if (tag && std::string_view(tag).starts_with("id_") &&
                             weechat_strcasecmp(tag + 3, reply_to_id) == 0)
                         {
                             // Found the original message - get excerpt
