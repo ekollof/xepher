@@ -243,13 +243,89 @@ void ensure_registration_id(omemo &self)
         store_string(self, kRegistrationIdKey, fmt::format("{}", registration_id));
 }
 
+// Rebuild the kPrekeys index from the actual prekey:N records stored in LMDB.
+// Called when the index exists but is known to be shorter than the actual records,
+// e.g. because a previous write partially failed or the index was never updated for
+// IDs outside the originally-generated range.
+// Returns the number of entries successfully rebuilt.
+static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
+{
+    OMEMO_ASSERT(self.context, "signal context required for prekey index repair");
+    OMEMO_ASSERT(context != nullptr, "xmpp context required for prekey index repair");
+
+    // Scan all prekey:N LMDB records to discover which IDs actually exist.
+    // We cannot scan by range directly; instead we probe each ID in the
+    // originally-generated range [kPreKeyStart, kPreKeyStart + kPreKeyCount - 1].
+    // Any record that exists and can be deserialized contributes an index entry.
+    std::vector<std::string> index_entries;
+    index_entries.reserve(kPreKeyCount);
+
+    for (std::uint32_t id = kPreKeyStart; id < kPreKeyStart + kPreKeyCount; ++id)
+    {
+        const auto record_bytes = load_bytes(self, key_for_prekey_record(id));
+        if (!record_bytes || record_bytes->empty())
+            continue;
+
+        session_pre_key *pre_key_raw = nullptr;
+        if (session_pre_key_deserialize(&pre_key_raw,
+                                        record_bytes->data(), record_bytes->size(),
+                                        self.context) != 0)
+            continue;
+        libsignal::object<session_pre_key> pre_key {pre_key_raw};
+
+        ec_key_pair *pair = session_pre_key_get_key_pair(pre_key.get());
+        if (!pair)
+            continue;
+        ec_public_key *pub = ec_key_pair_get_public(pair);
+        if (!pub)
+            continue;
+
+        const auto pub_b64 = serialize_public_key(context, pub);
+        if (pub_b64.empty())
+            continue;
+
+        index_entries.push_back(fmt::format("{},{}", session_pre_key_get_id(pre_key.get()), pub_b64));
+    }
+
+    if (index_entries.empty())
+        return 0;
+
+    store_string(self, kPrekeys, join(index_entries, ";"));
+    weechat_printf(nullptr,
+                   "%somemo: repaired prekeys index — rebuilt %zu entries",
+                   weechat_prefix("network"),
+                   index_entries.size());
+    return index_entries.size();
+}
+
 void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
 {
     OMEMO_ASSERT(self.context, "signal context must exist before generating prekeys");
     OMEMO_ASSERT(context != nullptr, "xmpp context must exist before serializing prekeys");
 
-    if (load_string(self, kSignedPreKeyRecord) && load_string(self, kPrekeys))
-        return;
+    if (load_string(self, kSignedPreKeyRecord))
+    {
+        // Index exists — check whether it is complete.  If fewer than
+        // kPreKeyCount entries are indexed (possible after a partial write or
+        // an earlier bug), repair it from the on-disk records before returning.
+        const auto existing_index = load_string(self, kPrekeys);
+        if (existing_index)
+        {
+            const auto parts = split(*existing_index, ';');
+            if (parts.size() < kPreKeyCount)
+            {
+                weechat_printf(nullptr,
+                               "%somemo: prekeys index has only %zu entries (expected %u); repairing",
+                               weechat_prefix("network"),
+                               parts.size(),
+                               kPreKeyCount);
+                repair_prekeys_index(self, context);
+            }
+            return;
+        }
+        // Signed prekey record exists but index is missing — fall through to
+        // regenerate prekeys (signed prekey is reused, only prekey material changes).
+    }
 
     session_signed_pre_key *signed_pre_key_raw = nullptr;
     const auto now_ms = static_cast<std::uint64_t>(std::time(nullptr)) * 1000ULL;

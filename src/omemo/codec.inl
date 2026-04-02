@@ -266,8 +266,50 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                     device_id));
             }
         }
-        else if (!quiet)
-            print_error(buffer, "OMEMO transport key decryption failed.");
+        else
+        {
+            // found_key_for_us==true but decryption failed.  This happens when the
+            // Signal ratchet has no usable state for the received message — most
+            // commonly a MAM replay of a prekey message whose prekey was already
+            // consumed when the session was first established.
+            //
+            // Recovery: send a key-transport message back to the sender so that
+            // their client picks up our current ratchet state and can encrypt new
+            // messages to us.  Throttled per {jid, device} via
+            // key_transport_bootstrap_attempted to avoid flooding on repeated MAM
+            // replays.  Not sent during MAM catchup (global_mam_catchup) because
+            // the original live message that can recover the session has not yet
+            // been processed.
+            if (!quiet)
+                print_error(buffer, "OMEMO transport key decryption failed.");
+            if (account && sender_device_id && !global_mam_catchup)
+            {
+                const std::string bare_jid = normalize_bare_jid(*account->context, jid);
+                const auto kex_key = std::make_pair(bare_jid, *sender_device_id);
+                if (key_transport_bootstrap_attempted.count(kex_key) == 0)
+                {
+                    key_transport_bootstrap_attempted.insert(kex_key);
+                    if (!quiet)
+                        print_info(buffer, fmt::format(
+                            "OMEMO: sending key-transport to {}/{} to recover stale session",
+                            bare_jid, *sender_device_id));
+                    // Delete the stale session so the key-transport forces a fresh
+                    // PreKeySignalMessage exchange from the sender's side.
+                    auto addr = make_signal_address(bare_jid,
+                                                    static_cast<std::int32_t>(*sender_device_id));
+                    signal_protocol_session_delete_session(store_context, &addr.address);
+                    // Queue a key-transport after re-establishing the outbound session.
+                    pending_key_transport.insert(kex_key);
+                    const auto selected_mode = resolve_device_mode(
+                        *this, *account, bare_jid, *sender_device_id,
+                        is_axolotl_format ? peer_mode::axolotl : peer_mode::unknown);
+                    if (selected_mode == peer_mode::axolotl)
+                        request_axolotl_bundle(*account, bare_jid, *sender_device_id);
+                    else
+                        request_bundle(*account, bare_jid, *sender_device_id);
+                }
+            }
+        }
         return std::nullopt;
     }
 
