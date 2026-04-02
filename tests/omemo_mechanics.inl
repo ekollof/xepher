@@ -135,7 +135,18 @@ static int stub_string_base_decode(const char *base,
             reinterpret_cast<unsigned char *>(to),
             reinterpret_cast<const unsigned char *>(from),
             static_cast<int>(strlen(from)));
-        return written;
+        if (written < 0)
+            return -1;
+
+        // EVP_DecodeBlock returns a count that includes the null bytes
+        // introduced by base64 '=' padding.  Subtract one byte per trailing
+        // '=' so the caller receives the actual decoded length (matching
+        // the behaviour of WeeChat's string_base_decode implementation).
+        int padding = 0;
+        const std::size_t len = strlen(from);
+        if (len >= 1 && from[len - 1] == '=') ++padding;
+        if (len >= 2 && from[len - 2] == '=') ++padding;
+        return written - padding;
     }
 
     return -1;
@@ -531,7 +542,103 @@ TEST_CASE("handle_axolotl_bundle sets race guard before clearing pending sets")
     CHECK(env.omemo->pending_key_transport.count(key)  == 0);
 }
 
-// ── 9. Bootstrap-race guard: handle_bundle mirrors the same guarantee ─────────
+// ── 10. MAM replay self-session: Signal session to own device survives reinit ──
+//
+// Regression test for Bug 3: MAM-replayed self-sent OMEMO messages must be
+// decryptable after WeeChat restarts.  The fix adds `&& !is_mam_replay` to
+// the OMEMO_ADVICE gate in message_handler.inl so decode() is actually called
+// for such messages.
+//
+// This test validates the underlying crypto layer that the fix relies on:
+//   1. Establish a Signal session to (own_jid, own_device_id) — the same
+//      session the sender would use to encrypt the key-copy for itself.
+//   2. Verify has_session() returns true before AND after reinit.
+//      Surviving reinit is mandatory: the session must persist in LMDB so
+//      decode() can succeed when replaying MAM messages after WeeChat restarts.
+//
+// Methodology: `get_axolotl_bundle()` exports our real bundle; feeding it to
+// `handle_axolotl_bundle(account=nullptr, ...)` with our own device_id causes
+// the normal session-bootstrap code path to run (account=nullptr → is_own_device
+// is false → establish_session_from_bundle is called).  This mirrors the Signal
+// address (own_jid, own_device_id) that encode_axolotl / encode use when adding
+// a sender-side key copy (include_own_device=true), and that decode() uses on
+// MAM replay when the inner forwarded stanza has from=own_jid, sid=own_device_id.
+
+TEST_CASE("MAM replay self-session: Signal session to own device survives reinit")
+{
+    omemo_test_env env;
+
+    // Use a stable own JID string for the self-session address.
+    const std::string own_jid = "alice@example.com";
+    const std::uint32_t own_device_id = env.omemo->device_id;
+    REQUIRE(own_device_id != 0);
+
+    // 1. Export our real legacy bundle as XML text.
+    //    get_axolotl_bundle() returns an <iq><pubsub><publish><item><bundle> tree.
+    //    We serialise the <bundle> element to XML text (same bytes the server would
+    //    send back in a pubsub result), then wrap it in the <items><item> envelope
+    //    that production iq_handler.inl hands to handle_axolotl_bundle().
+    //    Parsing with xmpp_stanza_new_from_string reproduces the exact production
+    //    code path: server XML → libstrophe parser → items stanza pointer.
+    xmpp_stanza_t *iq = env.omemo->get_axolotl_bundle(env.ctx, nullptr, nullptr);
+    REQUIRE(iq != nullptr);
+
+    // Walk to the <bundle> element inside the IQ tree.
+    auto *pubsub  = xmpp_stanza_get_child_by_name(iq, "pubsub");
+    auto *publish = pubsub  ? xmpp_stanza_get_child_by_name(pubsub,  "publish") : nullptr;
+    auto *iq_item = publish ? xmpp_stanza_get_child_by_name(publish, "item")    : nullptr;
+    auto *bundle  = iq_item ? xmpp_stanza_get_child_by_name_and_ns(
+                                  iq_item, "bundle", "eu.siacs.conversations.axolotl") : nullptr;
+    REQUIRE(bundle != nullptr);
+
+    // Serialise the <bundle> subtree to XML text.
+    // xmpp_stanza_to_text emits xmlns= on the root element, so the NS is
+    // preserved when re-parsed below (verified by manual inspection).
+    const std::string bundle_xml = stanza_to_xml(env.ctx, bundle);
+    xmpp_stanza_release(iq);
+    REQUIRE_FALSE(bundle_xml.empty());
+
+    // Wrap with the <items><item id='N'> envelope that the IQ result handler
+    // passes to handle_axolotl_bundle() (see iq_handler.inl line 4173).
+    const std::string items_xml =
+        "<items><item id='" + std::to_string(own_device_id) + "'>"
+        + bundle_xml
+        + "</item></items>";
+
+    // Parse: this is exactly the production path through libstrophe.
+    xmpp_stanza_t *items = xmpp_stanza_new_from_string(env.ctx, items_xml.c_str());
+    REQUIRE(items != nullptr);
+
+    // Verify the parser preserved the bundle NS so extract_legacy_bundle_from_items
+    // will find it (guards against a regression in the XML round-trip).
+    {
+        auto *parsed_item   = xmpp_stanza_get_child_by_name(items, "item");
+        auto *parsed_bundle = parsed_item
+            ? xmpp_stanza_get_child_by_name_and_ns(
+                  parsed_item, "bundle", "eu.siacs.conversations.axolotl")
+            : nullptr;
+        REQUIRE(parsed_bundle != nullptr);
+    }
+
+    // 2. Establish a self-session: feed our own real bundle to handle_axolotl_bundle
+    //    using our own JID + device_id as the "remote peer".
+    //    account=nullptr → is_own_device=false → establish_session_from_bundle runs.
+    env.omemo->handle_axolotl_bundle(nullptr, nullptr, own_jid.c_str(), own_device_id, items);
+    xmpp_stanza_release(items);
+
+    // 3. Verify the session exists immediately after bootstrap.
+    CHECK(env.omemo->has_session(own_jid.c_str(), own_device_id));
+
+    // 4. Reinit (simulates WeeChat restart — LMDB is reopened, Signal state reloaded).
+    env.reinit();
+
+    // 5. Verify the session still exists after reinit.
+    //    This is the key invariant Bug 3's fix depends on: the persisted session
+    //    allows decode() to succeed when processing MAM-replayed self-sent messages.
+    CHECK(env.omemo->has_session(own_jid.c_str(), own_device_id));
+}
+
+// ── 11. Bootstrap-race guard: handle_bundle mirrors the same guarantee ────────
 
 TEST_CASE("handle_bundle sets race guard before clearing pending sets")
 {
