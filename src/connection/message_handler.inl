@@ -1961,9 +1961,6 @@ message_handler_after_omemo:
             stanza, "reactions", "urn:xmpp:reactions:0");
         xmpp_stanza_t *retract = xmpp_stanza_get_child_by_name_and_ns(
             stanza, "retract", "urn:xmpp:message-retract:1");
-        if (!retract)
-            retract = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "retract", "urn:xmpp:message-retract:0");
         xmpp_stanza_t *reply_fb = xmpp_stanza_get_child_by_name_and_ns(
             stanza, "reply", "urn:xmpp:reply:0");
         xmpp_stanza_t *apply_to = xmpp_stanza_get_child_by_name_and_ns(
