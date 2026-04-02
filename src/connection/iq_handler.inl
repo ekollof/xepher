@@ -80,72 +80,69 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     if (type && (weechat_strcasecmp(type, "result") == 0 || weechat_strcasecmp(type, "error") == 0))
     {
         const char *stanza_id = xmpp_stanza_get_id(stanza);
-        if (stanza_id) {
-            auto ping_it = account.user_ping_queries.find(stanza_id);
-            if (ping_it != account.user_ping_queries.end())
+        if (stanza_id && account.user_ping_queries.count(stanza_id))
+        {
+            time_t start_time = account.user_ping_queries[stanza_id];
+            time_t now = time(nullptr);
+            long rtt_ms = (now - start_time) * 1000;  // Convert to milliseconds
+            
+            account.user_ping_queries.erase(stanza_id);
+            
+            const char *from_jid = from ? from : account.jid().data();
+            
+            // Check if this is a MUC self-ping (XEP-0410)
+            bool is_muc_selfping = false;
+            std::string room_jid;
+            if (from)
             {
-                time_t start_time = ping_it->second;
-                time_t now = time(nullptr);
-                long rtt_ms = (now - start_time) * 1000;  // Convert to milliseconds
-                
-                account.user_ping_queries.erase(stanza_id);
-                
-                const char *from_jid = from ? from : account.jid().data();
-                
-                // Check if this is a MUC self-ping (XEP-0410)
-                bool is_muc_selfping = false;
-                std::string room_jid;
-                if (from)
+                std::string from_str(from);
+                size_t slash_pos = from_str.find('/');
+                if (slash_pos != std::string::npos)
                 {
-                    std::string from_str(from);
-                    size_t slash_pos = from_str.find('/');
-                    if (slash_pos != std::string::npos)
+                    room_jid = from_str.substr(0, slash_pos);
+                    std::string resource = from_str.substr(slash_pos + 1);
+                    
+                    // Check if this is our own nickname in a MUC
+                    if (resource == account.nickname())
                     {
-                        room_jid = from_str.substr(0, slash_pos);
-                        std::string resource = from_str.substr(slash_pos + 1);
-                        
-                        // Check if this is our own nickname in a MUC
-                        if (resource == account.nickname())
+                        // Check if we have a channel for this room
+                        if (account.channels.find(room_jid) != account.channels.end())
                         {
-                            // Check if we have a channel for this room
-                            if (account.channels.find(room_jid) != account.channels.end())
-                            {
-                                is_muc_selfping = true;
-                            }
+                            is_muc_selfping = true;
                         }
                     }
                 }
-                
-                if (weechat_strcasecmp(type, "result") == 0)
+            }
+            
+            if (weechat_strcasecmp(type, "result") == 0)
+            {
+                if (is_muc_selfping)
                 {
-                    if (is_muc_selfping)
-                    {
-                        weechat_printf(account.buffer, "%sMUC self-ping OK: still in %s",
-                                      weechat_prefix("network"), room_jid.c_str());
-                    }
-                    else
-                    {
-                        weechat_printf(account.buffer, "%sPong from %s (RTT: %ld ms)",
-                                      weechat_prefix("network"), from_jid, rtt_ms);
-                    }
+                    weechat_printf(account.buffer, "%sMUC self-ping OK: still in %s",
+                                  weechat_prefix("network"), room_jid.c_str());
                 }
                 else
                 {
-                    // Error response
-                    if (is_muc_selfping)
-                    {
-                        weechat_printf(account.buffer, "%sMUC self-ping FAILED: no longer in %s",
-                                      weechat_prefix("error"), room_jid.c_str());
-                    }
-                    else
-                    {
-                        xmpp_stanza_t *error = xmpp_stanza_get_child_by_name(stanza, "error");
-                        const char *error_type = error ? xmpp_stanza_get_attribute(error, "type") : "unknown";
-                        weechat_printf(account.buffer, "%sPing failed to %s: %s",
-                                      weechat_prefix("error"), from_jid, error_type);
-                    }
+                    weechat_printf(account.buffer, "%sPong from %s (RTT: %ld ms)",
+                                  weechat_prefix("network"), from_jid, rtt_ms);
                 }
-        }
+            }
+            else
+            {
+                // Error response
+                if (is_muc_selfping)
+                {
+                    weechat_printf(account.buffer, "%sMUC self-ping FAILED: no longer in %s",
+                                  weechat_prefix("error"), room_jid.c_str());
+                }
+                else
+                {
+                    xmpp_stanza_t *error = xmpp_stanza_get_child_by_name(stanza, "error");
+                    const char *error_type = error ? xmpp_stanza_get_attribute(error, "type") : "unknown";
+                    weechat_printf(account.buffer, "%sPing failed to %s: %s",
+                                  weechat_prefix("error"), from_jid, error_type);
+                }
+            }
     // XEP-0283: Moved — detect JID migration notice
     {
         xmpp_stanza_t *moved_elem = xmpp_stanza_get_child_by_name_and_ns(
@@ -3237,9 +3234,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 account.bookmarks[jid].jid = jid;
                 account.bookmarks[jid].name = name ? name : "";
                 account.bookmarks[jid].nick = intext ? intext : "";
-                account.bookmarks[jid].autojoin = autojoin
-                    && (weechat_strcasecmp(autojoin, "true") == 0
-                        || weechat_strcasecmp(autojoin, "1") == 0);
+                account.bookmarks[jid].autojoin = autojoin && weechat_strcasecmp(autojoin, "true") == 0;
 
                 account.connection.send(stanza::iq()
                             .from(to)

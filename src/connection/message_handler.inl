@@ -6,12 +6,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
     (void) top_level;
     append_raw_xml_trace(account, "RECV", stanza);
 
-    // Cache hdata handles — stable for the process lifetime, resolved once.
-    static struct t_hdata *hdata_line      = weechat_hdata_get("line");
-    static struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
-    static struct t_hdata *hdata_lines     = weechat_hdata_get("lines");
-    static struct t_hdata *hdata_buffer    = weechat_hdata_get("buffer");
-
     weechat::channel *channel, *parent_channel;
     xmpp_stanza_t *x, *body, *delay, *topic, *replace, *request, *markable, *composing, *sent, *received, *result, *forwarded, *event, *items, *item, *list, *encrypted;
     const char *type, *from, *nick, *from_bare, *to, *to_bare, *id, *thread, *replace_id, *timestamp;
@@ -97,10 +91,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
             return 1;
         std::string from_bare_s = ::jid(nullptr, from).bare;
             std::string from_resource_s = ::jid(nullptr, from).resource;
-             from_bare = from_bare_s.c_str();
-             from = from_resource_s.c_str();
-             { auto it = account.channels.find(from_bare); channel = it != account.channels.end() ? &it->second : nullptr; }
-             if (!channel)
+            from_bare = from_bare_s.c_str();
+            from = from_resource_s.c_str();
+            channel = account.channels.contains(from_bare)
+                ? &account.channels.find(from_bare)->second : nullptr;
+            if (!channel)
             {
                 if (weechat_strcasecmp(type, "groupchat") == 0)
                 {
@@ -140,10 +135,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 return 1;
             std::string cs_from_bare_s = ::jid(nullptr, from).bare;
             std::string cs_nick_s = ::jid(nullptr, from).resource;
-             from_bare = cs_from_bare_s.c_str();
-             nick = cs_nick_s.c_str();
-             { auto it = account.channels.find(from_bare); channel = it != account.channels.end() ? &it->second : nullptr; }
-             if (!channel)
+            from_bare = cs_from_bare_s.c_str();
+            nick = cs_nick_s.c_str();
+            channel = account.channels.contains(from_bare)
+                ? &account.channels.find(from_bare)->second : nullptr;
+            if (!channel)
                 return 1;
             auto user = user::search(&account, from);
             if (!user)
@@ -635,11 +631,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                             channel_jid_chk = chk_to_s.c_str();
 
                         struct t_gui_buffer *chk_buf = nullptr;
-                        if (channel_jid_chk) {
-                            auto it = account.channels.find(channel_jid_chk);
-                            if (it != account.channels.end())
-                                chk_buf = it->second.buffer;
-                        }
+                        if (channel_jid_chk && account.channels.contains(channel_jid_chk))
+                            chk_buf = account.channels.at(channel_jid_chk).buffer;
 
                         bool already_displayed = false;
                         if (chk_buf)
@@ -647,8 +640,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                             // Build the tag we're looking for
                             std::string needle = std::string("stanza_id_") + archive_id;
 
+                            struct t_hdata *hdata_line      = weechat_hdata_get("line");
+                            struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
                             struct t_gui_lines *own_lines = (struct t_gui_lines*)
-                                weechat_hdata_pointer(hdata_buffer,
+                                weechat_hdata_pointer(weechat_hdata_get("buffer"),
                                                       chk_buf, "own_lines");
                             if (own_lines)
                             {
@@ -989,16 +984,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                         }
                         else
                         {
-                            // XEP-0402 §4 (v1.2.0): autojoin is false (or absent).
-                            // Only close the buffer if we have already *fully* joined
-                            // the room (joining==false, i.e. status 110 was received).
-                            // During initial session setup the server sends the full
-                            // bookmark list as individual PEP notifications; closing
-                            // buffers here at that point would destroy channels that
-                            // were just created by the XEP-0049 autojoin flow.
+                            // XEP-0402 §4 (v1.2.0): autojoin is false (or absent) —
+                            // leave the room immediately if we are currently in it.
                             auto ch_it = account.channels.find(item_id);
-                            if (ch_it != account.channels.end() && ch_it->second.buffer
-                                && !ch_it->second.joining)
+                            if (ch_it != account.channels.end() && ch_it->second.buffer)
                             {
                                 weechat_printf(ch_it->second.buffer,
                                                "%sBookmark autojoin disabled — leaving room",
@@ -1055,8 +1044,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
 
                         // Find the channel for this peer and clear its unreads
                         // up to and including last_id (or all if id unknown)
-                        weechat::channel *ch = nullptr;
-                        { auto it = account.channels.find(peer_jid); ch = it != account.channels.end() ? &it->second : nullptr; }
+                        weechat::channel *ch = account.channels.contains(peer_jid)
+                            ? &account.channels.find(peer_jid)->second : nullptr;
                         if (!ch)
                             continue;
 
@@ -1509,6 +1498,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                     const char       *acked_id,
                                     std::string_view  new_glyph)
         {
+            struct t_hdata *hdata_line      = weechat_hdata_get("line");
+            struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+            struct t_hdata *hdata_lines     = weechat_hdata_get("lines");
+            struct t_hdata *hdata_buffer    = weechat_hdata_get("buffer");
             void *lines     = weechat_hdata_pointer(hdata_buffer, ch->buffer, "lines");
             void *last_line = lines ? weechat_hdata_pointer(hdata_lines, lines, "last_line") : nullptr;
             std::string target_tag = std::string("id_") + acked_id;
@@ -1564,8 +1557,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 if (receipt_from && acked_id)
                 {
                     std::string bare_s = ::jid(nullptr, receipt_from).bare;
-                    auto ch_receipt_it = account.channels.find(bare_s);
-                    weechat::channel *ch = ch_receipt_it != account.channels.end() ? &ch_receipt_it->second : nullptr;
+                    weechat::channel *ch = account.channels.contains(bare_s)
+                        ? &account.channels.find(bare_s)->second : nullptr;
                     if (ch && ch->type != weechat::channel::chat_type::MUC)
                     {
                         // Find the sent message line tagged id_<acked_id> and update glyph ⌛→✓
@@ -1590,8 +1583,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 if (marker_from && acked_id)
                 {
                     std::string bare_s = ::jid(nullptr, marker_from).bare;
-                    auto ch_marker_it = account.channels.find(bare_s);
-                    weechat::channel *ch = ch_marker_it != account.channels.end() ? &ch_marker_it->second : nullptr;
+                    weechat::channel *ch = account.channels.contains(bare_s)
+                        ? &account.channels.find(bare_s)->second : nullptr;
                     if (ch && ch->type != weechat::channel::chat_type::MUC)
                     {
                         // Find the sent message line tagged id_<acked_id> and update glyph ⌛/✓→✓✓
@@ -1612,8 +1605,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                 if (attn_from)
                 {
                     std::string bare_s = ::jid(nullptr, attn_from).bare;
-                    auto ch_attn_it = account.channels.find(bare_s);
-                    weechat::channel *ch = ch_attn_it != account.channels.end() ? &ch_attn_it->second : nullptr;
+                    weechat::channel *ch = account.channels.contains(bare_s)
+                        ? &account.channels.find(bare_s)->second : nullptr;
                     if (!ch)
                     {
                         // Create PM channel for the buzz
@@ -1672,7 +1665,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                                                     "urn:xmpp:chat-markers:0");
 
     const char *channel_id = account.jid() == from_bare ? to_bare : from_bare;
-    { auto it = account.channels.find(channel_id); parent_channel = it != account.channels.end() ? &it->second : nullptr; }
+    parent_channel = account.channels.contains(channel_id)
+        ? &account.channels.find(channel_id)->second : nullptr;
     const char *pm_id = account.jid() == from_bare ? to : from;
     channel = parent_channel;
     if (!channel)
@@ -2041,25 +2035,25 @@ message_handler_after_omemo:
         std::unique_ptr<char, decltype(&free)> orig_guard(nullptr, &free);
         char *orig = nullptr;
         void *edit_line_data = nullptr; // line_data of the original message for in-place update
-        void *lines = weechat_hdata_pointer(hdata_buffer,
+        void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
                                             channel->buffer, "lines");
         if (lines)
         {
-            void *last_line = weechat_hdata_pointer(hdata_lines,
+            void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
                                                     lines, "last_line");
             while (last_line && !orig)
             {
-                void *line_data = weechat_hdata_pointer(hdata_line,
+                void *line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                         last_line, "data");
                 if (line_data)
                 {
-                    int tags_count = weechat_hdata_integer(hdata_line_data,
+                    int tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
                                                            line_data, "tags_count");
                     std::string str_tag;
                     for (int n_tag = 0; n_tag < tags_count; n_tag++)
                     {
                         str_tag = fmt::format("{}|tags_array", n_tag);
-                        const char *tag = weechat_hdata_string(hdata_line_data,
+                        const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                line_data, str_tag.c_str());
                          if (std::string_view(tag).starts_with("id_") &&
                              weechat_strcasecmp(tag + 3, replace_id) == 0)
@@ -2079,7 +2073,7 @@ message_handler_after_omemo:
                             {
                                 str_tag = fmt::format("{}|tags_array", chk);
                                 const char *chk_tag = weechat_hdata_string(
-                                    hdata_line_data, line_data, str_tag.c_str());
+                                    weechat_hdata_get("line_data"), line_data, str_tag.c_str());
                                  if (std::string_view(chk_tag).starts_with("nick_") &&
                                     weechat_strcasecmp(chk_tag + 5, corr_nick) == 0)
                                 {
@@ -2100,16 +2094,16 @@ message_handler_after_omemo:
                                 orig_lines_ptr(weechat_arraylist_new(0, 0, 0, nullptr, nullptr, nullptr, nullptr),
                                                arraylist_deleter);
                             struct t_arraylist *orig_lines = orig_lines_ptr.get();
-                            char *msg = (char*)weechat_hdata_string(hdata_line_data,
+                            char *msg = (char*)weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                     line_data, "message");
                             weechat_arraylist_insert(orig_lines, 0, msg);
 
                             while (msg)
                             {
-                                last_line = weechat_hdata_pointer(hdata_line,
+                                last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                                   last_line, "prev_line");
                                 if (last_line)
-                                    line_data = weechat_hdata_pointer(hdata_line,
+                                    line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                                       last_line, "data");
                                 else
                                     line_data = nullptr;
@@ -2117,17 +2111,17 @@ message_handler_after_omemo:
                                 msg = nullptr;
                                 if (line_data)
                                 {
-                                    tags_count = weechat_hdata_integer(hdata_line_data,
+                                    tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
                                                                        line_data, "tags_count");
                                     for (n_tag = 0; n_tag < tags_count; n_tag++)
                                     {
                                         str_tag = fmt::format("{}|tags_array", n_tag);
-                                        tag = weechat_hdata_string(hdata_line_data,
+                                        tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                    line_data, str_tag.c_str());
                                          if (std::string_view(tag).starts_with("id_") &&
                                             weechat_strcasecmp(tag + 3, replace_id) == 0)
                                         {
-                                            msg = (char*)weechat_hdata_string(hdata_line_data,
+                                            msg = (char*)weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                               line_data, "message");
                                             break;
                                         }
@@ -2151,7 +2145,7 @@ message_handler_after_omemo:
                     }
                 }
 
-                last_line = weechat_hdata_pointer(hdata_line,
+                last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                   last_line, "prev_line");
             }
         }
@@ -2167,7 +2161,7 @@ message_handler_after_omemo:
                 WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING,
                 nullptr, nullptr);
             weechat_hashtable_set(ht, "message", new_msg.c_str());
-            weechat_hdata_update(hdata_line_data, edit_line_data, ht);
+            weechat_hdata_update(weechat_hdata_get("line_data"), edit_line_data, ht);
             weechat_hashtable_free(ht);
             return 1;
         }
@@ -2201,25 +2195,25 @@ message_handler_after_omemo:
             account.mam_cache_retract_message(channel_id, moderate_id);
             
             // Find and tombstone the moderated message in buffer
-            void *lines = weechat_hdata_pointer(hdata_buffer,
+            void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
                                                 channel->buffer, "lines");
             if (lines)
             {
-                void *last_line = weechat_hdata_pointer(hdata_lines,
+                void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
                                                         lines, "last_line");
                 while (last_line)
                 {
-                    void *line_data = weechat_hdata_pointer(hdata_line,
+                    void *line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                             last_line, "data");
                     if (line_data)
                     {
-                        int tags_count = weechat_hdata_integer(hdata_line_data,
+                        int tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
                                                                line_data, "tags_count");
                         std::string str_tag;
                         for (int n_tag = 0; n_tag < tags_count; n_tag++)
                         {
                             str_tag = fmt::format("{}|tags_array", n_tag);
-                            const char *tag = weechat_hdata_string(hdata_line_data,
+                            const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                    line_data, str_tag.c_str());
                             if (std::string_view(tag).starts_with("id_") &&
                                 weechat_strcasecmp(tag + 3, moderate_id) == 0)
@@ -2241,7 +2235,7 @@ message_handler_after_omemo:
                                     nullptr, nullptr);
                                 weechat_hashtable_set(hashtable, "message", tombstone.c_str());
                                 weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,xmpp_moderated,notify_none");
-                                weechat_hdata_update(hdata_line_data, line_data, hashtable);
+                                weechat_hdata_update(weechat_hdata_get("line_data"), line_data, hashtable);
                                 weechat_hashtable_free(hashtable);
                                 
                                 // Print notification
@@ -2261,7 +2255,7 @@ message_handler_after_omemo:
                         }
                     }
 
-                    last_line = weechat_hdata_pointer(hdata_line,
+                    last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                       last_line, "prev_line");
                 }
             }
@@ -2294,25 +2288,25 @@ message_handler_after_omemo:
         account.mam_cache_retract_message(channel_id, retract_id);
         
         // Find and tombstone the retracted message in buffer
-        void *lines = weechat_hdata_pointer(hdata_buffer,
+        void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
                                             channel->buffer, "lines");
         if (lines)
         {
-            void *last_line = weechat_hdata_pointer(hdata_lines,
+            void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
                                                     lines, "last_line");
             while (last_line)
             {
-                void *line_data = weechat_hdata_pointer(hdata_line,
+                void *line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                         last_line, "data");
                 if (line_data)
                 {
-                    int tags_count = weechat_hdata_integer(hdata_line_data,
+                    int tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
                                                            line_data, "tags_count");
                     std::string str_tag;
                     for (int n_tag = 0; n_tag < tags_count; n_tag++)
                     {
                         str_tag = fmt::format("{}|tags_array", n_tag);
-                        const char *tag = weechat_hdata_string(hdata_line_data,
+                        const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                line_data, str_tag.c_str());
                         if (std::string_view(tag).starts_with("id_") &&
                             weechat_strcasecmp(tag + 3, retract_id) == 0)
@@ -2330,7 +2324,7 @@ message_handler_after_omemo:
                                 nullptr, nullptr);
                             weechat_hashtable_set(hashtable, "message", tombstone.c_str());
                             weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,notify_none");
-                            weechat_hdata_update(hdata_line_data, line_data, hashtable);
+                            weechat_hdata_update(weechat_hdata_get("line_data"), line_data, hashtable);
                             weechat_hashtable_free(hashtable);
                             
                             // Print notification
@@ -2344,7 +2338,7 @@ message_handler_after_omemo:
                     }
                 }
 
-                last_line = weechat_hdata_pointer(hdata_line,
+                last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                   last_line, "prev_line");
             }
         }
@@ -2391,25 +2385,25 @@ message_handler_after_omemo:
         if (std::string_view(emojis).size() > 0)
         {
             // Find the message being reacted to and append reaction
-            void *lines = weechat_hdata_pointer(hdata_buffer,
+            void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
                                                 channel->buffer, "lines");
             if (lines)
             {
-                void *last_line = weechat_hdata_pointer(hdata_lines,
+                void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
                                                         lines, "last_line");
                 while (last_line)
                 {
-                    void *line_data = weechat_hdata_pointer(hdata_line,
+                    void *line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                             last_line, "data");
                     if (line_data)
                     {
-                        int tags_count = weechat_hdata_integer(hdata_line_data,
+                        int tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
                                                                line_data, "tags_count");
                         std::string str_tag;
                         for (int n_tag = 0; n_tag < tags_count; n_tag++)
                         {
                             str_tag = fmt::format("{}|tags_array", n_tag);
-                            const char *tag = weechat_hdata_string(hdata_line_data,
+                            const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                    line_data, str_tag.c_str());
                             if (std::string_view(tag).starts_with("id_") &&
                                 weechat_strcasecmp(tag + 3, reactions_id) == 0)
@@ -2420,7 +2414,7 @@ message_handler_after_omemo:
                                 // previously-appended reaction blocks (our format:
                                 // " <blue>[…]<reset>") before appending the new set.
                                 const char *orig_message = weechat_hdata_string(
-                                    hdata_line_data, line_data, "message");
+                                    weechat_hdata_get("line_data"), line_data, "message");
 
                                 std::string base(orig_message ? orig_message : "");
                                 // The reaction suffix we append starts with " " + weechat_color("blue") + "["
@@ -2441,7 +2435,7 @@ message_handler_after_omemo:
                                     WEECHAT_HASHTABLE_STRING,
                                     nullptr, nullptr);
                                 weechat_hashtable_set(hashtable, "message", new_message.c_str());
-                                weechat_hdata_update(hdata_line_data, line_data, hashtable);
+                                weechat_hdata_update(weechat_hdata_get("line_data"), line_data, hashtable);
                                 weechat_hashtable_free(hashtable);
 
                                 weechat_string_dyn_free(dyn_emojis, 1);
@@ -2450,7 +2444,7 @@ message_handler_after_omemo:
                         }
                     }
 
-                    last_line = weechat_hdata_pointer(hdata_line,
+                    last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                       last_line, "prev_line");
                 }
             }
@@ -2505,8 +2499,10 @@ message_handler_after_omemo:
     if (delay && stanza_id && channel && channel->buffer)
     {
         std::string needle = std::string("stanza_id_") + stanza_id;
+        struct t_hdata *hdata_line      = weechat_hdata_get("line");
+        struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
         struct t_gui_lines *own_lines   = (struct t_gui_lines*)
-            weechat_hdata_pointer(hdata_buffer,
+            weechat_hdata_pointer(weechat_hdata_get("buffer"),
                                   channel->buffer, "own_lines");
         bool already_shown = false;
         if (own_lines)
@@ -2745,32 +2741,32 @@ message_handler_after_omemo:
     if (reply_to_id)
     {
         // Find the original message being replied to
-        void *lines = weechat_hdata_pointer(hdata_buffer,
+        void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"),
                                             channel->buffer, "lines");
         if (lines)
         {
-            void *last_line = weechat_hdata_pointer(hdata_lines,
+            void *last_line = weechat_hdata_pointer(weechat_hdata_get("lines"),
                                                     lines, "last_line");
             while (last_line)
             {
-                void *line_data = weechat_hdata_pointer(hdata_line,
+                void *line_data = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                         last_line, "data");
                 if (line_data)
                 {
-                    int tags_count = weechat_hdata_integer(hdata_line_data,
+                    int tags_count = weechat_hdata_integer(weechat_hdata_get("line_data"),
                                                            line_data, "tags_count");
                     std::string str_tag;
                     for (int n_tag = 0; n_tag < tags_count; n_tag++)
                     {
                         str_tag = fmt::format("{}|tags_array", n_tag);
-                        const char *tag = weechat_hdata_string(hdata_line_data,
+                        const char *tag = weechat_hdata_string(weechat_hdata_get("line_data"),
                                                                line_data, str_tag.c_str());
                         if (std::string_view(tag).starts_with("id_") &&
                             weechat_strcasecmp(tag + 3, reply_to_id) == 0)
                         {
                             // Found the original message - get excerpt
                             const char *orig_message = weechat_hdata_string(
-                                hdata_line_data, line_data, "message");
+                                weechat_hdata_get("line_data"), line_data, "message");
                             
                             if (orig_message)
                             {
@@ -2856,7 +2852,7 @@ message_handler_after_omemo:
                                 {
                                     str_tag = fmt::format("{}|tags_array", nn);
                                     const char *ntag = weechat_hdata_string(
-                                        hdata_line_data, line_data, str_tag.c_str());
+                                        weechat_hdata_get("line_data"), line_data, str_tag.c_str());
                                     if (ntag && std::string_view(ntag).starts_with("nick_"))
                                     {
                                         reply_quote_nick = ntag + 5;
@@ -2871,7 +2867,7 @@ message_handler_after_omemo:
                     }
                 }
 
-                last_line = weechat_hdata_pointer(hdata_line,
+                last_line = weechat_hdata_pointer(weechat_hdata_get("line"),
                                                   last_line, "prev_line");
             }
         }
