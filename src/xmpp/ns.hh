@@ -192,6 +192,7 @@ struct urn {
             struct metadata : public xmlns { metadata() : xmlns("urn:xmpp:file:metadata:0") {} };
         };
         struct sfs { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:sfs:0") {} }; };
+        struct sims { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:sims:1") {} }; };
         struct ciphers {
             struct aes_256_gcm_nopadding : public xmlns {
                 aes_256_gcm_nopadding() : xmlns("urn:xmpp:ciphers:aes-256-gcm-nopadding:0") {}
@@ -225,6 +226,7 @@ struct urn {
         struct jingle { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:jingle:1") {} };
             struct apps {
                 struct dtls { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:jingle:apps:dtls:0") {} }; };
+                struct file_transfer { struct _5 : public xmlns { _5() : xmlns("urn:xmpp:jingle:apps:file-transfer:5") {} }; };
                 struct rtp { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:jingle:apps:rtp:1") {} };
                     struct errors { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:jingle:apps:rtp:errors:1") {} }; };
                     struct info { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:jingle:apps:rtp:info:1") {} }; };

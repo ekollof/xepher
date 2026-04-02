@@ -983,7 +983,7 @@ int weechat::channel::send_message(std::string to, std::string body,
         xmpp_stanza_set_attribute(reference.get(), "type", "data");
         xmpp_stanza_set_attribute(reference.get(), "begin", "0");
         xmpp_stanza_set_attribute(reference.get(), "end",
-            std::to_string(oob->size()).c_str());
+            std::to_string(body.size()).c_str()); // body char offset per XEP-0385 §4
 
         auto media_sharing = make_child(nullptr, "media-sharing", "urn:xmpp:sims:1");
         auto file_elem = make_child(nullptr, "file",
