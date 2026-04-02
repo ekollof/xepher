@@ -613,11 +613,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     }
                     
                     // XEP-0313: Dedup MAM results against already-displayed live messages.
-                    // The <result id='...'> archive ID equals the server-assigned stanza-id
-                    // that live delivery tags each buffer line with ("stanza_id_<id>").
-                    // If a line with that tag already exists, the message was already shown.
+                    // Two tag strategies are used:
+                    //   1. stanza_id_<archive-id>  – written when the server injects a
+                    //      <stanza-id> element on live delivery (XEP-0359).
+                    //   2. id_<msg-id>              – written from the message's own id=
+                    //      attribute (always present); used as fallback for servers that
+                    //      do not inject <stanza-id> on direct delivery.
+                    // If either tag is found in the channel buffer, the message was
+                    // already displayed and the MAM copy should be silently discarded.
                     const char *archive_id = xmpp_stanza_get_attribute(result, "id");
-                    if (archive_id && *archive_id)
+                    if ((archive_id && *archive_id) || (msg_id && *msg_id))
                     {
                         // Resolve channel JID from the forwarded message addresses
                         std::string chk_from_s = msg_from ? ::jid(nullptr, msg_from).bare : std::string{};
@@ -637,8 +642,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         bool already_displayed = false;
                         if (chk_buf)
                         {
-                            // Build the tag we're looking for
-                            std::string needle = std::string("stanza_id_") + archive_id;
+                            // Primary needle: stanza_id set by server on live delivery (XEP-0359)
+                            std::string needle1 = (archive_id && *archive_id)
+                                ? std::string("stanza_id_") + archive_id : std::string{};
+                            // Fallback needle: message's own id= tag, always written on live delivery
+                            std::string needle2 = (msg_id && *msg_id)
+                                ? std::string("id_") + msg_id : std::string{};
 
                             struct t_gui_lines *own_lines = (struct t_gui_lines*)
                                 weechat_hdata_pointer(hdata_buffer,
@@ -655,8 +664,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     {
                                         const char *tags = (const char*)
                                             weechat_hdata_string(hdata_line_data, ld, "tags");
-                                        if (tags && std::string_view(tags).contains(needle))
-                                            already_displayed = true;
+                                        if (tags)
+                                        {
+                                            std::string_view tv(tags);
+                                            if ((!needle1.empty() && tv.contains(needle1)) ||
+                                                (!needle2.empty() && tv.contains(needle2)))
+                                                already_displayed = true;
+                                        }
                                     }
                                     ln = (struct t_gui_line*)
                                         weechat_hdata_move(hdata_line, ln, -1);
