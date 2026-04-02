@@ -172,26 +172,27 @@ std::string apply_xep393_styling(const std::string& text)
                 }
             }
             
-            // ~~strikethrough~~ (XEP-0393 uses double-tilde)
-            else if (ch == '~' && i + 2 < text.length() && text[i+1] == '~' && !isspace(text[i+2]))
+            // ~strikethrough~ (XEP-0393 §6.2.4 — single tilde U+007E)
+            else if (ch == '~' && i + 1 < text.length() && !isspace(text[i+1]))
             {
-                size_t end = i + 2;
-                // XEP-0393: spans MUST NOT cross line boundaries; look for ~~
-                while (end + 1 < text.length() &&
-                       !(text[end] == '~' && text[end+1] == '~') &&
+                size_t end = i + 1;
+                // XEP-0393: spans MUST NOT cross line boundaries; look for closing ~
+                while (end < text.length() &&
+                       text[end] != '~' &&
                        text[end] != '\n')
                     end++;
-                
-                if (end + 1 < text.length() && text[end] == '~' && text[end+1] == '~' &&
+
+                if (end < text.length() && text[end] == '~' &&
+                    end > i + 1 &&          // at least one char between tildes
                     !isspace(text[end-1]) &&
-                    (end + 2 >= text.length() || isspace(text[end+2]) || ispunct(text[end+2])))
+                    (end + 1 >= text.length() || isspace(text[end+1]) || ispunct(text[end+1])))
                 {
                     result += weechat_color("red");
-                    i += 2; // Skip opening ~~
+                    i += 1; // Skip opening ~
                     while (i < end)
                         result += text[i++];
                     result += weechat_color("resetcolor");
-                    i += 2; // Skip closing ~~
+                    i += 1; // Skip closing ~
                     continue;
                 }
             }
