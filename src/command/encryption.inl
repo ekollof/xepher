@@ -192,6 +192,36 @@ int command__omemo(const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
+        if (weechat_strcasecmp(argv[1], "approve") == 0)
+        {
+            if (!require_omemo()) return WEECHAT_RC_OK;
+            if (argc < 3)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: usage: /omemo approve <jid> [<fingerprint>]"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+            const char *fp = (argc > 3) ? argv[3] : nullptr;
+            ptr_account->omemo.approve_jid(buffer, *ptr_account, argv[2], fp);
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "distrust") == 0)
+        {
+            if (!require_omemo()) return WEECHAT_RC_OK;
+            if (argc < 3)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: usage: /omemo distrust <jid> [<fingerprint>]"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+            const char *fp = (argc > 3) ? argv[3] : nullptr;
+            ptr_account->omemo.distrust_fp(buffer, *ptr_account, argv[2], fp);
+            return WEECHAT_RC_OK;
+        }
+
         if (weechat_strcasecmp(argv[1], "devices") == 0)
         {
             if (!require_omemo()) return WEECHAT_RC_OK;

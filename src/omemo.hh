@@ -258,6 +258,28 @@ namespace weechat {
             // proves the server no longer has usable OMEMO:2 data for it.
             void clear_cached_bundle(std::string_view jid, std::uint32_t device_id);
 
+            // XEP-0450 manual trust management:
+            // approve: mark one (or all) fingerprint(s) for jid as "trusted" and
+            //          broadcast a <trust> ATM message.
+            //   jid      — bare JID whose key(s) to approve
+            //   fp_hex   — colon-separated uppercase hex fingerprint, or nullptr
+            //              to approve all known undecided keys for jid
+            void approve_jid(struct t_gui_buffer *buffer,
+                             weechat::account &account,
+                             const char *jid,
+                             const char *fp_hex);
+
+            // distrust_fp: mark one (or all) fingerprint(s) for jid as "distrusted"
+            //              and broadcast a <distrust> ATM message.  Does NOT wipe
+            //              stored session/bundle data (use distrust_jid for that).
+            //   jid      — bare JID whose key(s) to distrust
+            //   fp_hex   — colon-separated uppercase hex fingerprint, or nullptr
+            //              to distrust all known keys for jid
+            void distrust_fp(struct t_gui_buffer *buffer,
+                             weechat::account &account,
+                             const char *jid,
+                             const char *fp_hex);
+
             // XEP-0450 §4.2: broadcast a <distrust> trust-message for all known
             // fingerprints of jid to own devices and to jid's devices.
             // Called when the user explicitly distrusts a peer via /omemo trust.
