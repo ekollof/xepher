@@ -2915,10 +2915,52 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         if (weechat_strcasecmp(type, "get") == 0)
         {
             const char *requested_node = xmpp_stanza_get_attribute(query, "node");
-            reply = get_caps(xmpp_stanza_reply(stanza), nullptr, requested_node);
 
-            account.connection.send(reply);
-            xmpp_stanza_release(reply);
+            // XEP-0030 §3.3: if a node= is present, it MUST match a recognized
+            // node (our caps node "http://weechat.org#<hash>") otherwise return
+            // <item-not-found/>.  An absent or empty node= always gets a normal reply.
+            bool node_ok = true;
+            if (requested_node && *requested_node)
+            {
+                // Recompute our caps hash to derive the canonical node URI.
+                xmpp_stanza_t *dummy = xmpp_stanza_new(account.context);
+                xmpp_stanza_set_name(dummy, "caps");
+                char *computed_hash = nullptr;
+                xmpp_stanza_t *caps_st = get_caps(dummy, &computed_hash);
+                xmpp_stanza_release(caps_st);
+                std::unique_ptr<char, decltype(&free)> hash_guard(computed_hash, &free);
+
+                // Accept "http://weechat.org" (bare) or "http://weechat.org#<hash>"
+                std::string_view req(requested_node);
+                node_ok = (req == "http://weechat.org") ||
+                          (computed_hash &&
+                           req == std::string("http://weechat.org#") + computed_hash);
+            }
+
+            if (node_ok)
+            {
+                reply = get_caps(xmpp_stanza_reply(stanza), nullptr, requested_node);
+                account.connection.send(reply);
+                xmpp_stanza_release(reply);
+            }
+            else
+            {
+                // Return <iq type='error'><error type='cancel'><item-not-found/></error></iq>
+                xmpp_stanza_t *err_iq = xmpp_stanza_reply(stanza);
+                xmpp_stanza_set_attribute(err_iq, "type", "error");
+                xmpp_stanza_t *err_el = xmpp_stanza_new(account.context);
+                xmpp_stanza_set_name(err_el, "error");
+                xmpp_stanza_set_attribute(err_el, "type", "cancel");
+                xmpp_stanza_t *inf = xmpp_stanza_new(account.context);
+                xmpp_stanza_set_name(inf, "item-not-found");
+                xmpp_stanza_set_ns(inf, "urn:ietf:params:xml:ns:xmpp-stanzas");
+                xmpp_stanza_add_child(err_el, inf);
+                xmpp_stanza_release(inf);
+                xmpp_stanza_add_child(err_iq, err_el);
+                xmpp_stanza_release(err_el);
+                account.connection.send(err_iq);
+                xmpp_stanza_release(err_iq);
+            }
         }
 
         if (weechat_strcasecmp(type, "result") == 0)
