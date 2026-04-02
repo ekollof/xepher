@@ -133,8 +133,43 @@ void weechat::xmpp::omemo::process_atm_trust_sce_pub(xmpp_ctx_t *ctx,
 
 void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const char *jid)
 {
+    if (!db_env)
+    {
+        print_error(buffer, "OMEMO is not initialized.");
+        return;
+    }
+
+    // Helper: format raw identity key bytes as colon-separated uppercase hex,
+    // then compute and return the ATM trust status label.
+    auto format_fp_hex = [](const std::vector<std::uint8_t> &bytes) -> std::string {
+        if (bytes.empty())
+            return {};
+        std::string out;
+        out.reserve(bytes.size() * 3);
+        for (std::size_t i = 0; i < bytes.size(); ++i)
+        {
+            if (i > 0)
+                out += ':';
+            constexpr const char *hex = "0123456789ABCDEF";
+            out += hex[(bytes[i] >> 4) & 0xF];
+            out += hex[bytes[i] & 0xF];
+        }
+        return out;
+    };
+
+    auto trust_label = [&](std::string_view jid_sv, const std::vector<std::uint8_t> &bytes) -> std::string {
+        const std::string fp = atm_fingerprint_b64(bytes);
+        if (fp.empty())
+            return "unknown";
+        const auto t = load_atm_trust(*this, jid_sv, fp);
+        if (!t)
+            return "undecided";
+        return *t;
+    };
+
     if (jid)
     {
+        // Peer fingerprints: iterate all known devices for this JID.
         std::vector<std::uint32_t> devices;
         auto append_devices = [&](const std::optional<std::string> &device_list)
         {
@@ -148,29 +183,51 @@ void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const c
             }
         };
 
-        if (db_env)
-        {
-            append_devices(load_string(*this, key_for_devicelist(jid)));
-            append_devices(load_string(*this, key_for_legacy_devicelist(jid)));
-        }
-
+        append_devices(load_string(*this, key_for_devicelist(jid)));
+        append_devices(load_string(*this, key_for_legacy_devicelist(jid)));
         std::sort(devices.begin(), devices.end());
         devices.erase(std::unique(devices.begin(), devices.end()), devices.end());
-        print_info(buffer, fmt::format(
-            "OMEMO: {} known device(s) for {}; peer fingerprints are not implemented yet.",
-            devices.size(), jid));
+
+        if (devices.empty())
+        {
+            print_info(buffer, fmt::format("OMEMO: no known devices for {}.", jid));
+            return;
+        }
+
+        print_info(buffer, fmt::format("OMEMO fingerprints for {} ({} device(s)):", jid, devices.size()));
+        for (const auto dev_id : devices)
+        {
+            const auto ik = load_bytes(*this,
+                key_for_identity(jid, static_cast<std::int32_t>(dev_id)));
+            if (!ik || ik->empty())
+            {
+                print_info(buffer, fmt::format("  device {:10} : (no key yet)", dev_id));
+                continue;
+            }
+            const std::string hex = format_fp_hex(*ik);
+            const std::string trust = trust_label(jid, *ik);
+            print_info(buffer, fmt::format("  device {:10} [{}]: {}", dev_id, trust, hex));
+        }
         return;
     }
 
+    // Own fingerprint
     if (device_id == 0)
     {
         print_error(buffer, "OMEMO is not initialized.");
         return;
     }
 
-    print_info(buffer, fmt::format(
-        "OMEMO active; fingerprint generation is not implemented yet (device {}).",
-        device_id));
+    const auto pub = load_bytes(*this, kIdentityPublicKey);
+    if (!pub || pub->empty())
+    {
+        print_error(buffer, "OMEMO: own identity key not yet generated.");
+        return;
+    }
+
+    const std::string hex = format_fp_hex(*pub);
+    print_info(buffer, fmt::format("OMEMO own fingerprint (device {}):", device_id));
+    print_info(buffer, fmt::format("  {}", hex));
 }
 
 void weechat::xmpp::omemo::send_atm_distrust_pub(weechat::account &account, const char *jid)
@@ -178,9 +235,10 @@ void weechat::xmpp::omemo::send_atm_distrust_pub(weechat::account &account, cons
     if (!db_env || !jid)
         return;
 
-    // Walk all known devices for this JID, compute their fingerprints, mark
-    // each as "distrusted" in LMDB and broadcast a <distrust> trust-message.
-    auto process_devlist = [&](const std::optional<std::string> &devlist) {
+    // Collect (jid, fingerprint) pairs for all known devices of this JID,
+    // then send one batched <distrust> trust-message (XEP-0434 §4 batching).
+    std::vector<std::pair<std::string,std::string>> pairs;
+    auto collect_devlist = [&](const std::optional<std::string> &devlist) {
         if (!devlist || devlist->empty())
             return;
         for (const auto &dev : split(*devlist, ';'))
@@ -196,12 +254,184 @@ void weechat::xmpp::omemo::send_atm_distrust_pub(weechat::account &account, cons
             if (fp.empty())
                 continue;
             store_atm_trust(*this, jid, fp, "distrusted");
-            send_atm_distrust_message(*this, account, jid, fp);
+            pairs.emplace_back(jid, fp);
         }
     };
 
-    process_devlist(load_string(*this, key_for_devicelist(jid)));
-    process_devlist(load_string(*this, key_for_legacy_devicelist(jid)));
+    collect_devlist(load_string(*this, key_for_devicelist(jid)));
+    collect_devlist(load_string(*this, key_for_legacy_devicelist(jid)));
+
+    if (!pairs.empty())
+        send_atm_distrust_message(*this, account, pairs);
+}
+
+// Normalise a fingerprint string for comparison: strip colons/spaces,
+// convert to uppercase.  Returns empty string on invalid input.
+static std::string normalise_fp_hex(std::string_view raw)
+{
+    std::string out;
+    out.reserve(raw.size());
+    for (char c : raw)
+    {
+        if (c == ':' || c == ' ')
+            continue;
+        if (c >= 'a' && c <= 'f')
+            c = static_cast<char>(c - 'a' + 'A');
+        else if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F')))
+            return {};  // invalid character
+        out += c;
+    }
+    return out;
+}
+
+// Format raw bytes as uppercase hex (no separators) for comparison with
+// a normalised fingerprint from the user.
+static std::string bytes_to_hex(const std::vector<std::uint8_t> &bytes)
+{
+    constexpr const char *hex = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(bytes.size() * 2);
+    for (auto b : bytes)
+    {
+        out += hex[(b >> 4) & 0xF];
+        out += hex[b & 0xF];
+    }
+    return out;
+}
+
+void weechat::xmpp::omemo::approve_jid(struct t_gui_buffer *buffer,
+                                        weechat::account &account,
+                                        const char *jid,
+                                        const char *fp_hex)
+{
+    if (!db_env || !jid)
+    {
+        print_error(buffer, "OMEMO is not initialized.");
+        return;
+    }
+
+    const std::string filter = fp_hex ? normalise_fp_hex(fp_hex) : std::string{};
+    if (fp_hex && filter.empty())
+    {
+        print_error(buffer, "OMEMO: invalid fingerprint format.");
+        return;
+    }
+
+    std::vector<std::pair<std::string,std::string>> pairs;
+    auto collect = [&](const std::optional<std::string> &devlist) {
+        if (!devlist || devlist->empty())
+            return;
+        for (const auto &dev : split(*devlist, ';'))
+        {
+            const auto dev_id = parse_uint32(dev);
+            if (!dev_id || !is_valid_omemo_device_id(*dev_id))
+                continue;
+            const auto ik = load_bytes(*this,
+                key_for_identity(jid, static_cast<std::int32_t>(*dev_id)));
+            if (!ik || ik->empty())
+                continue;
+            if (!filter.empty() && bytes_to_hex(*ik) != filter)
+                continue;
+            const std::string fp = atm_fingerprint_b64(*ik);
+            if (fp.empty())
+                continue;
+            // Only change undecided (or absent) keys; do not silently override
+            // an explicit "distrusted" decision.
+            const auto existing = load_atm_trust(*this, jid, fp);
+            if (existing && *existing == "distrusted")
+            {
+                print_info(buffer, fmt::format(
+                    "OMEMO: device {} is currently distrusted; use /omemo trust <jid> to reset.",
+                    *dev_id));
+                continue;
+            }
+            store_atm_trust(*this, jid, fp, "trusted");
+            pairs.emplace_back(jid, fp);
+            print_info(buffer, fmt::format("OMEMO: marked device {} for {} as trusted.", *dev_id, jid));
+        }
+    };
+
+    collect(load_string(*this, key_for_devicelist(jid)));
+    collect(load_string(*this, key_for_legacy_devicelist(jid)));
+
+    if (pairs.empty())
+    {
+        if (!filter.empty())
+            print_error(buffer, fmt::format(
+                "OMEMO: no known key for {} matches that fingerprint.", jid));
+        else
+            print_info(buffer, fmt::format(
+                "OMEMO: no undecided keys found for {}.", jid));
+        return;
+    }
+
+    if (weechat::config::instance
+        && weechat_config_boolean(weechat::config::instance->look.omemo_atm))
+    {
+        send_atm_trust_message(*this, account, pairs);
+    }
+}
+
+void weechat::xmpp::omemo::distrust_fp(struct t_gui_buffer *buffer,
+                                        weechat::account &account,
+                                        const char *jid,
+                                        const char *fp_hex)
+{
+    if (!db_env || !jid)
+    {
+        print_error(buffer, "OMEMO is not initialized.");
+        return;
+    }
+
+    const std::string filter = fp_hex ? normalise_fp_hex(fp_hex) : std::string{};
+    if (fp_hex && filter.empty())
+    {
+        print_error(buffer, "OMEMO: invalid fingerprint format.");
+        return;
+    }
+
+    std::vector<std::pair<std::string,std::string>> pairs;
+    auto collect = [&](const std::optional<std::string> &devlist) {
+        if (!devlist || devlist->empty())
+            return;
+        for (const auto &dev : split(*devlist, ';'))
+        {
+            const auto dev_id = parse_uint32(dev);
+            if (!dev_id || !is_valid_omemo_device_id(*dev_id))
+                continue;
+            const auto ik = load_bytes(*this,
+                key_for_identity(jid, static_cast<std::int32_t>(*dev_id)));
+            if (!ik || ik->empty())
+                continue;
+            if (!filter.empty() && bytes_to_hex(*ik) != filter)
+                continue;
+            const std::string fp = atm_fingerprint_b64(*ik);
+            if (fp.empty())
+                continue;
+            store_atm_trust(*this, jid, fp, "distrusted");
+            pairs.emplace_back(jid, fp);
+            print_info(buffer, fmt::format("OMEMO: marked device {} for {} as distrusted.", *dev_id, jid));
+        }
+    };
+
+    collect(load_string(*this, key_for_devicelist(jid)));
+    collect(load_string(*this, key_for_legacy_devicelist(jid)));
+
+    if (pairs.empty())
+    {
+        if (!filter.empty())
+            print_error(buffer, fmt::format(
+                "OMEMO: no known key for {} matches that fingerprint.", jid));
+        else
+            print_info(buffer, fmt::format("OMEMO: no known keys for {}.", jid));
+        return;
+    }
+
+    if (weechat::config::instance
+        && weechat_config_boolean(weechat::config::instance->look.omemo_atm))
+    {
+        send_atm_distrust_message(*this, account, pairs);
+    }
 }
 
 void weechat::xmpp::omemo::distrust_jid(struct t_gui_buffer *buffer, const char *jid)
@@ -266,5 +496,4 @@ void weechat::xmpp::omemo::show_status(struct t_gui_buffer *buffer,
         channel_name ? channel_name : "(none)",
         channel_omemo_enabled ? "enabled" : "disabled"));
     print_info(buffer, fmt::format("  pubsub nodes: {}, {}", kDevicesNode, kBundlesNode));
-    print_info(buffer, "  note: fingerprint/status reporting is still incomplete.");
 }

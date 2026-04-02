@@ -287,17 +287,99 @@ static bool send_atm_trust_message_legacy(
     return true;
 }
 
-// XEP-0450 §4: send a trust message for key_owner_jid/key_b64.
-// Sends one encrypted message per namespace (OMEMO:2 and legacy) to:
-//   - All own devices (so other clients learn the trust decision)
-//   - All of key_owner_jid's devices (to distribute our trust decision to them)
-// Both sends are best-effort; failures are silently skipped.
+// XEP-0434 §4: build a batched <trust-message> XML string from a list of
+// (key_owner_jid, fingerprint_b64) pairs.  Entries with the same JID are
+// grouped under a single <key-owner> element as the spec example shows.
+// tag_name is "trust" or "distrust".  Returns empty string if pairs is empty.
+static std::string build_trust_message_xml(
+    std::string_view encryption_ns,
+    std::string_view tag_name,
+    const std::vector<std::pair<std::string,std::string>> &pairs)
+{
+    if (pairs.empty())
+        return {};
+
+    // Group fingerprints by key-owner JID (preserving first-seen order).
+    std::vector<std::string> jid_order;
+    std::unordered_map<std::string, std::vector<std::string>> by_jid;
+    for (const auto &[jid, fp] : pairs)
+    {
+        if (by_jid.find(jid) == by_jid.end())
+            jid_order.push_back(jid);
+        by_jid[jid].push_back(fp);
+    }
+
+    std::string body;
+    for (const auto &jid : jid_order)
+    {
+        body += fmt::format("<key-owner jid='{}'>", xml_escape(jid));
+        for (const auto &fp : by_jid[jid])
+            body += fmt::format("<{}>{}</{}>", tag_name, xml_escape(fp), tag_name);
+        body += "</key-owner>";
+    }
+
+    return fmt::format(
+        "<trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1'"
+        " encryption='{}'>{}</trust-message>",
+        encryption_ns, body);
+}
+
+// XEP-0450 §4: send trust messages for a batch of (key_owner_jid, fingerprint)
+// pairs. Sends one encrypted message per namespace (OMEMO:2 and legacy) to:
+//   - All own devices (so other clients learn the decision)
+//   - All of each key owner's devices (XEP-0450 §4.1.1.2)
+// All key owners' devices that share the same target JID receive a single
+// stanza containing all <key-owner> elements for that JID (XEP-0434 §4 batching).
+static void send_atm_trust_message(omemo &self,
+                                   weechat::account &account,
+                                   const std::vector<std::pair<std::string,std::string>> &pairs)
+{
+    if (!account.context || pairs.empty())
+        return;
+
+    const std::string own_bare_jid = [&]{
+        auto b = ::jid(nullptr, account.jid().data()).bare;
+        return b.empty() ? std::string(account.jid()) : b;
+    }();
+
+    const auto tm_omemo2  = build_trust_message_xml("urn:xmpp:omemo:2", "trust", pairs);
+    const auto tm_legacy  = build_trust_message_xml("eu.siacs.conversations.axolotl", "trust", pairs);
+
+    // Collect the set of target JIDs: own + all key-owner JIDs.
+    std::set<std::string> targets;
+    targets.insert(own_bare_jid);
+    for (const auto &[jid, _] : pairs)
+        targets.insert(jid);
+
+    for (const auto &target_jid : targets)
+    {
+        const auto dl2 = load_string(self, key_for_devicelist(target_jid));
+        if (dl2 && !dl2->empty())
+            send_atm_trust_message_omemo2(self, account, tm_omemo2, target_jid, *dl2);
+
+        const auto dll = load_string(self, key_for_legacy_devicelist(target_jid));
+        if (dll && !dll->empty())
+            send_atm_trust_message_legacy(self, account, tm_legacy, target_jid, *dll);
+    }
+}
+
+// Convenience overload for the common single-key case.
 static void send_atm_trust_message(omemo &self,
                                    weechat::account &account,
                                    const std::string &key_owner_jid,
                                    const std::string &key_b64)
 {
-    if (!account.context || key_owner_jid.empty() || key_b64.empty())
+    send_atm_trust_message(self, account,
+        std::vector<std::pair<std::string,std::string>>{{key_owner_jid, key_b64}});
+}
+
+// XEP-0450 §4.2: send <distrust> messages for a batch of (key_owner_jid, fp) pairs.
+// Mirrors send_atm_trust_message but uses the <distrust> element.
+static void send_atm_distrust_message(omemo &self,
+                                      weechat::account &account,
+                                      const std::vector<std::pair<std::string,std::string>> &pairs)
+{
+    if (!account.context || pairs.empty())
         return;
 
     const std::string own_bare_jid = [&]{
@@ -305,23 +387,16 @@ static void send_atm_trust_message(omemo &self,
         return b.empty() ? std::string(account.jid()) : b;
     }();
 
-    // Build serialised <trust-message> for OMEMO:2 and legacy namespaces.
-    const auto tm_omemo2 = fmt::format(
-        "<trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1'"
-        " encryption='urn:xmpp:omemo:2'>"
-        "<key-owner jid='{}'><trust>{}</trust></key-owner>"
-        "</trust-message>",
-        xml_escape(key_owner_jid), xml_escape(key_b64));
+    const auto tm_omemo2 = build_trust_message_xml("urn:xmpp:omemo:2", "distrust", pairs);
+    const auto tm_legacy = build_trust_message_xml("eu.siacs.conversations.axolotl", "distrust", pairs);
 
-    const auto tm_legacy = fmt::format(
-        "<trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1'"
-        " encryption='eu.siacs.conversations.axolotl'>"
-        "<key-owner jid='{}'><trust>{}</trust></key-owner>"
-        "</trust-message>",
-        xml_escape(key_owner_jid), xml_escape(key_b64));
+    std::set<std::string> targets;
+    targets.insert(own_bare_jid);
+    for (const auto &[jid, _] : pairs)
+        targets.insert(jid);
 
-    // Helper: send to a JID if we have a devicelist for it
-    auto send_to = [&](const std::string &target_jid) {
+    for (const auto &target_jid : targets)
+    {
         const auto dl2 = load_string(self, key_for_devicelist(target_jid));
         if (dl2 && !dl2->empty())
             send_atm_trust_message_omemo2(self, account, tm_omemo2, target_jid, *dl2);
@@ -329,58 +404,19 @@ static void send_atm_trust_message(omemo &self,
         const auto dll = load_string(self, key_for_legacy_devicelist(target_jid));
         if (dll && !dll->empty())
             send_atm_trust_message_legacy(self, account, tm_legacy, target_jid, *dll);
-    };
-
-    // Send to own devices (required — other own clients must learn the decision)
-    if (own_bare_jid != key_owner_jid)
-        send_to(own_bare_jid);
-
-    // Send to key owner's devices as well (XEP-0450 §4.1.1.2)
-    send_to(key_owner_jid);
+    }
 }
 
-// XEP-0450 §4.2: send a <distrust> message for key_owner_jid/key_b64.
-// Mirrors send_atm_trust_message but uses the <distrust> element.
+// Convenience overload for the common single-key distrust case (unused externally,
+// kept for potential future callers).
+[[maybe_unused]]
 static void send_atm_distrust_message(omemo &self,
                                       weechat::account &account,
                                       const std::string &key_owner_jid,
                                       const std::string &key_b64)
 {
-    if (!account.context || key_owner_jid.empty() || key_b64.empty())
-        return;
-
-    const std::string own_bare_jid = [&]{
-        auto b = ::jid(nullptr, account.jid().data()).bare;
-        return b.empty() ? std::string(account.jid()) : b;
-    }();
-
-    const auto tm_omemo2 = fmt::format(
-        "<trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1'"
-        " encryption='urn:xmpp:omemo:2'>"
-        "<key-owner jid='{}'><distrust>{}</distrust></key-owner>"
-        "</trust-message>",
-        xml_escape(key_owner_jid), xml_escape(key_b64));
-
-    const auto tm_legacy = fmt::format(
-        "<trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1'"
-        " encryption='eu.siacs.conversations.axolotl'>"
-        "<key-owner jid='{}'><distrust>{}</distrust></key-owner>"
-        "</trust-message>",
-        xml_escape(key_owner_jid), xml_escape(key_b64));
-
-    auto send_to = [&](const std::string &target_jid) {
-        const auto dl2 = load_string(self, key_for_devicelist(target_jid));
-        if (dl2 && !dl2->empty())
-            send_atm_trust_message_omemo2(self, account, tm_omemo2, target_jid, *dl2);
-
-        const auto dll = load_string(self, key_for_legacy_devicelist(target_jid));
-        if (dll && !dll->empty())
-            send_atm_trust_message_legacy(self, account, tm_legacy, target_jid, *dll);
-    };
-
-    if (own_bare_jid != key_owner_jid)
-        send_to(own_bare_jid);
-    send_to(key_owner_jid);
+    send_atm_distrust_message(self, account,
+        std::vector<std::pair<std::string,std::string>>{{key_owner_jid, key_b64}});
 }
 
 // XEP-0450 §5.1: drain any trust decisions that were deferred while sender_jid
