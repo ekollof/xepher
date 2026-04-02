@@ -521,10 +521,25 @@ When implementing a new feature:
 ## Repository Information
 
 - **Origin**: Fork of bqv/weechat-xmpp
-- **Remote**: git.hackerheaven.org:ekollof/weechat-xmpp-fixed.git
-- **Branch**: master
+- **Remote**: https://github.com/ekollof/xepher.git
+- **Branch**: master (protected — no force-push, no deletion)
 - **Language**: C++23 (`-std=c++23`)
 - **Dependencies**: libstrophe, LMDB, WeeChat API
+
+### Project URLs
+
+| Resource | URL |
+|----------|-----|
+| GitHub repository | https://github.com/ekollof/xepher |
+| GitHub wiki | https://github.com/ekollof/xepher/wiki — clone with `git clone https://github.com/ekollof/xepher.wiki.git` |
+| GitHub Pages (website) | https://ekollof.github.io/xepher — source on the `gh-pages` branch |
+| Releases | https://github.com/ekollof/xepher/releases |
+
+When updating documentation:
+- **Code-level guidance for agents** → `.github/copilot-instructions.md` (this file)
+- **User-facing docs** → `README.org` and `DOAP.xml` in the repo root
+- **Wiki** → clone `https://github.com/ekollof/xepher.wiki.git`, edit, commit, push (no PRs — direct push to `master`)
+- **Website** → `gh-pages` branch; edit `index.html` directly
 
 ## Useful Commands
 
