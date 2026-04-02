@@ -569,7 +569,24 @@ int identity_save(const signal_protocol_address *address, std::uint8_t *key_data
     if (!self || !address || !key_data)
         return SG_ERR_INVAL;
 
-    store_bytes(*self, key_for_identity(signal_address_name(address), address->device_id), key_data, key_len);
+    const std::string addr_name = signal_address_name(address);
+    store_bytes(*self, key_for_identity(addr_name, address->device_id), key_data, key_len);
+
+    // XEP-0450 §5.2: apply any trust decisions that were deferred while this
+    // identity key was not yet known.
+    const std::vector<std::uint8_t> key_vec(key_data, key_data + key_len);
+    const std::string fp = atm_fingerprint_b64(key_vec);
+    if (!fp.empty())
+    {
+        const std::string pending_key = addr_name + '\x1F' + fp;
+        auto it = self->pending_atm_trust_for_unknown_key.find(pending_key);
+        if (it != self->pending_atm_trust_for_unknown_key.end())
+        {
+            store_atm_trust(*self, addr_name, fp, it->second);
+            self->pending_atm_trust_for_unknown_key.erase(it);
+        }
+    }
+
     return SG_SUCCESS;
 }
 

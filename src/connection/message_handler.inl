@@ -1757,10 +1757,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         return 1;
     }
 
-    // XEP-0450 / XEP-0434: Automatic Trust Management — unencrypted trust messages.
-    // <trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1' encryption='urn:xmpp:omemo:2'>
-    //   <key-owner jid='...'><trust>BASE64</trust></key-owner>
-    // </trust-message>
+    // XEP-0450 / XEP-0434: Automatic Trust Management — plaintext trust messages
+    // (legacy interop path).  Encrypted trust messages are handled after OMEMO
+    // decryption below.  XEP-0450 §5 MUST: only apply if sender is ATM-trusted.
     {
         xmpp_stanza_t *trust_msg = xmpp_stanza_get_child_by_name_and_ns(
             stanza, "trust-message", "urn:xmpp:tm:1");
@@ -1771,37 +1770,45 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
         {
             const char *usage = xmpp_stanza_get_attribute(trust_msg, "usage");
             const char *encryption = xmpp_stanza_get_attribute(trust_msg, "encryption");
-            if (usage && std::string_view(usage) == "urn:xmpp:atm:1"
-                && encryption && std::string_view(encryption) == "urn:xmpp:omemo:2")
+            const bool enc_known = encryption &&
+                (std::string_view(encryption) == "urn:xmpp:omemo:2"
+                 || std::string_view(encryption) == "eu.siacs.conversations.axolotl");
+            if (usage && std::string_view(usage) == "urn:xmpp:atm:1" && enc_known)
             {
-                // Walk <key-owner> children
-                xmpp_stanza_t *ko = xmpp_stanza_get_children(trust_msg);
-                while (ko)
+                // XEP-0450 §5 MUST: gate on authenticated sender.
+                const bool sender_trusted = from_bare
+                    && account.omemo.sender_atm_trusted_pub(from_bare);
+                if (sender_trusted)
                 {
-                    const char *ko_name = xmpp_stanza_get_name(ko);
-                    const char *ko_jid = ko_name && std::string_view(ko_name) == "key-owner"
-                        ? xmpp_stanza_get_attribute(ko, "jid") : nullptr;
-                    if (ko_jid)
+                    // Walk <key-owner> children
+                    xmpp_stanza_t *ko = xmpp_stanza_get_children(trust_msg);
+                    while (ko)
                     {
-                        xmpp_stanza_t *decision = xmpp_stanza_get_children(ko);
-                        while (decision)
+                        const char *ko_name = xmpp_stanza_get_name(ko);
+                        const char *ko_jid = ko_name && std::string_view(ko_name) == "key-owner"
+                            ? xmpp_stanza_get_attribute(ko, "jid") : nullptr;
+                        if (ko_jid)
                         {
-                            const char *dname = xmpp_stanza_get_name(decision);
-                            if (dname && (std::string_view(dname) == "trust"
-                                          || std::string_view(dname) == "distrust"))
+                            xmpp_stanza_t *decision = xmpp_stanza_get_children(ko);
+                            while (decision)
                             {
-                                const char *fp = xmpp_stanza_get_text_ptr(decision);
-                                if (fp && *fp)
+                                const char *dname = xmpp_stanza_get_name(decision);
+                                if (dname && (std::string_view(dname) == "trust"
+                                              || std::string_view(dname) == "distrust"))
                                 {
-                                    const std::string level =
-                                        (std::string_view(dname) == "trust") ? "trusted" : "distrusted";
-                                    account.omemo.store_atm_trust_pub(ko_jid, fp, level);
+                                    const char *fp = xmpp_stanza_get_text_ptr(decision);
+                                    if (fp && *fp)
+                                    {
+                                        const std::string level =
+                                            (std::string_view(dname) == "trust") ? "trusted" : "distrusted";
+                                        account.omemo.store_atm_trust_pub(ko_jid, fp, level);
+                                    }
                                 }
+                                decision = xmpp_stanza_get_next(decision);
                             }
-                            decision = xmpp_stanza_get_next(decision);
                         }
+                        ko = xmpp_stanza_get_next(ko);
                     }
-                    ko = xmpp_stanza_get_next(ko);
                 }
             }
             // Trust messages must not be displayed; consume silently.
@@ -1937,6 +1944,29 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
                            weechat_prefix("error"));
     }
 message_handler_after_omemo:
+    // XEP-0450 §4: handle trust messages that arrived encrypted inside OMEMO.
+    // When the SCE <content> holds a <trust-message> (not a <body>), decode()
+    // returns the raw SCE XML as the cleartext.  We detect this here, process
+    // the trust update with sender auth gating, and suppress display.
+    if (!omemo_cleartext_storage.empty()
+        && account.omemo
+        && weechat::config::instance
+        && weechat_config_boolean(weechat::config::instance->look.omemo_atm))
+    {
+        // Quick check: does the decrypted payload look like an SCE envelope?
+        const std::string_view ct_sv(omemo_cleartext_storage);
+        if (ct_sv.find("urn:xmpp:sce:1") != std::string_view::npos
+            && ct_sv.find("urn:xmpp:tm:1") != std::string_view::npos)
+        {
+            account.omemo.process_atm_trust_sce_pub(
+                account.context,
+                from_bare,
+                omemo_cleartext_storage.c_str());
+            // Suppress display — trust messages are not user-visible.
+            return 1;
+        }
+    }
+
     if (x)
     {
         xmpp_string_guard ciphertext_g(account.context, xmpp_stanza_get_text(x));

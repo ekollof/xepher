@@ -99,6 +99,21 @@ namespace weechat {
             // recover the correct JID even when `from` is the server domain.
             std::unordered_map<std::string, std::string> pending_iq_jid;
 
+            // XEP-0450 §5.1: trust decisions received from senders whose own
+            // key has not yet been authenticated.  Keyed by sender bare JID;
+            // each entry is a list of (key_owner_jid, fingerprint_b64, level).
+            // Drained in handle_bundle() / handle_legacy_bundle() once the
+            // sender's first device becomes ATM-trusted.
+            std::unordered_map<std::string,
+                std::vector<std::tuple<std::string, std::string, std::string>>>
+                pending_atm_trust_from_unauthenticated;
+
+            // XEP-0450 §5.2: trust decisions for keys whose identity bytes have
+            // not yet been fetched (bundle not downloaded yet).
+            // Key: "jid\x00fingerprint_b64" → level ("trusted" or "distrusted").
+            // Applied in identity_save() when the identity key arrives.
+            std::unordered_map<std::string, std::string> pending_atm_trust_for_unknown_key;
+
             // Peers for which the corresponding devicelist node returned
             // <item-not-found/>. Used to avoid request/error loops.
             std::unordered_set<std::string> missing_omemo2_devicelist;
@@ -243,11 +258,27 @@ namespace weechat {
             // proves the server no longer has usable OMEMO:2 data for it.
             void clear_cached_bundle(std::string_view jid, std::uint32_t device_id);
 
+            // XEP-0450 §4.2: broadcast a <distrust> trust-message for all known
+            // fingerprints of jid to own devices and to jid's devices.
+            // Called when the user explicitly distrusts a peer via /omemo trust.
+            void send_atm_distrust_pub(weechat::account &account, const char *jid);
+
             // XEP-0450: Store an ATM trust decision for a key identified by its
             // Base64-encoded SHA-256 fingerprint. level must be "trusted" or "distrusted".
             // This is the public API called from the message handler when receiving
             // an unencrypted trust message (XEP-0434).
             void store_atm_trust_pub(const char *jid, const char *key_b64, const std::string &level);
+
+            // XEP-0450 §5: return true iff the sender's identity key has ATM
+            // trust level "trusted" for at least one known device.
+            // Used to gate incoming trust message application (§5 MUST).
+            [[nodiscard]] bool sender_atm_trusted_pub(const char *sender_bare_jid);
+
+            // XEP-0450 §4: process a <trust-message> from inside a decrypted SCE envelope,
+            // gate on sender auth, and apply trust decisions.
+            void process_atm_trust_sce_pub(xmpp_ctx_t *ctx,
+                                           const char *sender_bare_jid,
+                                           const char *sce_xml);
         };
     }
 }
