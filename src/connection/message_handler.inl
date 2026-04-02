@@ -2301,13 +2301,41 @@ message_handler_after_omemo:
     xmpp_stanza_t *retract = xmpp_stanza_get_child_by_name_and_ns(stanza, "retract",
                                                                    "urn:xmpp:message-retract:1");
     const char *retract_id = retract ? xmpp_stanza_get_attribute(retract, "id") : nullptr;
-    
+
     if (retract_id)
     {
+        // XEP-0424 §5 MUST: verify the retractor is the original sender.
+        // For MUC: compare MUC nick (resource part).
+        // For PM:  compare bare JID.
+        // Additionally, if the room advertises XEP-0421 (occupant-id), use
+        // the occupant-id from the retraction stanza to verify identity even
+        // through nick changes in semi-anonymous rooms.
+        const char *retract_nick = from_bare; // default for PM
+        std::string retract_resource_s;
+        if (channel && channel->type == weechat::channel::chat_type::MUC)
+        {
+            retract_resource_s = ::jid(nullptr, from).resource;
+            if (!retract_resource_s.empty())
+                retract_nick = retract_resource_s.c_str();
+        }
+
+        // Extract occupant-id from the retraction stanza (XEP-0421 §4).
+        // Only trusted if the room advertises urn:xmpp:occupant-id:0.
+        const char *retract_occ_id = nullptr;
+        const bool room_has_occupant_ids = channel && from_bare &&
+            account.peer_supports_feature(from_bare, "urn:xmpp:occupant-id:0");
+        if (room_has_occupant_ids)
+        {
+            xmpp_stanza_t *occ_elem = xmpp_stanza_get_child_by_name_and_ns(
+                stanza, "occupant-id", "urn:xmpp:occupant-id:0");
+            if (occ_elem)
+                retract_occ_id = xmpp_stanza_get_attribute(occ_elem, "id");
+        }
+
         // Save retraction to MAM cache
         const char *channel_id = account.jid() == from_bare ? to_bare : from_bare;
         account.mam_cache_retract_message(channel_id, retract_id);
-        
+
         // Find and tombstone the retracted message in buffer
         void *lines = weechat_hdata_pointer(hdata_buffer,
                                             channel->buffer, "lines");
@@ -2324,6 +2352,7 @@ message_handler_after_omemo:
                     int tags_count = weechat_hdata_integer(hdata_line_data,
                                                            line_data, "tags_count");
                     std::string str_tag;
+                    bool id_matched = false;
                     for (int n_tag = 0; n_tag < tags_count; n_tag++)
                     {
                         str_tag = fmt::format("{}|tags_array", n_tag);
@@ -2332,30 +2361,74 @@ message_handler_after_omemo:
                         if (tag && std::string_view(tag).starts_with("id_") &&
                             weechat_strcasecmp(tag + 3, retract_id) == 0)
                         {
-                            // Found the message to retract - update it with tombstone
-                            // Create tombstone text
-                            auto tombstone = fmt::format("{}[Message deleted]{}",
-                                                         weechat_color("darkgray"),
-                                                         weechat_color("resetcolor"));
-                            
-                            // Update the line with tombstone
-                            struct t_hashtable *hashtable = weechat_hashtable_new(8,
-                                WEECHAT_HASHTABLE_STRING,
-                                WEECHAT_HASHTABLE_STRING,
-                                nullptr, nullptr);
-                            weechat_hashtable_set(hashtable, "message", tombstone.c_str());
-                            weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,notify_none");
-                            weechat_hdata_update(hdata_line_data, line_data, hashtable);
-                            weechat_hashtable_free(hashtable);
-                            
-                            // Print notification
-                            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                                "%s%s retracted a message",
-                                weechat_prefix("network"),
-                                from_bare);
-                            
-                            return 1;
+                            id_matched = true;
+                            break;
                         }
+                    }
+
+                    if (id_matched)
+                    {
+                        // XEP-0424 §5 MUST: sender verification.
+                        // Primary method: nick_ tag match.
+                        // Secondary (MUC semi-anon): occupant_id_ tag match.
+                        bool sender_ok = false;
+
+                        if (retract_occ_id)
+                        {
+                            // Occupant-id available and room is trusted — use it.
+                            // It is robust against nick changes.
+                            std::string occ_needle =
+                                std::string("occupant_id_") + retract_occ_id;
+                            for (int chk = 0; chk < tags_count && !sender_ok; chk++)
+                            {
+                                str_tag = fmt::format("{}|tags_array", chk);
+                                const char *t = weechat_hdata_string(hdata_line_data,
+                                                                     line_data, str_tag.c_str());
+                                if (t && weechat_strcasecmp(t, occ_needle.c_str()) == 0)
+                                    sender_ok = true;
+                            }
+                        }
+                        else
+                        {
+                            // Fall back to nick_ tag comparison.
+                            for (int chk = 0; chk < tags_count && !sender_ok; chk++)
+                            {
+                                str_tag = fmt::format("{}|tags_array", chk);
+                                const char *t = weechat_hdata_string(hdata_line_data,
+                                                                     line_data, str_tag.c_str());
+                                if (t && std::string_view(t).starts_with("nick_") &&
+                                    weechat_strcasecmp(t + 5, retract_nick) == 0)
+                                    sender_ok = true;
+                            }
+                        }
+
+                        if (!sender_ok)
+                        {
+                            // Sender mismatch — silently drop the spoofed retraction.
+                            break;
+                        }
+
+                        // Found the message to retract - update it with tombstone
+                        auto tombstone = fmt::format("{}[Message deleted]{}",
+                                                     weechat_color("darkgray"),
+                                                     weechat_color("resetcolor"));
+
+                        struct t_hashtable *hashtable = weechat_hashtable_new(8,
+                            WEECHAT_HASHTABLE_STRING,
+                            WEECHAT_HASHTABLE_STRING,
+                            nullptr, nullptr);
+                        weechat_hashtable_set(hashtable, "message", tombstone.c_str());
+                        weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,notify_none");
+                        weechat_hdata_update(hdata_line_data, line_data, hashtable);
+                        weechat_hashtable_free(hashtable);
+
+                        // Print notification
+                        weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                            "%s%s retracted a message",
+                            weechat_prefix("network"),
+                            from_bare);
+
+                        return 1;
                     }
                 }
 
@@ -2363,13 +2436,13 @@ message_handler_after_omemo:
                                                   last_line, "prev_line");
             }
         }
-        
+
         // If we didn't find the message, still print notification
         weechat_printf_date_tags(channel->buffer, 0, "notify_none",
             "%s%s retracted a message (not found in buffer)",
             weechat_prefix("network"),
             from_bare);
-        
+
         return 1;
     }
 
@@ -2598,6 +2671,25 @@ message_handler_after_omemo:
         {
             weechat_string_dyn_concat(dyn_tags, ",stanza_id_by_", -1);
             weechat_string_dyn_concat(dyn_tags, stanza_id_by, -1);
+        }
+    }
+    // XEP-0421: Occupant Identifiers — store occupant_id_ tag for MUC messages.
+    // Per §4 MUST: only trust the occupant-id if the room advertises
+    // urn:xmpp:occupant-id:0 via disco#info (otherwise a malicious client
+    // could forge the element before it reaches the MUC).
+    if (is_muc_channel && from_bare &&
+        account.peer_supports_feature(from_bare, "urn:xmpp:occupant-id:0"))
+    {
+        xmpp_stanza_t *occ_id_elem = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "occupant-id", "urn:xmpp:occupant-id:0");
+        if (occ_id_elem)
+        {
+            const char *occ_id = xmpp_stanza_get_attribute(occ_id_elem, "id");
+            if (occ_id && *occ_id)
+            {
+                weechat_string_dyn_concat(dyn_tags, ",occupant_id_", -1);
+                weechat_string_dyn_concat(dyn_tags, occ_id, -1);
+            }
         }
     }
     // XEP-0380: Store encryption method if advertised
@@ -3463,8 +3555,9 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
         "urn:xmpp:message-correct:0",
         "urn:xmpp:message-retract:1",
         "urn:xmpp:message-moderate:1",
-        "urn:xmpp:fasten:0",
-        "urn:xmpp:reactions:0",
+         "urn:xmpp:fasten:0",
+         "urn:xmpp:occupant-id:0",
+         "urn:xmpp:reactions:0",
         "urn:xmpp:reply:0",
         "urn:xmpp:sid:0",
         "urn:xmpp:styling:0",

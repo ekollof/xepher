@@ -271,6 +271,7 @@ struct urn {
             struct conditions { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:muc:conditions:1") {} }; };
         };
         struct notification_settings { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:notification-settings:1") {} }; };
+        struct occupant_id { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:occupant-id:0") {} }; };
         struct omemo { struct _2 : public xmlns { _2() : xmlns("urn:xmpp:omemo:2") {} }; };
         struct tm { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:tm:1") {} }; };
         struct atm { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:atm:1") {} }; };

@@ -195,6 +195,7 @@ namespace stanza {
 #include "xep-0352.inl"
 #include "xep-0359.inl"
 #include "xep-0382.inl"
+#include "xep-0421.inl"
 #include "xep-0422.inl"
 #include "xep-0424.inl"
 #include "xep-0425.inl"
@@ -235,6 +236,7 @@ namespace stanza {
                      public xep0333::message,
                      public xep0359::message,
                      public xep0382::message,
+                     public xep0421::message,
                      public xep0422::message,
                      public xep0424::message,
                      public xep0425::message,
@@ -260,7 +262,8 @@ namespace stanza {
     };
 
     struct presence : virtual public spec,
-                      public xep0045::presence {
+                      public xep0045::presence,
+                      public xep0421::presence {
         presence() : spec("presence") {}
 
         presence& id(std::string_view s) { attr("id", s); return *this; }
