@@ -180,6 +180,13 @@ int command__omemo(const void *pointer, void *data,
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
                 return WEECHAT_RC_OK;
             }
+            // XEP-0450 §4.2: broadcast <distrust> to own devices and peer before
+            // wiping local keys so other clients learn the revocation decision.
+            if (weechat::config::instance
+                && weechat_config_boolean(weechat::config::instance->look.omemo_atm))
+            {
+                ptr_account->omemo.send_atm_distrust_pub(*ptr_account, argv[2]);
+            }
             // Remove stored identity keys → next message triggers TOFU re-store
             ptr_account->omemo.distrust_jid(buffer, argv[2]);
             return WEECHAT_RC_OK;
