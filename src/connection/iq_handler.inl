@@ -80,16 +80,18 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     if (type && (weechat_strcasecmp(type, "result") == 0 || weechat_strcasecmp(type, "error") == 0))
     {
         const char *stanza_id = xmpp_stanza_get_id(stanza);
-        if (stanza_id && account.user_ping_queries.count(stanza_id))
+        auto ping_it = stanza_id ? account.user_ping_queries.find(stanza_id)
+                                 : account.user_ping_queries.end();
+        if (ping_it != account.user_ping_queries.end())
         {
-            time_t start_time = account.user_ping_queries[stanza_id];
+            time_t start_time = ping_it->second;
             time_t now = time(nullptr);
             long rtt_ms = (now - start_time) * 1000;  // Convert to milliseconds
-            
-            account.user_ping_queries.erase(stanza_id);
-            
+
+            account.user_ping_queries.erase(ping_it);
+
             const char *from_jid = from ? from : account.jid().data();
-            
+
             // Check if this is a MUC self-ping (XEP-0410)
             bool is_muc_selfping = false;
             std::string room_jid;
@@ -101,7 +103,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 {
                     room_jid = from_str.substr(0, slash_pos);
                     std::string resource = from_str.substr(slash_pos + 1);
-                    
+
                     // Check if this is our own nickname in a MUC
                     if (resource == account.nickname())
                     {
@@ -113,7 +115,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     }
                 }
             }
-            
+
             if (weechat_strcasecmp(type, "result") == 0)
             {
                 if (is_muc_selfping)
@@ -183,7 +185,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     return true;
 }
     }
-    
+
     // XEP-0441: MAM Preferences — handle <prefs xmlns='urn:xmpp:mam:2'> result/error
     if (id && account.mam_prefs_queries.count(id))
     {
