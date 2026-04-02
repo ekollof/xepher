@@ -138,6 +138,7 @@ void request_devicelist(weechat::account &account, std::string_view jid)
     const std::string target_jid = normalize_bare_jid(account.context, jid);
     if (account.omemo.missing_omemo2_devicelist.count(target_jid) != 0)
         return;
+    account.omemo.missing_omemo2_devicelist.insert(target_jid);
 
     const std::string uuid = stanza::uuid(account.context);
     if (!uuid.empty())
@@ -512,6 +513,7 @@ void request_legacy_devicelist(weechat::account &account, std::string_view jid)
     const std::string target_jid = normalize_bare_jid(account.context, jid);
     if (account.omemo.missing_legacy_devicelist.count(target_jid) != 0)
         return;
+    account.omemo.missing_legacy_devicelist.insert(target_jid);
 
     const std::string uuid = stanza::uuid(account.context);
     if (!uuid.empty())
