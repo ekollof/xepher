@@ -767,8 +767,8 @@
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0428.html' />
         <xmpp:status>complete</xmpp:status>
-        <xmpp:version>0.2.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Fallback Indication - sent alongside retraction stanzas; parsed on receive</xmpp:note>
+        <xmpp:version>0.2.1</xmpp:version>
+        <xmpp:note xml:lang='en'>Fallback Indication - sent alongside retraction and reply stanzas; [start,end) byte range parsed on receive per §2.2</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -776,8 +776,8 @@
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0444.html' />
         <xmpp:status>complete</xmpp:status>
-        <xmpp:version>0.3.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Message Reactions - /react command; reactions appended to original message line</xmpp:note>
+        <xmpp:version>0.2.1</xmpp:version>
+        <xmpp:note xml:lang='en'>Message Reactions - /react command; reactions appended to original message line; empty &lt;reactions&gt; removes reaction display per §3.2</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
