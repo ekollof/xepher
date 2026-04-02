@@ -11,7 +11,7 @@
 
 namespace stanza {
 
-    /* Message Processing Hints (XEP-0333) */
+    /* Message Processing Hints (XEP-0334) and Chat Markers (XEP-0333 v1.0+) */
     struct xep0333 {
 
         // <store xmlns='urn:xmpp:hints'/>
@@ -35,14 +35,6 @@ namespace stanza {
             }
         };
 
-        // <received xmlns='urn:xmpp:chat-markers:0' id='...'/>  (XEP-0333 Chat Markers)
-        struct markers_received : virtual public spec {
-            markers_received() : spec("received") {
-                xmlns<urn::xmpp::chat_markers::_0>();
-            }
-            markers_received& id(std::string_view s) { attr("id", s); return *this; }
-        };
-
         // <displayed xmlns='urn:xmpp:chat-markers:0' id='...'/>  (XEP-0333 Chat Markers)
         struct markers_displayed : virtual public spec {
             markers_displayed() : spec("displayed") {
@@ -58,12 +50,6 @@ namespace stanza {
             message& store() { xep0333::store s; child(s); return *this; }
             message& no_store() { xep0333::no_store ns; child(ns); return *this; }
             message& no_permanent_store() { xep0333::no_permanent_store nps; child(nps); return *this; }
-            message& chat_marker_received(std::string_view msg_id) {
-                xep0333::markers_received r;
-                r.id(msg_id);
-                child(r);
-                return *this;
-            }
             message& chat_marker_displayed(std::string_view msg_id) {
                 xep0333::markers_displayed d;
                 d.id(msg_id);

@@ -1576,13 +1576,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
             }
         }
 
-        // XEP-0333: Chat Markers — handle <displayed> and <read> from others
+        // XEP-0333: Chat Markers — handle <displayed> from others (v1.0+; <read> removed)
         {
             xmpp_stanza_t *marker_displayed = xmpp_stanza_get_child_by_name_and_ns(
                 stanza, "displayed", "urn:xmpp:chat-markers:0");
-            xmpp_stanza_t *marker_read = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "read", "urn:xmpp:chat-markers:0");
-            xmpp_stanza_t *marker = marker_displayed ? marker_displayed : marker_read;
+            xmpp_stanza_t *marker = marker_displayed;
             if (marker)
             {
                 const char *marker_from = xmpp_stanza_get_from(stanza);
@@ -1720,7 +1718,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level)
             msg.receipt_received(unread->id);
 
         if (markable)
-            msg.chat_marker_received(unread->id);
+            msg.chat_marker_displayed(unread->id);
 
         if (unread->thread.has_value())
             msg.thread(*unread->thread);
