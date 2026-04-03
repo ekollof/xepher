@@ -26,6 +26,10 @@ constexpr std::string_view kSignedPreKeyTimestamp = "signed_pre_key:generated_at
 // Rotate the signed prekey after 7 days (Signal spec recommendation: 1–4 weeks).
 constexpr std::int64_t kSignedPreKeyRotationSecs = 7 * 24 * 60 * 60;
 constexpr std::string_view kPrekeys = "prekeys";
+// Tracks the highest pre-key ID ever issued so that after a signed-prekey
+// rotation we continue numbering rather than restarting at kPreKeyStart.
+// Absent on first run — treated as kPreKeyStart - 1 (i.e., start at kPreKeyStart).
+constexpr std::string_view kMaxPreKeyId = "max_pre_key_id";
 constexpr std::string_view kOmemoPayloadInfo = "OMEMO Payload";
 constexpr std::uint32_t kPreKeyStart = 1;
 constexpr std::uint32_t kPreKeyCount = 100;

@@ -674,34 +674,52 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
             return nullptr;
     }
 
-    // Encrypt for own devices (other than the current one), per XEP-0384 §7.2.
+    // Encrypt for own devices per XEP-0384 §7.2 so carbon copies can be
+    // decrypted on other sessions, and so the sender's own device can decrypt
+    // a self-addressed message.
+    //
+    // When own_jid != target_jid: the first block above already encrypted for
+    // recipient devices; now add keys for our other devices (exclude the
+    // current device via include_own_device=false — we don't need to encrypt
+    // to ourselves since we have the plaintext).  include_own_device=true
+    // ensures the current device *is* included when needed (see below).
+    //
+    // When own_jid == target_jid (self-message): the first block encrypted for
+    // all own devices with include_own_device=false, meaning the current device
+    // was skipped.  Do a second pass with include_own_device=true so the
+    // current device also gets a key (required for self-send decryption and
+    // carbon-copy consistency — Profanity always encrypts for all devices
+    // including the sender's).
     {
-        if (own_jid != target_jid)
+        const auto own_devicelist_omemo2 = load_string(*this, key_for_devicelist(own_jid));
+        const auto *own_devicelist_to_use =
+            (own_devicelist_omemo2 && !own_devicelist_omemo2->empty())
+                ? &*own_devicelist_omemo2
+                : nullptr;
+
+        std::optional<std::string> own_devicelist_axolotl;
+        if (!own_devicelist_to_use)
         {
-            const auto own_devicelist_omemo2 = load_string(*this, key_for_devicelist(own_jid));
-            const auto *own_devicelist_to_use =
-                (own_devicelist_omemo2 && !own_devicelist_omemo2->empty())
-                    ? &*own_devicelist_omemo2
-                    : nullptr;
+            own_devicelist_axolotl = load_string(*this, key_for_axolotl_devicelist(own_jid));
+            if (own_devicelist_axolotl && !own_devicelist_axolotl->empty())
+                own_devicelist_to_use = &*own_devicelist_axolotl;
+        }
 
-            std::optional<std::string> own_devicelist_axolotl;
-            if (!own_devicelist_to_use)
+        if (own_devicelist_to_use)
+        {
+            int count = 0;
+            // When sending to self: include_own_device=true so the current
+            // device (skipped by the first pass) also gets a key.
+            // When sending to another JID: include_own_device=true here too
+            // so multi-device sync includes our own current device, matching
+            // Profanity's behaviour of encrypting for every device including
+            // the sender's active one.
+            auto own_ks = build_keys_spec(own_jid.c_str(), *own_devicelist_to_use, count,
+                                          nullptr, /*include_own_device=*/true);
+            if (own_ks)
             {
-                own_devicelist_axolotl = load_string(*this, key_for_axolotl_devicelist(own_jid));
-                if (own_devicelist_axolotl && !own_devicelist_axolotl->empty())
-                    own_devicelist_to_use = &*own_devicelist_axolotl;
-            }
-
-            if (own_devicelist_to_use)
-            {
-                int count = 0;
-                auto own_ks = build_keys_spec(own_jid.c_str(), *own_devicelist_to_use, count,
-                                              nullptr, /*include_own_device=*/true);
-                if (own_ks)
-                {
-                    header_spec.add_keys(*own_ks);
-                    added_any_key = true;
-                }
+                header_spec.add_keys(*own_ks);
+                added_any_key = true;
             }
         }
     }
@@ -858,7 +876,9 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
         if (incomplete_recipient_count > 0)
             return nullptr;
 
-        if (own_jid != target_jid)
+        // Encrypt for own devices (carbon copy sync + self-message support).
+        // Remove the own_jid != target_jid guard so self-addressed messages
+        // also produce a key for the current device (same fix as encode()).
         {
             const auto own_legacy_devicelist = load_string(*this, key_for_axolotl_devicelist(own_jid));
             if (own_legacy_devicelist && !own_legacy_devicelist->empty())

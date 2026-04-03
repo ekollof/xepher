@@ -2092,7 +2092,9 @@ message_handler_after_omemo:
     // XEP-0382: Spoiler Messages — display hint before the body
     xmpp_stanza_t *spoiler_elem = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "spoiler", "urn:xmpp:spoiler:0");
-    const char *spoiler_hint = spoiler_elem ? xmpp_stanza_get_text(spoiler_elem) : nullptr;
+    xmpp_string_guard spoiler_hint_g(account.context,
+        spoiler_elem ? xmpp_stanza_get_text(spoiler_elem) : nullptr);
+    const char *spoiler_hint = spoiler_hint_g.ptr;
 
     // XEP-0466: Ephemeral Messages — detect timer value
     xmpp_stanza_t *ephemeral_elem = xmpp_stanza_get_child_by_name_and_ns(
@@ -3202,6 +3204,9 @@ message_handler_after_omemo:
                 if (std::string_view(sname) == "reference"
                     && std::string_view(sns) == "urn:xmpp:reference:0")
                 {
+                    // XEP-0385: <reference type='data' uri='https://...'/>
+                    const char *uri = xmpp_stanza_get_attribute(src, "uri");
+                    if (uri) sims_url = uri;
                 }
                 else if (std::string_view(sname) == "url-data")
                 {
@@ -3294,6 +3299,17 @@ message_handler_after_omemo:
                 if (std::string_view(sname) == "encrypted" && sns
                     && std::string_view(sns) == "urn:xmpp:esfs:0")
                 {
+                    // XEP-0448 §4: cipher attribute identifies the algorithm.
+                    // We only support AES-256-GCM/NoPadding; skip other ciphers.
+                    const char *cipher_attr = xmpp_stanza_get_attribute(src, "cipher");
+                    if (!cipher_attr || std::string_view(cipher_attr)
+                            != "urn:xmpp:ciphers:aes-256-gcm-nopadding:0")
+                    {
+                        XDEBUG("XEP-0448: unsupported cipher '%s', skipping encrypted source",
+                               cipher_attr ? cipher_attr : "(none)");
+                        break; // still prefer encrypted source, even if unsupported
+                    }
+
                     // Extract key, iv, and inner url-data target.
                     std::string esfs_key, esfs_iv, esfs_ct_url;
                     xmpp_stanza_t *key_el = xmpp_stanza_get_child_by_name(src, "key");

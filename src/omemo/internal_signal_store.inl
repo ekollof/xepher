@@ -422,15 +422,31 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
             return;
     }
 
+    // Determine the starting ID for the new pre-key batch.
+    // On first run kMaxPreKeyId is absent — start at kPreKeyStart (1).
+    // After SPK rotation (or index loss), continue from max_id + 1 so we
+    // never reuse IDs that may still be in-flight on a peer's bundle cache.
+    // This mirrors Profanity's max_pre_key_id + 1 approach.
+    const auto max_id_str = load_string(self, kMaxPreKeyId);
+    const std::uint32_t prev_max = max_id_str
+        ? parse_uint32(*max_id_str).value_or(kPreKeyStart - 1)
+        : kPreKeyStart - 1;
+    // Avoid wrapping past kMaxOmemoDeviceId; restart at kPreKeyStart if we
+    // would overflow.
+    const std::uint32_t start_id = (prev_max + 1 > kMaxOmemoDeviceId - kPreKeyCount)
+        ? kPreKeyStart
+        : prev_max + 1;
+
     signal_protocol_key_helper_pre_key_list_node *pre_key_head_raw = nullptr;
     if (signal_protocol_key_helper_generate_pre_keys(
-            &pre_key_head_raw, kPreKeyStart, kPreKeyCount, self.context) != 0)
+            &pre_key_head_raw, start_id, kPreKeyCount, self.context) != 0)
     {
         return;
     }
 
     unique_pre_key_list pre_key_head {pre_key_head_raw};
     std::vector<std::string> serialized_prekeys;
+    std::uint32_t new_max_id = prev_max;
     for (auto *node = pre_key_head.get(); node;
          node = signal_protocol_key_helper_key_list_next(node))
     {
@@ -447,9 +463,13 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
                     signal_buffer_const_data(pre_key_record.get()),
                     signal_buffer_len(pre_key_record.get()));
 
+        const std::uint32_t this_id = session_pre_key_get_id(pre_key);
+        if (this_id > new_max_id)
+            new_max_id = this_id;
+
         serialized_prekeys.push_back(fmt::format(
             "{},{}",
-            session_pre_key_get_id(pre_key),
+            this_id,
             serialize_public_key(context, pre_key_public)));
     }
 
@@ -463,6 +483,9 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
     }
 
     store_string(self, kPrekeys, join(serialized_prekeys, ";"));
+    // Persist the new high-water mark so the next rotation or regeneration
+    // continues from here rather than restarting at kPreKeyStart.
+    store_string(self, kMaxPreKeyId, fmt::format("{}", new_max_id));
 }
 
 // Generate a fresh pre-key with the same ID as `used_id`, store it to LMDB,
@@ -569,8 +592,22 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
         return false;
     }
 
+    // Pick a uniformly random pre-key from the bundle (Signal protocol best
+    // practice and matches Profanity's random index selection).  Using front()
+    // would let the recipient correlate initiator identity via key-consumption
+    // order, which is a privacy leak.
+    const std::size_t pk_count = bundle->prekeys.size();
+    std::size_t pk_index = 0;
+    if (pk_count > 1)
+    {
+        thread_local std::mt19937 rng { std::random_device{}() };
+        std::uniform_int_distribution<std::size_t> dist { 0, pk_count - 1 };
+        pk_index = dist(rng);
+    }
+    const auto &chosen_prekey = bundle->prekeys[pk_index];
+
     const auto signed_pre_key_id = parse_uint32(bundle->signed_pre_key_id).value_or(0);
-    const auto pre_key_id = parse_uint32(bundle->prekeys.front().first).value_or(0);
+    const auto pre_key_id = parse_uint32(chosen_prekey.first).value_or(0);
     if (signed_pre_key_id == 0 || pre_key_id == 0)
     {
         weechat_printf(nullptr,
@@ -583,7 +620,7 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
 
     auto identity_key = deserialize_public_key(bundle->identity_key, self.context);
     auto signed_pre_key = deserialize_public_key(bundle->signed_pre_key, self.context);
-    auto one_time_pre_key = deserialize_public_key(bundle->prekeys.front().second, self.context);
+    auto one_time_pre_key = deserialize_public_key(chosen_prekey.second, self.context);
     if (!identity_key || !signed_pre_key || !one_time_pre_key)
     {
         weechat_printf(nullptr,
