@@ -23,6 +23,56 @@ int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaini
         XDEBUG("Client state: inactive (idle for {} seconds)", idle_time);
     }
 
+    // XEP-0319: Last User Interaction in Presence
+    // When going idle, broadcast presence with <idle since='...'/>.
+    // Only do this once per idle transition (not on every timer tick).
+    if (idle_time > 300 && !account->xep0319_idle_sent)
+    {
+        // Format idle-since as ISO 8601 UTC
+        struct tm *tm_idle = gmtime(&account->last_activity);
+        std::string since_str = fmt::format("{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z",
+            tm_idle->tm_year + 1900, tm_idle->tm_mon + 1, tm_idle->tm_mday,
+            tm_idle->tm_hour, tm_idle->tm_min, tm_idle->tm_sec);
+        struct idle_pres_spec : stanza::spec {
+            idle_pres_spec(std::string_view from_jid, std::string_view since) : spec("presence") {
+                attr("from", from_jid);
+                struct idle_el : stanza::spec {
+                    idle_el(std::string_view s) : spec("idle") {
+                        xmlns<urn::xmpp::idle::_1>();
+                        attr("since", s);
+                    }
+                } idle_child(since);
+                child(idle_child);
+            }
+        } idle_pres(account->jid(), since_str);
+        account->connection.send(idle_pres.build(account->context).get());
+        account->xep0319_idle_sent = true;
+        XDEBUG("XEP-0319: sent idle presence (since={})", since_str);
+    }
+
+    // XEP-0410 / XEP-0199: Sweep stale ping queries — if a ping has not
+    // received a result or error within 30 seconds, treat it as a timeout.
+    // For MUC self-pings: a dropped ping is functionally equivalent to
+    // <not-acceptable/> — we can no longer confirm we are still in the room.
+    {
+        static constexpr time_t PING_TIMEOUT_SECS = 30;
+        std::vector<std::string> stale_ids;
+        for (auto &[pid, start_time] : account->user_ping_queries)
+        {
+            if (now - start_time > PING_TIMEOUT_SECS)
+                stale_ids.push_back(pid);
+        }
+        for (auto &pid : stale_ids)
+        {
+            account->user_ping_queries.erase(pid);
+            weechat_printf(account->buffer,
+                           "%sPing %s timed out (no response within %ld s)",
+                           weechat_prefix("error"),
+                           pid.c_str(),
+                           PING_TIMEOUT_SECS);
+        }
+    }
+
     return WEECHAT_RC_OK;
 }
 
@@ -54,6 +104,20 @@ int weechat::account::activity_cb(const void *pointer, void *data,
                                 .get());
         account->csi_active = true;
         XDEBUG("Client state: active");
+    }
+
+    // XEP-0319: if we previously sent idle presence, send a fresh plain
+    // presence (without <idle>) to signal that the user is no longer idle.
+    if (account->xep0319_idle_sent)
+    {
+        struct active_pres_spec : stanza::spec {
+            active_pres_spec(std::string_view from_jid) : spec("presence") {
+                attr("from", from_jid);
+            }
+        } active_pres(account->jid());
+        account->connection.send(active_pres.build(account->context).get());
+        account->xep0319_idle_sent = false;
+        XDEBUG("XEP-0319: cleared idle presence (user active)");
     }
 
     return WEECHAT_RC_OK;
