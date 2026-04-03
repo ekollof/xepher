@@ -260,22 +260,18 @@ int command__adhoc(const void *pointer, void *data,
     info.session_id = session_id;
     ptr_account->adhoc_queries[submit_id] = info;
 
-    // Build IQ with command + x:data form using RAII shared_ptr stanzas
+    // Build IQ with command + x:data form using stanza builder helpers
     {
         xmpp_ctx_t *ctx = ptr_account->context;
         std::shared_ptr<xmpp_stanza_t> iq {xmpp_iq_new(ctx, "set", submit_id.c_str()),
                                             xmpp_stanza_release};
         xmpp_stanza_set_to(iq.get(), target_jid);
-        std::shared_ptr<xmpp_stanza_t> command {xmpp_stanza_new(ctx), xmpp_stanza_release};
-        xmpp_stanza_set_name(command.get(), "command");
-        xmpp_stanza_set_ns(command.get(), "http://jabber.org/protocol/commands");
-        xmpp_stanza_set_attribute(command.get(), "node", node);
-        xmpp_stanza_set_attribute(command.get(), "sessionid", session_id);
-        xmpp_stanza_set_attribute(command.get(), "action", "execute");
-        std::shared_ptr<xmpp_stanza_t> x_form {xmpp_stanza_new(ctx), xmpp_stanza_release};
-        xmpp_stanza_set_name(x_form.get(), "x");
-        xmpp_stanza_set_ns(x_form.get(), "jabber:x:data");
-        xmpp_stanza_set_attribute(x_form.get(), "type", "submit");
+        auto command = stanza_node(ctx, "command",
+                                   "http://jabber.org/protocol/commands",
+                                   {{"node", node},
+                                    {"sessionid", session_id},
+                                    {"action", "execute"}});
+        auto x_form = stanza_node(ctx, "x", "jabber:x:data", {{"type", "submit"}});
         for (int i = 4; i < argc; i++)
         {
             std::string_view arg_sv(argv[i]);
@@ -283,14 +279,9 @@ int command__adhoc(const void *pointer, void *data,
             if (eq_pos == std::string_view::npos) continue;
             std::string field_var(arg_sv.substr(0, eq_pos));
             const char *field_val = argv[i] + eq_pos + 1;
-            std::shared_ptr<xmpp_stanza_t> field {xmpp_stanza_new(ctx), xmpp_stanza_release};
-            xmpp_stanza_set_name(field.get(), "field");
-            xmpp_stanza_set_attribute(field.get(), "var", field_var.c_str());
-            std::shared_ptr<xmpp_stanza_t> value {xmpp_stanza_new(ctx), xmpp_stanza_release};
-            xmpp_stanza_set_name(value.get(), "value");
-            std::shared_ptr<xmpp_stanza_t> vtext {xmpp_stanza_new(ctx), xmpp_stanza_release};
-            xmpp_stanza_set_text(vtext.get(), field_val);
-            xmpp_stanza_add_child(value.get(), vtext.get());
+            auto field = stanza_node(ctx, "field", nullptr,
+                                     {{"var", field_var.c_str()}});
+            auto value = stanza_text_node(ctx, "value", field_val);
             xmpp_stanza_add_child(field.get(), value.get());
             xmpp_stanza_add_child(x_form.get(), field.get());
         }
@@ -828,36 +819,23 @@ int command__feed(const void *pointer, void *data,
                                                 acct_domain.empty() ? "xmpp" : acct_domain,
                                                 date_buf, item_uuid);
 
-        // Helper: build <tag>text</tag> with RAII
-        auto make_text_el = [&](const char *tag, const char *text)
+        // Helper: build <tag>text</tag> with stanza builder
+        auto make_text_el = [&](const char *tag, const char *text_content)
             -> std::shared_ptr<xmpp_stanza_t> {
-            std::shared_ptr<xmpp_stanza_t> el {xmpp_stanza_new(ptr_account->context),
-                                                xmpp_stanza_release};
-            xmpp_stanza_set_name(el.get(), tag);
-            std::shared_ptr<xmpp_stanza_t> t {xmpp_stanza_new(ptr_account->context),
-                                               xmpp_stanza_release};
-            xmpp_stanza_set_text(t.get(), text);
-            xmpp_stanza_add_child(el.get(), t.get());
-            return el;
+            return stanza_text_node(ptr_account->context, tag, text_content);
         };
 
-        std::shared_ptr<xmpp_stanza_t> entry {xmpp_stanza_new(ptr_account->context),
-                                               xmpp_stanza_release};
-        xmpp_stanza_set_name(entry.get(), "entry");
-        xmpp_stanza_set_ns(entry.get(), "http://www.w3.org/2005/Atom");
+        auto entry = stanza_node(ptr_account->context, "entry",
+                                 "http://www.w3.org/2005/Atom");
 
         // <title>Shared: item-id [— comment]</title>
         {
             std::string repeat_title = rep_comment.empty()
                 ? fmt::format("Shared: {}", rep_item_id)
                 : fmt::format("Shared: {} — {}", rep_item_id, rep_comment);
-            std::shared_ptr<xmpp_stanza_t> title_el {xmpp_stanza_new(ptr_account->context),
-                                                       xmpp_stanza_release};
-            xmpp_stanza_set_name(title_el.get(), "title");
-            xmpp_stanza_set_attribute(title_el.get(), "type", "text");
-            std::shared_ptr<xmpp_stanza_t> t {xmpp_stanza_new(ptr_account->context),
-                                               xmpp_stanza_release};
-            xmpp_stanza_set_text(t.get(), repeat_title.c_str());
+            auto title_el = stanza_node(ptr_account->context, "title", nullptr,
+                                        {{"type", "text"}});
+            auto t = stanza_text_node(ptr_account->context, "", repeat_title.c_str());
             xmpp_stanza_add_child(title_el.get(), t.get());
             xmpp_stanza_add_child(entry.get(), title_el.get());
         }
@@ -870,9 +848,7 @@ int command__feed(const void *pointer, void *data,
         {
             const std::string my_bare = ptr_account->jid();
             const std::string xmpp_uri = fmt::format("xmpp:{}", my_bare);
-            std::shared_ptr<xmpp_stanza_t> author_el {xmpp_stanza_new(ptr_account->context),
-                                                        xmpp_stanza_release};
-            xmpp_stanza_set_name(author_el.get(), "author");
+            auto author_el = stanza_node(ptr_account->context, "author");
             xmpp_stanza_add_child(author_el.get(), make_text_el("name", my_bare.c_str()).get());
             xmpp_stanza_add_child(author_el.get(), make_text_el("uri", xmpp_uri.c_str()).get());
             xmpp_stanza_add_child(entry.get(), author_el.get());
@@ -882,11 +858,8 @@ int command__feed(const void *pointer, void *data,
         {
             const std::string rep_feed_key = fmt::format("{}/{}", rep_service, rep_node);
             const std::string rep_atom_id  = ptr_account->feed_atom_id_get(rep_feed_key, rep_item_id);
-            std::shared_ptr<xmpp_stanza_t> via_el {xmpp_stanza_new(ptr_account->context),
-                                                    xmpp_stanza_release};
-            xmpp_stanza_set_name(via_el.get(), "link");
-            xmpp_stanza_set_attribute(via_el.get(), "rel",  "via");
-            xmpp_stanza_set_attribute(via_el.get(), "href", via_uri.c_str());
+            auto via_el = stanza_node(ptr_account->context, "link", nullptr,
+                                      {{"rel", "via"}, {"href", via_uri.c_str()}});
             if (!rep_atom_id.empty())
                 xmpp_stanza_set_attribute(via_el.get(), "ref", rep_atom_id.c_str());
             xmpp_stanza_add_child(entry.get(), via_el.get());
@@ -895,25 +868,18 @@ int command__feed(const void *pointer, void *data,
         // Optional <content>comment</content>
         if (!rep_comment.empty())
         {
-            std::shared_ptr<xmpp_stanza_t> content_el {xmpp_stanza_new(ptr_account->context),
-                                                         xmpp_stanza_release};
-            xmpp_stanza_set_name(content_el.get(), "content");
-            xmpp_stanza_set_attribute(content_el.get(), "type", "text");
-            std::shared_ptr<xmpp_stanza_t> t {xmpp_stanza_new(ptr_account->context),
-                                               xmpp_stanza_release};
-            xmpp_stanza_set_text(t.get(), rep_comment.c_str());
+            auto content_el = stanza_node(ptr_account->context, "content", nullptr,
+                                          {{"type", "text"}});
+            auto t = stanza_text_node(ptr_account->context, "", rep_comment.c_str());
             xmpp_stanza_add_child(content_el.get(), t.get());
             xmpp_stanza_add_child(entry.get(), content_el.get());
         }
 
         // <generator>
         {
-            std::shared_ptr<xmpp_stanza_t> gen_el {xmpp_stanza_new(ptr_account->context),
-                                                     xmpp_stanza_release};
-            xmpp_stanza_set_name(gen_el.get(), "generator");
-            xmpp_stanza_set_attribute(gen_el.get(), "uri",
-                "https://github.com/ekollof/xepher");
-            xmpp_stanza_set_attribute(gen_el.get(), "version", WEECHAT_XMPP_PLUGIN_VERSION);
+            auto gen_el = stanza_node(ptr_account->context, "generator", nullptr,
+                                      {{"uri", "https://github.com/ekollof/xepher"},
+                                       {"version", WEECHAT_XMPP_PLUGIN_VERSION}});
             xmpp_stanza_add_child(gen_el.get(), make_text_el("", "Xepher").get());
             xmpp_stanza_add_child(entry.get(), gen_el.get());
         }
@@ -935,10 +901,8 @@ int command__feed(const void *pointer, void *data,
             xmpp_stanza_t *pub = ps ? xmpp_stanza_get_child_by_name(ps, "publish") : nullptr;
             if (pub)
             {
-                std::shared_ptr<xmpp_stanza_t> item_s {xmpp_stanza_new(ptr_account->context),
-                                                         xmpp_stanza_release};
-                xmpp_stanza_set_name(item_s.get(), "item");
-                xmpp_stanza_set_id(item_s.get(), item_uuid.c_str());
+                auto item_s = stanza_node(ptr_account->context, "item", nullptr,
+                                          {{"id", item_uuid.c_str()}});
                 xmpp_stanza_add_child(item_s.get(), entry.get());
                 xmpp_stanza_add_child(pub, item_s.get());
             }

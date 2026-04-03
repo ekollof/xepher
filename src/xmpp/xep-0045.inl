@@ -116,12 +116,13 @@ namespace xml {
                 destroy(node& node) {
                     for (auto& child : node.get_children("reason"))
                         reason += child.get().text;
-                    if (auto attr = node.get_attr("target"))
-                        target = jid(node.context, *attr);
+                    // XEP-0045 §10.9: the successor room attribute is "jid", not "target"
+                    if (auto attr = node.get_attr("jid"))
+                        jid_ = jid(node.context, *attr);
                 };
 
                 std::string reason;
-                std::optional<jid> target;
+                std::optional<jid> jid_;
             };
 
             struct invite {

@@ -5,75 +5,75 @@
 #pragma once
 
 #include <strophe.h>
-#include "../strophe.hh"
+
+// stanza::* builder types are available because node.hh (which includes all
+// xep-NNNN.inl files) is included before this file in every translation unit.
 
 namespace xmpp { namespace xep0163 {
 
     // XEP-0163: Personal Eventing Protocol (PEP)
-    // PEP is simplified PubSub sent to user's bare JID
-    
-    // Generic PEP publish - publishes an item to a PEP node
-    // The 'to' address should be empty (defaults to user's own bare JID)
-    inline xmpp_stanza_t *publish_pep(xmpp_ctx_t *context, const char *node, 
-                                      xmpp_stanza_t *payload, const char *item_id = nullptr)
+    // PEP is simplified PubSub sent to user's bare JID.
+
+    // Generic PEP publish — publishes an item to a PEP node.
+    //
+    // payload: an already-allocated xmpp_stanza_t* that will be added as a
+    //          child of <item> (may be nullptr).  The caller retains ownership
+    //          of payload — this function does not release it.
+    // item_id: optional PubSub item id attribute.
+    //
+    // Returns a caller-owned xmpp_stanza_t* (call xmpp_stanza_release when done).
+    inline xmpp_stanza_t *publish_pep(xmpp_ctx_t *context, const char *node,
+                                      xmpp_stanza_t *payload,
+                                      const char *item_id = nullptr)
     {
-        xmpp_string_guard id(context, xmpp_uuid_gen(context));
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id.c_str());
-        
-        xmpp_stanza_t *pubsub = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(pubsub, "pubsub");
-        xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
-        
-        xmpp_stanza_t *publish = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(publish, "publish");
-        xmpp_stanza_set_attribute(publish, "node", node);
-        
-        xmpp_stanza_t *item = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(item, "item");
-        if (item_id)
-            xmpp_stanza_set_attribute(item, "id", item_id);
-        
-        if (payload)
+        // Build the skeleton with an empty <item>; attach payload and item_id
+        // after the tree is materialised (builder does not wrap raw stanzas).
+        auto sp = stanza::iq()
+            .type("set")
+            .id(stanza::uuid(context))
+            .pubsub(
+                stanza::xep0060::pubsub().publish(
+                    stanza::xep0060::publish(node).item(
+                        stanza::xep0060::item()
+                    )
+                )
+            )
+            .build(context);
+
+        // Walk the built tree to attach the optional item_id and payload.
+        xmpp_stanza_t *ps  = xmpp_stanza_get_child_by_name(sp.get(), "pubsub");
+        xmpp_stanza_t *pub = ps  ? xmpp_stanza_get_child_by_name(ps,  "publish") : nullptr;
+        xmpp_stanza_t *it  = pub ? xmpp_stanza_get_child_by_name(pub, "item")    : nullptr;
+        if (it)
         {
-            xmpp_stanza_add_child(item, payload);
+            if (item_id)
+                xmpp_stanza_set_attribute(it, "id", item_id);
+            if (payload)
+                xmpp_stanza_add_child(it, payload);
         }
-        
-        xmpp_stanza_add_child(publish, item);
-        xmpp_stanza_release(item);
-        
-        xmpp_stanza_add_child(pubsub, publish);
-        xmpp_stanza_release(publish);
-        
-        xmpp_stanza_add_child(iq, pubsub);
-        xmpp_stanza_release(pubsub);
-        
-        return iq;
+
+        xmpp_stanza_clone(sp.get());  // bump refcount; shared_ptr dtor drops its ref
+        return sp.get();              // caller owns one reference
     }
-    
-    // Subscribe to a PEP node (usually automatic via roster)
-    inline xmpp_stanza_t *subscribe_pep(xmpp_ctx_t *context, const char *node, 
-                                         const char *jid)
+
+    // Subscribe to a PEP node (usually automatic via roster).
+    // Returns a caller-owned xmpp_stanza_t* (call xmpp_stanza_release when done).
+    inline xmpp_stanza_t *subscribe_pep(xmpp_ctx_t *context, const char *node,
+                                        const char *jid)
     {
-        xmpp_string_guard id(context, xmpp_uuid_gen(context));
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id.c_str());
-        xmpp_stanza_set_to(iq, jid);
-        
-        xmpp_stanza_t *pubsub = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(pubsub, "pubsub");
-        xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
-        
-        xmpp_stanza_t *subscribe = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(subscribe, "subscribe");
-        xmpp_stanza_set_attribute(subscribe, "node", node);
-        xmpp_stanza_set_attribute(subscribe, "jid", jid);
-        
-        xmpp_stanza_add_child(pubsub, subscribe);
-        xmpp_stanza_release(subscribe);
-        
-        xmpp_stanza_add_child(iq, pubsub);
-        xmpp_stanza_release(pubsub);
-        
-        return iq;
+        auto sp = stanza::iq()
+            .type("set")
+            .id(stanza::uuid(context))
+            .to(jid)
+            .pubsub(
+                stanza::xep0060::pubsub().subscribe(
+                    stanza::xep0060::subscribe(node, jid)
+                )
+            )
+            .build(context);
+
+        xmpp_stanza_clone(sp.get());
+        return sp.get();
     }
 
 } }

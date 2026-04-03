@@ -7,41 +7,36 @@
 #include <optional>
 #include <string>
 #include <strophe.h>
-#include "../strophe.hh"
+
+// stanza::* builder types are available via the including translation unit.
 
 namespace xmpp { namespace xep0054 {
 
-    // XEP-0054: vcard-temp — build a vCard IQ get request
+    // XEP-0054: vcard-temp — build a vCard IQ get request.
+    // Returns a caller-owned xmpp_stanza_t* (call xmpp_stanza_release when done).
     inline xmpp_stanza_t *vcard_request(xmpp_ctx_t *context, const char *to)
     {
-        xmpp_string_guard id(context, xmpp_uuid_gen(context));
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", id.c_str());
-        if (to)
-            xmpp_stanza_set_to(iq, to);
+        // <vCard xmlns='vcard-temp'/>
+        struct vcard_spec : virtual public stanza::spec {
+            vcard_spec() : spec("vCard") {
+                attr("xmlns", "vcard-temp");
+            }
+        };
 
-        xmpp_stanza_t *vcard = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(vcard, "vCard");
-        xmpp_stanza_set_ns(vcard, "vcard-temp");
+        auto b = stanza::iq()
+            .type("get")
+            .id(stanza::uuid(context));
+        if (to) b.to(to);
 
-        xmpp_stanza_add_child(iq, vcard);
-        xmpp_stanza_release(vcard);
+        vcard_spec vc;
+        // stanza::iq doesn't have a vcard child method; add via pubsub-like
+        // workaround: build iq, then post-attach vCard.
+        auto sp = b.build(context);
+        auto vc_sp = vc.build(context);
+        xmpp_stanza_add_child(sp.get(), vc_sp.get());
 
-        return iq;
-    }
-
-    // Helper: append a simple text child element to parent if value is non-empty.
-    inline void _append_text_child(xmpp_ctx_t *ctx, xmpp_stanza_t *parent,
-                                   const char *name, const std::string &value)
-    {
-        if (value.empty()) return;
-        xmpp_stanza_t *el  = xmpp_stanza_new(ctx);
-        xmpp_stanza_set_name(el, name);
-        xmpp_stanza_t *txt = xmpp_stanza_new(ctx);
-        xmpp_stanza_set_text(txt, value.c_str());
-        xmpp_stanza_add_child(el, txt);
-        xmpp_stanza_release(txt);
-        xmpp_stanza_add_child(parent, el);
-        xmpp_stanza_release(el);
+        xmpp_stanza_clone(sp.get());
+        return sp.get();
     }
 
     // XEP-0054: vcard-temp — build a vCard IQ set (publish) request.
@@ -59,54 +54,63 @@ namespace xmpp { namespace xep0054 {
         std::optional<std::string> note;
     };
 
+    // Returns a caller-owned xmpp_stanza_t* (call xmpp_stanza_release when done).
     inline xmpp_stanza_t *vcard_set(xmpp_ctx_t *context, const vcard_fields &f)
     {
-        xmpp_string_guard id(context, xmpp_uuid_gen(context));
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "set", id.c_str());
+        // Build <vCard xmlns='vcard-temp'> inline using post-build tree mutation.
+        // The builder handles simple text children; for nested wrappers like
+        // <EMAIL><USERID>x</USERID></EMAIL> we use spec types below.
 
-        xmpp_stanza_t *vcard = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(vcard, "vCard");
-        xmpp_stanza_set_ns(vcard, "vcard-temp");
+        // Simple text-child element: <NAME>value</NAME>
+        struct text_el : virtual public stanza::spec {
+            text_el(std::string_view name, std::string_view val)
+                : spec(std::string(name)) { text(val); }
+        };
 
-        if (f.fn)       _append_text_child(context, vcard, "FN",       *f.fn);
-        if (f.nickname) _append_text_child(context, vcard, "NICKNAME", *f.nickname);
-        if (f.url)      _append_text_child(context, vcard, "URL",      *f.url);
-        if (f.desc)     _append_text_child(context, vcard, "DESC",     *f.desc);
-        if (f.title)    _append_text_child(context, vcard, "TITLE",    *f.title);
-        if (f.bday)     _append_text_child(context, vcard, "BDAY",     *f.bday);
-        if (f.note)     _append_text_child(context, vcard, "NOTE",     *f.note);
+        // Wrapper with one text-child: <OUTER><INNER>value</INNER></OUTER>
+        struct wrapped_el : virtual public stanza::spec {
+            wrapped_el(std::string_view outer, std::string_view inner,
+                       std::string_view val)
+                : spec(std::string(outer))
+            {
+                text_el te(inner, val);
+                child(te);
+            }
+        };
 
-        if (f.email && !f.email->empty())
-        {
-            xmpp_stanza_t *email_el = xmpp_stanza_new(context);
-            xmpp_stanza_set_name(email_el, "EMAIL");
-            _append_text_child(context, email_el, "USERID", *f.email);
-            xmpp_stanza_add_child(vcard, email_el);
-            xmpp_stanza_release(email_el);
-        }
+        struct vcard_spec : virtual public stanza::spec {
+            vcard_spec(const vcard_fields &f) : spec("vCard") {
+                attr("xmlns", "vcard-temp");
+                if (f.fn)       { text_el e("FN",       *f.fn);       child(e); }
+                if (f.nickname) { text_el e("NICKNAME",  *f.nickname); child(e); }
+                if (f.url)      { text_el e("URL",       *f.url);      child(e); }
+                if (f.desc)     { text_el e("DESC",      *f.desc);     child(e); }
+                if (f.title)    { text_el e("TITLE",     *f.title);    child(e); }
+                if (f.bday)     { text_el e("BDAY",      *f.bday);     child(e); }
+                if (f.note)     { text_el e("NOTE",      *f.note);     child(e); }
+                if (f.email && !f.email->empty()) {
+                    wrapped_el e("EMAIL", "USERID", *f.email); child(e);
+                }
+                if (f.tel && !f.tel->empty()) {
+                    wrapped_el e("TEL", "NUMBER", *f.tel); child(e);
+                }
+                if (f.org && !f.org->empty()) {
+                    wrapped_el e("ORG", "ORGNAME", *f.org); child(e);
+                }
+            }
+        };
 
-        if (f.tel && !f.tel->empty())
-        {
-            xmpp_stanza_t *tel_el = xmpp_stanza_new(context);
-            xmpp_stanza_set_name(tel_el, "TEL");
-            _append_text_child(context, tel_el, "NUMBER", *f.tel);
-            xmpp_stanza_add_child(vcard, tel_el);
-            xmpp_stanza_release(tel_el);
-        }
+        auto sp = stanza::iq()
+            .type("set")
+            .id(stanza::uuid(context))
+            .build(context);
 
-        if (f.org && !f.org->empty())
-        {
-            xmpp_stanza_t *org_el = xmpp_stanza_new(context);
-            xmpp_stanza_set_name(org_el, "ORG");
-            _append_text_child(context, org_el, "ORGNAME", *f.org);
-            xmpp_stanza_add_child(vcard, org_el);
-            xmpp_stanza_release(org_el);
-        }
+        vcard_spec vc(f);
+        auto vc_sp = vc.build(context);
+        xmpp_stanza_add_child(sp.get(), vc_sp.get());
 
-        xmpp_stanza_add_child(iq, vcard);
-        xmpp_stanza_release(vcard);
-
-        return iq;
+        xmpp_stanza_clone(sp.get());
+        return sp.get();
     }
 
 } }

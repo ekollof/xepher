@@ -15,20 +15,15 @@ namespace stanza {
     struct xep0425 {
 
         // <moderate xmlns='urn:xmpp:message-moderate:1'>
-        //   <retract xmlns='urn:xmpp:message-retract:1'/>
         //   [<reason>text</reason>]
         // </moderate>
+        //
+        // XEP-0425 §3: the client sends this inside <apply-to id='...'>.
+        // The <retract> element is part of the *notification* the MUC service
+        // broadcasts back to room members — it MUST NOT be in the request IQ.
         struct moderate : virtual public spec {
             moderate() : spec("moderate") {
                 xmlns<urn::xmpp::message_moderate::_1>();
-                // Always include the inner <retract>
-                struct retract_el : virtual public spec {
-                    retract_el() : spec("retract") {
-                        xmlns<urn::xmpp::message_retract::_1>();
-                    }
-                };
-                retract_el r;
-                child(r);
             }
 
             moderate& reason(std::string_view s) {

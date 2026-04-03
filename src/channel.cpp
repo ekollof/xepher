@@ -865,38 +865,28 @@ int weechat::channel::send_message(std::string to, std::string body,
 
     // XEP-0359: Add origin-id for stable message identification
     {
-        std::shared_ptr<xmpp_stanza_t> origin_id {
-            xmpp_stanza_new(account.context), xmpp_stanza_release };
-        xmpp_stanza_set_name(origin_id.get(), "origin-id");
-        xmpp_stanza_set_ns(origin_id.get(), "urn:xmpp:sid:0");
-        xmpp_stanza_set_attribute(origin_id.get(), "id", saved_id.c_str());
+        auto origin_id = stanza_node(account.context, "origin-id", "urn:xmpp:sid:0",
+                                     {{"id", saved_id.c_str()}});
         xmpp_stanza_add_child(message.get(), origin_id.get());
     }
 
     xmpp_message_set_body(message.get(), body.data());
 
-    // Helper: make a new stanza child, add it to parent, then release it
+    // Helper: make a new stanza child (optionally add to parent)
     auto make_child = [&](xmpp_stanza_t *parent,
                           const char *name, const char *ns = nullptr)
         -> std::shared_ptr<xmpp_stanza_t>
     {
-        std::shared_ptr<xmpp_stanza_t> s {
-            xmpp_stanza_new(account.context), xmpp_stanza_release };
-        xmpp_stanza_set_name(s.get(), name);
-        if (ns) xmpp_stanza_set_ns(s.get(), ns);
+        auto s = stanza_node(account.context, name, ns);
         if (parent) xmpp_stanza_add_child(parent, s.get());
         return s;
     };
 
     // Helper: make a text-node child and add it to parent
     auto add_text_child = [&](xmpp_stanza_t *parent, const char *name,
-                               const char *ns, const char *text)
+                               const char *ns, const char *text_content)
     {
-        auto el = make_child(nullptr, name, ns);
-        std::shared_ptr<xmpp_stanza_t> tx {
-            xmpp_stanza_new(account.context), xmpp_stanza_release };
-        xmpp_stanza_set_text(tx.get(), text);
-        xmpp_stanza_add_child(el.get(), tx.get());
+        auto el = stanza_text_node(account.context, name, text_content, ns);
         xmpp_stanza_add_child(parent, el.get());
     };
 
@@ -924,9 +914,8 @@ int weechat::channel::send_message(std::string to, std::string body,
         {
             auto hash_elem = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
             xmpp_stanza_set_attribute(hash_elem.get(), "algo", "sha-256");
-            std::shared_ptr<xmpp_stanza_t> hash_tx {
-                xmpp_stanza_new(account.context), xmpp_stanza_release };
-            xmpp_stanza_set_text(hash_tx.get(), file_meta->sha256_hash.c_str());
+            auto hash_tx = stanza_text_node(account.context, "",
+                                            file_meta->sha256_hash.c_str());
             xmpp_stanza_add_child(hash_elem.get(), hash_tx.get());
             xmpp_stanza_add_child(sfs_file.get(), hash_elem.get());
         }
@@ -950,9 +939,8 @@ int weechat::channel::send_message(std::string to, std::string body,
             {
                 auto hash_el = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
                 xmpp_stanza_set_attribute(hash_el.get(), "algo", "sha-256");
-                std::shared_ptr<xmpp_stanza_t> hash_tx {
-                    xmpp_stanza_new(account.context), xmpp_stanza_release };
-                xmpp_stanza_set_text(hash_tx.get(), file_meta->esfs->cipher_hash_b64.c_str());
+                auto hash_tx = stanza_text_node(account.context, "",
+                                                file_meta->esfs->cipher_hash_b64.c_str());
                 xmpp_stanza_add_child(hash_el.get(), hash_tx.get());
                 xmpp_stanza_add_child(enc.get(), hash_el.get());
             }
@@ -997,9 +985,8 @@ int weechat::channel::send_message(std::string to, std::string body,
         {
             auto hash_elem = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
             xmpp_stanza_set_attribute(hash_elem.get(), "algo", "sha-256");
-            std::shared_ptr<xmpp_stanza_t> hash_tx {
-                xmpp_stanza_new(account.context), xmpp_stanza_release };
-            xmpp_stanza_set_text(hash_tx.get(), file_meta->sha256_hash.c_str());
+            auto hash_tx = stanza_text_node(account.context, "",
+                                            file_meta->sha256_hash.c_str());
             xmpp_stanza_add_child(hash_elem.get(), hash_tx.get());
             xmpp_stanza_add_child(file_elem.get(), hash_elem.get());
         }
@@ -1161,11 +1148,8 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
 
     // XEP-0359: Add origin-id for stable message identification
     {
-        std::shared_ptr<xmpp_stanza_t> origin_id_elem {
-            xmpp_stanza_new(account.context), xmpp_stanza_release };
-        xmpp_stanza_set_name(origin_id_elem.get(), "origin-id");
-        xmpp_stanza_set_ns(origin_id_elem.get(), "urn:xmpp:sid:0");
-        xmpp_stanza_set_attribute(origin_id_elem.get(), "id", saved_id.c_str());
+        auto origin_id_elem = stanza_node(account.context, "origin-id", "urn:xmpp:sid:0",
+                                          {{"id", saved_id.c_str()}});
         xmpp_stanza_add_child(message.get(), origin_id_elem.get());
     }
 
@@ -1178,10 +1162,8 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         && account.channels.count(peer_bare)
         && account.channels.at(peer_bare).type == weechat::channel::chat_type::MUC)
     {
-        std::shared_ptr<xmpp_stanza_t> muc_x {
-            xmpp_stanza_new(account.context), xmpp_stanza_release };
-        xmpp_stanza_set_name(muc_x.get(), "x");
-        xmpp_stanza_set_ns(muc_x.get(), "http://jabber.org/protocol/muc#user");
+        auto muc_x = stanza_node(account.context, "x",
+                                 "http://jabber.org/protocol/muc#user");
         xmpp_stanza_add_child(message.get(), muc_x.get());
     }
 
@@ -1235,12 +1217,8 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         xmpp_stanza_add_child(message.get(), encrypted.get());
 
         {
-            std::shared_ptr<xmpp_stanza_t> enc_elem {
-                xmpp_stanza_new(account.context), xmpp_stanza_release };
-            xmpp_stanza_set_name(enc_elem.get(), "encryption");
-            xmpp_stanza_set_ns(enc_elem.get(), "urn:xmpp:eme:0");
-            xmpp_stanza_set_attribute(enc_elem.get(), "namespace", eme_namespace);
-            xmpp_stanza_set_attribute(enc_elem.get(), "name", "OMEMO");
+            auto enc_elem = stanza_node(account.context, "encryption", "urn:xmpp:eme:0",
+                                        {{"namespace", eme_namespace}});
             xmpp_stanza_add_child(message.get(), enc_elem.get());
         }
 
@@ -1249,17 +1227,15 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     }
     else if (pgp.enabled && !pgp.ids.empty())
     {
-        std::shared_ptr<xmpp_stanza_t> pgp_x {
-            xmpp_stanza_new(account.context), xmpp_stanza_release };
-        xmpp_stanza_set_name(pgp_x.get(), "x");
-        xmpp_stanza_set_ns(pgp_x.get(), "jabber:x:encrypted");
+        auto pgp_x = stanza_node(account.context, "x", "jabber:x:encrypted");
 
-        std::shared_ptr<xmpp_stanza_t> pgp_text {
-            xmpp_stanza_new(account.context), xmpp_stanza_release };
         auto ciphertext = account.pgp.encrypt(buffer, account.pgp_keyid().data(),
             std::vector(pgp.ids.begin(), pgp.ids.end()), body_str.c_str());
         if (ciphertext)
-            xmpp_stanza_set_text(pgp_text.get(), ciphertext->c_str());
+        {
+            auto pgp_text = stanza_text_node(account.context, "", ciphertext->c_str());
+            xmpp_stanza_add_child(pgp_x.get(), pgp_text.get());
+        }
         else
         {
             weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
@@ -1268,17 +1244,11 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
             return WEECHAT_RC_ERROR;
         }
 
-        xmpp_stanza_add_child(pgp_x.get(), pgp_text.get());
         xmpp_stanza_add_child(message.get(), pgp_x.get());
 
         {
-            std::shared_ptr<xmpp_stanza_t> enc_elem {
-                xmpp_stanza_new(account.context), xmpp_stanza_release };
-            xmpp_stanza_set_name(enc_elem.get(), "encryption");
-            xmpp_stanza_set_ns(enc_elem.get(), "urn:xmpp:eme:0");
-            // XEP-0380: correct namespace for Legacy OpenPGP
-            xmpp_stanza_set_attribute(enc_elem.get(), "namespace", "jabber:x:encrypted");
-            xmpp_stanza_set_attribute(enc_elem.get(), "name", "Legacy OpenPGP");
+            auto enc_elem = stanza_node(account.context, "encryption", "urn:xmpp:eme:0",
+                                         {{"namespace", "jabber:x:encrypted"}});
             xmpp_stanza_add_child(message.get(), enc_elem.get());
         }
 
@@ -1386,10 +1356,8 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     }
 
     {
-        std::shared_ptr<xmpp_stanza_t> active {
-            xmpp_stanza_new(account.context), xmpp_stanza_release };
-        xmpp_stanza_set_name(active.get(), "active");
-        xmpp_stanza_set_ns(active.get(), "http://jabber.org/protocol/chatstates");
+        auto active = stanza_node(account.context, "active",
+                                  "http://jabber.org/protocol/chatstates");
         xmpp_stanza_add_child(message.get(), active.get());
     }
 
@@ -1398,26 +1366,18 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     if (type != weechat::channel::chat_type::MUC)
     {
         {
-            std::shared_ptr<xmpp_stanza_t> req {
-                xmpp_stanza_new(account.context), xmpp_stanza_release };
-            xmpp_stanza_set_name(req.get(), "request");
-            xmpp_stanza_set_ns(req.get(), "urn:xmpp:receipts");
+            auto req = stanza_node(account.context, "request", "urn:xmpp:receipts");
             xmpp_stanza_add_child(message.get(), req.get());
         }
         {
-            std::shared_ptr<xmpp_stanza_t> markable {
-                xmpp_stanza_new(account.context), xmpp_stanza_release };
-            xmpp_stanza_set_name(markable.get(), "markable");
-            xmpp_stanza_set_ns(markable.get(), "urn:xmpp:chat-markers:0");
+            auto markable = stanza_node(account.context, "markable",
+                                        "urn:xmpp:chat-markers:0");
             xmpp_stanza_add_child(message.get(), markable.get());
         }
     }
 
     {
-        std::shared_ptr<xmpp_stanza_t> store {
-            xmpp_stanza_new(account.context), xmpp_stanza_release };
-        xmpp_stanza_set_name(store.get(), "store");
-        xmpp_stanza_set_ns(store.get(), "urn:xmpp:hints");
+        auto store = stanza_node(account.context, "store", "urn:xmpp:hints");
         xmpp_stanza_add_child(message.get(), store.get());
     }
 
@@ -1638,22 +1598,14 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
             // which does NOT bind a prefix.  We must use explicit xmlns:rdf= and
             // xmlns:og= attributes so that Expat on the receiving end can resolve
             // the rdf: and og: prefixes used in element/attribute names.
-            std::shared_ptr<xmpp_stanza_t> rdf {
-                xmpp_stanza_new(ctx), xmpp_stanza_release };
-            xmpp_stanza_set_name(rdf.get(), "rdf:Description");
-            xmpp_stanza_set_attribute(rdf.get(), "xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
-            xmpp_stanza_set_attribute(rdf.get(), "xmlns:og", "https://ogp.me/ns#");
-            xmpp_stanza_set_attribute(rdf.get(), "rdf:about", task->url.data());
+            auto rdf = stanza_node(ctx, "rdf:Description", nullptr,
+                {{"xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
+                 {"xmlns:og",  "https://ogp.me/ns#"},
+                 {"rdf:about", task->url.data()}});
 
             auto add_og_child = [&](const char *elem_name, const std::string& text) {
                 if (text.empty()) return;
-                std::shared_ptr<xmpp_stanza_t> child {
-                    xmpp_stanza_new(ctx), xmpp_stanza_release };
-                xmpp_stanza_set_name(child.get(), elem_name);
-                std::shared_ptr<xmpp_stanza_t> tnode {
-                    xmpp_stanza_new(ctx), xmpp_stanza_release };
-                xmpp_stanza_set_text(tnode.get(), text.data());
-                xmpp_stanza_add_child(child.get(), tnode.get());
+                auto child = stanza_text_node(ctx, elem_name, text.data());
                 xmpp_stanza_add_child(rdf.get(), child.get());
             };
 
@@ -1666,17 +1618,11 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
 
             // XEP-0334: no-store + no-copy — metadata-only stanza, don't archive
             {
-                std::shared_ptr<xmpp_stanza_t> no_store {
-                    xmpp_stanza_new(ctx), xmpp_stanza_release };
-                xmpp_stanza_set_name(no_store.get(), "no-store");
-                xmpp_stanza_set_ns(no_store.get(), "urn:xmpp:hints");
+                auto no_store = stanza_node(ctx, "no-store", "urn:xmpp:hints");
                 xmpp_stanza_add_child(msg.get(), no_store.get());
             }
             {
-                std::shared_ptr<xmpp_stanza_t> no_copy {
-                    xmpp_stanza_new(ctx), xmpp_stanza_release };
-                xmpp_stanza_set_name(no_copy.get(), "no-copy");
-                xmpp_stanza_set_ns(no_copy.get(), "urn:xmpp:hints");
+                auto no_copy = stanza_node(ctx, "no-copy", "urn:xmpp:hints");
                 xmpp_stanza_add_child(msg.get(), no_copy.get());
             }
 

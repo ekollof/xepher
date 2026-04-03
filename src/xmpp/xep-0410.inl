@@ -5,28 +5,27 @@
 #pragma once
 
 #include <strophe.h>
-#include "../strophe.hh"
+
+// stanza::* builder types are available via the including translation unit.
 
 namespace xmpp { namespace xep0410 {
 
     // XEP-0410: MUC Self-Ping (Schrödinger's Chat)
     
-    // Send a self-ping to our own MUC nickname
-    // to: full MUC JID (room@server/nickname)
+    // Send a self-ping to our own MUC nickname.
+    // muc_jid: full MUC JID (room@server/nickname)
+    // Returns a caller-owned xmpp_stanza_t* (call xmpp_stanza_release when done).
     inline xmpp_stanza_t *muc_self_ping(xmpp_ctx_t *context, const char *muc_jid)
     {
-        xmpp_string_guard id(context, xmpp_uuid_gen(context));
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", id.c_str());
-        xmpp_stanza_set_to(iq, muc_jid);
-        
-        xmpp_stanza_t *ping = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(ping, "ping");
-        xmpp_stanza_set_ns(ping, "urn:xmpp:ping");
-        
-        xmpp_stanza_add_child(iq, ping);
-        xmpp_stanza_release(ping);
-        
-        return iq;
+        auto sp = stanza::iq()
+            .type("get")
+            .id(stanza::uuid(context))
+            .to(muc_jid)
+            .ping()
+            .build(context);
+
+        xmpp_stanza_clone(sp.get());
+        return sp.get();
     }
 
 } }

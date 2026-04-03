@@ -23,30 +23,33 @@ namespace xmpp { namespace xep0172 {
     //       </publish>
     //     </pubsub>
     //   </iq>
+    //
+    // Returns a caller-owned xmpp_stanza_t* (call xmpp_stanza_release when done).
     inline xmpp_stanza_t *publish_nick(xmpp_ctx_t *context, const char *nick)
     {
-        // Build the <nick> payload element
-        xmpp_stanza_t *nick_elem = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(nick_elem, "nick");
-        xmpp_stanza_set_ns(nick_elem, "http://jabber.org/protocol/nick");
+        // <nick xmlns='http://jabber.org/protocol/nick'> text </nick>
+        struct nick_payload : virtual public stanza::spec {
+            nick_payload(const char *n) : spec("nick") {
+                xmlns<jabber_org::protocol::nick>();
+                if (n && *n)
+                    text(n);
+            }
+        };
 
-        if (nick && *nick)
-        {
-            xmpp_stanza_t *nick_text = xmpp_stanza_new(context);
-            xmpp_stanza_set_text(nick_text, nick);
-            xmpp_stanza_add_child(nick_elem, nick_text);
-            xmpp_stanza_release(nick_text);
-        }
+        nick_payload np(nick);
+        auto sp = stanza::iq()
+            .type("set")
+            .id(stanza::uuid(context))
+            .pubsub(
+                stanza::xep0060::pubsub().publish(
+                    stanza::xep0060::publish("http://jabber.org/protocol/nick")
+                        .item(stanza::xep0060::item().payload(np))
+                )
+            )
+            .build(context);
 
-        // Use the generic PEP publish helper from xep-0163
-        xmpp_stanza_t *iq = xep0163::publish_pep(
-            context,
-            "http://jabber.org/protocol/nick",
-            nick_elem);
-
-        xmpp_stanza_release(nick_elem);
-
-        return iq;
+        xmpp_stanza_clone(sp.get());
+        return sp.get();
     }
 
 } }

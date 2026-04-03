@@ -195,6 +195,7 @@ namespace stanza {
 #include "xep-0352.inl"
 #include "xep-0359.inl"
 #include "xep-0382.inl"
+#include "xep-0384.inl"
 #include "xep-0421.inl"
 #include "xep-0422.inl"
 #include "xep-0424.inl"
@@ -259,6 +260,13 @@ namespace stanza {
         message& subject() { stanza::subject s; child(s); return *this; }
 
         message& thread(std::string_view s) { stanza::thread t(s); child(t); return *this; }
+
+        // OMEMO:2 encrypted child
+        message& omemo_encrypted(xep0384::encrypted e) { child(e); return *this; }
+        // Legacy axolotl encrypted child
+        message& omemo_axolotl_encrypted(xep0384::axolotl_encrypted e) { child(e); return *this; }
+        // XEP-0334 store hint
+        message& omemo_store_hint(xep0384::store_hint h) { child(h); return *this; }
     };
 
     struct presence : virtual public spec,
@@ -357,4 +365,76 @@ namespace xml {
         void bind(xmpp_ctx_t *context, xmpp_stanza_t *stanza) override;
     };
 
+}
+
+// Build a simple element <name xmlns="ns" attr1="val1" .../>
+// Returns a shared_ptr that owns one reference (caller may add as child or send).
+// Implemented via stanza::spec — no raw xmpp_stanza_new() calls outside node.hh.
+inline std::shared_ptr<xmpp_stanza_t> stanza_node(
+    xmpp_ctx_t *ctx,
+    const char *name,
+    const char *ns = nullptr,
+    std::initializer_list<std::pair<const char*, const char*>> attrs = {})
+{
+    struct elem_spec : virtual public stanza::spec {
+        elem_spec(const char *n, const char *ns_,
+                  std::initializer_list<std::pair<const char*,const char*>> as)
+            : spec(n)
+        {
+            if (ns_) attr("xmlns", ns_);
+            for (auto& [k, v] : as) attr(k, v);
+        }
+    };
+    elem_spec es(name, ns, attrs);
+    return es.build(ctx);
+}
+
+// Build a <name xmlns="ns">text</name> element (single text child).
+// Returns a shared_ptr owning one reference.
+inline std::shared_ptr<xmpp_stanza_t> stanza_text_node(
+    xmpp_ctx_t *ctx,
+    const char *name,
+    const char *text_content,
+    const char *ns = nullptr,
+    std::initializer_list<std::pair<const char*, const char*>> attrs = {})
+{
+    struct text_elem_spec : virtual public stanza::spec {
+        text_elem_spec(const char *n, const char *tx, const char *ns_,
+                       std::initializer_list<std::pair<const char*,const char*>> as)
+            : spec(n)
+        {
+            if (ns_) attr("xmlns", ns_);
+            for (auto& [k, v] : as) attr(k, v);
+            text(tx ? tx : "");
+        }
+    };
+    text_elem_spec ts(name, text_content, ns, attrs);
+    return ts.build(ctx);
+}
+
+// Build a <field var="..." type="..."><value>...</value></field> stanza.
+// Caller owns the returned stanza (call xmpp_stanza_release when done).
+// Implemented via the stanza::spec builder — no raw xmpp_stanza_new() calls.
+inline xmpp_stanza_t *stanza_make_field(xmpp_ctx_t *ctx,
+                                        const char *var, const char *val,
+                                        const char *type_attr = nullptr)
+{
+    struct value_spec : virtual public stanza::spec {
+        explicit value_spec(const char *v) : spec("value") { text(v); }
+    };
+    struct field_spec : virtual public stanza::spec {
+        field_spec(const char *var_, const char *val_, const char *type_)
+            : spec("field")
+        {
+            attr("var", var_);
+            if (type_) attr("type", type_);
+            value_spec vs(val_);
+            child(vs);
+        }
+    };
+
+    field_spec fs(var, val, type_attr);
+    auto sp = fs.build(ctx);
+    xmpp_stanza_clone(sp.get());
+    return sp.get();
 }

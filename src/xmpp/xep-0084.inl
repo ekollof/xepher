@@ -6,68 +6,78 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <strophe.h>
 
-#include "xep-0163.inl"
+// stanza::* builder types are available via the including translation unit.
 
 namespace weechat::xep0084
 {
     // XEP-0084: User Avatar (PEP-based)
-    // Namespace constants
     inline constexpr const char *METADATA_NS = "urn:xmpp:avatar:metadata";
-    inline constexpr const char *DATA_NS = "urn:xmpp:avatar:data";
-    
-    // Request avatar data from PubSub
-    inline xmpp_stanza_t *request_avatar_data(xmpp_ctx_t *context, 
-                                              const char *to, 
+    inline constexpr const char *DATA_NS     = "urn:xmpp:avatar:data";
+
+    // Request avatar data from PubSub.
+    // Returns a caller-owned xmpp_stanza_t* (call xmpp_stanza_release when done).
+    inline xmpp_stanza_t *request_avatar_data(xmpp_ctx_t *context,
+                                              const char *to,
                                               const char *id)
     {
-        xmpp_stanza_t *iq = xmpp_iq_new(context, "get", id);
-        xmpp_stanza_set_to(iq, to);
-        
-        xmpp_stanza_t *pubsub = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(pubsub, "pubsub");
-        xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
-        
-        xmpp_stanza_t *items = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(items, "items");
-        xmpp_stanza_set_attribute(items, "node", DATA_NS);
-        
-        xmpp_stanza_add_child(pubsub, items);
-        xmpp_stanza_add_child(iq, pubsub);
-        
-        xmpp_stanza_release(items);
-        xmpp_stanza_release(pubsub);
-        
-        return iq;
+        auto sp = stanza::iq()
+            .type("get")
+            .id(id)
+            .to(to)
+            .pubsub(
+                stanza::xep0060::pubsub().items(
+                    stanza::xep0060::items(DATA_NS)
+                )
+            )
+            .build(context);
+
+        xmpp_stanza_clone(sp.get());
+        return sp.get();
     }
 
     // Publish avatar image data to urn:xmpp:avatar:data PEP node.
     // base64_data: base64-encoded raw image bytes (no newlines).
     // hash_id:     hex SHA-1 of the raw image bytes (used as item id).
+    // Returns a caller-owned xmpp_stanza_t* (call xmpp_stanza_release when done).
     inline xmpp_stanza_t *publish_avatar_data(xmpp_ctx_t *context,
                                               const char *base64_data,
                                               const char *hash_id)
     {
-        xmpp_stanza_t *data_elem = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(data_elem, "data");
-        xmpp_stanza_set_ns(data_elem, DATA_NS);
+        // <data xmlns='urn:xmpp:avatar:data'>BASE64</data>
+        struct data_payload : virtual public stanza::spec {
+            data_payload(const char *b64) : spec("data") {
+                xmlns<urn::xmpp::avatar::data>();
+                text(b64);
+            }
+        };
 
-        xmpp_stanza_t *text = xmpp_stanza_new(context);
-        xmpp_stanza_set_text(text, base64_data);
-        xmpp_stanza_add_child(data_elem, text);
-        xmpp_stanza_release(text);
+        data_payload dp(base64_data);
+        auto sp = stanza::iq()
+            .type("set")
+            .id(stanza::uuid(context))
+            .pubsub(
+                stanza::xep0060::pubsub().publish(
+                    stanza::xep0060::publish(DATA_NS)
+                        .item(stanza::xep0060::item()
+                                  .id(hash_id)
+                                  .payload(dp))
+                )
+            )
+            .build(context);
 
-        xmpp_stanza_t *iq = ::xmpp::xep0163::publish_pep(context, DATA_NS, data_elem, hash_id);
-        xmpp_stanza_release(data_elem);
-        return iq;
+        xmpp_stanza_clone(sp.get());
+        return sp.get();
     }
 
     // Publish avatar metadata to urn:xmpp:avatar:metadata PEP node.
-    // hash_id:   hex SHA-1 (used as item id and info id attribute).
-    // mime_type: e.g. "image/png" or "image/jpeg".
-    // bytes:     raw file size in bytes.
+    // hash_id:    hex SHA-1 (used as item id and info id attribute).
+    // mime_type:  e.g. "image/png" or "image/jpeg".
+    // bytes:      raw file size in bytes.
     // width/height: image dimensions (may be 0 if unknown).
+    // Returns a caller-owned xmpp_stanza_t* (call xmpp_stanza_release when done).
     inline xmpp_stanza_t *publish_avatar_metadata(xmpp_ctx_t *context,
                                                   const char *hash_id,
                                                   const char *mime_type,
@@ -75,34 +85,44 @@ namespace weechat::xep0084
                                                   uint32_t width,
                                                   uint32_t height)
     {
-        xmpp_stanza_t *metadata = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(metadata, "metadata");
-        xmpp_stanza_set_ns(metadata, METADATA_NS);
+        struct info_spec : virtual public stanza::spec {
+            info_spec(const char *id, const char *type,
+                      size_t sz, uint32_t w, uint32_t h) : spec("info")
+            {
+                attr("id",    id);
+                attr("type",  type);
+                attr("bytes", std::to_string(sz));
+                if (w > 0) attr("width",  std::to_string(w));
+                if (h > 0) attr("height", std::to_string(h));
+            }
+        };
 
-        xmpp_stanza_t *info = xmpp_stanza_new(context);
-        xmpp_stanza_set_name(info, "info");
-        xmpp_stanza_set_attribute(info, "id", hash_id);
-        xmpp_stanza_set_attribute(info, "type", mime_type);
+        struct metadata_payload : virtual public stanza::spec {
+            metadata_payload(const char *id, const char *type,
+                             size_t sz, uint32_t w, uint32_t h)
+                : spec("metadata")
+            {
+                xmlns<urn::xmpp::avatar::metadata>();
+                info_spec inf(id, type, sz, w, h);
+                child(inf);
+            }
+        };
 
-        auto bytes_str = fmt::format("{}", bytes);
-        xmpp_stanza_set_attribute(info, "bytes", bytes_str.c_str());
+        metadata_payload mp(hash_id, mime_type, bytes, width, height);
+        auto sp = stanza::iq()
+            .type("set")
+            .id(stanza::uuid(context))
+            .pubsub(
+                stanza::xep0060::pubsub().publish(
+                    stanza::xep0060::publish(METADATA_NS)
+                        .item(stanza::xep0060::item()
+                                  .id(hash_id)
+                                  .payload(mp))
+                )
+            )
+            .build(context);
 
-        if (width > 0)
-        {
-            auto width_str = fmt::format("{}", width);
-            xmpp_stanza_set_attribute(info, "width", width_str.c_str());
-        }
-        if (height > 0)
-        {
-            auto height_str = fmt::format("{}", height);
-            xmpp_stanza_set_attribute(info, "height", height_str.c_str());
-        }
-
-        xmpp_stanza_add_child(metadata, info);
-        xmpp_stanza_release(info);
-
-        xmpp_stanza_t *iq = ::xmpp::xep0163::publish_pep(context, METADATA_NS, metadata, hash_id);
-        xmpp_stanza_release(metadata);
-        return iq;
+        xmpp_stanza_clone(sp.get());
+        return sp.get();
     }
 }

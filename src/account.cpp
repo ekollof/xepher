@@ -812,25 +812,21 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     const bool         access_open       = post.access_open;
     const bool         is_comment        = !reply_to_id.empty();
 
-    // Build Atom <entry> using RAII shared_ptr (dynamic/conditional children require runtime loops)
-    auto make_sp = [this](const char *tag) -> std::shared_ptr<xmpp_stanza_t> {
-        auto s = std::shared_ptr<xmpp_stanza_t>{ xmpp_stanza_new(context), xmpp_stanza_release };
-        xmpp_stanza_set_name(s.get(), tag);
-        return s;
-    };
-    auto make_text_el = [&](const char *tag, std::string_view text_sv)
+    // Build Atom <entry> using stanza builder helpers (dynamic/conditional children require runtime)
+    auto make_sp = [this](const char *tag, const char *ns = nullptr,
+                          std::initializer_list<std::pair<const char*,const char*>> attrs = {})
         -> std::shared_ptr<xmpp_stanza_t>
     {
-        auto el = make_sp(tag);
-        auto t = std::shared_ptr<xmpp_stanza_t>{ xmpp_stanza_new(context), xmpp_stanza_release };
-        xmpp_stanza_set_text(t.get(), std::string(text_sv).c_str());
-        xmpp_stanza_add_child(el.get(), t.get());
-        return el;
+        return stanza_node(context, tag, ns, attrs);
+    };
+    auto make_text_el = [this](const char *tag, std::string_view text_sv,
+                               const char *ns = nullptr)
+        -> std::shared_ptr<xmpp_stanza_t>
+    {
+        return stanza_text_node(context, tag, std::string(text_sv).c_str(), ns);
     };
 
-    auto entry = make_sp("entry");
-    xmpp_stanza_set_name(entry.get(), "entry");
-    xmpp_stanza_set_ns(entry.get(), "http://www.w3.org/2005/Atom");
+    auto entry = make_sp("entry", "http://www.w3.org/2005/Atom");
 
     // <title type='text'>
     // For comments (XEP-0277 §3.2) the body goes into <title> and there is no
@@ -858,11 +854,8 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
                                                              size_t{60})));
             title_text = body_excerpt;
         }
-        auto title_el = make_sp("title");
-        xmpp_stanza_set_name(title_el.get(), "title");
-        xmpp_stanza_set_attribute(title_el.get(), "type", "text");
-        auto t = make_sp("text");
-        xmpp_stanza_set_text(t.get(), std::string(title_text).c_str());
+        auto title_el = make_sp("title", nullptr, {{"type", "text"}});
+        auto t = make_text_el("", std::string(title_text));
         xmpp_stanza_add_child(title_el.get(), t.get());
         xmpp_stanza_add_child(entry.get(), title_el.get());
     }
@@ -885,7 +878,6 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     {
         const std::string bare_jid = ::jid(nullptr, jid()).bare;
         auto author_el = make_sp("author");
-        xmpp_stanza_set_name(author_el.get(), "author");
         auto name_el = make_text_el("name", bare_jid.empty() ? jid() : bare_jid);
         xmpp_stanza_add_child(author_el.get(), name_el.get());
         std::string xmpp_uri = fmt::format("xmpp:{}", bare_jid);
@@ -897,11 +889,8 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     // <content type='text'> — omitted for comments (body is in <title> per XEP-0277 §3.2)
     if (!is_comment)
     {
-        auto content_el = make_sp("content");
-        xmpp_stanza_set_name(content_el.get(), "content");
-        xmpp_stanza_set_attribute(content_el.get(), "type", "text");
-        auto ct = make_sp("text");
-        xmpp_stanza_set_text(ct.get(), body.c_str());
+        auto content_el = make_sp("content", nullptr, {{"type", "text"}});
+        auto ct = make_text_el("", body);
         xmpp_stanza_add_child(content_el.get(), ct.get());
         xmpp_stanza_add_child(entry.get(), content_el.get());
     }
@@ -911,14 +900,11 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     {
         if (!emb.uploaded()) continue;
 
-        auto fs = make_sp("file-sharing");
-        xmpp_stanza_set_name(fs.get(), "file-sharing");
-        xmpp_stanza_set_ns(fs.get(), "urn:xmpp:sfs:0");
-        xmpp_stanza_set_attribute(fs.get(), "disposition", emb.disposition());
+        auto fs = make_sp("file-sharing", "urn:xmpp:sfs:0",
+                          {{"disposition", emb.disposition()}});
 
         // <file>
         auto file_el = make_sp("file");
-        xmpp_stanza_set_name(file_el.get(), "file");
         {
             auto name_el = make_text_el("name", emb.filename);
             xmpp_stanza_add_child(file_el.get(), name_el.get());
@@ -935,12 +921,8 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
         }
         if (!emb.sha256_b64.empty())
         {
-            auto hash_el = make_sp("hash");
-            xmpp_stanza_set_name(hash_el.get(), "hash");
-            xmpp_stanza_set_ns(hash_el.get(), "urn:xmpp:hashes:2");
-            xmpp_stanza_set_attribute(hash_el.get(), "algo", "sha-256");
-            auto ht = make_sp("text");
-            xmpp_stanza_set_text(ht.get(), emb.sha256_b64.c_str());
+            auto hash_el = make_sp("hash", "urn:xmpp:hashes:2", {{"algo", "sha-256"}});
+            auto ht = make_text_el("", emb.sha256_b64);
             xmpp_stanza_add_child(hash_el.get(), ht.get());
             xmpp_stanza_add_child(file_el.get(), hash_el.get());
         }
@@ -958,12 +940,9 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
 
         // <sources><url-data target='…'/></sources>
         auto sources_el = make_sp("sources");
-        xmpp_stanza_set_name(sources_el.get(), "sources");
         {
-            auto ud = make_sp("url-data");
-            xmpp_stanza_set_name(ud.get(), "url-data");
-            xmpp_stanza_set_ns(ud.get(), "http://jabber.org/protocol/url-data");
-            xmpp_stanza_set_attribute(ud.get(), "target", emb.get_url.c_str());
+            auto ud = make_sp("url-data", "http://jabber.org/protocol/url-data",
+                              {{"target", emb.get_url.c_str()}});
             xmpp_stanza_add_child(sources_el.get(), ud.get());
         }
         xmpp_stanza_add_child(fs.get(), sources_el.get());
@@ -983,14 +962,11 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
         const std::string reply_xmpp_uri = fmt::format(
             "xmpp:{}?;node={};item={}", pub_service, reply_ref_node, reply_to_id);
         const std::string reply_atom_id = feed_atom_id_get(reply_feed_key, reply_to_id);
-        auto reply_el = make_sp("thr:in-reply-to");
-        xmpp_stanza_set_name(reply_el.get(), "thr:in-reply-to");
-        xmpp_stanza_set_attribute(reply_el.get(), "xmlns:thr",
-                                  "http://purl.org/syndication/thread/1.0");
-        xmpp_stanza_set_attribute(reply_el.get(), "ref",
-                                  reply_atom_id.empty() ? reply_xmpp_uri.c_str()
-                                                        : reply_atom_id.c_str());
-        xmpp_stanza_set_attribute(reply_el.get(), "href", reply_xmpp_uri.c_str());
+        auto reply_el = make_sp("thr:in-reply-to", nullptr,
+                                {{"xmlns:thr", "http://purl.org/syndication/thread/1.0"},
+                                 {"ref", reply_atom_id.empty() ? reply_xmpp_uri.c_str()
+                                                               : reply_atom_id.c_str()},
+                                 {"href", reply_xmpp_uri.c_str()}});
         xmpp_stanza_add_child(entry.get(), reply_el.get());
     }
 
@@ -1009,22 +985,19 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
             fmt::format("urn:xmpp:microblog:0:comments/{}", item_uuid);
         const std::string comments_xmpp_uri = fmt::format(
             "xmpp:{}?;node={}", target_service, comments_node_name);
-        auto replies_el = make_sp("link");
-        xmpp_stanza_set_name(replies_el.get(), "link");
-        xmpp_stanza_set_attribute(replies_el.get(), "rel",   "replies");
-        xmpp_stanza_set_attribute(replies_el.get(), "title", "comments");
-        xmpp_stanza_set_attribute(replies_el.get(), "href",  comments_xmpp_uri.c_str());
+        auto replies_el = make_sp("link", nullptr,
+                                  {{"rel",   "replies"},
+                                   {"title", "comments"},
+                                   {"href",  comments_xmpp_uri.c_str()}});
         xmpp_stanza_add_child(entry.get(), replies_el.get());
     }
 
     // <generator>
     {
-        auto gen_el = make_sp("generator");
-        xmpp_stanza_set_name(gen_el.get(), "generator");
-        xmpp_stanza_set_attribute(gen_el.get(), "uri", "https://github.com/ekollof/xepher");
-        xmpp_stanza_set_attribute(gen_el.get(), "version", WEECHAT_XMPP_PLUGIN_VERSION);
-        auto gt = make_sp("text");
-        xmpp_stanza_set_text(gt.get(), "Xepher");
+        auto gen_el = make_sp("generator", nullptr,
+                              {{"uri", "https://github.com/ekollof/xepher"},
+                               {"version", WEECHAT_XMPP_PLUGIN_VERSION}});
+        auto gt = make_text_el("", "Xepher");
         xmpp_stanza_add_child(gen_el.get(), gt.get());
         xmpp_stanza_add_child(entry.get(), gen_el.get());
     }
@@ -1033,40 +1006,25 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     // All built with shared_ptr RAII since entry is already a live stanza_t
 
     // <item id='uuid'> wrapping the entry
-    auto item_el = make_sp("item");
-    xmpp_stanza_set_name(item_el.get(), "item");
-    xmpp_stanza_set_attribute(item_el.get(), "id", item_uuid.c_str());
+    auto item_el = make_sp("item", nullptr, {{"id", item_uuid.c_str()}});
     xmpp_stanza_add_child(item_el.get(), entry.get());
 
     // <publish node='...'>
-    auto publish_el = make_sp("publish");
-    xmpp_stanza_set_name(publish_el.get(), "publish");
-    xmpp_stanza_set_attribute(publish_el.get(), "node", target_node.c_str());
+    auto publish_el = make_sp("publish", nullptr, {{"node", target_node.c_str()}});
     xmpp_stanza_add_child(publish_el.get(), item_el.get());
 
     // <pubsub xmlns='http://jabber.org/protocol/pubsub'>
-    auto pubsub_el = make_sp("pubsub");
-    xmpp_stanza_set_name(pubsub_el.get(), "pubsub");
-    xmpp_stanza_set_ns(pubsub_el.get(), "http://jabber.org/protocol/pubsub");
+    auto pubsub_el = make_sp("pubsub", "http://jabber.org/protocol/pubsub");
     xmpp_stanza_add_child(pubsub_el.get(), publish_el.get());
 
     // publish-options (only when access_open)
     if (access_open)
     {
-        auto x = make_sp("x");
-        xmpp_stanza_set_name(x.get(), "x");
-        xmpp_stanza_set_ns(x.get(), "jabber:x:data");
-        xmpp_stanza_set_attribute(x.get(), "type", "submit");
+        auto x = make_sp("x", "jabber:x:data", {{"type", "submit"}});
 
         auto add_field = [&](std::string_view var, std::string_view val) {
-            auto f = make_sp("field");
-            xmpp_stanza_set_name(f.get(), "field");
-            xmpp_stanza_set_attribute(f.get(), "var", std::string(var).c_str());
-            auto v = make_sp("value");
-            xmpp_stanza_set_name(v.get(), "value");
-            auto vt = make_sp("text");
-            xmpp_stanza_set_text(vt.get(), std::string(val).c_str());
-            xmpp_stanza_add_child(v.get(), vt.get());
+            auto f = make_sp("field", nullptr, {{"var", std::string(var).c_str()}});
+            auto v = make_text_el("value", val);
             xmpp_stanza_add_child(f.get(), v.get());
             xmpp_stanza_add_child(x.get(), f.get());
         };
@@ -1079,7 +1037,6 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
         add_field("pubsub#notify_retract","true");
 
         auto pub_opts = make_sp("publish-options");
-        xmpp_stanza_set_name(pub_opts.get(), "publish-options");
         xmpp_stanza_add_child(pub_opts.get(), x.get());
         xmpp_stanza_add_child(pubsub_el.get(), pub_opts.get());
     }
