@@ -114,9 +114,8 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 caps_placeholder_spec() : spec("caps") {}
             } cpp;
             auto caps_placeholder = cpp.build(account.context);
-            char *cap_hash_raw = nullptr;
-            this->get_caps(caps_placeholder.get(), &cap_hash_raw);
-            std::unique_ptr<char[]> cap_hash(cap_hash_raw);
+            std::optional<std::string> cap_hash;
+            this->get_caps(caps_placeholder.get(), &cap_hash);
 
             struct caps_spec : stanza::spec {
                 caps_spec(const char *ver) : spec("c") {
@@ -125,7 +124,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                     attr("node", "http://weechat.org");
                     attr("ver", ver ? ver : "");
                 }
-            } caps_ch(cap_hash.get());
+            } caps_ch(cap_hash ? cap_hash->c_str() : "");
 
             struct status_spec : stanza::spec {
                 status_spec(std::string_view s) : spec("status") { text(s); }

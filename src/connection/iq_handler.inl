@@ -2886,16 +2886,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     } cph;
                     auto dummy_sp = cph.build(account.context);
                     xmpp_stanza_t *dummy = dummy_sp.get();
-                    char *computed_hash = nullptr;
+                    std::optional<std::string> computed_hash;
                     xmpp_stanza_t *caps_st = get_caps(dummy, &computed_hash);
                 xmpp_stanza_release(caps_st);
-                std::unique_ptr<char, decltype(&free)> hash_guard(computed_hash, &free);
 
                 // Accept "http://weechat.org" (bare) or "http://weechat.org#<hash>"
                 std::string_view req(requested_node);
                 node_ok = (req == "http://weechat.org") ||
                           (computed_hash &&
-                           req == std::string("http://weechat.org#") + computed_hash);
+                           req == std::string("http://weechat.org#") + *computed_hash);
             }
 
             if (node_ok)

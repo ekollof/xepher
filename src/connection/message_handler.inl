@@ -3643,7 +3643,7 @@ message_handler_after_omemo:
     return true;
 }
 
-xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, const char *node)
+xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional<std::string> *hash, const char *node)
 {
     // Build <query xmlns='http://jabber.org/protocol/disco#info'> via spec builder.
     struct query_spec : stanza::spec {
@@ -3859,10 +3859,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, char **hash, 
             static_cast<int>(digest_len), encoded.data());
         if (written > 0) {
             encoded.resize(static_cast<std::size_t>(written));
-            auto buf = std::make_unique<char[]>(encoded.size() + 1);
-            encoded.copy(buf.get(), encoded.size());
-            buf.get()[encoded.size()] = '\0';
-            *hash = buf.release(); // caller owns, must delete[]
+            *hash = std::move(encoded);
         }
     }
 
