@@ -93,3 +93,6 @@ libstrophe*/
 libstrophe_*
 weechat-[0-9]*/
 weechat_[0-9]*
+
+deps/diff/config.log.old
+reference/*
