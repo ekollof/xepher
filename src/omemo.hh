@@ -132,6 +132,19 @@ namespace weechat {
             // metadata/bundle probing for inactive contacts.
             std::unordered_set<std::string> peers_with_observed_traffic;
 
+            // Per-{jid, device} set tracking whether we have already sent a
+            // heartbeat for the current ratchet state. Cleared when a new
+            // PreKeySignalMessage (kex) arrives from that device, which means
+            // a fresh ratchet has started.  XEP-0384 §6: MUST send a heartbeat
+            // when the first message with counter >= 53 is received.
+            std::set<std::pair<std::string, std::uint32_t>> heartbeat_sent;
+
+            // XEP-0384 §5.7: bare JIDs that have sent us an <opt-out/> element
+            // inside an SCE envelope.  Outgoing OMEMO messages to these peers are
+            // blocked until the user explicitly acknowledges the switch to
+            // plaintext via /omemo optout-ack <jid>.
+            std::unordered_set<std::string> omemo_opted_out_peers;
+
             class bundle_request
             {
             public:
@@ -282,6 +295,17 @@ namespace weechat {
                              weechat::account &account,
                              const char *jid,
                              const char *fp_hex);
+
+            // XEP-0384 §5.7: send an opt-out message to peer jid (OMEMO:2 only).
+            // reason is optional and may be nullptr.
+            void send_opt_out(weechat::account &account,
+                              struct t_gui_buffer *buffer,
+                              const char *jid,
+                              const char *reason = nullptr);
+
+            // XEP-0384 §5.7: acknowledge a peer's opt-out, removing the block
+            // on outgoing OMEMO messages to that jid.
+            void optout_ack(struct t_gui_buffer *buffer, const char *jid);
 
             // XEP-0450 §4.2: broadcast a <distrust> trust-message for all known
             // fingerprints of jid to own devices and to jid's devices.

@@ -234,7 +234,11 @@ std::optional<std::string> weechat::xmpp::pgp::verify(struct t_gui_buffer *buffe
     err = gpgme_data_new(&out_g.h);
     if (err) goto verify_finish;
 
-    err = gpgme_op_verify(this->gpgme, in_g.h, out_g.h, nullptr);
+    // For a clearsigned block (header+content+footer all in one buffer):
+    // sig=in_g.h (the block), signed_text=NULL (implicit in clearsign),
+    // plaintext=out_g.h (receives extracted plain text).
+    // Passing out_g.h as signed_text was wrong (detached-sig semantics).
+    err = gpgme_op_verify(this->gpgme, in_g.h, nullptr, out_g.h);
     if (err) goto verify_finish;
 
     if (vrf_result = gpgme_op_verify_result(this->gpgme);

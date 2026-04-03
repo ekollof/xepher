@@ -91,22 +91,8 @@ static bool send_atm_trust_message_omemo2(
     if (!ep)
         return false;
 
-    auto mk = [&]() {
-        return std::shared_ptr<xmpp_stanza_t> { xmpp_stanza_new(*account.context), xmpp_stanza_release };
-    };
-
-    xmpp_stanza_t *encrypted = xmpp_stanza_new(*account.context);
-    xmpp_stanza_set_name(encrypted, "encrypted");
-    xmpp_stanza_set_ns(encrypted, kOmemoNs.data());
-
-    auto header = mk();
-    xmpp_stanza_set_name(header.get(), "header");
-    xmpp_stanza_set_attribute(header.get(), "sid", fmt::format("{}", self.device_id).c_str());
-
-    // Build <keys jid='recipient_jid'>  one <key rid='…'> per device
-    auto keys = mk();
-    xmpp_stanza_set_name(keys.get(), "keys");
-    xmpp_stanza_set_attribute(keys.get(), "jid", recipient_jid.c_str());
+    // Build <keys jid='recipient_jid'> per device
+    stanza::xep0384::keys keys_spec(recipient_jid);
     int key_count = 0;
     for (const auto &dev : split(recipient_devicelist, ';'))
     {
@@ -128,51 +114,32 @@ static bool send_atm_trust_message_omemo2(
             continue;
         const auto enc_key = base64_encode(*account.context,
                                            transport->first.data(), transport->first.size());
-        auto key_st = mk();
-        xmpp_stanza_set_name(key_st.get(), "key");
-        xmpp_stanza_set_attribute(key_st.get(), "rid", fmt::format("{}", *remote_id).c_str());
-        if (transport->second)
-            xmpp_stanza_set_attribute(key_st.get(), "kex", "true");
-        auto key_text = mk();
-        xmpp_stanza_set_text(key_text.get(), enc_key.c_str());
-        xmpp_stanza_add_child(key_st.get(), key_text.get());
-        xmpp_stanza_add_child(keys.get(), key_st.get());
+        keys_spec.add_key(stanza::xep0384::key(
+            fmt::format("{}", *remote_id), enc_key, transport->second));
         ++key_count;
     }
     if (key_count == 0)
-    {
-        xmpp_stanza_release(encrypted);
         return false;
-    }
-    xmpp_stanza_add_child(header.get(), keys.get());
 
-    // <payload>
-    auto payload = mk();
-    xmpp_stanza_set_name(payload.get(), "payload");
-    const auto enc_payload = base64_encode(*account.context,
-                                           ep->payload.data(), ep->payload.size());
-    auto payload_text = mk();
-    xmpp_stanza_set_text(payload_text.get(), enc_payload.c_str());
-    xmpp_stanza_add_child(payload.get(), payload_text.get());
+    const auto enc_payload_b64 = base64_encode(*account.context,
+                                               ep->payload.data(), ep->payload.size());
 
-    xmpp_stanza_add_child(encrypted, header.get());
-    xmpp_stanza_add_child(encrypted, payload.get());
+    stanza::xep0384::header header_spec(fmt::format("{}", self.device_id));
+    header_spec.add_keys(keys_spec);
 
-    // Wrap in <message type='chat' to='recipient_jid'>
-    auto message = mk();
-    xmpp_stanza_set_name(message.get(), "message");
-    xmpp_stanza_set_type(message.get(), "chat");
-    xmpp_stanza_set_attribute(message.get(), "to", recipient_jid.c_str());
-    xmpp_stanza_set_id(message.get(), stanza::uuid(*account.context).c_str());
-    xmpp_stanza_add_child(message.get(), encrypted);
+    stanza::xep0384::encrypted enc_spec;
+    enc_spec.add_header(header_spec)
+            .add_payload(stanza::xep0384::payload(enc_payload_b64));
 
-    auto store_hint = mk();
-    xmpp_stanza_set_name(store_hint.get(), "store");
-    xmpp_stanza_set_ns(store_hint.get(), "urn:xmpp:hints");
-    xmpp_stanza_add_child(message.get(), store_hint.get());
+    auto msg_sp = stanza::message()
+        .type("chat")
+        .to(recipient_jid)
+        .id(stanza::uuid(*account.context))
+        .omemo_encrypted(enc_spec)
+        .omemo_store_hint(stanza::xep0384::store_hint{})
+        .build(*account.context);
 
-    account.connection.send(message.get());
-    xmpp_stanza_release(encrypted);
+    account.connection.send(msg_sp.get());
     return true;
 }
 
@@ -199,21 +166,7 @@ static bool send_atm_trust_message_axolotl(
     if (!ep)
         return false;
 
-    auto mk = [&]() {
-        return std::shared_ptr<xmpp_stanza_t> { xmpp_stanza_new(*account.context), xmpp_stanza_release };
-    };
-
-    xmpp_stanza_t *encrypted = xmpp_stanza_new(*account.context);
-    xmpp_stanza_set_name(encrypted, "encrypted");
-    xmpp_stanza_set_ns(encrypted, kLegacyOmemoNs.data());
-
-    auto header = mk();
-    xmpp_stanza_set_name(header.get(), "header");
-    xmpp_stanza_set_attribute(header.get(), "sid", fmt::format("{}", self.device_id).c_str());
-
-    auto keys = mk();
-    xmpp_stanza_set_name(keys.get(), "keys");
-    xmpp_stanza_set_attribute(keys.get(), "jid", recipient_jid.c_str());
+    stanza::xep0384::axolotl_keys keys_spec(recipient_jid);
     int key_count = 0;
     for (const auto &dev : split(recipient_devicelist, ';'))
     {
@@ -234,56 +187,34 @@ static bool send_atm_trust_message_axolotl(
             continue;
         const auto enc_key = base64_encode(*account.context,
                                            transport->first.data(), transport->first.size());
-        auto key_st = mk();
-        xmpp_stanza_set_name(key_st.get(), "key");
-        xmpp_stanza_set_attribute(key_st.get(), "rid", fmt::format("{}", *remote_id).c_str());
-        if (transport->second)
-            xmpp_stanza_set_attribute(key_st.get(), "prekey", "true");
-        auto key_text = mk();
-        xmpp_stanza_set_text(key_text.get(), enc_key.c_str());
-        xmpp_stanza_add_child(key_st.get(), key_text.get());
-        xmpp_stanza_add_child(keys.get(), key_st.get());
+        keys_spec.add_key(stanza::xep0384::axolotl_key(
+            fmt::format("{}", *remote_id), enc_key, transport->second));
         ++key_count;
     }
     if (key_count == 0)
-    {
-        xmpp_stanza_release(encrypted);
         return false;
-    }
-    xmpp_stanza_add_child(header.get(), keys.get());
 
     const auto enc_iv = base64_encode(*account.context, ep->iv.data(), ep->iv.size());
-    auto iv_st = mk();
-    xmpp_stanza_set_name(iv_st.get(), "iv");
-    auto iv_text = mk();
-    xmpp_stanza_set_text(iv_text.get(), enc_iv.c_str());
-    xmpp_stanza_add_child(iv_st.get(), iv_text.get());
-    xmpp_stanza_add_child(header.get(), iv_st.get());
+    const auto enc_payload_b64 = base64_encode(*account.context,
+                                               ep->payload.data(), ep->payload.size());
 
-    xmpp_stanza_add_child(encrypted, header.get());
+    stanza::xep0384::axolotl_header header_spec(fmt::format("{}", self.device_id));
+    header_spec.add_keys(keys_spec)
+               .add_iv(stanza::xep0384::axolotl_iv(enc_iv));
 
-    const auto enc_payload = base64_encode(*account.context, ep->payload.data(), ep->payload.size());
-    auto payload = mk();
-    xmpp_stanza_set_name(payload.get(), "payload");
-    auto payload_text = mk();
-    xmpp_stanza_set_text(payload_text.get(), enc_payload.c_str());
-    xmpp_stanza_add_child(payload.get(), payload_text.get());
-    xmpp_stanza_add_child(encrypted, payload.get());
+    stanza::xep0384::axolotl_encrypted enc_spec;
+    enc_spec.add_header(header_spec)
+            .add_payload(stanza::xep0384::axolotl_payload(enc_payload_b64));
 
-    auto message = mk();
-    xmpp_stanza_set_name(message.get(), "message");
-    xmpp_stanza_set_type(message.get(), "chat");
-    xmpp_stanza_set_attribute(message.get(), "to", recipient_jid.c_str());
-    xmpp_stanza_set_id(message.get(), stanza::uuid(*account.context).c_str());
-    xmpp_stanza_add_child(message.get(), encrypted);
+    auto msg_sp = stanza::message()
+        .type("chat")
+        .to(recipient_jid)
+        .id(stanza::uuid(*account.context))
+        .omemo_axolotl_encrypted(enc_spec)
+        .omemo_store_hint(stanza::xep0384::store_hint{})
+        .build(*account.context);
 
-    auto store_hint = mk();
-    xmpp_stanza_set_name(store_hint.get(), "store");
-    xmpp_stanza_set_ns(store_hint.get(), "urn:xmpp:hints");
-    xmpp_stanza_add_child(message.get(), store_hint.get());
-
-    account.connection.send(message.get());
-    xmpp_stanza_release(encrypted);
+    account.connection.send(msg_sp.get());
     return true;
 }
 
@@ -417,6 +348,86 @@ static void send_atm_distrust_message(omemo &self,
 {
     send_atm_distrust_message(self, account,
         std::vector<std::pair<std::string,std::string>>{{key_owner_jid, key_b64}});
+}
+
+// XEP-0384 §5.7: send an <opt-out xmlns='urn:xmpp:omemo:2'/> message to peer_jid
+// to indicate that this client is switching to plaintext.  Only sent via OMEMO:2
+// (the spec only defines opt-out for urn:xmpp:omemo:2).  reason may be empty.
+// This is the static helper; the public method weechat::xmpp::omemo::send_opt_out()
+// in commands.inl calls this.
+static void send_omemo2_opt_out(omemo &self,
+                                weechat::account &account,
+                                const std::string &peer_jid,
+                                std::string_view reason)
+{
+    if (!account.context || peer_jid.empty())
+        return;
+
+    const auto dl2 = load_string(self, key_for_devicelist(peer_jid));
+    if (!dl2 || dl2->empty())
+        return;
+
+    // Build the <opt-out> XML fragment that goes inside SCE <content>.
+    const std::string opt_out_xml = reason.empty()
+        ? "<opt-out xmlns='urn:xmpp:omemo:2'/>"
+        : fmt::format("<opt-out xmlns='urn:xmpp:omemo:2'><reason>{}</reason></opt-out>",
+                      xml_escape(std::string(reason)));
+
+    const auto sce_envelope = sce_wrap_content(*account.context, account, opt_out_xml);
+
+    const auto ep = omemo2_encrypt(sce_envelope);
+    if (!ep)
+        return;
+
+    const auto sid_str = fmt::format("{}", self.device_id);
+    const auto enc_payload_b64 = base64_encode(*account.context,
+                                               ep->payload.data(), ep->payload.size());
+
+    // Build <keys jid='peer_jid'> with one <key> per remote device.
+    stanza::xep0384::keys keys_spec(peer_jid);
+    int key_count = 0;
+    for (const auto &dev : split(*dl2, ';'))
+    {
+        const auto remote_id = parse_uint32(dev);
+        if (!remote_id || !is_valid_omemo_device_id(*remote_id))
+            continue;
+        if (self.failed_session_bootstrap.count({peer_jid, *remote_id}) > 0)
+            continue;
+        if (!self.has_session(peer_jid.c_str(), *remote_id))
+        {
+            if (!establish_session_from_bundle(self, *account.context, peer_jid, *remote_id))
+                continue;
+        }
+        const auto transport = encrypt_transport_key(self, peer_jid, *remote_id, *ep);
+        if (!transport)
+            continue;
+        const auto enc_key = base64_encode(*account.context,
+                                           transport->first.data(), transport->first.size());
+        keys_spec.add_key(stanza::xep0384::key(
+            fmt::format("{}", *remote_id), enc_key, transport->second));
+        ++key_count;
+    }
+    if (key_count == 0)
+        return;
+
+    stanza::xep0384::header header_spec(sid_str);
+    header_spec.add_keys(keys_spec);
+
+    stanza::xep0384::encrypted enc_spec;
+    enc_spec.add_header(header_spec);
+    enc_spec.add_payload(stanza::xep0384::payload(enc_payload_b64));
+
+    stanza::xep0384::store_hint hint_spec;
+
+    auto msg_sp = stanza::message()
+        .type("chat")
+        .to(peer_jid)
+        .id(stanza::uuid(*account.context))
+        .omemo_encrypted(enc_spec)
+        .omemo_store_hint(hint_spec)
+        .build(*account.context);
+
+    account.connection.send(msg_sp.get());
 }
 
 // XEP-0450 §5.1: drain any trust decisions that were deferred while sender_jid
@@ -772,6 +783,15 @@ void weechat::xmpp::omemo::handle_devicelist(weechat::account *account,
                     auto bs = std::shared_ptr<xmpp_stanza_t> { bundle, xmpp_stanza_release };
                     account->connection.send(bs.get());
                 }
+                // Also republish the legacy axolotl devicelist and bundle so
+                // Conversations-compatible clients keep seeing our device.
+                if (auto legacy_dl = account->get_legacy_devicelist())
+                    account->connection.send(legacy_dl.get());
+                if (auto axolotl_bundle = get_axolotl_bundle(*account->context, nullptr, nullptr))
+                {
+                    auto abs = std::shared_ptr<xmpp_stanza_t> { axolotl_bundle, xmpp_stanza_release };
+                    account->connection.send(abs.get());
+                }
             }
         }
     }
@@ -917,62 +937,48 @@ static void send_omemo2_key_transport(omemo &self,
     if (!self || !peer_jid)
         return;
 
-    // Generate a fresh random 48-byte transport key bundle (key32 || hmac16).
-    // We use omemo2_encrypt on a dummy single-byte plaintext just to get a
-    // properly-derived key; the resulting payload is discarded.
-    const auto ep = omemo2_encrypt(std::string_view("\x00", 1));
-    if (!ep)
-    {
-        print_error(buffer, fmt::format(
-            "OMEMO: key-transport key generation failed for {}/{}",
-            peer_jid, remote_device_id));
-        return;
-    }
+    // Per XEP-0384 §5.5.3: for an empty OMEMO message (KeyTransportElement)
+    // the 32-byte key and 16-byte HMAC SHOULD be 32+16 zero bytes.
+    // This advances the Double Ratchet on both ends without associating any
+    // actual plaintext decryption key with this message.
+    const omemo2_payload ep{};  // all-zero key, all-zero hmac, empty payload
 
-    // Build <encrypted xmlns='urn:xmpp:omemo:2'>
-    auto mk_o2 = [&]() {
-        return std::shared_ptr<xmpp_stanza_t> { xmpp_stanza_new(*account.context), xmpp_stanza_release };
+    // Map of JID → per-device keys (ordered to maintain consistent wire order)
+    // We use a vector of (jid, keys_spec) pairs to preserve insertion order.
+    std::vector<std::pair<std::string, stanza::xep0384::keys>> keys_by_jid;
+
+    const std::string own_bare_jid = [&]{
+        auto b = ::jid(nullptr, account.jid().data()).bare;
+        return b.empty() ? std::string(account.jid()) : b;
+    }();
+
+    // Helper: find or create a keys_spec for a JID
+    auto get_keys_for_jid = [&](const std::string &jid) -> stanza::xep0384::keys& {
+        for (auto &[j, ks] : keys_by_jid)
+            if (j == jid) return ks;
+        keys_by_jid.emplace_back(jid, stanza::xep0384::keys(jid));
+        return keys_by_jid.back().second;
     };
 
-    auto encrypted = mk_o2();
-    xmpp_stanza_set_name(encrypted.get(), "encrypted");
-    xmpp_stanza_set_ns(encrypted.get(), kOmemoNs.data());
-
-    // <header sid='our_device_id'>
-    auto header = mk_o2();
-    xmpp_stanza_set_name(header.get(), "header");
-    xmpp_stanza_set_attribute(header.get(), "sid", fmt::format("{}", self.device_id).c_str());
-
+    // Helper: encrypt transport key for a device and add to its keys_spec.
+    // Returns true if a key was successfully added.
     auto add_omemo2_key = [&](const std::string &target_jid,
                               std::uint32_t target_device_id) -> bool
     {
         if (!is_valid_omemo_device_id(target_device_id))
             return false;
 
-        const auto target_transport = encrypt_transport_key(self, target_jid.c_str(), target_device_id, *ep);
+        const auto target_transport = encrypt_transport_key(self, target_jid.c_str(), target_device_id, ep);
         if (!target_transport)
             return false;
 
         const auto target_encoded_transport = base64_encode(*account.context,
                                                             target_transport->first.data(),
                                                             target_transport->first.size());
-
-        auto keys = mk_o2();
-        xmpp_stanza_set_name(keys.get(), "keys");
-        xmpp_stanza_set_attribute(keys.get(), "jid", target_jid.c_str());
-
-        auto key_elem = mk_o2();
-        xmpp_stanza_set_name(key_elem.get(), "key");
-        xmpp_stanza_set_attribute(key_elem.get(), "rid", fmt::format("{}", target_device_id).c_str());
-        if (target_transport->second)
-            xmpp_stanza_set_attribute(key_elem.get(), "kex", "true");
-
-        auto key_text = mk_o2();
-        xmpp_stanza_set_text(key_text.get(), target_encoded_transport.c_str());
-        xmpp_stanza_add_child(key_elem.get(), key_text.get());
-
-        xmpp_stanza_add_child(keys.get(), key_elem.get());
-        xmpp_stanza_add_child(header.get(), keys.get());
+        get_keys_for_jid(target_jid).add_key(stanza::xep0384::key(
+            fmt::format("{}", target_device_id),
+            target_encoded_transport,
+            target_transport->second));
         return true;
     };
 
@@ -981,32 +987,40 @@ static void send_omemo2_key_transport(omemo &self,
 
     // Also include our other own devices so carbon-copied stanzas can be
     // decrypted on sibling clients (e.g., Gajim), avoiding spurious warnings.
-    const std::string own_bare_jid = [&]{
-        auto b = ::jid(nullptr, account.jid().data()).bare;
-        return b.empty() ? std::string(account.jid()) : b;
-    }();
-    const auto own_devicelist = load_string(self, key_for_devicelist(own_bare_jid));
-    if (own_devicelist)
-    {
-        for (const auto &dev : split(*own_devicelist, ';'))
+    // We iterate both the OMEMO:2 devicelist and the legacy axolotl devicelist
+    // so that own devices registered only via the legacy namespace are covered.
+
+    // Collect device IDs from both lists (deduplicated via set).
+    std::set<std::uint32_t> own_device_ids;
+    auto collect_from_list = [&](const std::optional<std::string> &devlist_opt) {
+        if (!devlist_opt || devlist_opt->empty())
+            return;
+        for (const auto &dev : split(*devlist_opt, ';'))
         {
-            const auto own_device = parse_uint32(dev);
-            if (!own_device || *own_device == self.device_id)
-                continue;
-
-            if (self.failed_session_bootstrap.count({own_bare_jid, *own_device}) > 0)
-                continue;
-
-            if (!self.has_session(own_bare_jid.c_str(), *own_device)
-                && !establish_session_from_bundle(self, *account.context, own_bare_jid, *own_device))
-            {
-                request_bundle(account, own_bare_jid, *own_device);
-                continue;
-            }
-
-            if (add_omemo2_key(own_bare_jid, *own_device))
-                added_any_key = true;
+            if (const auto id = parse_uint32(dev))
+                own_device_ids.insert(*id);
         }
+    };
+    collect_from_list(load_string(self, key_for_devicelist(own_bare_jid)));
+    collect_from_list(load_string(self, key_for_axolotl_devicelist(own_bare_jid)));
+
+    for (const auto own_device : own_device_ids)
+    {
+        if (own_device == self.device_id)
+            continue;
+
+        if (self.failed_session_bootstrap.count({own_bare_jid, own_device}) > 0)
+            continue;
+
+        if (!self.has_session(own_bare_jid.c_str(), own_device)
+            && !establish_session_from_bundle(self, *account.context, own_bare_jid, own_device))
+        {
+            request_bundle(account, own_bare_jid, own_device);
+            continue;
+        }
+
+        if (add_omemo2_key(own_bare_jid, own_device))
+            added_any_key = true;
     }
 
     if (!added_any_key)
@@ -1017,28 +1031,27 @@ static void send_omemo2_key_transport(omemo &self,
         return;
     }
 
-    xmpp_stanza_add_child(encrypted.get(), header.get());
+    stanza::xep0384::header header_spec(fmt::format("{}", self.device_id));
+    for (auto &[jid, ks] : keys_by_jid)
+        header_spec.add_keys(ks);
 
-    // Wrap in a <message type='chat' to='peer_jid'>
-    auto message_o2 = mk_o2();
-    xmpp_stanza_set_name(message_o2.get(), "message");
-    xmpp_stanza_set_type(message_o2.get(), "chat");
-    xmpp_stanza_set_attribute(message_o2.get(), "to", peer_jid);
-    xmpp_stanza_set_id(message_o2.get(), stanza::uuid(*account.context).c_str());
-    xmpp_stanza_add_child(message_o2.get(), encrypted.get());
-
-    // Add <store xmlns='urn:xmpp:hints'/> so the server archives it and
-    // Conversations can pick up our session even if it's offline.
-    auto store_hint_o2 = mk_o2();
-    xmpp_stanza_set_name(store_hint_o2.get(), "store");
-    xmpp_stanza_set_ns(store_hint_o2.get(), "urn:xmpp:hints");
-    xmpp_stanza_add_child(message_o2.get(), store_hint_o2.get());
+    // Key-transport messages have NO <payload> element (XEP-0384 §7.3)
+    stanza::xep0384::encrypted enc_spec;
+    enc_spec.add_header(header_spec);
 
     print_info(buffer, fmt::format(
         "OMEMO: sending key-transport to {}/{} (kex={})",
         peer_jid, remote_device_id, "mixed"));
 
-    account.connection.send(message_o2.get());
+    auto msg_sp = stanza::message()
+        .type("chat")
+        .to(peer_jid)
+        .id(stanza::uuid(*account.context))
+        .omemo_encrypted(enc_spec)
+        .omemo_store_hint(stanza::xep0384::store_hint{})
+        .build(*account.context);
+
+    account.connection.send(msg_sp.get());
 }
 
 static void send_axolotl_key_transport(omemo &self,
@@ -1050,64 +1063,51 @@ static void send_axolotl_key_transport(omemo &self,
     if (!self || !peer_jid)
         return;
 
-    const auto ep = axolotl_omemo_encrypt(std::string_view("\x00", 1));
-    if (!ep)
-    {
-        print_error(buffer, fmt::format(
-            "OMEMO (legacy): key-transport key generation failed for {}/{}",
-            peer_jid, remote_device_id));
-        return;
-    }
+    // Per XEP-0384 §5.5.3 / Conversations empty OMEMO message: for a
+    // KeyTransportElement the innerKey(16) and authTag(16) SHOULD be zero bytes.
+    // IV is also zero (no payload to decrypt with it).
+    const axolotl_omemo_payload ep{};  // all-zero key, iv, authtag, empty payload
 
     const auto encoded_iv = base64_encode(*account.context,
-                                          ep->iv.data(),
-                                          ep->iv.size());
+                                          ep.iv.data(),
+                                          ep.iv.size());
 
-    auto mk_leg2 = [&]() {
-        return std::shared_ptr<xmpp_stanza_t> { xmpp_stanza_new(*account.context), xmpp_stanza_release };
-    };
+    const std::string own_bare_jid = [&]{
+        auto b = ::jid(nullptr, account.jid().data()).bare;
+        return b.empty() ? std::string(account.jid()) : b;
+    }();
 
-    auto encrypted_leg = mk_leg2();
-    xmpp_stanza_set_name(encrypted_leg.get(), "encrypted");
-    xmpp_stanza_set_ns(encrypted_leg.get(), kLegacyOmemoNs.data());
+    // Build per-JID axolotl_keys specs. Use a vector to preserve insertion order.
+    // peer_keys holds keys for the remote peer; own_keys for our own devices.
+    stanza::xep0384::axolotl_keys peer_keys_spec(peer_jid);
+    stanza::xep0384::axolotl_keys own_keys_spec(own_bare_jid);
+    bool peer_has_keys = false;
+    bool own_has_keys = false;
 
-    auto header_leg = mk_leg2();
-    xmpp_stanza_set_name(header_leg.get(), "header");
-    xmpp_stanza_set_attribute(header_leg.get(), "sid", fmt::format("{}", self.device_id).c_str());
-
+    // Helper: encrypt an axolotl transport key and add to the given spec.
     auto add_axolotl_key = [&](const std::string &target_jid,
-                              std::uint32_t target_device_id) -> bool
+                               std::uint32_t target_device_id,
+                               stanza::xep0384::axolotl_keys &ks) -> bool
     {
         if (!is_valid_omemo_device_id(target_device_id))
             return false;
 
-        const auto target_transport = encrypt_axolotl_transport_key(self, target_jid, target_device_id, *ep);
+        const auto target_transport = encrypt_axolotl_transport_key(self, target_jid, target_device_id, ep);
         if (!target_transport)
             return false;
 
         const auto target_encoded_transport = base64_encode(*account.context,
                                                             target_transport->first.data(),
                                                             target_transport->first.size());
-
-        auto key_elem = mk_leg2();
-        xmpp_stanza_set_name(key_elem.get(), "key");
-        xmpp_stanza_set_attribute(key_elem.get(), "rid", fmt::format("{}", target_device_id).c_str());
-        if (target_transport->second)
-            xmpp_stanza_set_attribute(key_elem.get(), "prekey", "true");
-
-        auto key_text = mk_leg2();
-        xmpp_stanza_set_text(key_text.get(), target_encoded_transport.c_str());
-        xmpp_stanza_add_child(key_elem.get(), key_text.get());
-        xmpp_stanza_add_child(header_leg.get(), key_elem.get());
+        ks.add_key(stanza::xep0384::axolotl_key(
+            fmt::format("{}", target_device_id),
+            target_encoded_transport,
+            target_transport->second));
         return true;
     };
 
-    bool added_any_key = add_axolotl_key(peer_jid, remote_device_id);
-
-    const std::string own_bare_jid = [&]{
-        auto b = ::jid(nullptr, account.jid().data()).bare;
-        return b.empty() ? std::string(account.jid()) : b;
-    }();
+    if (add_axolotl_key(peer_jid, remote_device_id, peer_keys_spec))
+        peer_has_keys = true;
 
     auto add_own_legacy_targets = [&](const std::string &device_list_str)
     {
@@ -1127,8 +1127,8 @@ static void send_axolotl_key_transport(omemo &self,
                 continue;
             }
 
-            if (add_axolotl_key(own_bare_jid, *own_device))
-                added_any_key = true;
+            if (add_axolotl_key(own_bare_jid, *own_device, own_keys_spec))
+                own_has_keys = true;
         }
     };
 
@@ -1144,7 +1144,7 @@ static void send_axolotl_key_transport(omemo &self,
             add_own_legacy_targets(*own_omemo2_devicelist);
     }
 
-    if (!added_any_key)
+    if (!peer_has_keys && !own_has_keys)
     {
         print_error(buffer, fmt::format(
             "OMEMO (legacy): key-transport encrypt failed for {}/{}",
@@ -1152,32 +1152,28 @@ static void send_axolotl_key_transport(omemo &self,
         return;
     }
 
-    auto iv_stanza_leg = mk_leg2();
-    xmpp_stanza_set_name(iv_stanza_leg.get(), "iv");
-    auto iv_text_leg = mk_leg2();
-    xmpp_stanza_set_text(iv_text_leg.get(), encoded_iv.c_str());
-    xmpp_stanza_add_child(iv_stanza_leg.get(), iv_text_leg.get());
-    xmpp_stanza_add_child(header_leg.get(), iv_stanza_leg.get());
+    stanza::xep0384::axolotl_header header_spec(fmt::format("{}", self.device_id));
+    if (peer_has_keys) header_spec.add_keys(peer_keys_spec);
+    if (own_has_keys)  header_spec.add_keys(own_keys_spec);
+    header_spec.add_iv(stanza::xep0384::axolotl_iv(encoded_iv));
 
-    xmpp_stanza_add_child(encrypted_leg.get(), header_leg.get());
-
-    auto message_leg = mk_leg2();
-    xmpp_stanza_set_name(message_leg.get(), "message");
-    xmpp_stanza_set_type(message_leg.get(), "chat");
-    xmpp_stanza_set_attribute(message_leg.get(), "to", peer_jid);
-    xmpp_stanza_set_id(message_leg.get(), stanza::uuid(*account.context).c_str());
-    xmpp_stanza_add_child(message_leg.get(), encrypted_leg.get());
-
-    auto store_hint_leg = mk_leg2();
-    xmpp_stanza_set_name(store_hint_leg.get(), "store");
-    xmpp_stanza_set_ns(store_hint_leg.get(), "urn:xmpp:hints");
-    xmpp_stanza_add_child(message_leg.get(), store_hint_leg.get());
+    // Key-transport messages carry no <payload> element
+    stanza::xep0384::axolotl_encrypted enc_spec;
+    enc_spec.add_header(header_spec);
 
     print_info(buffer, fmt::format(
         "OMEMO (legacy): sending key-transport to {}/{} (prekey={})",
         peer_jid, remote_device_id, "mixed"));
 
-    account.connection.send(message_leg.get());
+    auto msg_sp = stanza::message()
+        .type("chat")
+        .to(peer_jid)
+        .id(stanza::uuid(*account.context))
+        .omemo_axolotl_encrypted(enc_spec)
+        .omemo_store_hint(stanza::xep0384::store_hint{})
+        .build(*account.context);
+
+    account.connection.send(msg_sp.get());
 }
 
 static void send_key_transport(omemo &self,

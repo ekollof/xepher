@@ -412,7 +412,8 @@ void crypto_unlock(void *user_data)
                                          std::uint32_t remote_device_id,
                                          const std::vector<std::uint8_t> &serialized,
                                          bool is_prekey,
-                                         std::optional<std::uint32_t> *out_used_prekey_id = nullptr)
+                                         std::optional<std::uint32_t> *out_used_prekey_id = nullptr,
+                                         std::optional<std::uint32_t> *out_message_counter = nullptr)
     -> std::optional<std::pair<std::array<std::uint8_t, 32>, std::array<std::uint8_t, 16>>>
 {
     OMEMO_ASSERT(self.context, "signal context must be initialized before decrypting transport keys");
@@ -461,6 +462,13 @@ void crypto_unlock(void *user_data)
         // Capture the pre-key ID before decryption so we can replace it afterwards.
         if (out_used_prekey_id && pre_key_signal_message_has_pre_key_id(message.get()))
             *out_used_prekey_id = pre_key_signal_message_get_pre_key_id(message.get());
+        // Capture the ratchet counter for heartbeat logic (XEP-0384 §6).
+        if (out_message_counter)
+        {
+            const signal_message *inner_sm = pre_key_signal_message_get_signal_message(message.get());
+            if (inner_sm)
+                *out_message_counter = signal_message_get_counter(inner_sm);
+        }
         result = session_cipher_decrypt_pre_key_signal_message(cipher.get(), message.get(), nullptr, &plaintext_raw);
 
         // If prekey decryption fails but a session already exists, the prekey
@@ -495,6 +503,9 @@ void crypto_unlock(void *user_data)
             return std::nullopt;
         }
         libsignal::object<signal_message> message {message_raw};
+        // Capture the ratchet counter for heartbeat logic (XEP-0384 §6).
+        if (out_message_counter)
+            *out_message_counter = signal_message_get_counter(message.get());
         result = session_cipher_decrypt_signal_message(cipher.get(), message.get(), nullptr, &plaintext_raw);
     }
 
@@ -621,6 +632,37 @@ void crypto_unlock(void *user_data)
     if (text.empty())
         return std::nullopt;
     return text;
+}
+
+// XEP-0384 §5.7: Detect an <opt-out xmlns='urn:xmpp:omemo:2'/> element inside
+// an SCE <content> element.  Returns the <reason> text if present (empty string
+// if no <reason> child), or std::nullopt if no <opt-out/> element was found.
+[[nodiscard]] auto sce_detect_opt_out(xmpp_ctx_t *context, std::string_view xml)
+    -> std::optional<std::string>
+{
+    using stanza_guard = std::unique_ptr<xmpp_stanza_t, decltype(&xmpp_stanza_release)>;
+    stanza_guard stanza(xmpp_stanza_new_from_string(context, std::string {xml}.c_str()),
+                        xmpp_stanza_release);
+    if (!stanza)
+        return std::nullopt;
+
+    xmpp_stanza_t *content = xmpp_stanza_get_child_by_name(stanza.get(), "content");
+    if (!content)
+        return std::nullopt;
+
+    // Look for <opt-out xmlns='urn:xmpp:omemo:2'/> directly inside <content>.
+    xmpp_stanza_t *opt_out = xmpp_stanza_get_child_by_name_and_ns(
+        content, "opt-out", kOmemoNs.data());
+    if (!opt_out)
+        return std::nullopt;
+
+    // Extract optional <reason> text.
+    xmpp_stanza_t *reason_elem = xmpp_stanza_get_child_by_name(opt_out, "reason");
+    if (!reason_elem)
+        return std::string {};  // opt-out present, no reason given
+
+    const auto reason = stanza_text(reason_elem);
+    return reason;  // may be empty if <reason/> is self-closing
 }
 
 [[nodiscard]] auto serialize_public_key(xmpp_ctx_t *context, ec_public_key *key) -> std::string
@@ -769,7 +811,8 @@ struct axolotl_omemo_payload {
                                                 std::uint32_t remote_device_id,
                                                 const std::vector<std::uint8_t> &serialized,
                                                 bool is_prekey,
-                                                std::optional<std::uint32_t> *out_used_prekey_id = nullptr)
+                                                std::optional<std::uint32_t> *out_used_prekey_id = nullptr,
+                                                std::optional<std::uint32_t> *out_message_counter = nullptr)
     -> std::optional<std::pair<std::array<std::uint8_t, 16>, std::array<std::uint8_t, 16>>>
 {
     OMEMO_ASSERT(self.context, "signal context required");
@@ -815,6 +858,13 @@ struct axolotl_omemo_payload {
         libsignal::object<pre_key_signal_message> message {message_raw};
         if (out_used_prekey_id && pre_key_signal_message_has_pre_key_id(message.get()))
             *out_used_prekey_id = pre_key_signal_message_get_pre_key_id(message.get());
+        // Capture the ratchet counter for heartbeat logic (XEP-0384 §6).
+        if (out_message_counter)
+        {
+            const signal_message *inner_sm = pre_key_signal_message_get_signal_message(message.get());
+            if (inner_sm)
+                *out_message_counter = signal_message_get_counter(inner_sm);
+        }
         result = session_cipher_decrypt_pre_key_signal_message(cipher.get(), message.get(), nullptr, &plaintext_raw);
 
         // If prekey decryption fails but a session already exists, the prekey
@@ -852,6 +902,9 @@ struct axolotl_omemo_payload {
             return std::nullopt;
         }
         libsignal::object<signal_message> message {message_raw};
+        // Capture the ratchet counter for heartbeat logic (XEP-0384 §6).
+        if (out_message_counter)
+            *out_message_counter = signal_message_get_counter(message.get());
         result = session_cipher_decrypt_signal_message(cipher.get(), message.get(), nullptr, &plaintext_raw);
     }
 

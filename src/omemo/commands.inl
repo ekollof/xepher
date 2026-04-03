@@ -483,6 +483,75 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
         print_info(buffer, fmt::format("  {}", device));
 }
 
+void weechat::xmpp::omemo::send_opt_out(weechat::account &account,
+                                        struct t_gui_buffer *buffer,
+                                        const char *jid,
+                                        const char *reason)
+{
+    if (!db_env || !jid)
+    {
+        print_error(buffer, "OMEMO is not initialized.");
+        return;
+    }
+
+    const std::string bare_jid = normalize_bare_jid(*account.context, jid);
+    if (bare_jid.empty())
+    {
+        print_error(buffer, "OMEMO: invalid JID for opt-out.");
+        return;
+    }
+
+    const std::string_view reason_sv = reason ? reason : std::string_view {};
+    send_omemo2_opt_out(*this, account, bare_jid, reason_sv);
+
+    // Record that we ourselves have opted out toward this peer so encode()
+    // will block outgoing OMEMO to them until optout_ack() is called.
+    omemo_opted_out_peers.insert(bare_jid);
+
+    if (reason && *reason)
+    {
+        print_info(buffer, fmt::format(
+            "OMEMO: sent opt-out to {} (reason: {}). "
+            "Outgoing OMEMO messages to this contact are now blocked. "
+            "Use /omemo optout-ack {} to re-enable OMEMO or keep it disabled.",
+            bare_jid, reason, bare_jid));
+    }
+    else
+    {
+        print_info(buffer, fmt::format(
+            "OMEMO: sent opt-out to {}. "
+            "Outgoing OMEMO messages to this contact are now blocked. "
+            "Use /omemo optout-ack {} to re-enable OMEMO or keep it disabled.",
+            bare_jid, bare_jid));
+    }
+}
+
+void weechat::xmpp::omemo::optout_ack(struct t_gui_buffer *buffer, const char *jid)
+{
+    if (!jid)
+    {
+        print_error(buffer, "OMEMO: optout-ack requires a JID.");
+        return;
+    }
+
+    const std::string bare_jid = jid; // Already expected to be bare by caller
+    const bool was_blocked = omemo_opted_out_peers.erase(bare_jid) > 0;
+
+    if (was_blocked)
+    {
+        print_info(buffer, fmt::format(
+            "OMEMO: opt-out for {} acknowledged. "
+            "Outgoing OMEMO messages to this contact are now unblocked.",
+            bare_jid));
+    }
+    else
+    {
+        print_info(buffer, fmt::format(
+            "OMEMO: {} was not in the opt-out list (nothing changed).",
+            bare_jid));
+    }
+}
+
 void weechat::xmpp::omemo::show_status(struct t_gui_buffer *buffer,
                                        const char *account_name,
                                        const char *channel_name,

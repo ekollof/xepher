@@ -57,132 +57,50 @@ xmpp_stanza_t *weechat::xmpp::omemo::get_bundle(xmpp_ctx_t *context, char *from,
     XDEBUG("omemo: publishing bundle for device {} with {} prekeys",
            device_id, bundle->prekeys.size());
 
-    // All intermediate nodes are shared_ptr (auto-released). The root iq is
-    // returned raw with ownership transfer to the caller.
-    auto mk = [&]() {
-        return std::shared_ptr<xmpp_stanza_t> { xmpp_stanza_new(context), xmpp_stanza_release };
-    };
-
-    // <spk id='…'>base64</spk>  (XEP-0384 §4.3 wire format)
-    auto spk_text = mk();
-    xmpp_stanza_set_text(spk_text.get(), bundle->signed_pre_key.c_str());
-    auto spk = mk();
-    xmpp_stanza_set_name(spk.get(), "spk");
-    xmpp_stanza_set_attribute(spk.get(), "id", bundle->signed_pre_key_id.c_str());
-    xmpp_stanza_set_ns(spk.get(), kOmemoNs.data());
-    xmpp_stanza_add_child(spk.get(), spk_text.get());
-
-    // <spks>base64</spks>
-    auto spks_text = mk();
-    xmpp_stanza_set_text(spks_text.get(), bundle->signed_pre_key_signature.c_str());
-    auto spks = mk();
-    xmpp_stanza_set_name(spks.get(), "spks");
-    xmpp_stanza_set_ns(spks.get(), kOmemoNs.data());
-    xmpp_stanza_add_child(spks.get(), spks_text.get());
-
-    // <ik>base64</ik>
-    auto ik_text = mk();
-    xmpp_stanza_set_text(ik_text.get(), bundle->identity_key.c_str());
-    auto ik = mk();
-    xmpp_stanza_set_name(ik.get(), "ik");
-    xmpp_stanza_set_ns(ik.get(), kOmemoNs.data());
-    xmpp_stanza_add_child(ik.get(), ik_text.get());
-
-    // <prekeys> loop — each prekey is <pk id='…'>base64</pk>
-    auto prekeys = mk();
-    xmpp_stanza_set_name(prekeys.get(), "prekeys");
-    xmpp_stanza_set_ns(prekeys.get(), kOmemoNs.data());
+    // Build <bundle xmlns='urn:xmpp:omemo:2'>
+    stanza::xep0384::prekeys prekeys_spec;
     for (const auto &[id, key] : bundle->prekeys)
-    {
-        auto pk_text = mk();
-        xmpp_stanza_set_text(pk_text.get(), key.c_str());
-        auto pk = mk();
-        xmpp_stanza_set_name(pk.get(), "pk");
-        xmpp_stanza_set_attribute(pk.get(), "id", id.c_str());
-        xmpp_stanza_set_ns(pk.get(), kOmemoNs.data());
-        xmpp_stanza_add_child(pk.get(), pk_text.get());
-        xmpp_stanza_add_child(prekeys.get(), pk.get());
-    }
+        prekeys_spec.add_pk(stanza::xep0384::pk(id, key));
 
-    // <bundle xmlns='urn:xmpp:omemo:2'>
-    auto bundle_stanza = mk();
-    xmpp_stanza_set_name(bundle_stanza.get(), "bundle");
-    xmpp_stanza_set_ns(bundle_stanza.get(), kOmemoNs.data());
-    xmpp_stanza_add_child(bundle_stanza.get(), spk.get());
-    xmpp_stanza_add_child(bundle_stanza.get(), spks.get());
-    xmpp_stanza_add_child(bundle_stanza.get(), ik.get());
-    xmpp_stanza_add_child(bundle_stanza.get(), prekeys.get());
+    stanza::xep0384::bundle bundle_spec;
+    bundle_spec.add_spk(stanza::xep0384::spk(bundle->signed_pre_key_id, bundle->signed_pre_key))
+               .add_spks(stanza::xep0384::spks(bundle->signed_pre_key_signature))
+               .add_ik(stanza::xep0384::ik(bundle->identity_key))
+               .add_prekeys(prekeys_spec);
 
-    // <item id='device_id'>
+    // Build publish-options xdata form (access_model=open)
+    stanza::xep0384::xdata_form form;
+    form.add_field(stanza::xep0384::xdata_field(
+             "FORM_TYPE",
+             "http://jabber.org/protocol/pubsub#publish-options",
+             "hidden"))
+        .add_field(stanza::xep0384::xdata_field("pubsub#max_items", "max"))
+        .add_field(stanza::xep0384::xdata_field("pubsub#access_model", "open"))
+        .add_field(stanza::xep0384::xdata_field("pubsub#persist_items", "true"));
+
+    stanza::xep0060::publish_options pub_opts;
+    pub_opts.child_spec(form);
+
     const auto item_id = fmt::format("{}", device_id);
-    auto item = mk();
-    xmpp_stanza_set_name(item.get(), "item");
-    xmpp_stanza_set_attribute(item.get(), "id", item_id.c_str());
-    xmpp_stanza_add_child(item.get(), bundle_stanza.get());
+    stanza::xep0060::item item_spec;
+    item_spec.id(item_id).payload(bundle_spec);
 
-    // <publish node='…'>
-    auto publish = mk();
-    xmpp_stanza_set_name(publish.get(), "publish");
-    xmpp_stanza_set_attribute(publish.get(), "node", kBundlesNode.data());
-    xmpp_stanza_add_child(publish.get(), item.get());
+    stanza::xep0060::pubsub pubsub_spec;
+    pubsub_spec.publish(stanza::xep0060::publish(kBundlesNode)
+                            .item(item_spec))
+               .publish_options(pub_opts);
 
-    // <pubsub xmlns='…'>
-    auto pubsub = mk();
-    xmpp_stanza_set_name(pubsub.get(), "pubsub");
-    xmpp_stanza_set_ns(pubsub.get(), "http://jabber.org/protocol/pubsub");
-    xmpp_stanza_add_child(pubsub.get(), publish.get());
+    auto iq_sp = stanza::iq()
+        .type("set")
+        .id("omemo-bundle")
+        .pubsub(pubsub_spec)
+        .build(context);
 
-    // Add publish-options (access_model=open) so the server allows contacts
-    // to fetch our bundle.  Without this some servers default to a restricted
-    // access model and silently reject the publish or make the bundle invisible.
-    {
-        auto make_field = [&](const char *var, const char *val, const char *type_attr = nullptr) {
-            auto field = mk();
-            xmpp_stanza_set_name(field.get(), "field");
-            xmpp_stanza_set_attribute(field.get(), "var", var);
-            if (type_attr) xmpp_stanza_set_attribute(field.get(), "type", type_attr);
-            auto value = mk();
-            xmpp_stanza_set_name(value.get(), "value");
-            auto txt = mk();
-            xmpp_stanza_set_text(txt.get(), val);
-            xmpp_stanza_add_child(value.get(), txt.get());
-            xmpp_stanza_add_child(field.get(), value.get());
-            return field;
-        };
+    if (from) xmpp_stanza_set_attribute(iq_sp.get(), "from", from);
+    if (to)   xmpp_stanza_set_attribute(iq_sp.get(), "to", to);
 
-        auto x = mk();
-        xmpp_stanza_set_name(x.get(), "x");
-        xmpp_stanza_set_ns(x.get(), "jabber:x:data");
-        xmpp_stanza_set_attribute(x.get(), "type", "submit");
-
-        auto f1 = make_field("FORM_TYPE",
-            "http://jabber.org/protocol/pubsub#publish-options", "hidden");
-        auto f2 = make_field("pubsub#max_items", "max");
-        auto f3 = make_field("pubsub#access_model", "open");
-        auto f4 = make_field("pubsub#persist_items", "true");
-
-        xmpp_stanza_add_child(x.get(), f1.get());
-        xmpp_stanza_add_child(x.get(), f2.get());
-        xmpp_stanza_add_child(x.get(), f3.get());
-        xmpp_stanza_add_child(x.get(), f4.get());
-
-        auto publish_options = mk();
-        xmpp_stanza_set_name(publish_options.get(), "publish-options");
-        xmpp_stanza_add_child(publish_options.get(), x.get());
-
-        xmpp_stanza_add_child(pubsub.get(), publish_options.get());
-    }
-
-    // Build <iq type='set' id='omemo-bundle'> — returned raw (caller owns)
-    xmpp_stanza_t *iq = xmpp_stanza_new(context);
-    xmpp_stanza_set_name(iq, "iq");
-    xmpp_stanza_set_type(iq, "set");
-    xmpp_stanza_set_id(iq, "omemo-bundle");
-    if (from) xmpp_stanza_set_attribute(iq, "from", from);
-    if (to)   xmpp_stanza_set_attribute(iq, "to", to);
-    xmpp_stanza_add_child(iq, pubsub.get());
-
-    return iq;
+    xmpp_stanza_clone(iq_sp.get());  // bump refcount; shared_ptr dtor will release its ref
+    return iq_sp.get();              // caller owns one ref; must call xmpp_stanza_release()
 }
 
 XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ctx_t *context, char *from, char *to)
@@ -232,116 +150,51 @@ XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ct
     XDEBUG("omemo: publishing legacy bundle for device {} with {} prekeys",
            device_id, bundle->prekeys.size());
 
-    auto mk_leg = [&]() {
-        return std::shared_ptr<xmpp_stanza_t> { xmpp_stanza_new(context), xmpp_stanza_release };
-    };
-
-    auto make_text_node = [&](const char *name, const std::string &text,
-                              const char *attr_name = nullptr,
-                              const std::string *attr_value = nullptr) {
-        auto node = mk_leg();
-        xmpp_stanza_set_name(node.get(), name);
-        if (attr_name && attr_value)
-            xmpp_stanza_set_attribute(node.get(), attr_name, attr_value->c_str());
-        auto txt = mk_leg();
-        xmpp_stanza_set_text(txt.get(), text.c_str());
-        xmpp_stanza_add_child(node.get(), txt.get());
-        return node;
-    };
-
-    auto bundle_stanza = mk_leg();
-    xmpp_stanza_set_name(bundle_stanza.get(), "bundle");
-    xmpp_stanza_set_ns(bundle_stanza.get(), kLegacyOmemoNs.data());
-
-    auto spk = make_text_node("signedPreKeyPublic",
-                              bundle->signed_pre_key,
-                              "signedPreKeyId",
-                              &bundle->signed_pre_key_id);
-    xmpp_stanza_add_child(bundle_stanza.get(), spk.get());
-
-    auto spks = make_text_node("signedPreKeySignature",
-                               bundle->signed_pre_key_signature);
-    xmpp_stanza_add_child(bundle_stanza.get(), spks.get());
-
-    auto ik = make_text_node("identityKey", bundle->identity_key);
-    xmpp_stanza_add_child(bundle_stanza.get(), ik.get());
-
-    auto prekeys = mk_leg();
-    xmpp_stanza_set_name(prekeys.get(), "prekeys");
-    xmpp_stanza_set_ns(prekeys.get(), kLegacyOmemoNs.data());
+    // Build <bundle xmlns='eu.siacs.conversations.axolotl'>
+    stanza::xep0384::axolotl_prekeys prekeys_spec;
     for (const auto &[id, key] : bundle->prekeys)
-    {
-        auto pk = make_text_node("preKeyPublic", key, "preKeyId", &id);
-        xmpp_stanza_add_child(prekeys.get(), pk.get());
-    }
-    xmpp_stanza_add_child(bundle_stanza.get(), prekeys.get());
+        prekeys_spec.add_pk(stanza::xep0384::axolotl_pk(id, key));
+
+    stanza::xep0384::axolotl_bundle bundle_spec;
+    bundle_spec.add_spk(stanza::xep0384::axolotl_spk(bundle->signed_pre_key_id, bundle->signed_pre_key))
+               .add_spks(stanza::xep0384::axolotl_spks(bundle->signed_pre_key_signature))
+               .add_ik(stanza::xep0384::axolotl_ik(bundle->identity_key))
+               .add_prekeys(prekeys_spec);
+
+    // Build publish-options xdata form (access_model=open)
+    stanza::xep0384::xdata_form form;
+    form.add_field(stanza::xep0384::xdata_field(
+             "FORM_TYPE",
+             "http://jabber.org/protocol/pubsub#publish-options",
+             "hidden"))
+        .add_field(stanza::xep0384::xdata_field("pubsub#max_items", "max"))
+        .add_field(stanza::xep0384::xdata_field("pubsub#access_model", "open"))
+        .add_field(stanza::xep0384::xdata_field("pubsub#persist_items", "true"));
+
+    stanza::xep0060::publish_options pub_opts;
+    pub_opts.child_spec(form);
 
     const auto item_id = fmt::format("{}", device_id);
-    auto item = mk_leg();
-    xmpp_stanza_set_name(item.get(), "item");
-    xmpp_stanza_set_attribute(item.get(), "id", item_id.c_str());
-    xmpp_stanza_add_child(item.get(), bundle_stanza.get());
+    stanza::xep0060::item item_spec;
+    item_spec.id(item_id).payload(bundle_spec);
 
-    const auto node = fmt::format("{}{}", kLegacyBundlesNodePrefix, device_id);
-    auto publish = mk_leg();
-    xmpp_stanza_set_name(publish.get(), "publish");
-    xmpp_stanza_set_attribute(publish.get(), "node", node.c_str());
-    xmpp_stanza_add_child(publish.get(), item.get());
+    const auto legacy_node = fmt::format("{}{}", kLegacyBundlesNodePrefix, device_id);
+    stanza::xep0060::pubsub pubsub_spec;
+    pubsub_spec.publish(stanza::xep0060::publish(legacy_node)
+                            .item(item_spec))
+               .publish_options(pub_opts);
 
-    auto pubsub = mk_leg();
-    xmpp_stanza_set_name(pubsub.get(), "pubsub");
-    xmpp_stanza_set_ns(pubsub.get(), "http://jabber.org/protocol/pubsub");
-    xmpp_stanza_add_child(pubsub.get(), publish.get());
+    auto iq_sp = stanza::iq()
+        .type("set")
+        .id("omemo-legacy-bundle")
+        .pubsub(pubsub_spec)
+        .build(context);
 
-    // Keep legacy bundle node readable to interop clients.
-    {
-        auto make_field = [&](const char *var, const char *val, const char *type_attr = nullptr) {
-            auto field = mk_leg();
-            xmpp_stanza_set_name(field.get(), "field");
-            xmpp_stanza_set_attribute(field.get(), "var", var);
-            if (type_attr) xmpp_stanza_set_attribute(field.get(), "type", type_attr);
-            auto value = mk_leg();
-            xmpp_stanza_set_name(value.get(), "value");
-            auto txt = mk_leg();
-            xmpp_stanza_set_text(txt.get(), val);
-            xmpp_stanza_add_child(value.get(), txt.get());
-            xmpp_stanza_add_child(field.get(), value.get());
-            return field;
-        };
+    if (from) xmpp_stanza_set_attribute(iq_sp.get(), "from", from);
+    if (to)   xmpp_stanza_set_attribute(iq_sp.get(), "to", to);
 
-        auto x = mk_leg();
-        xmpp_stanza_set_name(x.get(), "x");
-        xmpp_stanza_set_ns(x.get(), "jabber:x:data");
-        xmpp_stanza_set_attribute(x.get(), "type", "submit");
-
-        auto f1 = make_field("FORM_TYPE",
-            "http://jabber.org/protocol/pubsub#publish-options", "hidden");
-        auto f2 = make_field("pubsub#max_items", "max");
-        auto f3 = make_field("pubsub#access_model", "open");
-        auto f4 = make_field("pubsub#persist_items", "true");
-
-        xmpp_stanza_add_child(x.get(), f1.get());
-        xmpp_stanza_add_child(x.get(), f2.get());
-        xmpp_stanza_add_child(x.get(), f3.get());
-        xmpp_stanza_add_child(x.get(), f4.get());
-
-        auto publish_options = mk_leg();
-        xmpp_stanza_set_name(publish_options.get(), "publish-options");
-        xmpp_stanza_add_child(publish_options.get(), x.get());
-
-        xmpp_stanza_add_child(pubsub.get(), publish_options.get());
-    }
-
-    // Build <iq type='set' id='omemo-legacy-bundle'> — returned raw (caller owns)
-    xmpp_stanza_t *iq = xmpp_stanza_new(context);
-    xmpp_stanza_set_name(iq, "iq");
-    xmpp_stanza_set_type(iq, "set");
-    xmpp_stanza_set_id(iq, "omemo-legacy-bundle");
-    if (from) xmpp_stanza_set_attribute(iq, "from", from);
-    if (to)   xmpp_stanza_set_attribute(iq, "to", to);
-    xmpp_stanza_add_child(iq, pubsub.get());
-
-    return iq;
+    xmpp_stanza_clone(iq_sp.get());  // bump refcount; shared_ptr dtor will release its ref
+    return iq_sp.get();              // caller owns one ref; must call xmpp_stanza_release()
 }
 
 // One-time migration: rename legacy_devicelist:* → axolotl_devicelist:*
@@ -431,7 +284,42 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, co
         }
         else
         {
+            // Generate a fresh device ID and ensure it does not collide with any
+            // device ID already present in the locally cached device list.
+            // The LMDB cache is open at this point so previously fetched lists
+            // are visible.  The probability of collision is ~1/2^31 per attempt,
+            // but the spec says we MUST check.
+            const auto own_jid = account_name ? std::string(account_name) : std::string{};
+            auto id_in_cached_list = [&](std::uint32_t candidate) -> bool {
+                if (own_jid.empty())
+                    return false;
+                // Check both OMEMO:2 and axolotl device lists.
+                for (const auto &dl_key : {key_for_devicelist(own_jid),
+                                           key_for_axolotl_devicelist(own_jid)})
+                {
+                    const auto cached = load_string(*this, dl_key);
+                    if (!cached || cached->empty())
+                        continue;
+                    for (const auto &entry : split(*cached, ';'))
+                    {
+                        if (parse_uint32(entry).value_or(0) == candidate)
+                            return true;
+                    }
+                }
+                return false;
+            };
+
             device_id = random_device_id();
+            constexpr int kMaxCollisionRetries = 16;
+            for (int attempt = 0;
+                 attempt < kMaxCollisionRetries && id_in_cached_list(device_id);
+                 ++attempt)
+            {
+                weechat_printf(buffer,
+                               "%somemo: generated device id %u already present in cached devicelist; retrying",
+                               weechat_prefix("network"), device_id);
+                device_id = random_device_id();
+            }
             store_string(*this, kDeviceIdKey, fmt::format("{}", device_id));
         }
 

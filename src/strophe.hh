@@ -303,23 +303,4 @@ namespace libstrophe {
     };
 }
 
-// Build a <field var="..." type="..."><value>...</value></field> stanza.
-// Caller owns the returned stanza (call xmpp_stanza_release when done).
-inline xmpp_stanza_t *stanza_make_field(xmpp_ctx_t *ctx,
-                                        const char *var, const char *val,
-                                        const char *type_attr = nullptr)
-{
-    xmpp_stanza_t *field = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(field, "field");
-    xmpp_stanza_set_attribute(field, "var", var);
-    if (type_attr) xmpp_stanza_set_attribute(field, "type", type_attr);
-    xmpp_stanza_t *value = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(value, "value");
-    xmpp_stanza_t *text = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_text(text, val);
-    xmpp_stanza_add_child(value, text);
-    xmpp_stanza_release(text);
-    xmpp_stanza_add_child(field, value);
-    xmpp_stanza_release(value);
-    return field;
-}
+// stanza_make_field is defined in xmpp/node.hh (after stanza::spec is available).

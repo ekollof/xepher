@@ -298,12 +298,97 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     return index_entries.size();
 }
 
+// Generate a new signed prekey with the given ID, persist it to LMDB, and
+// store the current timestamp.  Returns true on success.
+[[nodiscard]] static bool generate_and_store_spk(omemo &self, std::uint32_t new_spk_id)
+{
+    session_signed_pre_key *signed_pre_key_raw = nullptr;
+    const auto now_secs = static_cast<std::int64_t>(std::time(nullptr));
+    const auto now_ms   = static_cast<std::uint64_t>(now_secs) * 1000ULL;
+    if (signal_protocol_key_helper_generate_signed_pre_key(
+            &signed_pre_key_raw, self.identity, new_spk_id, now_ms, self.context) != 0)
+    {
+        return false;
+    }
+
+    libsignal::object<session_signed_pre_key> signed_pre_key {signed_pre_key_raw};
+    signal_buffer *signed_pre_key_record_raw = nullptr;
+    if (session_signed_pre_key_serialize(&signed_pre_key_record_raw, signed_pre_key.get()) != 0)
+        return false;
+
+    unique_signal_buffer signed_pre_key_record {signed_pre_key_record_raw};
+    ec_key_pair *signed_pre_key_pair = session_signed_pre_key_get_key_pair(signed_pre_key.get());
+    ec_public_key *signed_pre_key_public = ec_key_pair_get_public(signed_pre_key_pair);
+
+    signal_buffer *signed_pre_key_public_raw = nullptr;
+    if (ec_public_key_serialize(&signed_pre_key_public_raw, signed_pre_key_public) != 0)
+        return false;
+    unique_signal_buffer signed_pre_key_public_buffer {signed_pre_key_public_raw};
+
+    store_string(self, kSignedPreKeyId, fmt::format("{}", new_spk_id));
+    store_bytes(self,
+                kSignedPreKeyRecord,
+                signal_buffer_const_data(signed_pre_key_record.get()),
+                signal_buffer_len(signed_pre_key_record.get()));
+    store_bytes(self,
+                key_for_signed_prekey_record(new_spk_id),
+                signal_buffer_const_data(signed_pre_key_record.get()),
+                signal_buffer_len(signed_pre_key_record.get()));
+    store_bytes(self,
+                kSignedPreKeyPublic,
+                signal_buffer_const_data(signed_pre_key_public_buffer.get()),
+                signal_buffer_len(signed_pre_key_public_buffer.get()));
+    store_bytes(self,
+                kSignedPreKeySignature,
+                session_signed_pre_key_get_signature(signed_pre_key.get()),
+                session_signed_pre_key_get_signature_len(signed_pre_key.get()));
+    // Record the generation timestamp so rotation logic knows when to rotate next.
+    store_string(self, kSignedPreKeyTimestamp, fmt::format("{}", now_secs));
+
+    weechat_printf(nullptr,
+                   "%somemo: signed prekey rotated to id %u",
+                   weechat_prefix("network"),
+                   new_spk_id);
+    return true;
+}
+
+// Check whether the current signed prekey is old enough to rotate.  If it is
+// (or if no timestamp is stored, meaning it was created before rotation tracking
+// was added), generate a new signed prekey with an incremented ID and republish.
+// Returns true if a rotation was performed.
+[[nodiscard]] static bool rotate_signed_prekey_if_due(omemo &self)
+{
+    const auto ts_str = load_string(self, kSignedPreKeyTimestamp);
+    const auto now_secs = static_cast<std::int64_t>(std::time(nullptr));
+    const bool should_rotate = !ts_str
+        || (now_secs - parse_int64(*ts_str).value_or(0)) >= kSignedPreKeyRotationSecs;
+
+    if (!should_rotate)
+        return false;
+
+    // Determine the next SPK ID (wraps around at 2^31-1; must stay ≥ 1).
+    const auto current_id_str = load_string(self, kSignedPreKeyId);
+    const auto current_id = current_id_str
+        ? parse_uint32(*current_id_str).value_or(0)
+        : 0;
+    const std::uint32_t next_id = (current_id == 0 || current_id >= kMaxOmemoDeviceId)
+        ? 1
+        : current_id + 1;
+
+    return generate_and_store_spk(self, next_id);
+}
+
 void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
 {
     OMEMO_ASSERT(self.context, "signal context must exist before generating prekeys");
     OMEMO_ASSERT(context != nullptr, "xmpp context must exist before serializing prekeys");
 
-    if (load_string(self, kSignedPreKeyRecord))
+    // Rotate the signed prekey if it is older than kSignedPreKeyRotationSecs.
+    // This is checked on every bundle/encode call; the rotation is cheap (no-op
+    // unless the rotation interval has elapsed).
+    const bool rotated = rotate_signed_prekey_if_due(self);
+
+    if (!rotated && load_string(self, kSignedPreKeyRecord))
     {
         // Index exists — check whether it is complete.  If fewer than
         // kPreKeyCount entries are indexed (possible after a partial write or
@@ -327,45 +412,15 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
         // regenerate prekeys (signed prekey is reused, only prekey material changes).
     }
 
-    session_signed_pre_key *signed_pre_key_raw = nullptr;
-    const auto now_ms = static_cast<std::uint64_t>(std::time(nullptr)) * 1000ULL;
-    if (signal_protocol_key_helper_generate_signed_pre_key(
-            &signed_pre_key_raw, self.identity, 1, now_ms, self.context) != 0)
+    // First-time or post-rotation generation: generate SPK (id=1 for first time,
+    // or the rotated id was already stored by rotate_signed_prekey_if_due) and
+    // generate a fresh batch of prekeys.
+    if (!load_string(self, kSignedPreKeyRecord))
     {
-        return;
+        // No SPK at all — generate id=1 fresh.
+        if (!generate_and_store_spk(self, 1))
+            return;
     }
-
-    libsignal::object<session_signed_pre_key> signed_pre_key {signed_pre_key_raw};
-    signal_buffer *signed_pre_key_record_raw = nullptr;
-    if (session_signed_pre_key_serialize(&signed_pre_key_record_raw, signed_pre_key.get()) != 0)
-        return;
-
-    unique_signal_buffer signed_pre_key_record {signed_pre_key_record_raw};
-    ec_key_pair *signed_pre_key_pair = session_signed_pre_key_get_key_pair(signed_pre_key.get());
-    ec_public_key *signed_pre_key_public = ec_key_pair_get_public(signed_pre_key_pair);
-
-    signal_buffer *signed_pre_key_public_raw = nullptr;
-    if (ec_public_key_serialize(&signed_pre_key_public_raw, signed_pre_key_public) != 0)
-        return;
-    unique_signal_buffer signed_pre_key_public_buffer {signed_pre_key_public_raw};
-
-    store_string(self, kSignedPreKeyId, "1");
-    store_bytes(self,
-                kSignedPreKeyRecord,
-                signal_buffer_const_data(signed_pre_key_record.get()),
-                signal_buffer_len(signed_pre_key_record.get()));
-    store_bytes(self,
-                key_for_signed_prekey_record(1),
-                signal_buffer_const_data(signed_pre_key_record.get()),
-                signal_buffer_len(signed_pre_key_record.get()));
-    store_bytes(self,
-                kSignedPreKeyPublic,
-                signal_buffer_const_data(signed_pre_key_public_buffer.get()),
-                signal_buffer_len(signed_pre_key_public_buffer.get()));
-    store_bytes(self,
-                kSignedPreKeySignature,
-                session_signed_pre_key_get_signature(signed_pre_key.get()),
-                session_signed_pre_key_get_signature_len(signed_pre_key.get()));
 
     signal_protocol_key_helper_pre_key_list_node *pre_key_head_raw = nullptr;
     if (signal_protocol_key_helper_generate_pre_keys(

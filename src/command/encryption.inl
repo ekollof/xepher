@@ -318,6 +318,45 @@ int command__omemo(const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
+        if (weechat_strcasecmp(argv[1], "optout") == 0)
+        {
+            if (!require_omemo()) return WEECHAT_RC_OK;
+            const char *jid = nullptr;
+            if (argc > 2)
+                jid = argv[2];
+            else if (ptr_channel)
+                jid = ptr_channel->name.data();
+            if (!jid)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: usage: /omemo optout <jid> [<reason>]"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+            const char *reason = (argc > 3) ? argv_eol[3] : nullptr;
+            ptr_account->omemo.send_opt_out(*ptr_account, buffer, jid, reason);
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcasecmp(argv[1], "optout-ack") == 0)
+        {
+            if (!require_omemo()) return WEECHAT_RC_OK;
+            const char *jid = nullptr;
+            if (argc > 2)
+                jid = argv[2];
+            else if (ptr_channel)
+                jid = ptr_channel->name.data();
+            if (!jid)
+            {
+                weechat_printf(buffer,
+                               _("%s%s: usage: /omemo optout-ack <jid>"),
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+            ptr_account->omemo.optout_ack(buffer, jid);
+            return WEECHAT_RC_OK;
+        }
+
         WEECHAT_COMMAND_ERROR;
     }
 

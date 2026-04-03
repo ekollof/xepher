@@ -19,6 +19,12 @@ constexpr std::string_view kSignedPreKeyId = "signed_pre_key:id";
 constexpr std::string_view kSignedPreKeyRecord = "signed_pre_key:record";
 constexpr std::string_view kSignedPreKeyPublic = "signed_pre_key:public";
 constexpr std::string_view kSignedPreKeySignature = "signed_pre_key:signature";
+// Unix timestamp (seconds) of when the current signed prekey was generated.
+// Absent means the SPK was created before rotation tracking was added; treat
+// as expired immediately so a fresh one is generated on the next bundle call.
+constexpr std::string_view kSignedPreKeyTimestamp = "signed_pre_key:generated_at";
+// Rotate the signed prekey after 7 days (Signal spec recommendation: 1–4 weeks).
+constexpr std::int64_t kSignedPreKeyRotationSecs = 7 * 24 * 60 * 60;
 constexpr std::string_view kPrekeys = "prekeys";
 constexpr std::string_view kOmemoPayloadInfo = "OMEMO Payload";
 constexpr std::uint32_t kPreKeyStart = 1;
@@ -265,6 +271,17 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
 [[nodiscard]] auto parse_uint32(std::string_view value) -> std::optional<std::uint32_t>
 {
     std::uint32_t parsed = 0;
+    const auto *begin = value.data();
+    const auto *end = value.data() + value.size();
+    const auto [ptr, error] = std::from_chars(begin, end, parsed);
+    if (error != std::errc {} || ptr != end)
+        return std::nullopt;
+    return parsed;
+}
+
+[[nodiscard]] auto parse_int64(std::string_view value) -> std::optional<std::int64_t>
+{
+    std::int64_t parsed = 0;
     const auto *begin = value.data();
     const auto *end = value.data() + value.size();
     const auto [ptr, error] = std::from_chars(begin, end, parsed);
