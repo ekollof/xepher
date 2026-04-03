@@ -95,7 +95,7 @@ void store_bundle(omemo &self, std::string_view jid, std::uint32_t remote_device
     bundle.identity_key = base64_encode_raw(identity_public->data(),
                                             identity_public->size());
 
-    if (!is_valid_omemo_device_id(parse_uint32(bundle.signed_pre_key_id).value_or(0)))
+    if (bundle.signed_pre_key_id.empty() || !parse_uint32(bundle.signed_pre_key_id))
     {
         weechat_printf(nullptr,
                        "%somemo: local bundle metadata has invalid signed prekey id '%s'",
@@ -120,8 +120,8 @@ void store_bundle(omemo &self, std::string_view jid, std::uint32_t remote_device
 
         const auto id = entry.substr(0, separator);
         const auto key = entry.substr(separator + 1);
-        const auto parsed_id = parse_uint32(id).value_or(0);
-        if (!is_valid_omemo_device_id(parsed_id) || key.empty())
+        const auto parsed_id = parse_uint32(id);
+        if (!parsed_id || key.empty())
         {
             weechat_printf(nullptr,
                            "%somemo: local bundle metadata contains invalid prekey entry '%s'",
@@ -606,17 +606,19 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
     }
     const auto &chosen_prekey = bundle->prekeys[pk_index];
 
-    const auto signed_pre_key_id = parse_uint32(bundle->signed_pre_key_id).value_or(0);
-    const auto pre_key_id = parse_uint32(chosen_prekey.first).value_or(0);
-    if (signed_pre_key_id == 0 || pre_key_id == 0)
+    const auto signed_pre_key_id_opt = parse_uint32(bundle->signed_pre_key_id);
+    const auto pre_key_id_opt = parse_uint32(chosen_prekey.first);
+    if (!signed_pre_key_id_opt || !pre_key_id_opt)
     {
         weechat_printf(nullptr,
-                       "%somemo: session bootstrap failed for %.*s/%u: invalid signed-prekey id %u or prekey id %u",
+                       "%somemo: session bootstrap failed for %.*s/%u: invalid signed-prekey id '%s' or prekey id '%s'",
                        weechat_prefix("error"),
                        static_cast<int>(jid.size()), jid.data(), remote_device_id,
-                       signed_pre_key_id, pre_key_id);
+                       bundle->signed_pre_key_id.c_str(), chosen_prekey.first.c_str());
         return false;
     }
+    const auto signed_pre_key_id = *signed_pre_key_id_opt;
+    const auto pre_key_id = *pre_key_id_opt;
 
     auto identity_key = deserialize_public_key(bundle->identity_key, self.context);
     auto signed_pre_key = deserialize_public_key(bundle->signed_pre_key, self.context);

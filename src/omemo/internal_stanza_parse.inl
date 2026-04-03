@@ -31,8 +31,8 @@
                 if (!id)
                     continue;
 
-                const auto parsed_id = parse_uint32(id).value_or(0);
-                if (!is_valid_omemo_device_id(parsed_id))
+                const auto parsed_id = parse_uint32(id);
+                if (!parsed_id)
                 {
                     weechat_printf(nullptr,
                                    "%somemo: bundle parse failed: invalid prekey id '%s'",
@@ -60,7 +60,7 @@
         }
     }
 
-    if (!is_valid_omemo_device_id(parse_uint32(bundle.signed_pre_key_id).value_or(0)))
+    if (bundle.signed_pre_key_id.empty() || !parse_uint32(bundle.signed_pre_key_id))
     {
         weechat_printf(nullptr,
                        "%somemo: bundle parse failed: invalid signed prekey id '%s'",
