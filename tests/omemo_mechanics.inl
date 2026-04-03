@@ -713,3 +713,73 @@ TEST_CASE("note_peer_traffic unblocks has_peer_traffic for sender JID")
     // A different JID must still be false.
     CHECK_FALSE(env.omemo->has_peer_traffic(env.ctx, "eve@example.com"));
 }
+
+// ── 13. Stale-session recovery is deferred (not dropped) during global MAM catchup ──
+//
+// Regression test for the bug where the stale-session recovery path in decode()
+// was guarded by `!global_mam_catchup`, causing it to be silently dropped when
+// a MAM-replayed message had `found_key_for_us==true` but transport-key
+// decryption failed (e.g. prekey already consumed, ratchet mismatch).
+//
+// The fix removes the `!global_mam_catchup` guard in codec.inl and lets the
+// bundle request fire immediately; handle_axolotl_bundle defers the key-transport
+// send into `postponed_key_transports` when `global_mam_catchup==true`.
+//
+// This test verifies the handle_axolotl_bundle side: pending_key_transport and
+// pending_bundle_fetch are cleared (consumed) regardless of global_mam_catchup,
+// so a repeated bundle arrival does not re-enqueue.  The key_transport_bootstrap
+// guard is also set so no further bundle fetch is triggered.
+//
+// The deferred send itself (postponed_key_transports → process_postponed) requires
+// a live account+connection and is covered by integration testing; we verify here
+// only the bookkeeping invariants that are exercisable without a real account.
+
+TEST_CASE("handle_axolotl_bundle consumes pending_key_transport regardless of mam_catchup")
+{
+    omemo_test_env env;
+
+    const std::string remote_jid  = "frank@example.com";
+    const std::uint32_t remote_id = 55555;
+    const auto key = std::make_pair(remote_jid, remote_id);
+
+    // Pre-populate state as codec.inl would after the fix: bundle fetch
+    // requested and key-transport queued for a peer whose MAM-replayed
+    // message failed to decrypt during global_mam_catchup.
+    env.omemo->pending_bundle_fetch.insert(key);
+    env.omemo->pending_key_transport.insert(key);
+    env.omemo->global_mam_catchup = true;
+
+    // Minimal axolotl bundle stanza (same as test #11).
+    const std::string bundle_xml = R"(<items>
+      <item>
+        <bundle xmlns='eu.siacs.conversations.axolotl'>
+          <signedPreKeyPublic signedPreKeyId='1'>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</signedPreKeyPublic>
+          <signedPreKeySignature>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</signedPreKeySignature>
+          <identityKey>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</identityKey>
+          <prekeys>
+            <preKeyPublic preKeyId='1'>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</preKeyPublic>
+          </prekeys>
+        </bundle>
+      </item>
+    </items>)";
+
+    xmpp_stanza_t *items = xmpp_stanza_new_from_string(env.ctx, bundle_xml.c_str());
+    REQUIRE(items != nullptr);
+
+    // account=nullptr → session_is_fresh branch (needs account) is skipped,
+    // but pending_bundle_fetch and pending_key_transport must still be cleared.
+    env.omemo->handle_axolotl_bundle(nullptr, nullptr, remote_jid.c_str(), remote_id, items);
+    xmpp_stanza_release(items);
+
+    // Pending sets must be cleared (bundle was processed).
+    CHECK(env.omemo->pending_bundle_fetch.count(key) == 0);
+    CHECK(env.omemo->pending_key_transport.count(key) == 0);
+
+    // Race guard must be set so a concurrent decode() does not re-enqueue.
+    CHECK(env.omemo->key_transport_bootstrap_attempted.count(key) == 1);
+
+    // global_mam_catchup was true but no account was provided, so
+    // postponed_key_transports must be empty (the guard at line 1298 requires
+    // account && buffer which were nullptr).
+    CHECK(env.omemo->postponed_key_transports.empty());
+}
