@@ -2957,10 +2957,21 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // --- build serial string S per §5.1 ---
                 std::string S;
 
+                // xmpp_stanza_get_next() returns the next sibling regardless of name,
+                // so we must filter by element name to avoid picking up <feature>/<x> etc.
+                auto next_named = [](xmpp_stanza_t *st, const char *name) -> xmpp_stanza_t * {
+                    for (st = xmpp_stanza_get_next(st); st; st = xmpp_stanza_get_next(st)) {
+                        const char *n = xmpp_stanza_get_name(st);
+                        if (n && std::string_view(n) == name) return st;
+                    }
+                    return nullptr;
+                };
+
                 // Step 2-3: collect identities, sort by "category/type/lang/name"
                 std::vector<std::string> identities;
-                xmpp_stanza_t *id_elem = xmpp_stanza_get_child_by_name(query, "identity");
-                while (id_elem)
+                for (xmpp_stanza_t *id_elem = xmpp_stanza_get_child_by_name(query, "identity");
+                     id_elem;
+                     id_elem = next_named(id_elem, "identity"))
                 {
                     const char *cat  = xmpp_stanza_get_attribute(id_elem, "category");
                     const char *typ  = xmpp_stanza_get_attribute(id_elem, "type");
@@ -2971,7 +2982,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         std::string(typ  ? typ  : "") + "/" +
                         std::string(lang ? lang : "") + "/" +
                         std::string(name ? name : ""));
-                    id_elem = xmpp_stanza_get_next(id_elem);
                 }
                 std::sort(identities.begin(), identities.end());
                 for (const auto &ident : identities)
@@ -2990,16 +3000,16 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     std::vector<std::pair<std::string, std::vector<std::string>>> fields;
                 };
                 std::vector<FormData> forms;
-                xmpp_stanza_t *x_elem = xmpp_stanza_get_child_by_name(query, "x");
-                while (x_elem)
+                for (xmpp_stanza_t *x_elem = xmpp_stanza_get_child_by_name(query, "x");
+                     x_elem; x_elem = next_named(x_elem, "x"))
                 {
                     const char *xmlns_x = xmpp_stanza_get_attribute(x_elem, "xmlns");
                     if (xmlns_x && std::string_view(xmlns_x) == "jabber:x:data")
                     {
                         FormData fd;
                         // find FORM_TYPE value
-                        xmpp_stanza_t *f = xmpp_stanza_get_child_by_name(x_elem, "field");
-                        while (f)
+                        for (xmpp_stanza_t *f = xmpp_stanza_get_child_by_name(x_elem, "field");
+                             f; f = next_named(f, "field"))
                         {
                             const char *fvar = xmpp_stanza_get_attribute(f, "var");
                             if (fvar && std::string_view(fvar) == "FORM_TYPE")
@@ -3007,34 +3017,31 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 xmpp_stanza_t *vnode = xmpp_stanza_get_child_by_name(f, "value");
                                 const char *vtext = vnode ? xmpp_stanza_get_text_ptr(vnode) : nullptr;
                                 fd.form_type = vtext ? vtext : "";
+                                break;
                             }
-                            f = xmpp_stanza_get_next(f);
                         }
                         // collect non-FORM_TYPE fields
-                        f = xmpp_stanza_get_child_by_name(x_elem, "field");
-                        while (f)
+                        for (xmpp_stanza_t *f = xmpp_stanza_get_child_by_name(x_elem, "field");
+                             f; f = next_named(f, "field"))
                         {
                             const char *fvar = xmpp_stanza_get_attribute(f, "var");
                             if (fvar && std::string_view(fvar) != "FORM_TYPE")
                             {
                                 std::vector<std::string> vals;
-                                xmpp_stanza_t *vnode = xmpp_stanza_get_child_by_name(f, "value");
-                                while (vnode)
+                                for (xmpp_stanza_t *vnode = xmpp_stanza_get_child_by_name(f, "value");
+                                     vnode; vnode = next_named(vnode, "value"))
                                 {
                                     const char *vtext = xmpp_stanza_get_text_ptr(vnode);
                                     if (vtext) vals.push_back(vtext);
-                                    vnode = xmpp_stanza_get_next(vnode);
                                 }
                                 std::sort(vals.begin(), vals.end());
                                 fd.fields.emplace_back(fvar, std::move(vals));
                             }
-                            f = xmpp_stanza_get_next(f);
                         }
                         std::sort(fd.fields.begin(), fd.fields.end(),
                                   [](const auto &a, const auto &b){ return a.first < b.first; });
                         forms.push_back(std::move(fd));
                     }
-                    x_elem = xmpp_stanza_get_next(x_elem);
                 }
                 // sort forms by FORM_TYPE
                 std::sort(forms.begin(), forms.end(),
