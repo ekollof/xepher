@@ -42,7 +42,6 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
         print_error(buffer, "OMEMO message header is missing a valid sender sid.");
         return std::nullopt;
     }
-
     // payload_stanza may be absent for KeyTransportElement (XEP-0384 §7.3).
     const auto payload_text = payload_stanza ? stanza_text(payload_stanza) : std::string {};
     const auto payload = payload_stanza
@@ -252,7 +251,14 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
         {
             // The sender does not (yet) know our device_id. Request their bundle
             // once per peer device and avoid repeating the same error every message.
-            if (account && sender_device_id)
+            // During MAM replay (quiet==true) we suppress both the error print and
+            // the bundle fetch: the sender simply did not include our device at that
+            // point in time.  Issuing a bundle request here would queue a
+            // pending_key_transport that — when the bundle response arrives — calls
+            // establish_session_from_bundle and overwrites the existing session with
+            // a fresh one, making all subsequent MAM messages (encrypted under the
+            // old session) undecryptable.
+            if (!quiet && account && sender_device_id)
             {
                 const std::string bare_jid = normalize_bare_jid(*account->context, jid);
                 const auto key = std::make_pair(bare_jid, *sender_device_id);
@@ -261,10 +267,9 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
 
                 if (!already_attempted && !already_pending)
                 {
-                    if (!quiet)
-                        print_error(buffer, fmt::format(
-                            "OMEMO message has no key for our device {} (sender did not encrypt for us).",
-                            device_id));
+                    print_error(buffer, fmt::format(
+                        "OMEMO message has no key for our device {} (sender did not encrypt for us).",
+                        device_id));
 
                     pending_key_transport.insert(key);
                     const auto selected_mode = resolve_device_mode(
@@ -294,21 +299,14 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             // commonly a MAM replay of a prekey message whose prekey was already
             // consumed when the session was first established.
             //
-            // Recovery: fetch the sender's bundle and send a key-transport so
-            // their client picks up our current ratchet state and can encrypt
-            // future messages to us.  Throttled per {jid, device} via
-            // key_transport_bootstrap_attempted to avoid flooding on repeated
-            // MAM replays.
-            //
-            // During global_mam_catchup we still issue the bundle request (IQ
-            // is fire-and-forget and is fine to send early), but the actual
-            // key-transport is deferred: handle_axolotl_bundle / handle_bundle
-            // detects global_mam_catchup==true and inserts the pair into
-            // postponed_key_transports, which is flushed at MAM <fin>.  This
-            // is the same deferred path used everywhere else in session_flow.
+            // Only trigger stale-session recovery for live (non-MAM) messages.
+            // During MAM replay (quiet==true) decryption failures are expected for
+            // old messages that used a now-consumed prekey or an old ratchet state.
+            // Triggering recovery there would delete a perfectly good existing session
+            // and cause all subsequent messages — including live ones — to fail.
             if (!quiet)
                 print_error(buffer, "OMEMO transport key decryption failed.");
-            if (account && sender_device_id)
+            if (!quiet && account && sender_device_id)
             {
                 const std::string bare_jid = normalize_bare_jid(*account->context, jid);
                 // Self-outbound copy: the key was encrypted for our own device by
@@ -323,19 +321,15 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                 if (key_transport_bootstrap_attempted.count(kex_key) == 0)
                 {
                     key_transport_bootstrap_attempted.insert(kex_key);
-                    if (!quiet)
-                        print_info(buffer, fmt::format(
-                            "OMEMO: queueing key-transport to {}/{} to recover stale session{}",
-                            bare_jid, *sender_device_id,
-                            global_mam_catchup ? " (deferred — MAM catchup active)" : ""));
+                    print_info(buffer, fmt::format(
+                        "OMEMO: queueing key-transport to {}/{} to recover stale session",
+                        bare_jid, *sender_device_id));
                     // Delete the stale session so the key-transport forces a fresh
                     // PreKeySignalMessage exchange from the sender's side.
                     auto addr = make_signal_address(bare_jid,
                                                     static_cast<std::int32_t>(*sender_device_id));
                     signal_protocol_session_delete_session(store_context, &addr.address);
                     // Queue a key-transport after re-establishing the outbound session.
-                    // handle_axolotl_bundle / handle_bundle will defer the send if
-                    // global_mam_catchup is still active when the bundle arrives.
                     pending_key_transport.insert(kex_key);
                     const auto selected_mode = resolve_device_mode(
                         *this, *account, bare_jid, *sender_device_id,

@@ -1890,9 +1890,34 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
     // For live carbon copies of self-sent OMEMO messages we don't have the
     // session state to decrypt them on the spot, so show the advisory text.
-    // For MAM replays of self-sent messages we DO have the persisted session
-    // and must call decode() — fall through rather than substituting OMEMO_ADVICE.
-    if (encrypted && is_self_outbound_copy && !is_mam_replay)
+    //
+    // For MAM replays of self-sent messages: if the message was sent from
+    // THIS device (sender_sid == our device_id), Signal cannot decrypt the
+    // self-copy — the key was encrypted using our own outbound session state,
+    // but the inbound session at {own_jid, own_device_id} has never been
+    // established (we never received a PreKeySignalMessage from ourselves in
+    // the Signal protocol sense). Attempting decryption produces "Bad MAC"
+    // on all archived session states. Show OMEMO_ADVICE instead.
+    //
+    // For MAM replays from OTHER devices on our account (sender_sid != our
+    // device_id), fall through to decode() — they may have encrypted a key
+    // for our device and we can attempt decryption normally.
+    const bool is_own_device_self_copy = [&]() -> bool {
+        if (!encrypted || !is_self_outbound_copy || !account.omemo)
+            return false;
+        xmpp_stanza_t *enc_header = xmpp_stanza_get_child_by_name(encrypted, "header");
+        if (!enc_header)
+            return false;
+        const char *sid_str = xmpp_stanza_get_attribute(enc_header, "sid");
+        if (!sid_str || !*sid_str)
+            return false;
+        char *end = nullptr;
+        unsigned long sid_val = std::strtoul(sid_str, &end, 10);
+        if (end == sid_str || *end != '\0')
+            return false;
+        return static_cast<std::uint32_t>(sid_val) == account.omemo.device_id;
+    }();
+    if (encrypted && is_self_outbound_copy && (!is_mam_replay || is_own_device_self_copy))
     {
         if (intext)
             xmpp_free(account.context, intext);
@@ -1900,6 +1925,18 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         intext = xmpp_strdup(account.context, OMEMO_ADVICE);
 #pragma GCC diagnostic pop
+        // For MAM replays of messages sent from this device: the self-copy
+        // can never be decrypted (Signal does not support self-decryption of
+        // outbound messages — the inbound session at {own_jid, own_device_id}
+        // is never established). Clear |encrypted| so the decode() block is
+        // skipped and the message is displayed using the OMEMO_ADVICE
+        // placeholder (showing the user their sent history exists without
+        // corrupting the live Signal session state).
+        // For live carbon copies (!is_mam_replay), leave |encrypted| set so
+        // the existing silently-discard path at line 2026 still applies
+        // (live copies are already shown as sent messages; no replay needed).
+        if (is_mam_replay)
+            encrypted = nullptr;
     }
 
     // XEP-0071: XHTML-IM — prefer <html><body> rich rendering over plain <body>.
@@ -1990,12 +2027,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     }
 message_handler_after_omemo:
     // If OMEMO decryption produced no cleartext and this is a self-outbound copy
-    // (MAM replay of a message we sent, or a carbon copy), there is nothing to
-    // display.  Key-transport messages (null payload, all-zero IV) are the common
-    // case here — they establish the session but carry no user-visible content.
-    // Falling through to the display path with text==nullptr would print a blank
-    // line (or crash on weechat_string_match(nullptr)).
-    if (encrypted && !cleartext && is_self_outbound_copy)
+    // (MAM replay of a message we sent from another device, or a live carbon copy)
+    // or a MAM-replayed inbound message whose decryption failed, there is nothing
+    // to display.  Key-transport messages (null payload, all-zero IV) are the
+    // common case here — they establish the session but carry no user-visible
+    // content.  Falling through to the display path with text==nullptr would print
+    // a blank line (or crash on weechat_string_match(nullptr)).
+    // Note: MAM replays of messages sent from THIS device have |encrypted| cleared
+    // above so they bypass this check and flow to the display path with
+    // intext=OMEMO_ADVICE (showing the user their sent history).
+    if (encrypted && !cleartext && (is_self_outbound_copy || is_mam_replay))
         return 1;
 
     // XEP-0450 §4: handle trust messages that arrived encrypted inside OMEMO.
