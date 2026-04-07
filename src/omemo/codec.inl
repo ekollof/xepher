@@ -736,6 +736,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
         if (own_devicelist_to_use)
         {
             int count = 0;
+            int own_incomplete = 0;
             // When sending to self: include_own_device=true so the current
             // device (skipped by the first pass) also gets a key.
             // When sending to another JID: include_own_device=true here too
@@ -743,12 +744,20 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
             // Profanity's behaviour of encrypting for every device including
             // the sender's active one.
             auto own_ks = build_keys_spec(own_jid.c_str(), *own_devicelist_to_use, count,
-                                          nullptr, /*include_own_device=*/true);
+                                          &own_incomplete, /*include_own_device=*/true);
             if (own_ks)
             {
                 header_spec.add_keys(*own_ks);
                 added_any_key = true;
             }
+            // If any own-device bundle is still being fetched, defer the send
+            // so the message will be retried once the bundle arrives and
+            // flush_pending_omemo_messages() is called.  Without this, the
+            // message goes out with no <keys jid='own_jid'> block and sibling
+            // clients (e.g. Conversations) receiving the carbon copy cannot
+            // decrypt it.
+            if (own_incomplete > 0)
+                return nullptr;
         }
     }
 

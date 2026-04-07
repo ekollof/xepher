@@ -1352,7 +1352,24 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_bundle(weechat::account *acco
             if (ch.type == weechat::channel::chat_type::PM)
                 ch.flush_pending_omemo_messages();
         }
+    }
 
+    // When a bundle arrives for a *sibling* device on our own JID (e.g. a
+    // Conversations device), encode() may have deferred messages on any channel
+    // because the own-device key was missing.  Flush all channels that have
+    // queued messages so those sends are retried now that we have a session.
+    const bool is_own_sibling = account && !bare_jid.empty()
+        && (bare_jid == own_bare_jid)
+        && (remote_device_id != device_id)
+        && has_session(bare_jid.c_str(), remote_device_id);
+
+    if (is_own_sibling)
+    {
+        for (auto &[ch_id, ch] : account->channels)
+        {
+            if (!ch.pending_omemo_messages.empty())
+                ch.flush_pending_omemo_messages();
+        }
     }
 }
 
