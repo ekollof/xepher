@@ -378,7 +378,13 @@ int command__upload(const void *pointer, void *data,
     fseek(f, 0, SEEK_END);
     size_t file_size = ftell(f);
     fclose(f);
-    
+
+    // XEP-0448: when the channel has OMEMO active, the actual upload will be
+    // AES-256-GCM ciphertext = plaintext + 16-byte auth tag.  Request the slot
+    // for the larger size so the server does not reject the PUT with HTTP 413.
+    bool channel_omemo = ptr_account->omemo && ptr_channel->omemo.enabled;
+    size_t slot_size = channel_omemo ? file_size + 16 : file_size;
+
     // Store upload request with metadata for SIMS
     ptr_account->upload_requests[id] = {
         id, 
@@ -411,7 +417,7 @@ int command__upload(const void *pointer, void *data,
         }
     };
 
-    auto size_str = fmt::format("{}", file_size);
+    auto size_str = fmt::format("{}", slot_size);
     upload_request_iq upload_iq(ptr_account->upload_service, upload_id,
                                 sanitized_basename, size_str, content_type);
     ptr_account->connection.send(upload_iq.build(ptr_account->context).get());
