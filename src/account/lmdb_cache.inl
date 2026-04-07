@@ -184,7 +184,11 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
                 // Display cached message with gray prefix
                 if (is_retracted)
                 {
-                    weechat_printf_date_tags(buffer, timestamp, "xmpp_cached,xmpp_retracted,no_highlight",
+                    std::string tags = "xmpp_cached,xmpp_retracted,no_highlight";
+                    // Tag with id_<message-id> so MAM dedup can suppress later replays.
+                    if (!message_id.empty())
+                        tags += ",id_" + message_id;
+                    weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
                                             "%s%s\t%s[Message deleted]%s",
                                             weechat_color("darkgray"),
                                             from.c_str(),
@@ -193,7 +197,11 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
                 }
                 else
                 {
-                    weechat_printf_date_tags(buffer, timestamp, "xmpp_cached,no_highlight",
+                    std::string tags = "xmpp_cached,no_highlight";
+                    // Tag with id_<message-id> so MAM dedup can suppress later replays.
+                    if (!message_id.empty())
+                        tags += ",id_" + message_id;
+                    weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
                                             "%s%s\t%s",
                                             weechat_color("darkgray"),
                                             from.c_str(),

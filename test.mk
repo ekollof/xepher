@@ -23,7 +23,7 @@ tests/xmpp.cov.so: $(COVS) $(DEPS) $(HDRS)
 	$(CXX) --coverage $(SHARED_FLAG) $(LDFLAGS) -o tests/xmpp.cov.so $(AS_NEEDED) $(COVS) $(DEPS) $(LDLIBS)
 
 tests/run: $(COVS) tests/main.cc tests/xmpp.cov.so $(wildcard tests/*.inl)
-	cd tests && $(CXX) $(CPPFLAGS) $(LDFLAGS) -o run main.cc $(patsubst %,../%,$(DEPS)) $(LDLIBS) \
+	cd tests && $(CXX) $(subst -Ideps/lmdbxx,-I../deps/lmdbxx,$(CPPFLAGS)) $(LDFLAGS) -o run main.cc $(patsubst %,../%,$(DEPS)) $(LDLIBS) \
 		$(TEST_LDFLAGS) $(PWD)/tests/xmpp.cov.so
 
 .PHONY: test

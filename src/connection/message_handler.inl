@@ -3992,8 +3992,8 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
 }
 
 // XEP-0004: Data Forms — render a <x xmlns='jabber:x:data'> form to a buffer
-static void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
-                              const char *jid, const char *node, const char *session_id)
+void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
+                      const char *jid, const char *node, const char *session_id)
 {
     if (!x_form || !buf) return;
 

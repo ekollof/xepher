@@ -21,6 +21,7 @@
 #include "channel.hh"
 #include "input.hh"
 #include "buffer.hh"
+#include "debug.hh"
 #include "pgp.hh"
 #include "util.hh"
 #include "xmpp/node.hh"
@@ -362,16 +363,13 @@ weechat::channel::channel(weechat::account& account,
         if (last_mam_fetch > 0)
             account.mam_cache_load_messages(this->id, buffer);
         
-        // If we've fetched recently, only get new messages since last fetch
-        if (last_mam_fetch > 0 && (now - last_mam_fetch) < 300)  // Less than 5 minutes
-        {
+        // If we have a persisted last fetch timestamp, always fetch since then.
+        // The old 5-minute window caused us to re-fetch the last 7 days on any
+        // later reconnect/open, which looks like repeated/out-of-order history.
+        if (last_mam_fetch > 0)
             start = last_mam_fetch;
-        }
         else
-        {
-            // Fetch last 7 days
             start = now - (7 * 86400);
-        }
         
         time_t end = now;
         std::string mam_uuid = stanza::uuid(account.context);
@@ -914,9 +912,7 @@ int weechat::channel::send_message(std::string to, std::string body,
         {
             auto hash_elem = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
             xmpp_stanza_set_attribute(hash_elem.get(), "algo", "sha-256");
-            auto hash_tx = stanza_text_node(account.context, "",
-                                            file_meta->sha256_hash.c_str());
-            xmpp_stanza_add_child(hash_elem.get(), hash_tx.get());
+            xmpp_stanza_set_text(hash_elem.get(), file_meta->sha256_hash.c_str());
             xmpp_stanza_add_child(sfs_file.get(), hash_elem.get());
         }
 
@@ -939,9 +935,7 @@ int weechat::channel::send_message(std::string to, std::string body,
             {
                 auto hash_el = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
                 xmpp_stanza_set_attribute(hash_el.get(), "algo", "sha-256");
-                auto hash_tx = stanza_text_node(account.context, "",
-                                                file_meta->esfs->cipher_hash_b64.c_str());
-                xmpp_stanza_add_child(hash_el.get(), hash_tx.get());
+                xmpp_stanza_set_text(hash_el.get(), file_meta->esfs->cipher_hash_b64.c_str());
                 xmpp_stanza_add_child(enc.get(), hash_el.get());
             }
 
@@ -985,9 +979,7 @@ int weechat::channel::send_message(std::string to, std::string body,
         {
             auto hash_elem = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
             xmpp_stanza_set_attribute(hash_elem.get(), "algo", "sha-256");
-            auto hash_tx = stanza_text_node(account.context, "",
-                                            file_meta->sha256_hash.c_str());
-            xmpp_stanza_add_child(hash_elem.get(), hash_tx.get());
+            xmpp_stanza_set_text(hash_elem.get(), file_meta->sha256_hash.c_str());
             xmpp_stanza_add_child(file_elem.get(), hash_elem.get());
         }
 
@@ -1887,6 +1879,22 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
 {
     std::string mam_id = id ? id : stanza::uuid(account.context);
 
+    // Guard: avoid issuing overlapping top-level MAM queries for the same channel.
+    // Overlapping fetches interleave <result> stanzas, which looks like duplicates
+    // and out-of-order history in the buffer.
+    if (!after)
+    {
+        for (const auto &[qid, q] : account.mam_queries)
+        {
+            if (!q.with.empty() && q.with == this->id)
+            {
+                XDEBUG("MAM: suppressing duplicate fetch for {} (query {} already in flight)",
+                       this->id, qid);
+                return;
+            }
+        }
+    }
+
     // XEP-0313: MUC MAM is addressed to the room JID; PM MAM goes to the
     // user's own bare JID (personal archive), NOT the bare server domain.
     // Sending to the bare domain causes <service-unavailable/> errors.
@@ -1918,17 +1926,17 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
     stanza::xep0313::query q;
     q.queryid(mam_id).filter(xf);
 
+    // Track this query so IQ <fin> and error handlers can map id -> context.
+    account.add_mam_query(mam_id, this->id,
+                          start ? std::optional(*start) : std::optional<time_t>(),
+                          end ? std::optional(*end) : std::optional<time_t>());
+
+    // RSM paging: send <after> token if provided.
     if (after)
     {
         stanza::xep0059::set rsm;
         rsm.after(after);
         q.rsm(rsm);
-    }
-    else
-    {
-        account.add_mam_query(mam_id, this->id,
-                start ? std::optional(*start) : std::optional<time_t>(),
-                end ? std::optional(*end) : std::optional<time_t>());
     }
 
     stanza::iq iq_s;

@@ -743,15 +743,9 @@ void weechat::account::load_pgp_keys()
     weechat_string_free_split(pairs);
 }
 
-// ---------------------------------------------------------------------------
-// LMDB cache: MAM message store, capability cache, MAM cursors, bookmarks.
-// ---------------------------------------------------------------------------
-#include "account/lmdb_cache.inl"
-
-// ---------------------------------------------------------------------------
-// WeeChat timer / event callbacks (idle, activity, SM ack, upload fd).
-// ---------------------------------------------------------------------------
-#include "account/callbacks.inl"
+// (account/lmdb_cache.inl and account/callbacks.inl are compiled as
+//  separate translation units: src/account/lmdb_cache.cpp and
+//  src/account/callbacks.cpp)
 
 // ---------------------------------------------------------------------------
 // Feed draft saving: writes a pending_feed_post back to disk so the user

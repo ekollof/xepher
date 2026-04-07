@@ -62,7 +62,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 ### Stanza Construction
 
-**Raw `xmpp_stanza_new()` calls are forbidden in all OMEMO `.inl` files and any new code.**
+**Raw `xmpp_stanza_new()` calls are forbidden in all new code and all `.inl` / `.cpp` files.**
 Use the fluent stanza builder system exclusively.
 
 #### The stanza builder (`src/xmpp/node.hh` + XEP `.inl` files)
@@ -168,12 +168,27 @@ Always commit **or** abort every transaction — never let one go out of scope u
 
 ### Key Files
 
-- **connection.cpp**: XMPP stanza handlers (presence, message, IQ)
-- **account.cpp**: Account management, cache operations
-- **channel.cpp**: Chat buffer management (PM and MUC)
-- **command.cpp**: WeeChat command implementations
-- **config.cpp**: Plugin configuration
-- **omemo.cpp/pgp.cpp**: Encryption support
+The codebase has been refactored so that large `.inl` implementation fragments are
+each compiled as their own translation unit via a thin wrapper `.cpp` in a subdirectory.
+**Do not open `.inl` files to read logic — open the corresponding `.cpp` wrapper instead,
+which sets up all necessary includes and then `#include`s the `.inl`.**
+
+- **src/connection/helpers.cpp** — anonymous-namespace helpers shared by connection TUs
+- **src/connection/presence_handler.cpp** — XMPP presence stanza handler
+- **src/connection/message_handler.cpp** — XMPP message stanza handler (includes `render_data_form`)
+- **src/connection/iq_handler.cpp** — XMPP IQ stanza handler (HTTP upload, MAM, pubsub, caps, OMEMO keys)
+- **src/connection/session_lifecycle.cpp** — stream management + connect/disconnect lifecycle
+- **src/connection/internal.hh** — declarations shared across connection TUs
+- **src/account/callbacks.cpp** — WeeChat hook callbacks (fd, timer, input, etc.)
+- **src/account/lmdb_cache.cpp** — LMDB MAM/caps/OMEMO cache read/write
+- **src/account.cpp** — Account object: connect, disconnect, reset, channel/roster management
+- **src/command/account.cpp**, **channel.cpp**, **messaging.cpp**, **ephemeral.cpp**,
+  **notify.cpp**, **archive.cpp**, **encryption.cpp**, **history.cpp**,
+  **presence.cpp**, **roster.cpp**, **rooms.cpp**, **muc_admin.cpp** — one `.cpp` per `/xmpp` sub-command
+- **src/channel.cpp** — Chat buffer management (PM and MUC), `send_message`
+- **src/config.cpp** — Plugin configuration
+- **src/omemo/api.cpp** — Full OMEMO implementation (replaces the old `src/omemo.cpp`)
+- **src/pgp.cpp** — PGP encryption support
 
 ### Channel Types
 

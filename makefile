@@ -146,9 +146,28 @@ SRCS=src/plugin.cpp \
 	 src/completion.cpp \
 	 src/config.cpp \
 	 src/connection.cpp \
+	 src/connection/helpers.cpp \
+	 src/connection/presence_handler.cpp \
+	 src/connection/message_handler.cpp \
+	 src/connection/iq_handler.cpp \
+	 src/connection/session_lifecycle.cpp \
+	 src/account/callbacks.cpp \
+	 src/account/lmdb_cache.cpp \
+	 src/command/account.cpp \
+	 src/command/channel.cpp \
+	 src/command/messaging.cpp \
+	 src/command/ephemeral.cpp \
+	 src/command/notify.cpp \
+	 src/command/archive.cpp \
+	 src/command/encryption.cpp \
+	 src/command/history.cpp \
+	 src/command/presence.cpp \
+	 src/command/roster.cpp \
+	 src/command/rooms.cpp \
+	 src/command/muc_admin.cpp \
 	 src/input.cpp \
 	 src/message.cpp \
-	 src/omemo.cpp \
+	 src/omemo/api.cpp \
 	 src/pgp.cpp \
 	 src/user.cpp \
 	 src/util.cpp \

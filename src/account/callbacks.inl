@@ -341,10 +341,15 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     // Normal (non-embed) upload result
     if (!ctx->success)
     {
-        weechat_printf(ptr_account->buffer,
-                        "%s%s: file upload failed (HTTP %ld): %s",
+        // Report the error in the channel buffer where the upload was initiated,
+        // falling back to the account buffer if the channel is gone.
+        auto ch_it = ptr_account->channels.find(ctx->channel_id);
+        struct t_gui_buffer *err_buf = (ch_it != ptr_account->channels.end())
+                                       ? ch_it->second.buffer
+                                       : ptr_account->buffer;
+        weechat_printf(err_buf,
+                        "%s%s: file upload failed (%s)",
                         weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                        ctx->http_code,
                         ctx->curl_error.empty() ? "unknown error" : ctx->curl_error.c_str());
         return WEECHAT_RC_OK;
     }

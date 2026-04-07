@@ -37,22 +37,8 @@
 #define MAM_DEFAULT_DAYS 2
 #define STR(X) #X
 
-// ---------------------------------------------------------------------------
-// Command implementations — split into logical groups.
-// Each .inl file is a self-contained section that shares the includes above.
-// ---------------------------------------------------------------------------
-#include "command/account.inl"
-#include "command/channel.inl"
-#include "command/messaging.inl"
-#include "command/ephemeral.inl"
-#include "command/notify.inl"
-#include "command/archive.inl"
-#include "command/encryption.inl"
-#include "command/history.inl"
-#include "command/presence.inl"
-#include "command/roster.inl"
-#include "command/rooms.inl"
-#include "command/muc_admin.inl"
+// (command/*.inl files are compiled as separate translation units;
+//  see src/command/account.cpp ... src/command/muc_admin.cpp)
 
 // ---------------------------------------------------------------------------
 // command__init — register all WeeChat command hooks.

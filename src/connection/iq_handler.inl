@@ -1737,11 +1737,23 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         return;
                     }
 
+                    // Required for multithreaded use: suppress SIGALRM/SIGPIPE
+                    // delivery from within libcurl (e.g. OpenSSL alarm-based
+                    // DNS timeouts, or SIGPIPE on broken connections).
+                    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+
                     curl_easy_setopt(curl, CURLOPT_URL, put_url_copy.c_str());
                     curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
                     curl_easy_setopt(curl, CURLOPT_READDATA, upload_file);
                     curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE,
                                      static_cast<curl_off_t>(file_size));
+
+                    // Discard the response body (e.g. HTML error pages from
+                    // 4xx/5xx responses) — we only care about the HTTP status code.
+                    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+                        +[](char *, size_t size, size_t nmemb, void *) -> size_t {
+                            return size * nmemb;
+                        });
 
                     struct curl_slist *headers = nullptr;
                     headers = curl_slist_append(
@@ -1766,10 +1778,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                     c.http_code = http_code;
                     c.get_url   = get_url_copy;
-                    if (res != CURLE_OK || http_code != 201)
+                    if (res != CURLE_OK)
                     {
                         c.success    = false;
                         c.curl_error = curl_easy_strerror(res);
+                    }
+                    else if (http_code != 201)
+                    {
+                        c.success    = false;
+                        c.curl_error = fmt::format("HTTP {}", http_code);
                     }
                     else
                     {
@@ -4365,6 +4382,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         const char *fin_complete = xmpp_stanza_get_attribute(fin, "complete");
         const char *fin_stable = xmpp_stanza_get_attribute(fin, "stable");
         const char *fin_abort = xmpp_stanza_get_attribute(fin, "abort");
+        const bool fin_is_complete = fin_complete
+            && (weechat_strcasecmp(fin_complete, "true") == 0
+                || weechat_strcasecmp(fin_complete, "1") == 0);
         const bool fin_has_abort = fin_abort
             && (weechat_strcasecmp(fin_abort, "true") == 0
                 || weechat_strcasecmp(fin_abort, "1") == 0);
@@ -4402,7 +4422,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
             if (channel != account.channels.end())
             {
-                if (set__last__text)
+                // Only page when the result set is not complete.
+                // Some servers include <last/> even on the final page.
+                if (set__last__text && !fin_is_complete)
                 {
                     time_t *start_ptr = mam_query.start ? &*mam_query.start : nullptr;
                     time_t *end_ptr   = mam_query.end   ? &*mam_query.end   : nullptr;
@@ -4425,7 +4447,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
             else if (is_global_query)
             {
-                if (set__last__text)
+                // Only page when the result set is not complete.
+                if (set__last__text && !fin_is_complete)
                 {
                     // Persist the RSM cursor so the next reconnect resumes from here
                     account.mam_cursor_set("global", set__last__text);
