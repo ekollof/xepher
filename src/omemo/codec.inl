@@ -416,6 +416,22 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                 send_key_transport(*this, *account, buffer, bare_jid.c_str(), *sender_device_id);
             }
         }
+        // XEP-0384 §6 SHOULD: after successfully decrypting a PreKeySignalMessage
+        // (i.e. the first message of a new session from this device), send back an
+        // empty OMEMO message so the sender knows it can stop sending OMEMOKeyExchanges.
+        // Guarded against MAM replay and duplicate sends (one reply per fresh session).
+        if (decoded_as_prekey && !global_mam_catchup && account && sender_device_id)
+        {
+            const std::string bare_jid = normalize_bare_jid(*account->context, jid);
+            const auto pk_key = std::make_pair(bare_jid, *sender_device_id);
+            if (prekey_reply_sent.count(pk_key) == 0)
+            {
+                prekey_reply_sent.insert(pk_key);
+                XDEBUG("omemo (legacy): sending prekey-reply key-transport to {}/{}",
+                       bare_jid, *sender_device_id);
+                send_key_transport(*this, *account, buffer, bare_jid.c_str(), *sender_device_id);
+            }
+        }
         return std::string(*result);
     }
 
@@ -525,6 +541,22 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             send_key_transport(*this, *account, buffer, bare_jid.c_str(), *sender_device_id);
         }
     }
+    // XEP-0384 §6 SHOULD: after successfully decrypting a PreKeySignalMessage
+    // (i.e. the first message of a new session from this device), send back an
+    // empty OMEMO message so the sender knows it can stop sending OMEMOKeyExchanges.
+    // Guarded against MAM replay and duplicate sends (one reply per fresh session).
+    if (decoded_as_prekey && !global_mam_catchup && account && sender_device_id)
+    {
+        const std::string bare_jid = normalize_bare_jid(*account->context, jid);
+        const auto pk_key = std::make_pair(bare_jid, *sender_device_id);
+        if (prekey_reply_sent.count(pk_key) == 0)
+        {
+            prekey_reply_sent.insert(pk_key);
+            XDEBUG("omemo: sending prekey-reply key-transport to {}/{}",
+                   bare_jid, *sender_device_id);
+            send_key_transport(*this, *account, buffer, bare_jid.c_str(), *sender_device_id);
+        }
+    }
 
     return std::string(*body);
 }
@@ -552,7 +584,18 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
 
     ensure_local_identity(*this);
     ensure_registration_id(*this);
-    ensure_prekeys(*this, *account->context);
+    if (ensure_prekeys(*this, *account->context))
+    {
+        // New prekeys were just generated (or repaired) — the server-side bundle
+        // is now stale.  Publish both bundles immediately so peers (e.g.
+        // Conversations) will fetch the updated bundle on their next session
+        // bootstrap instead of hitting a Bad MAC / DecryptionException.
+        print_info(buffer, "OMEMO: prekeys regenerated — republishing bundle");
+        if (std::shared_ptr<xmpp_stanza_t> bs { get_bundle(*account->context, nullptr, nullptr), xmpp_stanza_release })
+            account->connection.send(bs.get());
+        if (std::shared_ptr<xmpp_stanza_t> lbs { get_axolotl_bundle(*account->context, nullptr, nullptr), xmpp_stanza_release })
+            account->connection.send(lbs.get());
+    }
 
     // Conversations addresses OMEMO device/session material by bare JID.
     // Normalize once here so devicelist/session lookups don't miss when
@@ -795,7 +838,16 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
 
         ensure_local_identity(*this);
         ensure_registration_id(*this);
-        ensure_prekeys(*this, *account->context);
+        if (ensure_prekeys(*this, *account->context))
+        {
+            // New prekeys were just generated (or repaired) — republish both bundles
+            // so peers fetch the updated material instead of using a stale cached bundle.
+            print_info(buffer, "OMEMO (legacy): prekeys regenerated — republishing bundle");
+            if (std::shared_ptr<xmpp_stanza_t> bs { get_bundle(*account->context, nullptr, nullptr), xmpp_stanza_release })
+                account->connection.send(bs.get());
+            if (std::shared_ptr<xmpp_stanza_t> lbs { get_axolotl_bundle(*account->context, nullptr, nullptr), xmpp_stanza_release })
+                account->connection.send(lbs.get());
+        }
 
         std::string target_jid = ::jid(nullptr, jid).bare;
         if (target_jid.empty())

@@ -22,7 +22,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::get_bundle(xmpp_ctx_t *context, char *from,
 
     ensure_local_identity(*this);
     ensure_registration_id(*this);
-    ensure_prekeys(*this, context);
+    (void)ensure_prekeys(*this, context);  // return value intentionally discarded: caller is already publishing
 
     const auto bundle = make_local_bundle_metadata(*this);
     if (!bundle)
@@ -115,7 +115,7 @@ XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ct
 
     ensure_local_identity(*this);
     ensure_registration_id(*this);
-    ensure_prekeys(*this, context);
+    (void)ensure_prekeys(*this, context);  // return value intentionally discarded: caller is already publishing
 
     const auto bundle = make_local_bundle_metadata(*this);
     if (!bundle)
@@ -270,6 +270,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, co
         key_transport_bootstrap_attempted.clear();
         failed_session_bootstrap.clear();
         peers_with_observed_traffic.clear();
+        prekey_reply_sent.clear();
         global_mam_catchup = false;
         bundle_republish_pending = false;
 

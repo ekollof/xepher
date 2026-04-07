@@ -378,7 +378,9 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     return generate_and_store_spk(self, next_id);
 }
 
-void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
+// Returns true if new prekeys were generated (caller should republish the bundle),
+// false if prekeys already existed and no regeneration was needed.
+[[nodiscard]] bool ensure_prekeys(omemo &self, xmpp_ctx_t *context)
 {
     OMEMO_ASSERT(self.context, "signal context must exist before generating prekeys");
     OMEMO_ASSERT(context != nullptr, "xmpp context must exist before serializing prekeys");
@@ -405,8 +407,11 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
                                parts.size(),
                                kPreKeyCount);
                 repair_prekeys_index(self, context);
+                // Repaired from existing on-disk records — no new keys generated,
+                // but the bundle needs to be republished to reflect the repaired index.
+                return true;
             }
-            return;
+            return false;
         }
         // Signed prekey record exists but index is missing — fall through to
         // regenerate prekeys (signed prekey is reused, only prekey material changes).
@@ -419,7 +424,7 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
     {
         // No SPK at all — generate id=1 fresh.
         if (!generate_and_store_spk(self, 1))
-            return;
+            return false;
     }
 
     // Determine the starting ID for the new pre-key batch.
@@ -441,7 +446,7 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
     if (signal_protocol_key_helper_generate_pre_keys(
             &pre_key_head_raw, start_id, kPreKeyCount, self.context) != 0)
     {
-        return;
+        return false;
     }
 
     unique_pre_key_list pre_key_head {pre_key_head_raw};
@@ -486,6 +491,9 @@ void ensure_prekeys(omemo &self, xmpp_ctx_t *context)
     // Persist the new high-water mark so the next rotation or regeneration
     // continues from here rather than restarting at kPreKeyStart.
     store_string(self, kMaxPreKeyId, fmt::format("{}", new_max_id));
+
+    // New prekeys were generated — caller should republish the bundle.
+    return true;
 }
 
 // Generate a fresh pre-key with the same ID as `used_id`, store it to LMDB,

@@ -146,6 +146,15 @@ namespace weechat {
             // when the first message with counter >= 53 is received.
             std::set<std::pair<std::string, std::uint32_t>> heartbeat_sent;
 
+            // Per-{jid, device} set tracking whether we have already sent the
+            // SHOULD empty key-transport reply after receiving a PreKeySignalMessage
+            // from that device.  XEP-0384 §6: "After receiving an OMEMOKeyExchange
+            // and successfully building a new session, the receiving device SHOULD
+            // automatically respond with an empty OMEMO message to notify the
+            // sender they can stop sending OMEMOKeyExchanges."
+            // Cleared on disconnect/reconnect together with heartbeat_sent.
+            std::set<std::pair<std::string, std::uint32_t>> prekey_reply_sent;
+
             // XEP-0384 §5.7: bare JIDs that have sent us an <opt-out/> element
             // inside an SCE envelope.  Outgoing OMEMO messages to these peers are
             // blocked until the user explicitly acknowledges the switch to
