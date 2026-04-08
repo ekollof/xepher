@@ -76,7 +76,11 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     // that peer — this unblocks bundle requests (which check has_peer_traffic)
     // so the recovery path can fetch their bundle and send a key-transport when
     // decryption fails due to a stale/mismatched session.
-    note_peer_traffic(account->context, jid);
+    // During MAM replay (quiet=true) we suppress this: we must not mark peers
+    // as having observed live traffic based on archived messages, as that
+    // would trigger spurious bundle fetches (e.g. for own ConverseJS devices).
+    if (!quiet)
+        note_peer_traffic(account->context, jid);
 
     // Legacy transport key: {innerKey16, authTag16}
     std::optional<std::pair<std::array<std::uint8_t, 16>, std::array<std::uint8_t, 16>>> legacy_transport_key;
@@ -255,26 +259,44 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             // found_key_for_us==true but decryption failed.
             if (!quiet)
                 print_error(buffer, "OMEMO transport key decryption failed.");
-            if (!quiet && account && sender_device_id)
+            if (account && sender_device_id)
             {
                 const std::string bare_jid = normalize_bare_jid(*account->context, jid);
                 // Self-outbound copy: do not corrupt own session.
                 if (bare_jid == own_bare_jid)
                     return std::nullopt;
                 const auto kex_key = std::make_pair(bare_jid, *sender_device_id);
-                if (key_transport_bootstrap_attempted.count(kex_key) == 0)
+                if (!quiet)
                 {
-                    key_transport_bootstrap_attempted.insert(kex_key);
-                    print_info(buffer, fmt::format(
-                        "OMEMO: queueing key-transport to {}/{} to recover stale session",
-                        bare_jid, *sender_device_id));
-                    // Delete the stale session so the key-transport forces a fresh
-                    // PreKeySignalMessage exchange from the sender's side.
-                    auto addr = make_signal_address(bare_jid,
-                                                    static_cast<std::int32_t>(*sender_device_id));
-                    signal_protocol_session_delete_session(store_context, &addr.address);
-                    pending_key_transport.insert(kex_key);
-                    request_axolotl_bundle(*account, bare_jid, *sender_device_id);
+                    if (key_transport_bootstrap_attempted.count(kex_key) == 0)
+                    {
+                        key_transport_bootstrap_attempted.insert(kex_key);
+                        print_info(buffer, fmt::format(
+                            "OMEMO: queueing key-transport to {}/{} to recover stale session",
+                            bare_jid, *sender_device_id));
+                        // Delete the stale session so the key-transport forces a fresh
+                        // PreKeySignalMessage exchange from the sender's side.
+                        auto addr = make_signal_address(bare_jid,
+                                                        static_cast<std::int32_t>(*sender_device_id));
+                        signal_protocol_session_delete_session(store_context, &addr.address);
+                        pending_key_transport.insert(kex_key);
+                        request_axolotl_bundle(*account, bare_jid, *sender_device_id);
+                    }
+                }
+                else
+                {
+                    // MAM replay: decryption failed for a real peer's archived message.
+                    // Queue a deferred key-transport so the session is recovered after
+                    // MAM catchup ends (process_postponed_key_transports will send it).
+                    // Do not delete the session here — if we still have a valid session
+                    // from a more recent message, we do not want to clobber it.
+                    if (key_transport_bootstrap_attempted.count(kex_key) == 0
+                        && pending_key_transport.count(kex_key) == 0)
+                    {
+                        XDEBUG("omemo: MAM decrypt failed for {}/{} — queuing deferred session recovery",
+                               bare_jid, *sender_device_id);
+                        pending_key_transport.insert(kex_key);
+                    }
                 }
             }
         }
