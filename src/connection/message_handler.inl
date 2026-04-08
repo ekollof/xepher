@@ -2925,17 +2925,36 @@ message_handler_after_omemo:
     {
         // PM channel: prefer a known-user prefix (avatar + colour), but fall
         // back to a plain coloured bare-JID string so the nick column is never
-        // empty.  The user may be stored under the full JID (chatstate handler
-        // inserts with full JID as key) or the bare JID (roster), so try both.
-        display_prefix = user::as_prefix_raw(&account, display_from);
-        if (display_prefix.empty() && from && *from)
-            display_prefix = user::as_prefix_raw(&account, from);
-        if (display_prefix.empty())
+        // empty.
+        //
+        // The label shown in the nick column is always the bare JID (or nick,
+        // which for PM is also bare JID). We never display a full JID with
+        // resource — chatstate handlers may create user objects keyed on the
+        // full JID, so looking up by full JID for avatar/colour is fine, but
+        // we must NOT use such a user's display_name (which may be the full JID)
+        // as the rendered label.
+        const std::string_view pm_label = (nick && *nick)  ? std::string_view(nick)
+                                        : from_bare         ? std::string_view(from_bare)
+                                                            : std::string_view("(unknown)");
+
+        // Try bare-JID user lookup first (roster contacts are stored by bare JID).
+        auto *pm_user = user::search(&account, display_from);
+        // If not found, try full-JID (chatstate-created users), but still
+        // render with pm_label (bare JID) not the user's stored display_name.
+        if (!pm_user && from && *from)
+            pm_user = user::search(&account, from);
+
+        if (pm_user)
         {
-            std::string_view label = (nick && *nick) ? std::string_view(nick)
-                                   : from_bare       ? std::string_view(from_bare)
-                                                     : std::string_view("(unknown)");
-            display_prefix = user::as_prefix_raw(label);
+            std::string pfx;
+            if (!pm_user->profile.avatar_rendered.empty())
+                pfx = pm_user->profile.avatar_rendered + " ";
+            pfx += user::as_prefix_raw(pm_label);
+            display_prefix = pfx;
+        }
+        else
+        {
+            display_prefix = user::as_prefix_raw(pm_label);
         }
     }
     
