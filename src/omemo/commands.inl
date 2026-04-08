@@ -180,6 +180,23 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
         print_info(buffer, fmt::format("  {}", device));
 }
 
+std::vector<std::uint32_t> weechat::xmpp::omemo::get_cached_device_ids(std::string_view jid)
+{
+    std::vector<std::uint32_t> result;
+    if (!db_env || jid.empty())
+        return result;
+    const auto devlist = load_string(*this, key_for_axolotl_devicelist(jid));
+    if (!devlist || devlist->empty())
+        return result;
+    for (const auto &dev : split(*devlist, ';'))
+    {
+        const auto parsed = parse_uint32(dev);
+        if (parsed && is_valid_omemo_device_id(*parsed))
+            result.push_back(*parsed);
+    }
+    return result;
+}
+
 void weechat::xmpp::omemo::show_status(struct t_gui_buffer *buffer,
                                        const char *account_name,
                                        const char *channel_name,

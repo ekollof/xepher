@@ -132,11 +132,16 @@ std::shared_ptr<xmpp_stanza_t> weechat::account::get_devicelist()
         return nullptr;
     }
 
-    using DeviceMap2 = std::unordered_map<std::uint32_t, weechat::account::device>;
+    // Collect peer device IDs from the LMDB-cached axolotl devicelist for our
+    // own JID.  This is the server's last-known list and must be preserved so
+    // we don't overwrite it with only our own device (singleton clobber bug).
+    const std::string own_bare_jid = jid();
+    const auto cached_ids = omemo.get_cached_device_ids(own_bare_jid);
 
-    // <list xmlns='eu.siacs.conversations.axolotl'> populated in-constructor
+    // <list xmlns='eu.siacs.conversations.axolotl'>
     struct list_spec : stanza::spec {
-        list_spec(std::uint32_t self_id, const DeviceMap2& devs, weechat::account* acct)
+        list_spec(std::uint32_t self_id,
+                  const std::vector<std::uint32_t> &cached)
             : spec("list")
         {
             attr("xmlns", "eu.siacs.conversations.axolotl");
@@ -147,27 +152,18 @@ std::shared_ptr<xmpp_stanza_t> weechat::account::get_devicelist()
                 }
             };
 
-            const std::string self_id_s = fmt::format("{}", self_id);
-            device_spec self_dev(self_id_s);
+            // Always include our own device first.
+            device_spec self_dev(fmt::format("{}", self_id));
             child(self_dev);
 
-            for (const auto& [dev_id, dev_info] : devs)
+            // Re-include all previously published devices from the server list
+            // so we do not clobber them.  This preserves other clients' device
+            // entries (Gajim, Conversations, …) that they registered themselves.
+            for (const auto dev_id : cached)
             {
                 if (dev_id == self_id || dev_id == 0 || dev_id > 0x7fffffffU)
                     continue;
-                if (dev_info.name == "%u")
-                    continue;
-                const auto expected = fmt::format("{}", dev_id);
-                if (dev_info.name != expected)
-                {
-                    weechat_printf(acct->buffer,
-                                   "%somemo: skipping cached device entry %u with mismatched published id '%s' (legacy devicelist)",
-                                   weechat_prefix("error"),
-                                   dev_id,
-                                   dev_info.name.c_str());
-                    continue;
-                }
-                device_spec peer_dev(dev_info.name);
+                device_spec peer_dev(fmt::format("{}", dev_id));
                 child(peer_dev);
             }
         }
@@ -201,7 +197,7 @@ std::shared_ptr<xmpp_stanza_t> weechat::account::get_devicelist()
         }
     };
 
-    list_spec list_el(omemo.device_id, devices, this);
+    list_spec list_el(omemo.device_id, cached_ids);
 
     // Keep legacy node public/persistent as well so clients still using
     // OMEMO:1 can reliably discover this device.
@@ -215,8 +211,9 @@ std::shared_ptr<xmpp_stanza_t> weechat::account::get_devicelist()
     static_cast<stanza::xep0060::iq&>(iq_s).pubsub(pubsub_el);
 
     weechat_printf(buffer,
-                   "%somemo: publishing legacy devicelist for device %u with open access model",
-                   weechat_prefix("network"), omemo.device_id);
+                   "%somemo: publishing legacy devicelist for device %u (%zu total device(s)) with open access model",
+                   weechat_prefix("network"), omemo.device_id,
+                   cached_ids.size() + 1);
 
     return iq_s.build(context);
 }

@@ -244,6 +244,11 @@ namespace weechat {
             // Drop a cached bundle for a remote device.
             void clear_cached_bundle(std::string_view jid, std::uint32_t device_id);
 
+            // Return all device IDs cached in the LMDB axolotl devicelist for
+            // `jid`.  Used by get_devicelist() to merge the server's previously
+            // published list so we don't clobber other devices with a singleton.
+            std::vector<std::uint32_t> get_cached_device_ids(std::string_view jid);
+
             // BTBV trust management:
             // trust_jid: set trust level to VERIFIED(1) for all known devices of jid,
             //            or for a specific device_id if provided.
