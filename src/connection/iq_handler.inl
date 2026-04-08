@@ -4143,7 +4143,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
                 else
                 {
-                    // Global MAM query complete
+                    // Global MAM query complete — persist the final RSM cursor so
+                    // the next reconnect resumes from the very end of the archive
+                    // rather than replaying from a stale intermediate cursor.
+                    if (set__last__text)
+                        account.mam_cursor_set("global", set__last__text);
+
                     account.mam_query_remove(mam_query.id);
                         // MAM catchup done — fire deferred key transports now
                         account.omemo.global_mam_catchup = false;
