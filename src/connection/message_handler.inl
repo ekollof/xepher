@@ -1931,11 +1931,24 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             // Only store on live inbound delivery — not for MAM replays themselves
             // (the cache hit path below handles those) and not for self outbound
             // copies (carbons of our own sent messages).
-            if (!is_mam_replay && !is_self_outbound_copy && stable_id && channel_id)
+            if (!is_mam_replay && !is_self_outbound_copy && channel_id)
             {
-                account.mam_cache_store_omemo_plaintext(
-                    std::string(channel_id), std::string(stable_id),
-                    omemo_cleartext_storage);
+                // Store under all three IDs so the MAM replay lookup always hits.
+                // On live delivery the server injects <stanza-id> (server-assigned);
+                // on MAM replay the server strips <stanza-id> from the forwarded copy,
+                // so stable_id on replay resolves to origin-id or the message id=
+                // attribute instead — a different value.  Storing all three guarantees
+                // a cache hit regardless of which one the replay uses as its stable_id.
+                std::string ch(channel_id);
+                std::string sid   = stanza_id  ? std::string(stanza_id)  : "";
+                std::string oid   = origin_id  ? std::string(origin_id)  : "";
+                std::string mid   = id         ? std::string(id)         : "";
+                if (!sid.empty())
+                    account.mam_cache_store_omemo_plaintext(ch, sid, omemo_cleartext_storage);
+                if (!oid.empty() && oid != sid)
+                    account.mam_cache_store_omemo_plaintext(ch, oid, omemo_cleartext_storage);
+                if (!mid.empty() && mid != sid && mid != oid)
+                    account.mam_cache_store_omemo_plaintext(ch, mid, omemo_cleartext_storage);
             }
         }
         if (!cleartext)
