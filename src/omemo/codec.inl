@@ -426,7 +426,8 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
                                int *out_incomplete_count = nullptr,
                                bool include_own_device = false) -> bool
     {
-        stanza::xep0384::axolotl_keys ks(recipient_jid);
+        // Legacy flat layout: emit <key rid='…'> directly under <header>
+        // (no <keys jid='…'> wrapper) for Conversations/Gajim compatibility.
         bool added_keys = false;
         if (out_incomplete_count)
             *out_incomplete_count = 0;
@@ -488,15 +489,13 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
             const auto encoded_transport = base64_encode(*account->context,
                                                          transport->first.data(),
                                                          transport->first.size());
-            ks.add_key(stanza::xep0384::axolotl_key(
+            // Flat legacy layout: add <key> directly under <header>
+            header_spec.add_key(stanza::xep0384::axolotl_key(
                 fmt::format("{}", *remote_device_id),
                 encoded_transport,
                 transport->second));
             added_keys = true;
         }
-
-        if (added_keys)
-            header_spec.add_keys(ks);
 
         return added_keys;
     };

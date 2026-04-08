@@ -302,14 +302,14 @@ static void send_key_transport(omemo &self,
         return b.empty() ? std::string(account.jid()) : b;
     }();
 
-    stanza::xep0384::axolotl_keys peer_keys_spec(peer_jid);
-    stanza::xep0384::axolotl_keys own_keys_spec(own_bare_jid);
+    stanza::xep0384::axolotl_header header_spec(fmt::format("{}", self.device_id));
     bool peer_has_keys = false;
     bool own_has_keys = false;
 
+    // Legacy flat layout: add <key> directly under <header> (no <keys jid=...> wrapper).
+    // This is the format nbxmpp/Gajim and Conversations expect.
     auto add_axolotl_key = [&](const std::string &target_jid,
-                               std::uint32_t target_device_id,
-                               stanza::xep0384::axolotl_keys &ks) -> bool
+                               std::uint32_t target_device_id) -> bool
     {
         if (!is_valid_omemo_device_id(target_device_id))
             return false;
@@ -321,14 +321,14 @@ static void send_key_transport(omemo &self,
         const auto target_encoded_transport = base64_encode(*account.context,
                                                             target_transport->first.data(),
                                                             target_transport->first.size());
-        ks.add_key(stanza::xep0384::axolotl_key(
+        header_spec.add_key(stanza::xep0384::axolotl_key(
             fmt::format("{}", target_device_id),
             target_encoded_transport,
             target_transport->second));
         return true;
     };
 
-    if (add_axolotl_key(peer_jid, remote_device_id, peer_keys_spec))
+    if (add_axolotl_key(peer_jid, remote_device_id))
         peer_has_keys = true;
 
     const auto own_legacy_devicelist = load_string(self, key_for_axolotl_devicelist(own_bare_jid));
@@ -350,7 +350,7 @@ static void send_key_transport(omemo &self,
                 continue;
             }
 
-            if (add_axolotl_key(own_bare_jid, *own_device, own_keys_spec))
+            if (add_axolotl_key(own_bare_jid, *own_device))
                 own_has_keys = true;
         }
     }
@@ -363,9 +363,6 @@ static void send_key_transport(omemo &self,
         return;
     }
 
-    stanza::xep0384::axolotl_header header_spec(fmt::format("{}", self.device_id));
-    if (peer_has_keys) header_spec.add_keys(peer_keys_spec);
-    if (own_has_keys)  header_spec.add_keys(own_keys_spec);
     header_spec.add_iv(stanza::xep0384::axolotl_iv(encoded_iv));
 
     stanza::xep0384::axolotl_encrypted enc_spec;

@@ -158,7 +158,10 @@ namespace stanza {
                 attr("sid", sid);
             }
 
+            // New-style: <header><keys jid='…'><key …/></keys></header>
             axolotl_header& add_keys(xep0384::axolotl_keys k) { child(k); return *this; }
+            // Legacy flat layout: <header><key …/></header> (Conversations/older Gajim compat)
+            axolotl_header& add_key(xep0384::axolotl_key k) { child(k); return *this; }
             axolotl_header& add_iv(xep0384::axolotl_iv iv) { child(iv); return *this; }
         };
 
