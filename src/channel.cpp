@@ -960,6 +960,16 @@ int weechat::channel::send_message(std::string to, std::string body,
         xmpp_stanza_add_child(file_sharing.get(), sfs_sources.get());
         xmpp_stanza_add_child(message.get(), file_sharing.get());
 
+        // XEP-0428: Fallback Indication — MUST be present when body contains
+        // a fallback URL for clients that don't support XEP-0447/0448.
+        {
+            auto fallback = make_child(nullptr, "fallback", "urn:xmpp:fallback:0");
+            xmpp_stanza_set_attribute(fallback.get(), "for", "urn:xmpp:sfs:0");
+            auto fb_body = make_child(nullptr, "body");
+            xmpp_stanza_add_child(fallback.get(), fb_body.get());
+            xmpp_stanza_add_child(message.get(), fallback.get());
+        }
+
         // ── XEP-0385: SIMS — kept for backward compat ──
         auto reference = make_child(nullptr, "reference", "urn:xmpp:reference:0");
         xmpp_stanza_set_attribute(reference.get(), "type", "data");
