@@ -339,9 +339,10 @@ namespace weechat
         struct mam_dbi {
             lmdb::dbi messages = 0;
             lmdb::dbi timestamps = 0;
-            lmdb::dbi capabilities = 0;  // XEP-0115 capability cache
-            lmdb::dbi retractions = 0;   // XEP-0424 retracted message IDs
-            lmdb::dbi cursors = 0;       // RSM cursor persistence for MAM queries
+            lmdb::dbi capabilities = 0;    // XEP-0115 capability cache
+            lmdb::dbi retractions = 0;     // XEP-0424 retracted message IDs
+            lmdb::dbi cursors = 0;         // RSM cursor persistence for MAM queries
+            lmdb::dbi omemo_plaintext = 0; // decrypted OMEMO body cache (keyed channel_jid:msg_id)
         } mam_dbi;
         std::string mam_db_path;
 
@@ -390,6 +391,11 @@ namespace weechat
         void mam_cache_clear_messages(const std::string& channel_jid);
         time_t mam_cache_get_last_timestamp(const std::string& channel_jid);
         void mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp);
+        // OMEMO plaintext cache: store decrypted body on live delivery; look up on MAM replay
+        void mam_cache_store_omemo_plaintext(const std::string& channel_jid, const std::string& msg_id,
+                                             const std::string& body);
+        std::optional<std::string> mam_cache_lookup_omemo_plaintext(const std::string& channel_jid,
+                                                                     const std::string& msg_id);
         // PM buffer persistence across restarts (stored in cursors LMDB table)
         void pm_open_register(const std::string& pm_jid);
         void pm_open_unregister(const std::string& pm_jid);

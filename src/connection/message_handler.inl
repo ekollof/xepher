@@ -1900,6 +1900,22 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     if (encrypted && account.omemo)
     {
         bool omemo_is_duplicate = false;
+        // On MAM replay: check if we cached the plaintext from the live delivery.
+        // If found, use it directly and skip Signal decryption entirely — the ratchet
+        // key was consumed in the original session and decryption would fail with
+        // SG_ERR_DUPLICATE_MESSAGE.  This mirrors Gajim's SQLite archive approach.
+        if (is_mam_replay && stable_id && channel_id)
+        {
+            auto cached = account.mam_cache_lookup_omemo_plaintext(
+                std::string(channel_id), std::string(stable_id));
+            if (cached.has_value())
+            {
+                omemo_cleartext_storage = std::move(*cached);
+                cleartext = omemo_cleartext_storage.data();
+                encrypted = nullptr;  // bypass after-omemo null-text guard
+                goto message_handler_after_omemo;
+            }
+        }
         // Always attempt decryption — MAM messages can be decrypted if the
         // Signal session is still valid.  quiet=false so errors are logged.
         // out_is_duplicate distinguishes "already seen live" (SG_ERR_DUPLICATE_MESSAGE)
@@ -1911,6 +1927,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         {
             omemo_cleartext_storage = std::move(*omemo_result);
             cleartext = omemo_cleartext_storage.data();
+            // Cache decrypted plaintext for MAM replay in future sessions.
+            // Only store on live inbound delivery — not for MAM replays themselves
+            // (the cache hit path below handles those) and not for self outbound
+            // copies (carbons of our own sent messages).
+            if (!is_mam_replay && !is_self_outbound_copy && stable_id && channel_id)
+            {
+                account.mam_cache_store_omemo_plaintext(
+                    std::string(channel_id), std::string(stable_id),
+                    omemo_cleartext_storage);
+            }
         }
         if (!cleartext)
         {
