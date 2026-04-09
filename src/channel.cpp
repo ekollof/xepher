@@ -184,7 +184,7 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
             // can derive a readable name from both the JID and the node.
             auto short_name_value = (type == weechat::channel::chat_type::FEED)
                 ? channel_short_name(type, name)
-                : channel_short_name(type, res ? res + 1 : name);
+                : channel_short_name(type, res ? res : name);
             weechat_buffer_set(ptr_buffer, "short_name", short_name_value.c_str());
         }
     }
