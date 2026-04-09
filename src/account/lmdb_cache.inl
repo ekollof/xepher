@@ -27,6 +27,7 @@ void weechat::account::mam_cache_init()
         mam_dbi.retractions = lmdb::dbi::open(transaction, "retractions", MDB_CREATE);
         mam_dbi.cursors = lmdb::dbi::open(transaction, "cursors", MDB_CREATE);
         mam_dbi.omemo_plaintext = lmdb::dbi::open(transaction, "omemo_plaintext", MDB_CREATE);
+        mam_dbi.esfs_downloads  = lmdb::dbi::open(transaction, "esfs_downloads",  MDB_CREATE);
 
         transaction.commit();
         
@@ -599,6 +600,55 @@ std::optional<std::string> weechat::account::mam_cache_lookup_omemo_plaintext(
             std::string body(static_cast<const char*>(v.mv_data), v.mv_size);
             txn.abort();
             return body;
+        }
+
+        txn.abort();
+    } catch (const lmdb::error&) {
+        // Silently ignore read errors
+    }
+
+    return std::nullopt;
+}
+
+void weechat::account::mam_cache_store_esfs_download(const std::string& channel_jid,
+                                                      const std::string& stable_id,
+                                                      const std::string& saved_path)
+{
+    if (!mam_db_env || channel_jid.empty() || stable_id.empty() || saved_path.empty()) return;
+
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+
+        std::string key = fmt::format("{}:{}", channel_jid, stable_id);
+        MDB_val k = {key.size(), (void*)key.data()};
+        MDB_val v = {saved_path.size(), (void*)saved_path.data()};
+
+        mdb_put(txn.handle(), mam_dbi.esfs_downloads.handle(), &k, &v, 0);
+        txn.commit();
+    } catch (const lmdb::error&) {
+        // Silently ignore write errors
+    }
+}
+
+std::optional<std::string> weechat::account::mam_cache_lookup_esfs_download(
+    const std::string& channel_jid, const std::string& stable_id)
+{
+    if (!mam_db_env || channel_jid.empty() || stable_id.empty()) return std::nullopt;
+
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
+
+        std::string key = fmt::format("{}:{}", channel_jid, stable_id);
+        MDB_val k = {key.size(), (void*)key.data()};
+        MDB_val v;
+
+        if (mdb_get(txn.handle(), mam_dbi.esfs_downloads.handle(), &k, &v) == 0)
+        {
+            std::string path(static_cast<const char*>(v.mv_data), v.mv_size);
+            txn.abort();
+            return path;
         }
 
         txn.abort();

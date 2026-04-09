@@ -52,11 +52,16 @@ int ephemeral_tombstone_cb(const void *pointer, void *data, int remaining_calls)
 // ── XEP-0448 Encrypted File Sharing download context ─────────────────────────
 struct esfs_download_ctx {
     // Inputs (set before thread starts)
-    std::string cipher_url;
+    std::string cipher_url;   // HTTPS ciphertext URL — used for in-flight dedup
     std::string filename;
     std::string key_b64;
     std::string iv_b64;
     struct t_gui_buffer *buffer = nullptr;
+
+    // Dedup keys — passed through to LMDB on success
+    weechat::account *account_ptr = nullptr; // non-owning; valid for plugin lifetime
+    std::string channel_jid;
+    std::string stable_id;    // stanza_id ?? origin_id ?? message id
 
     // Communication pipe (read-end watched by weechat_hook_fd)
     int pipe_read_fd  = -1;
@@ -74,11 +79,18 @@ struct esfs_download_ctx {
 extern std::list<esfs_download_ctx> g_esfs_downloads;
 
 // Called from message_handler when an encrypted SFS source is detected.
+// cipher_url  — the HTTPS URL of the ciphertext (used for in-flight dedup)
+// channel_jid — bare JID of the conversation (LMDB dedup key prefix)
+// stable_id   — best stable message identifier: stanza_id ?? origin_id ?? msg id
+// account_ptr — owning account (for LMDB store on success)
 void esfs_start_download(const std::string &cipher_url,
                          const std::string &filename,
                          const std::string &key_b64,
                          const std::string &iv_b64,
-                         struct t_gui_buffer *buf);
+                         struct t_gui_buffer *buf,
+                         weechat::account *account_ptr,
+                         const std::string &channel_jid,
+                         const std::string &stable_id);
 
 // ── XEP-0004: Data Forms renderer ─────────────────────────────────────────────
 // Render a <x xmlns='jabber:x:data'> form to a WeeChat buffer.

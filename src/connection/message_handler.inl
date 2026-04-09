@@ -3404,11 +3404,42 @@ message_handler_after_omemo:
 
                     if (!esfs_key.empty() && !esfs_iv.empty() && !esfs_ct_url.empty())
                     {
-                        // Kick off background download + decrypt.
-                        esfs_start_download(esfs_ct_url, sfs_name, esfs_key, esfs_iv,
-                                            channel ? channel->buffer : account.buffer);
-                        sfs_encrypted = true;
-                        sfs_url = esfs_ct_url; // use ciphertext URL for dedup check
+                        // Build a stable ID for LMDB dedup: prefer server stanza-id,
+                        // fall back to origin-id, then the raw message id attribute.
+                        std::string esfs_stable_id = stable_id ? std::string(stable_id) : std::string();
+                        std::string esfs_channel_jid = channel_id ? std::string(channel_id) : std::string();
+
+                        // Layer 2: persistent dedup — check LMDB for a previous download
+                        // of this exact message (survives restarts; blocks MAM replay re-downloads).
+                        bool already_downloaded = false;
+                        if (!esfs_stable_id.empty() && !esfs_channel_jid.empty())
+                        {
+                            auto prev = account.mam_cache_lookup_esfs_download(
+                                esfs_channel_jid, esfs_stable_id);
+                            if (prev)
+                            {
+                                // File was previously downloaded — annotate and skip download.
+                                // Set sfs_url so dedup checks work; leave sfs_encrypted false
+                                // so the outer display block does not add a second suffix.
+                                sfs_url = esfs_ct_url;
+                                sims_suffix += std::string("\n") + weechat_color("cyan")
+                                    + "[Encrypted file: "
+                                    + (sfs_name.empty() ? "(unnamed)" : sfs_name)
+                                    + " — already saved: " + *prev + "]"
+                                    + std::string(weechat_color("resetcolor"));
+                                already_downloaded = true;
+                            }
+                        }
+
+                        if (!already_downloaded)
+                        {
+                            // Kick off background download + decrypt.
+                            esfs_start_download(esfs_ct_url, sfs_name, esfs_key, esfs_iv,
+                                                channel ? channel->buffer : account.buffer,
+                                                &account, esfs_channel_jid, esfs_stable_id);
+                            sfs_encrypted = true;
+                            sfs_url = esfs_ct_url;
+                        }
                     }
                     break; // prefer encrypted source
                 }

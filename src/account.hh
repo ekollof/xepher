@@ -344,6 +344,7 @@ namespace weechat
             lmdb::dbi retractions = 0;     // XEP-0424 retracted message IDs
             lmdb::dbi cursors = 0;         // RSM cursor persistence for MAM queries
             lmdb::dbi omemo_plaintext = 0; // decrypted OMEMO body cache (keyed channel_jid:msg_id)
+            lmdb::dbi esfs_downloads = 0;  // ESFS downloaded file paths (keyed channel_jid:stable_id → saved_path)
         } mam_dbi;
         std::string mam_db_path;
 
@@ -397,6 +398,11 @@ namespace weechat
                                              const std::string& body);
         std::optional<std::string> mam_cache_lookup_omemo_plaintext(const std::string& channel_jid,
                                                                      const std::string& msg_id);
+        // ESFS download deduplication: record saved path by stable message ID; look up on MAM replay
+        void mam_cache_store_esfs_download(const std::string& channel_jid, const std::string& stable_id,
+                                           const std::string& saved_path);
+        std::optional<std::string> mam_cache_lookup_esfs_download(const std::string& channel_jid,
+                                                                   const std::string& stable_id);
         // PM buffer persistence across restarts (stored in cursors LMDB table)
         void pm_open_register(const std::string& pm_jid);
         void pm_open_unregister(const std::string& pm_jid);

@@ -235,8 +235,14 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
         close(ctx.pipe_write_fd);
 
     if (ctx.success)
+    {
         weechat_printf(ctx.buffer, "%s[ESFS] Saved decrypted file: %s",
                        weechat_prefix("network"), ctx.saved_path.c_str());
+        // Persist the download record to LMDB so MAM replay skips re-downloading.
+        if (ctx.account_ptr && !ctx.channel_jid.empty() && !ctx.stable_id.empty())
+            ctx.account_ptr->mam_cache_store_esfs_download(
+                ctx.channel_jid, ctx.stable_id, ctx.saved_path);
+    }
     else
         weechat_printf(ctx.buffer, "%s[ESFS] Download/decrypt failed: %s",
                        weechat_prefix("error"), ctx.error_msg.c_str());
@@ -249,8 +255,18 @@ void esfs_start_download(const std::string &cipher_url,
                          const std::string &filename,
                          const std::string &key_b64,
                          const std::string &iv_b64,
-                         struct t_gui_buffer *buf)
+                         struct t_gui_buffer *buf,
+                         weechat::account *account_ptr,
+                         const std::string &channel_jid,
+                         const std::string &stable_id)
 {
+    // Layer 1: in-flight dedup — same cipher_url already being downloaded this session.
+    bool already_inflight = std::any_of(g_esfs_downloads.begin(), g_esfs_downloads.end(),
+                                        [&](const esfs_download_ctx &c) {
+                                            return c.cipher_url == cipher_url;
+                                        });
+    if (already_inflight)
+        return;
     int pipe_fds[2];
     if (pipe(pipe_fds) != 0)
     {
@@ -266,6 +282,9 @@ void esfs_start_download(const std::string &cipher_url,
     ctx.key_b64       = key_b64;
     ctx.iv_b64        = iv_b64;
     ctx.buffer        = buf;
+    ctx.account_ptr   = account_ptr;
+    ctx.channel_jid   = channel_jid;
+    ctx.stable_id     = stable_id;
     ctx.pipe_read_fd  = pipe_fds[0];
     ctx.pipe_write_fd = pipe_fds[1];
 
