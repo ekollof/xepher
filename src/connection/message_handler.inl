@@ -2286,7 +2286,7 @@ message_handler_after_omemo:
         // new "* " line.  Use the inline diff if available, otherwise plain text.
         if (edit_line_data)
         {
-            const std::string new_msg = std::string("✏️ ") + text;
+            const std::string new_msg = std::string("📝 ") + text;
             struct t_hashtable *ht = weechat_hashtable_new(4,
                 WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING,
                 nullptr, nullptr);
@@ -2296,7 +2296,7 @@ message_handler_after_omemo:
             return 1;
         }
         // Original message not in buffer (e.g. scrolled out or MAM replay) —
-        // drop the correction silently rather than printing a dangling ✏️ line.
+        // drop the correction silently rather than printing a dangling 📝 line.
         return 1;
     }
 
@@ -2971,7 +2971,7 @@ message_handler_after_omemo:
         // "on-mention": no override — WeeChat highlight rules handle @nick detection
     }
 
-    const char *edit = replace ? "✏️ " : "";
+    const char *edit = replace ? "📝 " : "";
     if (x && text == cleartext && channel->transport != weechat::channel::transport::PGP)
     {
         channel->transport = weechat::channel::transport::PGP;
