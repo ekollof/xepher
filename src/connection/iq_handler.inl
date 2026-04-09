@@ -3083,7 +3083,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 {
                                     std::unique_ptr<char, decltype(&free)> vtext(
                                         xmpp_stanza_get_text(vnode), free);
-                                    if (vtext) vals.push_back(vtext.get());
+                                    // Always include the value, even if empty: an empty
+                                    // <value></value> must contribute "" to the S string
+                                    // (e.g. Psi sends os_version with an empty value).
+                                    vals.push_back(vtext ? vtext.get() : "");
                                 }
                                 std::sort(vals.begin(), vals.end());
                                 fd.fields.emplace_back(fvar, std::move(vals));
