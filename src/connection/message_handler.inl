@@ -676,11 +676,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
                             struct t_gui_lines *own_lines = (struct t_gui_lines*)
                                 weechat_hdata_pointer(hdata_buffer,
-                                                      chk_buf, "own_lines");
+                                                      chk_buf, "lines");
                             if (own_lines)
                             {
                                 struct t_gui_line *ln = (struct t_gui_line*)
-                                    weechat_hdata_pointer(hdata_line, own_lines, "last_line");
+                                    weechat_hdata_pointer(hdata_lines, own_lines, "last_line");
                                 while (ln && !already_displayed)
                                 {
                                     struct t_gui_line_data *ld = (struct t_gui_line_data*)
@@ -2722,12 +2722,12 @@ message_handler_after_omemo:
         std::string needle = std::string("stanza_id_") + stanza_id;
         struct t_gui_lines *own_lines   = (struct t_gui_lines*)
             weechat_hdata_pointer(hdata_buffer,
-                                  channel->buffer, "own_lines");
+                                  channel->buffer, "lines");
         bool already_shown = false;
         if (own_lines)
         {
             struct t_gui_line *ln = (struct t_gui_line*)
-                weechat_hdata_pointer(hdata_line, own_lines, "last_line");
+                weechat_hdata_pointer(hdata_lines, own_lines, "last_line");
             while (ln && !already_shown)
             {
                 struct t_gui_line_data *ld = (struct t_gui_line_data*)
