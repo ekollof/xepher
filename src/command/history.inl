@@ -192,7 +192,7 @@ int command__edit(const void *pointer, void *data,
         entries.push_back({resolved_id, label, {}});
     }
 
-    auto *p = new picker_t(
+    std::make_unique<picker_t>(
         "xmpp.picker.edit",
         "Edit message  (XEP-0308)",
         std::move(entries),
@@ -218,9 +218,8 @@ int command__edit(const void *pointer, void *data,
                                std::to_string(input.size()).c_str());
             weechat_buffer_set(buf, "display", "1");
         },
-        {},
-        buffer);
-    (void) p;
+        picker_t::close_cb{},
+        buffer).release();
     return WEECHAT_RC_OK;
 }
 
@@ -404,16 +403,15 @@ int command__retract(const void *pointer, void *data,
         entries.push_back({resolved_id, label, {}});
     }
 
-    auto *p = new picker_t(
+    std::make_unique<picker_t>(
         "xmpp.picker.retract",
         "Retract message  (XEP-0424)",
         std::move(entries),
         [ptr_account, ptr_channel, buf = buffer](const std::string &selected) {
             do_retract_send(ptr_account, ptr_channel, buf, selected);
         },
-        {},
-        buffer);
-    (void) p;
+        picker_t::close_cb{},
+        buffer).release();
     return WEECHAT_RC_OK;
 }
 
@@ -613,7 +611,7 @@ int command__reply(const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
-        auto *p = new picker_t(
+        std::make_unique<picker_t>(
             "xmpp.picker.reply",
             "Reply to message  (XEP-0461)",
             std::move(entries),
@@ -625,9 +623,8 @@ int command__reply(const void *pointer, void *data,
                     std::to_string(input.size()).c_str());
                 weechat_buffer_set(buf, "display", "1");
             },
-            {},
-            buffer);
-        (void) p;
+            picker_t::close_cb{},
+            buffer).release();
         return WEECHAT_RC_OK;
     }
 
@@ -834,7 +831,7 @@ int command__moderate(const void *pointer, void *data,
     }
 
     std::string reason_str = reason ? reason : "";
-    auto *p = new picker_t(
+    std::make_unique<picker_t>(
         "xmpp.picker.moderate",
         "Moderate message  (XEP-0425)",
         std::move(entries),
@@ -842,9 +839,8 @@ int command__moderate(const void *pointer, void *data,
             do_moderate_send(ptr_account, ptr_channel, buf, selected,
                              reason_str.empty() ? nullptr : reason_str.c_str());
         },
-        {},
-        buffer);
-    (void) p;
+        picker_t::close_cb{},
+        buffer).release();
     return WEECHAT_RC_OK;
 }
 

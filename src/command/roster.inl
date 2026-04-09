@@ -139,10 +139,10 @@ int command__blocklist(const void *pointer, void *data,
     using picker_t = weechat::ui::picker<std::string>;
     weechat::account *acct = ptr_account;  // capture for lambdas
 
-    auto *p = new picker_t(
+    auto p = std::make_unique<picker_t>(
         "xmpp.picker.blocklist",
         "Blocked JIDs  (XEP-0191)  — select to unblock",
-        {},  // populated async by IQ handler
+        std::vector<picker_t::entry>{},  // populated async by IQ handler
         [acct](const std::string &jid) {
             // on_select: send unblock IQ for selected JID
             stanza::xep0191::unblock ublk;
@@ -160,10 +160,9 @@ int command__blocklist(const void *pointer, void *data,
             acct->blocklist_picker = nullptr;
         },
         buffer);
-    (void) p;
 
     // Store non-owning pointer so the IQ handler can call add_entry().
-    ptr_account->blocklist_picker = p;
+    ptr_account->blocklist_picker = p.release();
 
     // Request the block list from the server.
     std::string bl_id = stanza::uuid(ptr_account->context);
@@ -285,7 +284,7 @@ int command__roster(const void *pointer, void *data,
             entries.push_back({ jid, label, sublabel, true });
         }
 
-        auto *p = new picker_t(
+        std::make_unique<picker_t>(
             "xmpp.picker.roster",
             "Open chat with contact  (roster)",
             std::move(entries),
@@ -293,10 +292,9 @@ int command__roster(const void *pointer, void *data,
                 auto cmd = fmt::format("/open {}", selected);
                 weechat_command(buf, cmd.c_str());
             },
-            {},
+            picker_t::close_cb{},
             buffer,
-            true /* sort_entries */);
-        (void) p;  // picker owns itself
+            true /* sort_entries */).release();
         return WEECHAT_RC_OK;
     }
 
@@ -399,7 +397,7 @@ int command__bookmark(const void *pointer, void *data,
                 sublabel += sublabel.empty() ? "autojoin" : "  autojoin";
             entries.push_back({jid, label, sublabel});
         }
-        auto *p = new picker_t(
+        std::make_unique<picker_t>(
             "xmpp.picker.bookmark",
             "Open bookmark  (XEP-0048)",
             std::move(entries),
@@ -407,10 +405,9 @@ int command__bookmark(const void *pointer, void *data,
                 auto cmd = fmt::format("/enter {}", selected);
                 weechat_command(buf, cmd.c_str());
             },
-            {},
+            picker_t::close_cb{},
             buffer,
-            true /* sort_entries */);
-        (void) p;
+            true /* sort_entries */).release();
         return WEECHAT_RC_OK;
     }
 

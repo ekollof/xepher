@@ -56,6 +56,11 @@ namespace stanza {
             }
         };
 
+        // ── OMEMO:2 (urn:xmpp:omemo:2) — NOT USED, dead code ────────────────
+        // Per coding instructions, OMEMO:2 must never be published or used as a
+        // primary path. Only the axolotl_* types below are instantiated in live code.
+        // These definitions are retained for reference only. Do not use them.
+
         // <encrypted xmlns='urn:xmpp:omemo:2'> … </encrypted>
         struct encrypted : virtual public spec {
             encrypted() : spec("encrypted") {
@@ -123,7 +128,7 @@ namespace stanza {
             bundle& add_prekeys(xep0384::prekeys p) { child(p); return *this; }
         };
 
-        // ── Legacy axolotl (eu.siacs.conversations.axolotl) ─────────────────
+        // ── Legacy axolotl (eu.siacs.conversations.axolotl) — SOLE SUPPORTED NAMESPACE ─
 
         // <key rid='…' [prekey='true']>BASE64</key>
         struct axolotl_key : virtual public spec {

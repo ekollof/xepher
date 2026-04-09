@@ -116,7 +116,7 @@ int command__mood(const void *pointer, void *data,
         for (int i = 0; valid_moods[i] != nullptr; i++)
             entries.push_back({ std::string(valid_moods[i]), valid_moods[i], "", true });
 
-        auto *p = new picker_t(
+        std::make_unique<picker_t>(
             "xmpp.picker.mood",
             "Select a mood  (XEP-0107)",
             std::move(entries),
@@ -124,9 +124,8 @@ int command__mood(const void *pointer, void *data,
                 auto cmd = fmt::format("/mood {}", selected);
                 weechat_command(buf, cmd.c_str());
             },
-            {},
-            buffer);
-        (void) p;  // picker owns itself
+            picker_t::close_cb{},
+            buffer).release();
         return WEECHAT_RC_OK;
     }
 
@@ -269,7 +268,7 @@ int command__activity(const void *pointer, void *data,
         for (int i = 0; valid_categories[i] != nullptr; i++)
             entries.push_back({ std::string(valid_categories[i]), valid_categories[i], "", true });
 
-        auto *p = new picker_t(
+        std::make_unique<picker_t>(
             "xmpp.picker.activity",
             "Select an activity  (XEP-0108)",
             std::move(entries),
@@ -277,9 +276,8 @@ int command__activity(const void *pointer, void *data,
                 auto cmd = fmt::format("/activity {}", selected);
                 weechat_command(buf, cmd.c_str());
             },
-            {},
-            buffer);
-        (void) p;  // picker owns itself
+            picker_t::close_cb{},
+            buffer).release();
         return WEECHAT_RC_OK;
     }
 

@@ -87,7 +87,9 @@ int crypto_hmac_sha256_final(void *hmac_context, signal_buffer **output, void *u
 void crypto_hmac_sha256_cleanup(void *hmac_context, void *user_data)
 {
     (void) user_data;
-    delete static_cast<mac_context *>(hmac_context);
+    // RAII exception: Signal C API transfers ownership via void* — delete is the
+    // mandatory cleanup paired with the make_unique<mac_context>().release() above.
+    delete static_cast<mac_context *>(hmac_context); // NOLINT(cppcoreguidelines-owning-memory)
 }
 
 int crypto_sha512_init(void **digest_context_ptr, void *user_data)
@@ -138,7 +140,9 @@ int crypto_sha512_final(void *digest_context_ptr, signal_buffer **output, void *
 void crypto_sha512_cleanup(void *digest_context_ptr, void *user_data)
 {
     (void) user_data;
-    delete static_cast<digest_context *>(digest_context_ptr);
+    // RAII exception: Signal C API transfers ownership via void* — delete is the
+    // mandatory cleanup paired with the make_unique<digest_context>().release() above.
+    delete static_cast<digest_context *>(digest_context_ptr); // NOLINT(cppcoreguidelines-owning-memory)
 }
 
 int crypto_encrypt(signal_buffer **output, int cipher,

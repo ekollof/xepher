@@ -2556,9 +2556,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // Build search submit based on XEP-0433 fields — RAII using spec builder.
                     xmpp_ctx_t *ctx = account.context;
 
-                    auto submit_iq = std::shared_ptr<xmpp_stanza_t> {
-                        xmpp_iq_new(ctx, "get", submit_id.c_str()), xmpp_stanza_release };
-                    xmpp_stanza_set_to(submit_iq.get(), cs_info.service_jid.c_str());
+                    auto submit_iq = stanza::iq().type("get").id(submit_id).to(cs_info.service_jid).build(ctx);
 
                     struct search_spec : stanza::spec {
                         search_spec() : spec("search") {
@@ -3653,9 +3651,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                     const std::string cfg_uuid = stanza::uuid(account.context);
 
-                    auto cfg_iq = std::shared_ptr<xmpp_stanza_t> {
-                        xmpp_iq_new(ctx, "set", cfg_uuid.c_str()), xmpp_stanza_release };
-                    xmpp_stanza_set_to(cfg_iq.get(), account.jid().data());
+                    auto cfg_iq = stanza::iq().type("set").id(cfg_uuid).to(account.jid()).build(ctx);
                     xmpp_stanza_add_child(cfg_iq.get(), cfg_pubsub.get());
 
                     // Remember which node to re-publish after the configure succeeds.

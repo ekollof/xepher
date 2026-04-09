@@ -33,9 +33,9 @@
 #include "debug.hh"
 
 // Use a pointer that's never freed to prevent destructor running at program exit
-// when plugin is already unloaded. Memory is leaked but OS reclaims it.
+// when plugin is already unloaded. Memory is leaked intentionally; OS reclaims it.
 std::unordered_map<std::string, weechat::account>& weechat::accounts = 
-    *new std::unordered_map<std::string, weechat::account>();
+    *std::make_unique<std::unordered_map<std::string, weechat::account>>().release();
 
 void weechat::log_emit(void *const userdata, const xmpp_log_level_t level,
                        const char *const area, const char *const msg)

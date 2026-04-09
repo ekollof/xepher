@@ -105,10 +105,10 @@ int command__list(const void *pointer, void *data,
     // We use a shared_ptr<picker_t*> so the lambda can see the final pointer value
     // without capturing a stack reference that would dangle after command__list returns.
     auto p_holder = std::make_shared<picker_t *>(nullptr);
-    auto *p = new picker_t(
+    auto p = std::make_unique<picker_t>(
         "xmpp.picker.list",
         title_str,
-        {},   // populated async as IQ results arrive
+        std::vector<picker_t::entry>{},   // populated async as IQ results arrive
         [acct](const std::string &jid) {
             // on_select: switch focus to origin buffer and join the room
             std::string cmd = fmt::format("/join {}", jid);
@@ -122,11 +122,11 @@ int command__list(const void *pointer, void *data,
                 if (info.picker == raw) info.picker = nullptr;
         },
         buffer);
-    *p_holder = p;
-    (void) p;
+    *p_holder = p.get();
+    picker_t *raw_p = p.release();
 
     xep0433_send_search(ptr_account, buffer, service_jid,
-                        keywords[0] ? keywords : nullptr, p);
+                        keywords[0] ? keywords : nullptr, raw_p);
 
     return WEECHAT_RC_OK;
 }

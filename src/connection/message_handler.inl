@@ -2266,7 +2266,7 @@ message_handler_after_omemo:
                                                           -1);
                             orig = *orig_message;
                             orig_guard.reset(orig);
-                            weechat_string_dyn_free(orig_message, 0); // free_string=0: keep buffer, ownership transferred to orig_guard
+                            weechat_string_dyn_free(orig_message, 1); // flag=1: free container only, *orig_message (now orig) is caller-owned
                             break;
                         }
                     }
@@ -3086,8 +3086,9 @@ message_handler_after_omemo:
 
                                 // Strip embedded color codes so we get plain text
                                 std::string msg_owned(msg_sv);
-                                char *plain_text = weechat_string_remove_color(msg_owned.c_str(), nullptr);
-                                std::string_view clean_text = plain_text ? plain_text : msg_sv;
+                                std::unique_ptr<char, decltype(&free)>
+                                    plain_text_guard(weechat_string_remove_color(msg_owned.c_str(), nullptr), &free);
+                                std::string_view clean_text = plain_text_guard ? plain_text_guard.get() : msg_sv;
 
                                 // Skip any leading reply prefix(es) (↪ …) from a prior reply chain.
                                 // UTF-8 encoding of ↪ is 3 bytes: e2 86 aa.
@@ -3152,8 +3153,6 @@ message_handler_after_omemo:
                                 std::string excerpt = (do_truncate && clean_text.size() > 40)
                                     ? std::string(clean_text.substr(0, 40)) + "..."
                                     : std::string(clean_text);
-
-                                if (plain_text) free(plain_text);
 
                                 // Extract the original sender's nick from the line tags.
                                 for (int nn = 0; nn < tags_count; nn++)

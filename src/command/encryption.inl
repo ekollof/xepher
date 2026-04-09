@@ -455,7 +455,6 @@ int command__xml(const void *pointer, void *data,
 {
     weechat::account *ptr_account = nullptr;
     weechat::channel *ptr_channel = nullptr;
-    xmpp_stanza_t *stanza;
 
     (void) pointer;
     (void) data;
@@ -499,8 +498,9 @@ int command__xml(const void *pointer, void *data,
         }
         else
         {
-            stanza = xmpp_stanza_new_from_string(ptr_account->context,
-                                                argv_eol[1]);
+            std::shared_ptr<xmpp_stanza_t> stanza(
+                xmpp_stanza_new_from_string(ptr_account->context, argv_eol[1]),
+                xmpp_stanza_release);
             if (!stanza)
             {
                 weechat_printf(nullptr, _("%s%s: Bad XML"),
@@ -508,8 +508,7 @@ int command__xml(const void *pointer, void *data,
                 return WEECHAT_RC_ERROR;
             }
 
-            ptr_account->connection.send( stanza);
-            xmpp_stanza_release(stanza);
+            ptr_account->connection.send(stanza.get());
         }
     }
 

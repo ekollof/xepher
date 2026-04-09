@@ -173,10 +173,10 @@ int command__adhoc(const void *pointer, void *data,
         std::string tjid_str = target_jid;
 
         auto p_holder = std::make_shared<picker_t *>(nullptr);
-        auto *p = new picker_t(
+        auto p = std::make_unique<picker_t>(
             "xmpp.picker.adhoc",
             fmt::format("Ad-hoc commands on {}  (XEP-0050)  — select to execute", target_jid),
-            {},   // populated async as disco#items result arrives
+            std::vector<picker_t::entry>{},   // populated async as disco#items result arrives
             [acct, tjid_str](const std::string &node_uri) {
                 // on_select: run /adhoc <jid> <node>
                 std::string cmd = fmt::format("/adhoc {} {}", tjid_str, node_uri);
@@ -189,8 +189,7 @@ int command__adhoc(const void *pointer, void *data,
                     if (info.picker == raw) info.picker = nullptr;
             },
             buffer);
-        *p_holder = p;
-        (void) p;
+        *p_holder = p.release();
 
         std::string query_id = stanza::uuid(ptr_account->context);
 
@@ -263,9 +262,7 @@ int command__adhoc(const void *pointer, void *data,
     // Build IQ with command + x:data form using stanza builder helpers
     {
         xmpp_ctx_t *ctx = ptr_account->context;
-        std::shared_ptr<xmpp_stanza_t> iq {xmpp_iq_new(ctx, "set", submit_id.c_str()),
-                                            xmpp_stanza_release};
-        xmpp_stanza_set_to(iq.get(), target_jid);
+        auto iq = stanza::iq().type("set").id(submit_id).to(target_jid).build(ctx);
         auto command = stanza_node(ctx, "command",
                                    "http://jabber.org/protocol/commands",
                                    {{"node", node},
