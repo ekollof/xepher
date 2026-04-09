@@ -147,9 +147,9 @@ MDB_val mdb_key = { .mv_size = k_foo.size(), .mv_data = k_foo.data() };
 
 #### `weechat_string_dyn_free` flag
 
-- `weechat_string_dyn_free(ptr, 0)` — frees the `char**` container **and** `*ptr`; `*ptr` is dangling afterwards.
-- `weechat_string_dyn_free(ptr, 1)` — frees only the container; `*ptr` is a caller-owned heap string.
+- `weechat_string_dyn_free(ptr, 0)` — frees only the `char**` container; reallocs `*ptr` to exact size and returns it. `*ptr` is a caller-owned heap string.
   Assign `*ptr` to a `std::unique_ptr<char, decltype(&free)>` or call `free()` when done.
+- `weechat_string_dyn_free(ptr, 1)` — frees **both** the `char**` container **and** `*ptr`; `*ptr` is dangling afterwards. Returns `nullptr`.
 
 #### Null-terminated pointer arrays
 

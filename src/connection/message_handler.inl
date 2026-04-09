@@ -2266,7 +2266,7 @@ message_handler_after_omemo:
                                                           -1);
                             orig = *orig_message;
                             orig_guard.reset(orig);
-                            weechat_string_dyn_free(orig_message, 1); // flag=1: free container only, *orig_message (now orig) is caller-owned
+                            weechat_string_dyn_free(orig_message, 0); // flag=0: free container only, return *ptr; orig_guard owns the string
                             break;
                         }
                     }
