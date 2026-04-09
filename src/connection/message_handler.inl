@@ -1118,9 +1118,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 // urn:xmpp:microblog:0:comments/<uuid> are comment thread nodes — also feeds.
                 bool node_is_microblog = (node_sv == "urn:xmpp:microblog:0")
                     || (node_sv.rfind("urn:xmpp:microblog:0:comments/", 0) == 0);
+                // Treat reversed-domain protocol namespaces (e.g. eu.siacs.conversations.axolotl.*)
+                // the same as urn: URIs — they are OMEMO/PEP protocol nodes, not user feeds.
+                bool node_is_protocol_ns = !node_sv.empty() && !node_is_microblog && (
+                    node_sv.rfind("eu.siacs.", 0) == 0 ||
+                    node_sv.rfind("com.google.", 0) == 0 ||
+                    node_sv.rfind("org.jivesoftware.", 0) == 0);
                 bool node_is_uri = !node_sv.empty() && !node_is_microblog && (
                     node_sv.find("://") != std::string_view::npos ||
-                    node_sv.substr(0, 4) == "urn:");
+                    node_sv.substr(0, 4) == "urn:" ||
+                    node_is_protocol_ns);
                 bool from_self = false;
                 if (!feed_service_sv.empty())
                 {
