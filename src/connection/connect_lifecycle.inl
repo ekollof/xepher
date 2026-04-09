@@ -71,13 +71,42 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 });
 
             // Stream Management handlers (XEP-0198)
-            for (const char *sm_name : {"enabled", "resumed", "failed", "a", "r"})
-                this->handler_add(
-                    sm_name, nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
-                        auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
-                        if (connection != conn) return 0;
-                        return connection.sm_handler(stanza) ? 1 : 0;
-                    });
+            // Each SM stanza name needs a DISTINCT (handler_fn_ptr, userdata) pair.
+            // A single lambda in a loop produces one function pointer for all 5 calls;
+            // libstrophe's _handler_add() dedup check would fire for calls 2-5 and
+            // silently drop them ("Stanza handler already exists.").
+            // Fix: write 5 separate lambda literals — each is a distinct type → distinct
+            // function pointer — so all 5 (fn_ptr, userdata=this) pairs are unique.
+            this->handler_add(
+                "enabled", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) return 0;
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
+            this->handler_add(
+                "resumed", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) return 0;
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
+            this->handler_add(
+                "failed", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) return 0;
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
+            this->handler_add(
+                "a", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) return 0;
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
+            this->handler_add(
+                "r", nullptr, [](xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata) {
+                    auto& connection = *reinterpret_cast<weechat::connection*>(userdata);
+                    if (connection != conn) return 0;
+                    return connection.sm_handler(stanza) ? 1 : 0;
+                });
             
             account.sm_handlers_registered = true;
         }
