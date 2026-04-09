@@ -1578,6 +1578,23 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         c.esfs_key_b64 = b64_encode(aes_key, sizeof(aes_key));
                         c.esfs_iv_b64  = b64_encode(aes_iv, sizeof(aes_iv));
 
+                        // Build hex(iv_bytes) + hex(key_bytes) for aesgcm:// URL fragment.
+                        // Format: 24 hex chars (12-byte IV) + 64 hex chars (32-byte key).
+                        {
+                            static constexpr char hex_chars[] = "0123456789abcdef";
+                            std::string frag;
+                            frag.reserve(24 + 64);
+                            for (int i = 0; i < 12; ++i) {
+                                frag += hex_chars[(aes_iv[i] >> 4) & 0xf];
+                                frag += hex_chars[ aes_iv[i]       & 0xf];
+                            }
+                            for (int i = 0; i < 32; ++i) {
+                                frag += hex_chars[(aes_key[i] >> 4) & 0xf];
+                                frag += hex_chars[ aes_key[i]       & 0xf];
+                            }
+                            c.esfs_aesgcm_fragment = std::move(frag);
+                        }
+
                         // Open plaintext source.
                         auto file_deleter_enc = [](FILE *f) { if (f) fclose(f); };
                         std::unique_ptr<FILE, decltype(file_deleter_enc)>

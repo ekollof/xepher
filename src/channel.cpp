@@ -1112,6 +1112,37 @@ int weechat::channel::send_message(std::string to, std::string body,
         }
     }
 
+    // XEP-0384: OMEMO-encrypt the file-share stanza when the channel has OMEMO active.
+    // This protects the ESFS key/IV XML children from eavesdroppers on the server.
+    if (account.omemo && omemo.enabled)
+    {
+        constexpr const char *eme_namespace = "eu.siacs.conversations.axolotl";
+
+        auto make_encrypted = [](xmpp_stanza_t *raw) -> std::shared_ptr<xmpp_stanza_t> {
+            if (!raw) return {};
+            return { raw, xmpp_stanza_release };
+        };
+
+        // body is the aesgcm:// URL (or https:// for non-encrypted uploads).
+        auto encrypted = make_encrypted(
+            account.omemo.encode(&account, buffer, to.data(), body.data()));
+
+        if (encrypted)
+        {
+            xmpp_stanza_add_child(message.get(), encrypted.get());
+
+            auto enc_elem = stanza_node(account.context, "encryption", "urn:xmpp:eme:0",
+                                        {{"namespace", eme_namespace}});
+            xmpp_stanza_add_child(message.get(), enc_elem.get());
+
+            xmpp_message_set_body(message.get(), OMEMO_ADVICE);
+            set_transport(weechat::channel::transport::OMEMO, 0);
+        }
+        // If encode fails (keys not yet fetched), send plaintext as fallback.
+        // The upload has already happened; we can't retry it. The user will
+        // need to re-send after OMEMO device/bundle exchange completes.
+    }
+
     account.connection.send(message.get());
     if (type != weechat::channel::chat_type::MUC)
     {

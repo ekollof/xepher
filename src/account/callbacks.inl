@@ -380,10 +380,23 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             meta.size = ctx->original_file_size;
         }
 
+        // XEP-0448: for encrypted uploads, replace https:// with aesgcm:// and
+        // append #hex(iv)hex(key) as the URL fragment so the receiver can decrypt.
+        std::string effective_url = ctx->get_url;
+        if (ctx->encrypted && !ctx->esfs_aesgcm_fragment.empty())
+        {
+            if (effective_url.starts_with("https://"))
+                effective_url = "aesgcm://" + effective_url.substr(8);
+            else if (effective_url.starts_with("http://"))
+                effective_url = "aesgcm://" + effective_url.substr(7);
+            effective_url += '#';
+            effective_url += ctx->esfs_aesgcm_fragment;
+        }
+
         channel_it->second.send_message(
             channel_it->second.id,
-            ctx->get_url,
-            std::optional<std::string>(ctx->get_url),
+            effective_url,
+            std::optional<std::string>(effective_url),
             std::optional<weechat::channel::file_metadata>(meta)
         );
     }

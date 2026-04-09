@@ -124,6 +124,7 @@ namespace weechat
             std::string esfs_key_b64;          // Base64(32-byte AES-256 key)
             std::string esfs_iv_b64;           // Base64(12-byte GCM IV)
             std::string esfs_cipher_hash_b64;  // Base64(SHA-256 of ciphertext)
+            std::string esfs_aesgcm_fragment;  // hex(iv_bytes) + hex(key_bytes) for aesgcm:// URL fragment
             size_t original_file_size = 0;     // plaintext file size for <file> metadata
         };
         // fd (read end) -> completion context
