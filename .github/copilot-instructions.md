@@ -398,6 +398,7 @@ Skip autojoin for IRC gateway rooms (causes connection issues):
 - **XMPP plugin logs**: `~/.local/share/weechat/logs/xmpp.account.<account>.weechatlog`
 - **Raw XML log**: `~/.local/share/weechat/xmpp/raw_xml_<account>.log` (only written when `xmpp.look.raw_xml_log on`)
 - **OMEMO correlation helper**: `tools/correlate_omemo_xml.sh`
+- **MAM LMDB cache inspector**: `tools/dump_mam_db` — dumps all 6 tables in the MAM cache with pretty-printed values. Build via `make -C tools`. Run with `XMPP_ACCOUNT=<account> tools/dump_mam_db` (or `--db <path>`). Tables: `messages` (key: `<channel>:<ts>:<msg_id>`, val: `<from>|<ts>|<body>`), `timestamps` (key: `<channel>`, val: time_t), `retractions`, `cursors` (RSM cursors), `omemo_plaintext`, `capabilities`. Use `--filter <prefix>` to narrow to a specific channel, `--limit N` to cap output, `--table <name>` to dump one table.
 - For OMEMO log debugging, always run `tools/correlate_omemo_xml.sh --account <account>` first to correlate event logs with raw XML before proposing protocol-level fixes.
 - Example: `tail -n 300 ~/.local/share/weechat/logs/xmpp.account.andrath.weechatlog`
 - Filter logs: `grep "OMEMO\|bundle\|devicelist" ~/.local/share/weechat/logs/xmpp.account.*.weechatlog`
