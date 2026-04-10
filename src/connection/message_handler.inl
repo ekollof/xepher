@@ -737,6 +737,22 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     message = xmpp_stanza_copy(message);
                     if (delay != nullptr)
                         xmpp_stanza_add_child_ex(message, xmpp_stanza_copy(delay), 0);
+                    // XEP-0313 §5.1.2: the server strips <stanza-id> from the
+                    // forwarded copy on MAM replay.  Re-inject it from the outer
+                    // <result id="..."> so the display code writes stanza_id_<archive_id>
+                    // into the buffer-line tags.  This makes reply/retract/edit/reaction
+                    // lookups find the line by archive ID — the ID that clients reference
+                    // in <reply>, <retract>, <replace>, and <reactions> stanzas.
+                    if (archive_id && *archive_id &&
+                        !xmpp_stanza_get_child_by_name_and_ns(
+                            message, "stanza-id", "urn:xmpp:sid:0"))
+                    {
+                        const char *outer_from = xmpp_stanza_get_from(stanza);
+                        std::string_view by_val = outer_from ? outer_from : "";
+                        auto sid_node = stanza::xep0359::stanza_id(
+                            archive_id, by_val).build(account.context);
+                        xmpp_stanza_add_child(message, sid_node.get());
+                    }
                     int ret = message_handler(message, false, true);  // MAM replay: suppress outgoing receipts/markers
                     xmpp_stanza_release(message);
                     return ret;
