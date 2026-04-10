@@ -99,8 +99,14 @@ int command__links(COMMAND_ARGS)
 
                 if (msg)
                 {
+                    // Strip WeeChat color/attribute codes before scanning for URLs.
+                    // The rendered message string contains embedded escape sequences
+                    // that would corrupt extracted URLs if not removed first.
+                    std::unique_ptr<char, decltype(&free)>
+                        plain(weechat_string_remove_color(msg, nullptr), &free);
+                    std::string_view sv = plain ? plain.get() : msg;
                     std::vector<std::string> found_urls;
-                    scan_urls(std::string_view(msg), found_urls);
+                    scan_urls(sv, found_urls);
                     for (auto &u : found_urls)
                     {
                         if (seen.insert(u).second)
@@ -120,6 +126,12 @@ int command__links(COMMAND_ARGS)
                        weechat_prefix("network"));
         return WEECHAT_RC_OK;
     }
+
+    // Sort newest-first (stable to preserve insertion order for same timestamp).
+    std::stable_sort(urls.begin(), urls.end(),
+                     [](const url_entry &a, const url_entry &b) {
+                         return a.date > b.date;
+                     });
 
     // ── Print the list ────────────────────────────────────────────────────────
 
