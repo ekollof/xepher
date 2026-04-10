@@ -653,6 +653,10 @@ static int og_fetch_cb(const void * /*pointer*/, void * /*data*/, int fd)
     if (ctx.pipe_write_fd >= 0)
         close(ctx.pipe_write_fd);
 
+    XDEBUG("og_fetch_cb: url={} success={} title='{}'",
+           ctx.url, (int)ctx.success,
+           ctx.preview.title.empty() ? "(none)" : ctx.preview.title);
+
     if (ctx.success && ctx.account_ptr
         && (!ctx.preview.title.empty() || !ctx.preview.description.empty()))
     {
@@ -772,9 +776,15 @@ void og_start_fetch(const std::string &url,
     entry.silent         = silent;
 
     if (static_cast<int>(g_og_fetches.size()) < OG_MAX_CONCURRENT)
+    {
+        XDEBUG("og: launching fetch silent={} url={}", (int)silent, url);
         og_launch_one(std::move(entry));
+    }
     else
+    {
+        XDEBUG("og: queuing fetch (slots full) url={}", url);
         g_og_pending.push_back(std::move(entry));
+    }
 }
 
 // ── og_launch_one ─────────────────────────────────────────────────────────────
