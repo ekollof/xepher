@@ -214,30 +214,43 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             }
         }
 
-        // XEP-0172: publish own nickname via PEP so contacts see a display name
-        if (!account.nickname().empty())
+        // XEP-0172: publish own nickname via PEP so contacts see a display name.
+        // Only publish when the nick has changed since the last publish in this
+        // process; unconditional publishing every reconnect sends a PEP push
+        // notification to all subscribed sessions, triggering an unnecessary MAM
+        // catchup on every other active client.
         {
             std::string nick_str(account.nickname());
-            struct nick_el : stanza::spec {
-                nick_el(std::string_view n) : spec("nick") {
-                    xmlns<jabber_org::protocol::nick>();
-                    text(n);
-                }
-            } nick_payload(nick_str);
-            stanza::xep0060::item nick_item;
-            nick_item.payload(nick_payload);
-            stanza::xep0060::publish nick_pub("http://jabber.org/protocol/nick");
-            nick_pub.item(nick_item);
-            stanza::xep0060::pubsub nick_ps;
-            nick_ps.publish(nick_pub);
-            this->send(stanza::iq()
-                        .from(account.jid())
-                        .type("set")
-                        .id(stanza::uuid(account.context))
-                        .xep0060()
-                        .pubsub(nick_ps)
-                        .build(account.context)
-                        .get());
+            if (!nick_str.empty() && nick_str != account.last_published_nick_)
+            {
+                XDEBUG("Publishing XEP-0172 nick (changed: '{}' → '{}')",
+                       account.last_published_nick_, nick_str);
+                struct nick_el : stanza::spec {
+                    nick_el(std::string_view n) : spec("nick") {
+                        xmlns<jabber_org::protocol::nick>();
+                        text(n);
+                    }
+                } nick_payload(nick_str);
+                stanza::xep0060::item nick_item;
+                nick_item.payload(nick_payload);
+                stanza::xep0060::publish nick_pub("http://jabber.org/protocol/nick");
+                nick_pub.item(nick_item);
+                stanza::xep0060::pubsub nick_ps;
+                nick_ps.publish(nick_pub);
+                this->send(stanza::iq()
+                            .from(account.jid())
+                            .type("set")
+                            .id(stanza::uuid(account.context))
+                            .xep0060()
+                            .pubsub(nick_ps)
+                            .build(account.context)
+                            .get());
+                account.last_published_nick_ = nick_str;
+            }
+            else if (!nick_str.empty())
+            {
+                XDEBUG("Skipping XEP-0172 nick publish (unchanged: '{}')", nick_str);
+            }
         }
 
         this->send(stanza::iq()

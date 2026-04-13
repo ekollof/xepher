@@ -335,6 +335,13 @@ namespace weechat
         // Avoids re-parsing xmpp_conn_get_bound_jid() on every stanza.
         std::string jid_bare_cache_;
 
+        // Last nick value successfully published via XEP-0172 PEP in this process.
+        // Used to suppress redundant nick publishes on reconnect (avoids triggering
+        // MAM catchup on other active clients via the PEP push notification).
+        // Intentionally in-memory only: resets on full WeeChat restart, which is
+        // acceptable because the nick virtually never changes between sessions.
+        std::string last_published_nick_;
+
         // MAM cache database
         lmdb::env mam_db_env = nullptr;
         struct mam_dbi {
