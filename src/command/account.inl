@@ -1,3 +1,143 @@
+// ---------------------------------------------------------------------------
+// Password prompt infrastructure
+// ---------------------------------------------------------------------------
+// Supports two actions: adding a new account or connecting an existing one.
+// Only one prompt can be active at a time (global singleton pointer).
+
+// Forward declarations needed by prompt callbacks
+void command__add_account(const char *name, const char *jid, const char *password);
+int  command__connect_account(weechat::account *account);
+
+enum class prompt_action { add, connect };
+
+struct password_prompt_ctx {
+    prompt_action        action;
+    std::string          account_name;
+    std::string          jid;            // only used for action::add
+    struct t_gui_buffer *buffer;
+    struct t_hook       *modifier_hook;  // masks displayed input with *
+    struct t_hook       *input_run_hook; // captures Enter
+};
+
+static password_prompt_ctx *g_prompt = nullptr;
+
+// Modifier callback: replaces every visible character in the input bar with '*'
+static char *prompt_input_mask_cb(const void * /*pointer*/, void * /*data*/,
+                                  const char *modifier, const char *modifier_data,
+                                  const char *string)
+{
+    (void) modifier;
+    (void) modifier_data;
+
+    if (!g_prompt || !string) return nullptr;
+
+    // Count UTF-8 characters (each char in the WeeChat string view may be
+    // multi-byte). We mask character by character preserving cursor position
+    // marker (which WeeChat appends as a special invisible char at the end).
+    // The simplest correct approach: count display chars, return that many '*'.
+    int display_len = weechat_strlen_screen(string);
+    if (display_len < 0) display_len = static_cast<int>(strlen(string));
+
+    std::string masked(static_cast<size_t>(display_len), '*');
+    return strdup(masked.c_str());
+}
+
+// command_run callback: fires when the user presses Enter in the input bar
+static int prompt_input_return_cb(const void * /*pointer*/, void * /*data*/,
+                                  struct t_gui_buffer *buffer,
+                                  const char * /*command*/)
+{
+    if (!g_prompt) return WEECHAT_RC_OK;
+    if (buffer != g_prompt->buffer) return WEECHAT_RC_OK;
+
+    // Capture the raw input text before WeeChat clears it
+    const char *raw = weechat_buffer_get_string(buffer, "input");
+    std::string password = raw ? raw : "";
+
+    // Unhook both hooks first so we don't re-enter
+    if (g_prompt->modifier_hook)  { weechat_unhook(g_prompt->modifier_hook);  g_prompt->modifier_hook  = nullptr; }
+    if (g_prompt->input_run_hook) { weechat_unhook(g_prompt->input_run_hook); g_prompt->input_run_hook = nullptr; }
+
+    // Clear the input bar (don't let the password be echoed on Enter)
+    weechat_buffer_set(buffer, "input", "");
+
+    // Take ownership of the prompt context
+    auto ctx = std::unique_ptr<password_prompt_ctx>(g_prompt);
+    g_prompt = nullptr;
+
+    if (password.empty()) {
+        weechat_printf(ctx->buffer,
+                       _("%s%s: password prompt cancelled (empty input)"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK_EAT; // eat the Enter so nothing is sent
+    }
+
+    if (ctx->action == prompt_action::add) {
+        // Delegate to the same function used when password is given on cmdline
+        command__add_account(ctx->account_name.c_str(),
+                             ctx->jid.c_str(),
+                             password.c_str());
+    } else {
+        // prompt_action::connect — find account and connect
+        weechat::account *account = nullptr;
+        if (weechat::account::search(account, ctx->account_name.c_str())) {
+            // Store the password in secure storage, set the reference, then connect
+            std::string sec_key = fmt::format("xmpp_{}", ctx->account_name);
+            std::string sec_cmd = fmt::format("/secure set {} {}", sec_key, password);
+            weechat_command(nullptr, sec_cmd.c_str());
+            std::string sec_ref = fmt::format("${{sec.data.{}}}", sec_key);
+            account->password(sec_ref);
+            command__connect_account(account);
+        } else {
+            weechat_printf(ctx->buffer,
+                           _("%s%s: account \"%s\" not found"),
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                           ctx->account_name.c_str());
+        }
+    }
+
+    return WEECHAT_RC_OK_EAT; // eat the Enter keypress
+}
+
+// Start an interactive password prompt on the given buffer.
+// The prompt context is heap-allocated and owned by the hooks until Enter is pressed.
+static void prompt_password(struct t_gui_buffer *buffer,
+                            prompt_action action,
+                            std::string account_name,
+                            std::string jid = {})
+{
+    if (g_prompt) {
+        weechat_printf(buffer,
+                       _("%s%s: a password prompt is already active"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return;
+    }
+
+    auto ctx = std::make_unique<password_prompt_ctx>();
+    ctx->action       = action;
+    ctx->account_name = std::move(account_name);
+    ctx->jid          = std::move(jid);
+    ctx->buffer       = buffer;
+
+    ctx->modifier_hook = weechat_hook_modifier(
+        "input_text_display_with_cursor",
+        prompt_input_mask_cb, nullptr, nullptr);
+
+    ctx->input_run_hook = weechat_hook_command_run(
+        "/input return",
+        prompt_input_return_cb, nullptr, nullptr);
+
+    g_prompt = ctx.release();
+
+    weechat_printf(buffer,
+                   _("%s%s: enter password (hidden): "),
+                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+    // Switch focus to the buffer so the user types there
+    weechat_buffer_set(buffer, "display", "1");
+    // Clear any leftover input
+    weechat_buffer_set(buffer, "input", "");
+}
+
 void command__display_account(weechat::account *account)
 {
     int num_channels, num_pv;
@@ -555,8 +695,14 @@ void command__add_account(const char *name, const char *jid, const char *passwor
     account->name = name;
     if (jid)
         account->jid(jid);
-    if (password)
-        account->password(password);
+    if (password) {
+        // Store the password in WeeChat secure storage and save a reference.
+        std::string sec_key = fmt::format("xmpp_{}", name);
+        std::string sec_cmd = fmt::format("/secure set {} {}", sec_key, password);
+        weechat_command(nullptr, sec_cmd.c_str());
+        std::string sec_ref = fmt::format("${{sec.data.{}}}", sec_key);
+        account->password(sec_ref);
+    }
     if (jid)
         account->nickname(::jid(nullptr, jid).local);
 
@@ -576,21 +722,20 @@ void command__add_account(const char *name, const char *jid, const char *passwor
 
 void command__account_add(struct t_gui_buffer *buffer, int argc, char **argv)
 {
-    char *name, *jid = nullptr, *password = nullptr;
-
-    (void) buffer;
-
     switch (argc)
     {
         case 5:
-            password = argv[4];
-            // fall through
+            // name jid password — all provided, store directly
+            command__add_account(argv[2], argv[3], argv[4]);
+            break;
         case 4:
-            jid = argv[3];
-            // fall through
+            // name jid — no password, prompt for it
+            prompt_password(buffer, prompt_action::add,
+                            std::string(argv[2]), std::string(argv[3]));
+            break;
         case 3:
-            name = argv[2];
-            command__add_account(name, jid, password);
+            // name only — still need jid+password
+            command__add_account(argv[2], nullptr, nullptr);
             break;
         default:
             weechat_printf(nullptr, _("account add: wrong number of arguments"));
@@ -622,19 +767,23 @@ int command__account_connect(struct t_gui_buffer *buffer, int argc, char **argv)
     int i, connect_ok;
     weechat::account *ptr_account = nullptr;
 
-    (void) buffer;
-    (void) argc;
-    (void) argv;
-
     connect_ok = 1;
 
     for (i = 2; i < argc; i++)
     {
         if (weechat::account::search(ptr_account, argv[i]))
         {
-            if (!command__connect_account(ptr_account))
-            {
-                connect_ok = 0;
+            // Check whether a password is configured (raw value may be a
+            // ${sec.data.*} reference — treat it as present if non-empty).
+            std::string_view pw = ptr_account->password();
+            if (pw.empty()) {
+                // No password stored — prompt interactively
+                prompt_password(buffer, prompt_action::connect,
+                                std::string(ptr_account->name));
+                // connect will happen inside the prompt callback; skip here
+            } else {
+                if (!command__connect_account(ptr_account))
+                    connect_ok = 0;
             }
         }
         else
@@ -980,6 +1129,12 @@ void command__account_delete(struct t_gui_buffer *buffer, int argc, char **argv)
     }
 
     std::string account_name = account->name;
+    // Remove secure storage entry if present
+    {
+        std::string sec_key = fmt::format("xmpp_{}", account_name);
+        std::string sec_cmd = fmt::format("/secure del {}", sec_key);
+        weechat_command(nullptr, sec_cmd.c_str());
+    }
     weechat::accounts.erase(account->name);
     weechat_printf(
         nullptr,
