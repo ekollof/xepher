@@ -118,15 +118,22 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 case 104: // : [message | Configuration change]: Inform occupants that a non-privacy-related room configuration change has occurred
                     break;
                 case 110: // Self-Presence: [presence | Any room presence]: Inform user that presence refers to one of its own room occupants
-                    // Status 110 is sent last in the initial presence flood — clear joining flag
+                    // Status 110 is sent last in the initial presence flood — clear joining flag.
+                    // Status 110 is also delivered when any other resource joins the same room
+                    // (the server re-sends the full occupant list to all members).  Guard against
+                    // spurious re-triggering by only running the MAM catch-up when we were
+                    // actually in the joining state (joining == true means this is the first
+                    // status-110 for this session).  If joining is already false we are already
+                    // in the room and this is just a roster update — do nothing.
                     if (channel)
                     {
+                        const bool was_joining = channel->joining;
                         channel->joining = false;
 
                         // MAM catch-up for MUC: fetch messages missed since last
                         // disconnect.  Mirror the same pattern used for PM channels
                         // in channel.cpp so we recover missed messages on reconnect.
-                        if (channel->type == weechat::channel::chat_type::MUC)
+                        if (was_joining && channel->type == weechat::channel::chat_type::MUC)
                         {
                             time_t now = time(nullptr);
                             time_t start;
