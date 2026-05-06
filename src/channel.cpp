@@ -1137,6 +1137,12 @@ int weechat::channel::send_message(std::string to, std::string body,
 
             xmpp_message_set_body(message.get(), OMEMO_ADVICE);
             set_transport(weechat::channel::transport::OMEMO, 0);
+
+            // Cache the plaintext (URL) so MAM replay can display it later.
+            std::string peer_bare(to);
+            if (auto s = peer_bare.find('/'); s != std::string::npos)
+                peer_bare.resize(s);
+            account.mam_cache_store_omemo_plaintext(peer_bare, saved_id, body);
         }
         // If encode fails (keys not yet fetched), send plaintext as fallback.
         // The upload has already happened; we can't retry it. The user will
@@ -1248,6 +1254,12 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
 
         xmpp_message_set_body(message.get(), OMEMO_ADVICE);
         set_transport(weechat::channel::transport::OMEMO, 0);
+
+        // Cache the plaintext so MAM replay can display it later.
+        // Self-sent OMEMO messages cannot be decrypted on replay (Signal does
+        // not support self-decryption), so without this cache the user would
+        // see only the OMEMO_ADVICE placeholder on every restart.
+        account.mam_cache_store_omemo_plaintext(peer_bare, saved_id, body_str);
     }
     else if (pgp.enabled && !pgp.ids.empty())
     {
