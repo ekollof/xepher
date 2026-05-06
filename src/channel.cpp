@@ -1207,6 +1207,17 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         xmpp_stanza_add_child(message.get(), muc_x.get());
     }
 
+    // OMEMO in MUCs is not yet implemented.  If somehow enabled (e.g. older
+    // config or a race), refuse to send rather than encrypt for the room JID.
+    // See docs/planning-muc-omemo.md for the full implementation checklist.
+    if (account.omemo && omemo.enabled && type == weechat::channel::chat_type::MUC)
+    {
+        weechat_printf_date_tags(buffer, 0, "notify_none",
+            "%s%s: OMEMO is not yet supported in MUC rooms",
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_ERROR;
+    }
+
     if (account.omemo && omemo.enabled)
     {
         std::shared_ptr<xmpp_stanza_t> encrypted;

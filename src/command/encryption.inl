@@ -296,6 +296,17 @@ int command__omemo(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
+    // OMEMO in MUCs is not yet implemented (requires per-occupant device lists,
+    // multi-recipient encryption, and real-JID mapping).  See docs/planning-muc-omemo.md.
+    if (ptr_channel->type == weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(
+            buffer,
+            "%s%s: OMEMO is not yet supported in MUC rooms",
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
     ptr_channel->omemo.enabled = 1;
     ptr_channel->pgp.enabled = 0;
 
