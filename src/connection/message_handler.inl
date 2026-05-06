@@ -3777,54 +3777,17 @@ message_handler_after_omemo:
     // XEP-0511: print each collected OG preview as a separate buffer line.
     // Using notify_none,no_log,xmpp_og_preview so these lines are never logged
     // or highlighted, and can be identified/skipped by the reply-excerpt scanner.
-    if (!og_previews_to_show.empty())
+    if (!og_previews_to_show.empty()
+        && weechat::config::instance
+        && weechat::config::instance->look.incoming_link_preview.boolean())
     {
-        auto format_og_line = [&](const account::og_preview& p) -> std::string {
-            std::string line;
-            line += weechat_color("darkgray");
-            line += "┌ ";
-            line += weechat_color("bold");
-            line += p.title.empty() ? (p.url.empty() ? "Link" : p.url) : p.title;
-            line += weechat_color("-bold");
-            if (!p.description.empty())
-            {
-                line += "\n\t";
-                line += weechat_color("darkgray");
-                line += "│ ";
-                line += weechat_color("resetcolor");
-                line += weechat_color("darkgray");
-                if (p.description.size() > 120)
-                {
-                    line += p.description.substr(0, 117);
-                    line += "...";
-                }
-                else
-                {
-                    line += p.description;
-                }
-            }
-            if (!p.url.empty() && p.url != p.title)
-            {
-                line += "\n\t";
-                line += weechat_color("darkgray");
-                line += "└ ";
-                line += weechat_color("blue");
-                line += p.url;
-            }
-            if (!p.image.empty())
-            {
-                line += " ";
-                line += weechat_color("darkgray");
-                line += "[img]";
-            }
-            line += weechat_color("resetcolor");
-            return line;
-        };
         for (const auto& p : og_previews_to_show)
         {
+            std::string line = format_og_preview_card(
+                p.title, p.description, p.url, p.image, "");
             weechat_printf_date_tags(channel->buffer, date,
                 "notify_none,no_log,xmpp_og_preview",
-                 "%s\t%s", display_prefix.data(), format_og_line(p).c_str());
+                 "%s\t%s", display_prefix.data(), line.c_str());
         }
     }
 
@@ -3839,7 +3802,9 @@ message_handler_after_omemo:
     // cache lookup (in the is_mam_replay branch above) already handles URLs
     // that were fetched during a previous live session.  First-time-seen URLs
     // in MAM will be fetched when the same URL appears in a live message later.
-    if (text && !is_mam_replay)
+    if (text && !is_mam_replay
+        && weechat::config::instance
+        && weechat::config::instance->look.incoming_link_preview.boolean())
     {
         // Collect URLs that were already shown so we don't double-print.
         std::unordered_set<std::string> already_shown;

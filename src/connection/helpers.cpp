@@ -673,47 +673,12 @@ static int og_fetch_cb(const void * /*pointer*/, void * /*data*/, int fd)
         XDEBUG("og_cache_store: url={} verify={}",
                ctx.url, verify ? "ok" : "FAILED");
 
-        if (!ctx.silent)
+        if (!ctx.silent
+            && weechat::config::instance
+            && weechat::config::instance->look.incoming_link_preview.boolean())
         {
-            // Build and display the inline preview card.
-            std::string line;
-            line += weechat_color("darkgray");
-            line += "┌ ";
-            line += weechat_color("bold");
-            line += p.title.empty() ? display_url : p.title;
-            line += weechat_color("-bold");
-            if (!p.description.empty())
-            {
-                line += "\n\t";
-                line += weechat_color("darkgray");
-                line += "│ ";
-                line += weechat_color("resetcolor");
-                line += weechat_color("darkgray");
-                if (p.description.size() > 120)
-                {
-                    line += p.description.substr(0, 117);
-                    line += "...";
-                }
-                else
-                {
-                    line += p.description;
-                }
-            }
-            if (!display_url.empty() && display_url != p.title)
-            {
-                line += "\n\t";
-                line += weechat_color("darkgray");
-                line += "└ ";
-                line += weechat_color("blue");
-                line += display_url;
-            }
-            if (!p.image.empty())
-            {
-                line += " ";
-                line += weechat_color("darkgray");
-                line += "[img]";
-            }
-            line += weechat_color("resetcolor");
+            std::string line = format_og_preview_card(
+                p.title, p.description, p.url, p.image, ctx.url);
 
             weechat_printf_date_tags(ctx.buffer, ctx.date,
                 "notify_none,no_log,xmpp_og_preview",
@@ -776,6 +741,66 @@ void strip_url_trailing_punct(std::string &url)
         }
         break;
     }
+}
+
+// ── format_og_preview_card ────────────────────────────────────────────────────
+// Build a simple WeeChat preview string without box-drawing characters.
+// Uses darkgray for the whole block so it is visually distinct from chat text.
+
+std::string format_og_preview_card(const std::string &title,
+                                     const std::string &description,
+                                     const std::string &url,
+                                     const std::string &image,
+                                     const std::string &fallback_url)
+{
+    const std::string &display_url  = url.empty() ? fallback_url : url;
+    const std::string &display_title = title.empty()
+                                         ? (display_url.empty() ? "Link" : display_url)
+                                         : title;
+
+    std::string line;
+    line += weechat_color("darkgray");
+    line += weechat_color("bold");
+    line += display_title;
+    line += weechat_color("-bold");
+
+    // Sanitize description: collapse any internal newlines / tabs / CRs to spaces
+    std::string desc = description;
+    for (char &c : desc)
+    {
+        if (c == '\n' || c == '\r' || c == '\t')
+            c = ' ';
+    }
+
+    if (!desc.empty())
+    {
+        line += "  ";
+        if (desc.size() > 120)
+        {
+            line += desc.substr(0, 117);
+            line += "...";
+        }
+        else
+        {
+            line += desc;
+        }
+    }
+
+    if (!display_url.empty() && display_url != display_title)
+    {
+        line += "  ";
+        line += weechat_color("blue");
+        line += display_url;
+        line += weechat_color("darkgray");
+    }
+
+    if (!image.empty())
+    {
+        line += " [img]";
+    }
+
+    line += weechat_color("resetcolor");
+    return line;
 }
 
 void og_start_fetch(const std::string &url,

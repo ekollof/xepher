@@ -153,16 +153,24 @@ void strip_url_trailing_punct(std::string &url);
 
 // Kick off an async OG preview fetch for a URL.
 // If OG_MAX_CONCURRENT active fetches are already running the request is
-// queued in g_og_pending and started when a slot opens up.
+// queued in g_og_pending and drained one-by-one as active fetches complete.
 // Silently no-ops if the URL is already cached, in-flight, or pending.
 // When silent=true the result is stored to LMDB but not displayed; instead
 // a one-line progress note is printed to the account buffer.
 void og_start_fetch(const std::string &url,
-                    struct t_gui_buffer *buf,
-                    weechat::account *account_ptr,
-                    const std::string &display_prefix,
-                    time_t date,
-                    bool silent = false);
+                     struct t_gui_buffer *buf,
+                     weechat::account *account_ptr,
+                     const std::string &display_prefix,
+                     time_t date,
+                     bool silent = false);
+
+// Format an OpenGraph preview as a WeeChat multi-line string with box-drawing chars.
+// description, url, image are the OG fields; fallback_url is used when url is empty.
+[[nodiscard]] std::string format_og_preview_card(const std::string &title,
+                                                   const std::string &description,
+                                                   const std::string &url,
+                                                   const std::string &image,
+                                                   const std::string &fallback_url);
 
 // ── XEP-0004: Data Forms renderer ─────────────────────────────────────────────
 // Render a <x xmlns='jabber:x:data'> form to a WeeChat buffer.

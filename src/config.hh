@@ -47,6 +47,7 @@ namespace weechat
             config_option raw_xml_log;
             config_option nick_completion_smart;
             config_option outgoing_link_preview;
+            config_option incoming_link_preview;
             config_option send_chat_states;
             config_option smart_filter;
             config_option smart_filter_delay;
