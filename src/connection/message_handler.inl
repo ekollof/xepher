@@ -2325,20 +2325,14 @@ message_handler_after_omemo:
         (void)orig; // diff display removed; corrected text shown as-is
 
         // XEP-0308: Replace the original line in-place rather than appending a
-        // new "* " line.  Use the inline diff if available, otherwise plain text.
+        // new "* " line.  Original message not in buffer (e.g. scrolled out or
+        // MAM replay) — drop the correction silently rather than printing a
+        // dangling 📝 line.
         if (edit_line_data)
         {
             const std::string new_msg = std::string("📝 ") + text;
-            struct t_hashtable *ht = weechat_hashtable_new(4,
-                WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING,
-                nullptr, nullptr);
-            weechat_hashtable_set(ht, "message", new_msg.c_str());
-            weechat_hdata_update(hdata_line_data, edit_line_data, ht);
-            weechat_hashtable_free(ht);
-            return 1;
+            buffer__update_line_by_id(channel->buffer, replace_id, new_msg.c_str());
         }
-        // Original message not in buffer (e.g. scrolled out or MAM replay) —
-        // drop the correction silently rather than printing a dangling 📝 line.
         return 1;
     }
 

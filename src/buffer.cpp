@@ -284,3 +284,49 @@ int buffer__close_cb(const void *pointer, void *data,
 
     return WEECHAT_RC_OK;
 }
+
+bool buffer__update_line_by_id(struct t_gui_buffer *buffer,
+                                const char *id_tag,
+                                const char *new_message)
+{
+    if (!buffer || !id_tag || !*id_tag || !new_message)
+        return false;
+
+    static struct t_hdata *hdata_buffer   = weechat_hdata_get("buffer");
+    static struct t_hdata *hdata_lines    = weechat_hdata_get("lines");
+    static struct t_hdata *hdata_line     = weechat_hdata_get("line");
+    static struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+
+    void *lines = weechat_hdata_pointer(hdata_buffer, buffer, "lines");
+    if (!lines) return false;
+
+    void *cur = weechat_hdata_pointer(hdata_lines, lines, "last_line");
+    while (cur)
+    {
+        void *line_data = weechat_hdata_pointer(hdata_line, cur, "data");
+        if (line_data)
+        {
+            int tags_count = weechat_hdata_integer(hdata_line_data,
+                                                    line_data, "tags_count");
+            for (int n_tag = 0; n_tag < tags_count; n_tag++)
+            {
+                std::string str_tag = fmt::format("{}|tags_array", n_tag);
+                const char *tag = weechat_hdata_string(hdata_line_data,
+                                                        line_data, str_tag.c_str());
+                if (tag && std::string_view(tag).starts_with("id_") &&
+                    weechat_strcasecmp(tag + 3, id_tag) == 0)
+                {
+                    struct t_hashtable *ht = weechat_hashtable_new(4,
+                        WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING,
+                        nullptr, nullptr);
+                    weechat_hashtable_set(ht, "message", new_message);
+                    weechat_hdata_update(hdata_line_data, line_data, ht);
+                    weechat_hashtable_free(ht);
+                    return true;
+                }
+            }
+        }
+        cur = weechat_hdata_pointer(hdata_line, cur, "prev_line");
+    }
+    return false;
+}

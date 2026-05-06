@@ -31,6 +31,7 @@
 #include "account.hh"
 #include "user.hh"
 #include "channel.hh"
+#include "buffer.hh"
 #include "connection.hh"
 #include "omemo.hh"
 #include "pgp.hh"

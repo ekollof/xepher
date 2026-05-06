@@ -287,46 +287,9 @@ int command__edit_to(const void *pointer, void *data,
     // immediately.  Servers do not carbon-copy self-sent corrections, so without
     // this the buffer would keep showing the old text.
     {
-        struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
-        struct t_hdata *hdata_lines    = weechat_hdata_get("lines");
-        struct t_hdata *hdata_line     = weechat_hdata_get("line");
-        struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
-
-        void *lines = weechat_hdata_pointer(hdata_buffer, buffer, "lines");
-        if (lines)
-        {
-            void *last_line = weechat_hdata_pointer(hdata_lines, lines, "last_line");
-            while (last_line)
-            {
-                void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
-                if (line_data)
-                {
-                    int tags_count = weechat_hdata_integer(hdata_line_data,
-                                                           line_data, "tags_count");
-                    for (int n_tag = 0; n_tag < tags_count; n_tag++)
-                    {
-                        std::string str_tag = fmt::format("{}|tags_array", n_tag);
-                        const char *tag = weechat_hdata_string(hdata_line_data,
-                                                                line_data, str_tag.c_str());
-                        if (tag && std::string_view(tag).starts_with("id_") &&
-                            weechat_strcasecmp(tag + 3, target_id) == 0)
-                        {
-                            std::string new_msg = std::string("📝 ") + new_text;
-                            struct t_hashtable *ht = weechat_hashtable_new(4,
-                                WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING,
-                                nullptr, nullptr);
-                            weechat_hashtable_set(ht, "message", new_msg.c_str());
-                            weechat_hdata_update(hdata_line_data, line_data, ht);
-                            weechat_hashtable_free(ht);
-                            goto edit_done;
-                        }
-                    }
-                }
-                last_line = weechat_hdata_pointer(hdata_line, last_line, "prev_line");
-            }
-        }
+        std::string new_msg = std::string("📝 ") + new_text;
+        buffer__update_line_by_id(buffer, target_id, new_msg.c_str());
     }
-edit_done:
 
     weechat_printf(buffer, "%sxmpp: message edit sent", weechat_prefix("network"));
     return WEECHAT_RC_OK;

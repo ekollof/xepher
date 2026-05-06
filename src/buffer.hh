@@ -24,4 +24,10 @@ int buffer__nickcmp_cb(const void *pointer, void *data,
                        const char *nick2);
 
 int buffer__close_cb(const void *pointer, void *data,
-                     struct t_gui_buffer *buffer);
+                      struct t_gui_buffer *buffer);
+
+// Update the message text of a buffer line whose tags include `id_<id_tag>`.
+// Returns true if a matching line was found and updated.
+bool buffer__update_line_by_id(struct t_gui_buffer *buffer,
+                                const char *id_tag,
+                                const char *new_message);
