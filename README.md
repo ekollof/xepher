@@ -224,13 +224,17 @@ color/attribute support instead of raw markup.
 ### Link previews (XEP-0511)
 
 **Incoming:** When a message contains `<rdf:Description>` (XEP-0511) carrying
-OpenGraph metadata, a compact preview is rendered:
+OpenGraph metadata, a compact preview is rendered in darkgray:
 
 ```
 alice: Check this out! https://example.com/article
-        ┌ The Best Webpage
-        │ This is a great webpage and you will really like it
-        └ https://example.com/canonical-url [img]
+        The Best Webpage  This is a great webpage and you will really like it  https://example.com/canonical-url [img]
+```
+
+To disable incoming previews:
+
+```
+/set xmpp.look.incoming_link_preview off
 ```
 
 **Outgoing:** URLs in your messages automatically trigger a background fetch;
@@ -710,7 +714,7 @@ Each nick in a MUC room displays a prefix indicating their role or affiliation
 
 | Command | Description |
 |---------|-------------|
-| `/omemo` | Enable OMEMO for the current buffer |
+| `/omemo` | Enable OMEMO for the current PM buffer (MUCs not yet supported) |
 | `/omemo check` | Verify OMEMO bundle is published |
 | `/omemo republish` | Republish OMEMO:2 + legacy nodes |
 | `/omemo status` | Show device ID and status |
