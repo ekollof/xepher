@@ -634,13 +634,15 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             channel_jid = to_bare_s2.c_str();
 
                         // Use plaintext body if available; otherwise check omemo_plaintext cache.
+                        // OMEMO messages carry <body>OMEMO_ADVICE</body> — the cache holds the
+                        // real plaintext, so look it up even when msg_text is the placeholder.
                         std::optional<std::string> omemo_body;
-                        if (!msg_text)
+                        if (!msg_text || std::string_view(msg_text) == OMEMO_ADVICE)
                             omemo_body = account.mam_cache_lookup_omemo_plaintext(channel_jid, msg_id);
 
-                        const char *effective_body = msg_text
-                            ? msg_text
-                            : (omemo_body ? omemo_body->c_str() : nullptr);
+                        const char *effective_body = (omemo_body && !omemo_body->empty())
+                            ? omemo_body->c_str()
+                            : (msg_text ? msg_text : nullptr);
 
                         if (effective_body)
                         {
