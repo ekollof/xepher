@@ -476,6 +476,7 @@ struct t_gui_buffer *weechat::account::create_buffer()
         weechat_buffer_set(buffer, "short_name", name.data());
     weechat_buffer_set(buffer, "localvar_set_type", "server");
     weechat_buffer_set(buffer, "localvar_set_account", name.data());
+    weechat_buffer_set(buffer, "localvar_set_server", name.data());
     weechat_buffer_set(buffer, "localvar_set_charset_modifier",
                        fmt::format("account.{}", name).data());
     weechat_buffer_set(buffer, "title", name.data());

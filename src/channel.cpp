@@ -183,6 +183,7 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
                        (type == weechat::channel::chat_type::PM) ? "query"
                      : (type == weechat::channel::chat_type::FEED) ? "feed"
                      : "channel");
+    weechat_buffer_set(ptr_buffer, "localvar_set_server", account.name.data());
 
     if (buffer_created)
     {
