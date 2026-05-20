@@ -106,43 +106,13 @@ void weechat::channel::set_transport(enum weechat::channel::transport transport,
     }
 }
 
-struct t_gui_buffer *weechat::channel::search_buffer(weechat::channel::chat_type type,
+struct t_gui_buffer *weechat::channel::search_buffer(weechat::channel::chat_type /*type*/,
                                                      const char *name)
 {
-    struct t_hdata *hdata_buffer;
-    struct t_gui_buffer *ptr_buffer;
-    const char *ptr_type, *ptr_account_name, *ptr_remote_jid;
-
-    hdata_buffer = weechat_hdata_get("buffer");
-    ptr_buffer = (struct t_gui_buffer*)weechat_hdata_get_list(hdata_buffer, "gui_buffers");
-
-    while (ptr_buffer)
-    {
-        if (weechat_buffer_get_pointer(ptr_buffer, "plugin") == weechat_plugin)
-        {
-            ptr_type = weechat_buffer_get_string(ptr_buffer, "localvar_type");
-            ptr_account_name = weechat_buffer_get_string(ptr_buffer,
-                                                           "localvar_account");
-            ptr_remote_jid = weechat_buffer_get_string(ptr_buffer,
-                                                         "localvar_remote_jid");
-            if (ptr_type && ptr_type[0]
-                && ptr_account_name && ptr_account_name[0]
-                && ptr_remote_jid && ptr_remote_jid[0]
-                 && (   ((  (type == weechat::channel::chat_type::MUC))
-                         && (std::string_view(ptr_type) == "channel"))
-                     || ((  (type == weechat::channel::chat_type::PM))
-                         && (std::string_view(ptr_type) == "private"))
-                     || ((  (type == weechat::channel::chat_type::FEED))
-                         && (std::string_view(ptr_type) == "feed")))
-                && (ptr_account_name == account.name)
-                && (weechat_strcasecmp(ptr_remote_jid, name) == 0))
-            {
-                return ptr_buffer;
-            }
-        }
-        ptr_buffer = (struct t_gui_buffer*)weechat_hdata_move(hdata_buffer, ptr_buffer, 1);
-    }
-
+    std::string buffer_name = fmt::format("{}.{}" , account.name, name);
+    struct t_gui_buffer *ptr_buffer = weechat_buffer_search("xmpp", buffer_name.c_str());
+    if (ptr_buffer && weechat_buffer_get_pointer(ptr_buffer, "plugin") == weechat_plugin)
+        return ptr_buffer;
     return nullptr;
 }
 
@@ -151,7 +121,7 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
 {
     struct t_gui_buffer *ptr_buffer;
     int buffer_created;
-    const char *short_name = nullptr, *localvar_remote_jid = nullptr;
+    const char *short_name = nullptr;
 
     buffer_created = 0;
 
@@ -191,11 +161,8 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
     else
     {
         short_name = weechat_buffer_get_string(ptr_buffer, "short_name");
-        localvar_remote_jid = weechat_buffer_get_string(ptr_buffer,
-                                                     "localvar_remote_jid");
 
-        if (!short_name ||
-            (localvar_remote_jid && (std::string_view(localvar_remote_jid) == short_name)))
+        if (!short_name)
         {
             const std::string node_s = ::jid(nullptr, name).local;
             const char *node_cstr = node_s.empty() ? name : node_s.c_str();
@@ -211,20 +178,6 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
         account.nickname(node_s.empty() ? account.jid() : node_s);
     }
 
-    // Set notify level for buffer: "0" = never add to hotlist
-    //                              "1" = add for highlights only
-    //                              "2" = add for highlights and messages
-    //                              "3" = add for all messages.
-    weechat_buffer_set(ptr_buffer, "notify",
-                       (type == weechat::channel::chat_type::PM) ? "3" : "2");
-    weechat_buffer_set(ptr_buffer, "localvar_set_type",
-                       (type == weechat::channel::chat_type::PM) ? "private"
-                     : (type == weechat::channel::chat_type::FEED) ? "feed"
-                     : "channel");
-    weechat_buffer_set(ptr_buffer, "localvar_set_nick",
-                       account.nickname().data());
-    weechat_buffer_set(ptr_buffer, "localvar_set_account", account.name.data());
-    weechat_buffer_set(ptr_buffer, "localvar_set_remote_jid", name);
     weechat_buffer_set(ptr_buffer, "input_multiline", "1");
 
     if (buffer_created)

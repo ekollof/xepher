@@ -207,33 +207,27 @@ int buffer__close_cb(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 
-    const char* type = weechat_buffer_get_string(buffer, "localvar_type");
-
-    if (weechat_strcasecmp(type, "server") == 0)
+    if (ptr_account && !ptr_channel)
     {
-        if (ptr_account)
+        if (ptr_account->connected())
         {
-            if (ptr_account->connected())
-            {
-                ptr_account->disconnect(0);
-            }
-
-            ptr_account->buffer = nullptr;
+            ptr_account->disconnect(0);
         }
+
+        ptr_account->buffer = nullptr;
     }
-    else if (weechat_strcasecmp(type, "channel") == 0)
+    else if (ptr_account && ptr_channel)
     {
-        if (ptr_account && ptr_channel)
+        if (ptr_account->connected())
         {
-            if (ptr_account->connected())
+            switch (ptr_channel->type)
             {
-                // Send unavailable presence to leave MUC
-                if (ptr_channel->type == weechat::channel::chat_type::MUC)
+                case weechat::channel::chat_type::MUC:
                 {
-                    // Build full JID with resource (room@server/nick)
-                    const char *nick = weechat_buffer_get_string(buffer, "localvar_nick");
+                    // Send unavailable presence to leave MUC
+                    std::string_view nick = ptr_account->nickname();
                     std::string to_jid;
-                    if (nick && nick[0])
+                    if (!nick.empty())
                     {
                         ::jid ch(nullptr, ptr_channel->id);
                         to_jid = fmt::format("{}@{}/{}", ch.local, ch.domain, nick);
@@ -246,40 +240,23 @@ int buffer__close_cb(const void *pointer, void *data,
                         .to(to_jid)
                         .from(ptr_account->jid());
                     ptr_account->connection.send(pres.build(ptr_account->context).get());
+                    break;
                 }
-                
-                ptr_account->channels.erase(ptr_channel->name);
-            }
-        }
-    }
-    else if (weechat_strcasecmp(type, "private") == 0)
-    {
-        if (ptr_account && ptr_channel)
-        {
-            if (ptr_account->connected())
-            {
-                // Send "gone" chat state when closing PM
-                if (ptr_channel->type == weechat::channel::chat_type::PM)
+                case weechat::channel::chat_type::PM:
                 {
+                    // Send "gone" chat state when closing PM
                     auto *user = weechat::user::search(ptr_account, ptr_account->jid_device().data());
                     ptr_channel->send_gone(user);
+                    break;
                 }
-                
-                ptr_account->channels.erase(ptr_channel->name);
+                case weechat::channel::chat_type::FEED:
+                    // Remove from LMDB feed-open registry so it is not restored on reconnect
+                    ptr_account->feed_open_unregister(std::string(ptr_channel->name));
+                    break;
             }
         }
-    }
-    else if (weechat_strcasecmp(type, "feed") == 0)
-    {
-        if (ptr_account && ptr_channel)
-        {
-            // Remove from LMDB feed-open registry so it is not restored on reconnect
-            ptr_account->feed_open_unregister(std::string(ptr_channel->name));
-            ptr_account->channels.erase(ptr_channel->name);
-        }
-    }
-    else
-    {
+
+        ptr_account->channels.erase(ptr_channel->name);
     }
 
     return WEECHAT_RC_OK;

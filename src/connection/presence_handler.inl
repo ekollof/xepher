@@ -102,8 +102,6 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             switch (status)
             {
                 case 100: // Non-Anonymous: [message | Entering a room]: Inform user that any occupant is allowed to see the user's full JID
-                    if (channel)
-                        weechat_buffer_set(channel->buffer, "notify", "2");
                     break;
                 case 101: // Affiliation change: room visibility changed, JID now visible to all
                     if (channel)

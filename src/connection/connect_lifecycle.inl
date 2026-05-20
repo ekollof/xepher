@@ -587,55 +587,6 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             restored_feeds.insert(feed_key);
         }
 
-        // Secondary restore source: open WeeChat buffers (survives plugin
-        // reload within the same WeeChat session even if LMDB was not yet
-        // written, e.g. feeds opened before this commit).
-        struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
-        struct t_gui_buffer *ptr_buffer = (struct t_gui_buffer*)weechat_hdata_get_list(hdata_buffer, "gui_buffers");
-
-        while (ptr_buffer)
-        {
-            if (weechat_buffer_get_pointer(ptr_buffer, "plugin") == weechat_plugin)
-            {
-                const char *ptr_type = weechat_buffer_get_string(ptr_buffer, "localvar_type");
-                const char *ptr_account_name = weechat_buffer_get_string(ptr_buffer, "localvar_account");
-                const char *ptr_remote_jid = weechat_buffer_get_string(ptr_buffer, "localvar_remote_jid");
-
-                // Restore PM buffers only (MUCs will be restored via bookmarks)
-                if (ptr_type && std::string_view(ptr_type) == "private" &&
-                    ptr_account_name && account.name == ptr_account_name &&
-                    ptr_remote_jid && ptr_remote_jid[0])
-                {
-                    // Check if channel already exists
-                    if (!account.channels.contains(ptr_remote_jid))
-                    {
-                        // Create channel object for existing buffer
-                        account.channels.emplace(
-                            std::make_pair(ptr_remote_jid, weechat::channel {
-                                    account, weechat::channel::chat_type::PM,
-                                    ptr_remote_jid, ptr_remote_jid
-                                }));
-                    }
-                }
-                // Restore FEED buffers from previous session that weren't
-                // already handled by the LMDB list above.
-                else if (ptr_type && std::string_view(ptr_type) == "feed" &&
-                         ptr_account_name && account.name == ptr_account_name &&
-                         ptr_remote_jid && ptr_remote_jid[0])
-                {
-                    std::string feed_key(ptr_remote_jid);
-                    // Also register in LMDB for future restarts
-                    account.feed_open_register(feed_key);
-                    if (!restored_feeds.count(feed_key))
-                    {
-                        restore_feed(feed_key);
-                        restored_feeds.insert(feed_key);
-                    }
-                }
-            }
-            ptr_buffer = (struct t_gui_buffer*)weechat_hdata_move(hdata_buffer, ptr_buffer, 1);
-        }
-
         // Tertiary restore source: LMDB pm_open registry.
         // Any JID registered via pm_open_register() (written when a PM MAM
         // fetch completes) is a PM conversation to restore.  This handles the

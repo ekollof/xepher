@@ -101,25 +101,22 @@ int command__enter(const void *pointer, void *data,
         }
         weechat_string_free_split(jids);
     }
-    else
+    else if (ptr_channel)
     {
-        const char *buffer_jid = weechat_buffer_get_string(buffer, "localvar_remote_jid");
+        const std::string &buffer_jid = ptr_channel->id;
+        std::string_view nick = ptr_account->nickname();
+        ::jid bjid(nullptr, buffer_jid.c_str());
+        std::string pres_jid_s = fmt::format("{}@{}/{}", bjid.local, bjid.domain,
+                                              nick.empty() ? "" : nick.data());
+        pres_jid = pres_jid_s.c_str();
 
-        {
-            ::jid bjid(nullptr, buffer_jid ? buffer_jid : "");
-            const char *nick = weechat_buffer_get_string(buffer, "localvar_nick");
-            std::string pres_jid_s = fmt::format("{}@{}/{}", bjid.local, bjid.domain,
-                                                  nick ? nick : "");
-            pres_jid = pres_jid_s.c_str();
+        if (!ptr_account->channels.contains(buffer_jid))
+            ptr_channel = &ptr_account->channels.emplace(
+                std::make_pair(buffer_jid, weechat::channel {
+                        *ptr_account, weechat::channel::chat_type::MUC, buffer_jid.c_str(), buffer_jid.c_str()
+                    })).first->second;
 
-            if (!ptr_account->channels.contains(buffer_jid))
-                ptr_channel = &ptr_account->channels.emplace(
-                    std::make_pair(std::string(buffer_jid), weechat::channel {
-                            *ptr_account, weechat::channel::chat_type::MUC, buffer_jid, buffer_jid
-                        })).first->second;
-
-            send_muc_join_presence(ptr_account, pres_jid);
-        }
+        send_muc_join_presence(ptr_account, pres_jid);
     }
 
     return WEECHAT_RC_OK;

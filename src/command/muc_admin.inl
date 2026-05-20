@@ -501,11 +501,11 @@ int command__muc_nick(const void *pointer, void *data,
     if (argc < 2)
     {
         /* Print current nick */
-        const char *current_nick = weechat_buffer_get_string(buffer, "localvar_nick");
+        std::string_view current_nick = ptr_account->nickname();
         weechat_printf(buffer, _("%sCurrent nick in %s: %s"),
                         weechat_prefix("network"),
                         ptr_channel->id.data(),
-                        current_nick ? current_nick : "(unknown)");
+                        current_nick.empty() ? "(unknown)" : current_nick.data());
         return WEECHAT_RC_OK;
     }
 
