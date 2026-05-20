@@ -179,6 +179,10 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
     }
 
     weechat_buffer_set(ptr_buffer, "input_multiline", "1");
+    weechat_buffer_set(ptr_buffer, "localvar_set_type",
+                       (type == weechat::channel::chat_type::PM) ? "query"
+                     : (type == weechat::channel::chat_type::FEED) ? "feed"
+                     : "channel");
 
     if (buffer_created)
     {
