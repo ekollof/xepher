@@ -174,9 +174,10 @@ void weechat::user::nicklist_set_color(weechat::account *account,
     struct t_gui_nick *ptr_nick = weechat_nicklist_search_nick(ptr_buffer, nullptr, name);
     if (ptr_nick)
     {
+        auto colour = get_colour_for_nicklist();
         const char *color = this->is_away
             ? "weechat.color.nicklist_away"
-            : get_colour_for_nicklist().data();
+            : colour.data();
         weechat_nicklist_nick_set(ptr_buffer, ptr_nick, "color", color);
     }
 }
