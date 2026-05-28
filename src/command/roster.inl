@@ -288,7 +288,7 @@ int command__roster(const void *pointer, void *data,
             "xmpp.picker.roster",
             "Open chat with contact  (roster)",
             std::move(entries),
-            [ptr_account, buf = buffer](const std::string &selected) {
+            [buf = buffer](const std::string &selected) {
                 auto cmd = fmt::format("/open {}", selected);
                 weechat_command(buf, cmd.c_str());
             },
