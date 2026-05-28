@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <string_view>
+#include <vector>
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>
 #include <fmt/core.h>
@@ -15,36 +16,65 @@
 #include "channel.hh"
 #include "avatar.hh"
 
+namespace {
+
+unsigned long nick_hash(std::string_view name)
+{
+    unsigned long hash = 5381;
+    for (char c : name)
+        hash = ((hash << 5) + hash) + static_cast<unsigned char>(c);
+    return hash;
+}
+
+std::string compute_nick_color(std::string_view name)
+{
+    const char *colors_str = weechat_config_string(
+        weechat_config_get("weechat.color.chat_nick_colors"));
+    if (!colors_str || !colors_str[0])
+        return {};
+
+    std::vector<std::string> palette;
+    std::string token;
+    for (const char *p = colors_str; *p; ++p)
+    {
+        if (*p == ',')
+        {
+            if (!token.empty()) palette.push_back(std::move(token));
+            token.clear();
+        }
+        else
+            token += *p;
+    }
+    if (!token.empty()) palette.push_back(std::move(token));
+
+    if (palette.empty()) return {};
+    return palette[nick_hash(name) % palette.size()];
+}
+
+}
+
 std::string weechat::user::get_colour()
 {
     if (cached_nick_color.empty() && !this->profile.display_name.empty())
-    {
-        auto result = weechat_info_get("nick_color", this->profile.display_name.c_str());
-        cached_nick_color = result ? result : std::string{};
-    }
+        cached_nick_color = compute_nick_color(this->profile.display_name);
     return cached_nick_color;
 }
 
 std::string weechat::user::get_colour(std::string_view name)
 {
-    auto result = weechat_info_get("nick_color", std::string(name).c_str());
-    return result ? result : std::string{};
+    return compute_nick_color(name);
 }
 
 std::string weechat::user::get_colour_for_nicklist()
 {
     if (cached_nick_color_name.empty() && !this->profile.display_name.empty())
-    {
-        auto result = weechat_info_get("nick_color_name", this->profile.display_name.c_str());
-        cached_nick_color_name = result ? result : std::string{};
-    }
+        cached_nick_color_name = compute_nick_color(this->profile.display_name);
     return cached_nick_color_name;
 }
 
 std::string weechat::user::get_colour_for_nicklist(std::string_view name)
 {
-    auto result = weechat_info_get("nick_color_name", std::string(name).c_str());
-    return result ? result : std::string{};
+    return compute_nick_color(name);
 }
 
 std::string weechat::user::as_prefix_raw()
@@ -54,10 +84,8 @@ std::string weechat::user::as_prefix_raw()
         std::string prefix;
         if (!this->profile.avatar_rendered.empty())
             prefix = this->profile.avatar_rendered + " ";
-        auto color_ptr = weechat_info_get("nick_color", this->profile.display_name.c_str());
-        auto reset_ptr = weechat_color("reset");
-        std::string color = color_ptr ? color_ptr : std::string{};
-        std::string reset = reset_ptr ? reset_ptr : std::string{};
+        std::string color = this->get_colour();
+        std::string reset = weechat_color("reset") ? weechat_color("reset") : std::string{};
         cached_prefix_raw = fmt::format("{}{}{}", color, prefix, this->profile.display_name, reset);
     }
     return cached_prefix_raw;
@@ -65,10 +93,8 @@ std::string weechat::user::as_prefix_raw()
 
 std::string weechat::user::as_prefix_raw(std::string_view name)
 {
-    auto color_ptr = weechat_info_get("nick_color", std::string(name).c_str());
-    auto reset_ptr = weechat_color("reset");
-    std::string color = color_ptr ? color_ptr : std::string{};
-    std::string reset = reset_ptr ? reset_ptr : std::string{};
+    std::string color = compute_nick_color(name);
+    std::string reset = weechat_color("reset") ? weechat_color("reset") : std::string{};
     return fmt::format("{}{}{}", color, name, reset);
 }
 
