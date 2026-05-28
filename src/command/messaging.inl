@@ -40,7 +40,7 @@ int command__msg(const void *pointer, void *data,
         auto msg_s = stanza::message().type(msg_type).to(ptr_channel->name).body(text);
         ptr_account->connection.send(msg_s.build(ptr_account->context).get());
         if (ptr_channel->type != weechat::channel::chat_type::MUC)
-            weechat_printf_date_tags(ptr_channel->buffer, 0,
+            xmpp_printf_date_tags(ptr_channel->buffer, 0,
                                      "xmpp_message,message,private,notify_none,self_msg,log1",
                                      "%s\t%s",
                                      weechat::user::search(ptr_account, ptr_account->jid().data())->as_prefix_raw().data(),

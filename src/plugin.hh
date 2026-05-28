@@ -24,7 +24,18 @@
 #define WEECHAT_XMPP_PLUGIN_VERSION "0.5.0"
 #endif//GIT_COMMIT
 
+#define xmpp_printf_date_tags(buffer, date, tags, ...) \
+    (weechat_plugin->printf_datetime_tags)(buffer, date, 0, weechat::xmpp_tags(tags).c_str(), __VA_ARGS__)
+
 namespace weechat {
+    inline std::string xmpp_tags(const char *tags)
+    {
+        if (!tags || !tags[0]) return "no_trigger";
+        std::string result(tags);
+        result += ",no_trigger";
+        return result;
+    }
+
     class plugin {
     private:
         struct t_weechat_plugin *m_plugin_ptr; // packed first for hackery

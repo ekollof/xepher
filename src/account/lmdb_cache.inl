@@ -191,7 +191,7 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
                     // Tag with id_<message-id> so MAM dedup can suppress later replays.
                     if (!message_id.empty())
                         tags += ",id_" + message_id;
-                    weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
+                    xmpp_printf_date_tags(buffer, timestamp, tags.c_str(),
                                             "%s%s\t%s[Message deleted]%s",
                                             weechat_color("darkgray"),
                                             from.c_str(),
@@ -204,7 +204,7 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
                     // Tag with id_<message-id> so MAM dedup can suppress later replays.
                     if (!message_id.empty())
                         tags += ",id_" + message_id;
-                    weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
+                    xmpp_printf_date_tags(buffer, timestamp, tags.c_str(),
                                             "%s%s\t%s",
                                             weechat_color("darkgray"),
                                             from.c_str(),

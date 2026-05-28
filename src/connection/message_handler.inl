@@ -295,7 +295,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
                             if (mmn_text && *mmn_text)
                             {
-                                weechat_printf_date_tags(
+                                xmpp_printf_date_tags(
                                     muc_buf, mmn_ts,
                                     "xmpp_message,notify_highlight,log1",
                                     "%s%s\t%s",
@@ -408,7 +408,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 if (!title.empty())
                                 {
                                     if (!author.empty() && !pubdate.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s %s%s%s  [%s%s%s] — %s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -418,7 +418,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             dim, author.c_str(), rst,
                                             pubdate.c_str());
                                     else if (!author.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s %s%s%s  [%s%s%s]",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -427,7 +427,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             bold, title.c_str(), rst,
                                             dim, author.c_str(), rst);
                                     else if (!pubdate.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s %s%s%s — %s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -436,7 +436,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             bold, title.c_str(), rst,
                                             pubdate.c_str());
                                     else
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s %s%s%s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -447,7 +447,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 else
                                 {
                                     if (!author.empty() && !pubdate.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s  [%s%s%s] — %s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -456,7 +456,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             dim, author.c_str(), rst,
                                             pubdate.c_str());
                                     else if (!author.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s  [%s%s%s]",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -464,7 +464,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             alias_pfx.empty() ? "" : rst,
                                             dim, author.c_str(), rst);
                                     else if (!pubdate.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s  — %s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -488,16 +488,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     }
                                     else
                                         reply_label = reply_to;
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sIn reply to:%s %s", dim, rst, reply_label.c_str());
                                 }
 
                                 if (!via_link.empty())
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sRepeated from:%s %s", dim, rst, via_link.c_str());
 
                                 if (!link.empty())
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %s", link.c_str());
 
                                 if (!ae.replies_link.empty())
@@ -509,11 +509,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     if (!comments_ref.empty())
                                     {
                                         if (ae.comments_count >= 0)
-                                            weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                            xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                                 "  %sComments (%d):%s /feed comments %s",
                                                 dim, ae.comments_count, rst, comments_ref.c_str());
                                         else
-                                            weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                            xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                                 "  %sComments:%s /feed comments %s",
                                                 dim, rst, comments_ref.c_str());
                                     }
@@ -521,7 +521,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
                                 if (!body.empty())
                                 {
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %s\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500%s",
                                         dim, rst);
                                     std::string_view bv(body);
@@ -529,12 +529,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     {
                                         auto nl = bv.find('\n', pos);
                                         auto line = bv.substr(pos, nl == std::string_view::npos ? nl : nl - pos);
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                             "  %.*s", static_cast<int>(line.size()), line.data());
                                         if (nl == std::string_view::npos) break;
                                         pos = nl + 1;
                                     }
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none", "");
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none", "");
                                 }
 
                                 if (item_id_raw)
@@ -1241,20 +1241,20 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     if (!af.title.empty())
                                     {
                                         feed_ch.update_name(af.title.c_str());
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                             "%sFeed title:%s %s",
                                             weechat_prefix("network"),
                                             weechat_color("reset"),
                                             af.title.c_str());
                                     }
                                     if (!af.author.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                             "  %sAuthor:%s %s",
                                             weechat_color("darkgray"),
                                             weechat_color("reset"),
                                             af.author.c_str());
                                     if (!af.subtitle.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                             "  %s", af.subtitle.c_str());
                                 }
                                 if (item_id_raw)
@@ -1307,7 +1307,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 else
                                 {
                                     // No ID at all — nothing useful to show or fetch
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                         "%s[%s] New item (no content)",
                                         weechat_prefix("network"),
                                         std::string(node_sv).c_str());
@@ -1348,7 +1348,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 if (!title.empty())
                                 {
                                     if (!author.empty() && !pubdate.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s %s%s%s  [%s%s%s] — %s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -1358,7 +1358,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             dim, author.c_str(), rst,
                                             pubdate.c_str());
                                     else if (!author.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s %s%s%s  [%s%s%s]",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -1367,7 +1367,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             bold, title.c_str(), rst,
                                             dim, author.c_str(), rst);
                                     else if (!pubdate.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s %s%s%s — %s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -1376,7 +1376,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             bold, title.c_str(), rst,
                                             pubdate.c_str());
                                     else
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s %s%s%s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -1388,7 +1388,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 {
                                     // No title: metadata-only header line.
                                     if (!author.empty() && !pubdate.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s  [%s%s%s] — %s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -1397,7 +1397,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             dim, author.c_str(), rst,
                                             pubdate.c_str());
                                     else if (!author.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s  [%s%s%s]",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -1405,7 +1405,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                             alias_pfx.empty() ? "" : rst,
                                             dim, author.c_str(), rst);
                                     else if (!pubdate.empty())
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
                                             "%s%s%s%s  — %s",
                                             pfx,
                                             alias_pfx.empty() ? "" : grn,
@@ -1432,18 +1432,18 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     }
                                     else
                                         reply_label = reply_to;
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sIn reply to:%s %s",
                                         dim, rst, reply_label.c_str());
                                 }
 
                                 if (!via_link.empty())
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sRepeated from:%s %s",
                                         dim, rst, via_link.c_str());
 
                                 if (!link.empty())
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %s", link.c_str());
 
                                 // Comments: suppress raw URI — user uses /feed comments #N or
@@ -1457,11 +1457,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     if (!comments_ref.empty())
                                     {
                                         if (ae.comments_count >= 0)
-                                            weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                            xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                                 "  %sComments (%d):%s /feed comments %s",
                                                 dim, ae.comments_count, rst, comments_ref.c_str());
                                         else
-                                            weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                            xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                                 "  %sComments:%s /feed comments %s",
                                                 dim, rst, comments_ref.c_str());
                                     }
@@ -1475,13 +1475,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                         if (i) tags += ", ";
                                         tags += ae.categories[i];
                                     }
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sTags:%s %s",
                                         dim, rst, tags.c_str());
                                 }
 
                                 for (const auto &enclosure : ae.enclosures)
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sAttachment:%s %s",
                                         dim, rst, enclosure.c_str());
 
@@ -1508,7 +1508,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     std::string meta;
                                     if (!att.media_type.empty()) meta += att.media_type;
                                     if (!size_str.empty()) meta += (meta.empty() ? "" : ", ") + size_str;
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %s[%s: %s%s] %s%s",
                                         dim, kind_str.c_str(), att.filename.c_str(),
                                         meta.empty() ? "" : (" (" + meta + ")").c_str(),
@@ -1516,13 +1516,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 }
 
                                 if (!geoloc.empty())
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sLocation:%s %s",
                                         dim, rst, geoloc.c_str());
 
                                 if (!body.empty())
                                 {
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %s\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500%s",
                                         dim, rst);
                                     std::string_view bv(body);
@@ -1530,12 +1530,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     {
                                         auto nl = bv.find('\n', pos);
                                         auto line = bv.substr(pos, nl == std::string_view::npos ? nl : nl - pos);
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
+                                        xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                             "  %.*s", static_cast<int>(line.size()), line.data());
                                         if (nl == std::string_view::npos) break;
                                         pos = nl + 1;
                                     }
-                                    weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none", "");
+                                    xmpp_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none", "");
                                 }
                             }
                             // Mark this item seen so push duplicates are suppressed.
@@ -1692,7 +1692,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     account, weechat::channel::chat_type::PM, bare_s, bare_s
                                 })).first->second;
                     }
-                    weechat_printf_date_tags(ch->buffer, 0, "xmpp_attention,notify_highlight",
+                    xmpp_printf_date_tags(ch->buffer, 0, "xmpp_attention,notify_highlight",
                                             "%s%s is requesting your attention! (/buzz)",
                                             weechat_prefix("network"),
                                             bare_s.c_str());
@@ -2072,7 +2072,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             if (!payload || !payload_text || !*payload_text)
                 return 1;
 
-            weechat_printf_date_tags(channel->buffer, 0, "notify_none", "%s%s (%s)",
+            xmpp_printf_date_tags(channel->buffer, 0, "notify_none", "%s%s (%s)",
                                      weechat_prefix("error"), "OMEMO Decryption Error", from);
             return 1;
         }
@@ -2417,12 +2417,12 @@ message_handler_after_omemo:
 
                             // Print notification
                             if (moderate_reason)
-                                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                                xmpp_printf_date_tags(channel->buffer, 0, "notify_none",
                                     "%s%s moderated a message: %s",
                                     weechat_prefix("network"),
                                     from_bare, moderate_reason);
                             else
-                                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                                xmpp_printf_date_tags(channel->buffer, 0, "notify_none",
                                     "%s%s moderated a message",
                                     weechat_prefix("network"),
                                     from_bare);
@@ -2439,12 +2439,12 @@ message_handler_after_omemo:
 
         // If we didn't find the message, still print notification
         if (moderate_reason)
-            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+            xmpp_printf_date_tags(channel->buffer, 0, "notify_none",
                 "%s%s moderated a message (not found in buffer): %s",
                 weechat_prefix("network"),
                 from_bare, moderate_reason);
         else
-            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+            xmpp_printf_date_tags(channel->buffer, 0, "notify_none",
                 "%s%s moderated a message (not found in buffer)",
                 weechat_prefix("network"),
                 from_bare);
@@ -2577,7 +2577,7 @@ message_handler_after_omemo:
                         weechat_hashtable_free(hashtable);
 
                         // Print notification
-                        weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                        xmpp_printf_date_tags(channel->buffer, 0, "notify_none",
                             "%s%s retracted a message",
                             weechat_prefix("network"),
                             from_bare);
@@ -2592,7 +2592,7 @@ message_handler_after_omemo:
         }
 
         // If we didn't find the message, still print notification
-        weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+        xmpp_printf_date_tags(channel->buffer, 0, "notify_none",
             "%s%s retracted a message (not found in buffer)",
             weechat_prefix("network"),
             from_bare);
@@ -2874,9 +2874,6 @@ message_handler_after_omemo:
         }
     }
 
-    if (is_mam_replay)
-        weechat_string_dyn_concat(dyn_tags, ",no_trigger", -1);
-
     // XEP-0334: Message Processing Hints — if the sender marks the message
     // as <no-store> or <no-permanent-store>, add the WeeChat no_log tag so
     // it is not written to the buffer log file.
@@ -3011,14 +3008,14 @@ message_handler_after_omemo:
     if (x && text == cleartext && channel->transport != weechat::channel::transport::PGP)
     {
         channel->transport = weechat::channel::transport::PGP;
-        weechat_printf_date_tags(channel->buffer, date, nullptr, "%s%sTransport: %s",
+        xmpp_printf_date_tags(channel->buffer, date, nullptr, "%s%sTransport: %s",
                                  weechat_prefix("network"), weechat_color("gray"),
                                  channel::transport_name(channel->transport));
     }
     else if (!x && !encrypted && text == intext && channel->transport != weechat::channel::transport::PLAIN)
     {
         channel->transport = weechat::channel::transport::PLAIN;
-        weechat_printf_date_tags(channel->buffer, date, nullptr, "%s%sTransport: %s",
+        xmpp_printf_date_tags(channel->buffer, date, nullptr, "%s%sTransport: %s",
                                  weechat_prefix("network"), weechat_color("gray"),
                                  channel::transport_name(channel->transport));
     }
@@ -3703,7 +3700,7 @@ message_handler_after_omemo:
         if (!reply_quote_nick.empty())
             quote_line += reply_quote_nick + weechat_color("darkgray") + ": ";
         quote_line += weechat_color("darkgray") + reply_prefix + weechat_color("resetcolor");
-        weechat_printf_date_tags(channel->buffer, date,
+        xmpp_printf_date_tags(channel->buffer, date,
             "notify_none,no_log,xmpp_reply_quote",
             "%s\t%s", display_prefix.data(), quote_line.c_str());
     }
@@ -3757,18 +3754,18 @@ message_handler_after_omemo:
     const char *encrypted_glyph = (encrypted || x) ? "🔒 " : "";
 
     if (channel_id == from_bare && to == channel->id)
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s[to %s]: %s%s",
+        xmpp_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s[to %s]: %s%s",
                                  display_prefix.data(),
                                  edit, to, encrypted_glyph,
                                  display_text ? display_text : "");
     else if (weechat_string_match(text, "/me *", 0))
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s%s %s%s",
+        xmpp_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s%s %s%s",
                                  weechat_prefix("action"),
                                  edit, display_prefix.data(),
                                  encrypted_glyph,
                                  display_text ? display_text+4 : "");
     else
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s%s%s",
+        xmpp_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s%s%s",
                                  display_prefix.data(),
                                   edit, encrypted_glyph,
                                   display_text ? display_text : "");
@@ -3784,7 +3781,7 @@ message_handler_after_omemo:
         {
             std::string line = format_og_preview_card(
                 p.title, p.description, p.url, p.image, "");
-            weechat_printf_date_tags(channel->buffer, date,
+            xmpp_printf_date_tags(channel->buffer, date,
                 "notify_none,no_log,xmpp_og_preview",
                  "%s\t%s", display_prefix.data(), line.c_str());
         }
@@ -4100,7 +4097,7 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
     xmpp_stanza_t *instr_elem = xmpp_stanza_get_child_by_name(x_form, "instructions");
     const char *instr = instr_elem ? xmpp_stanza_get_text_ptr(instr_elem) : nullptr;
 
-    weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+    xmpp_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
                              "%s%s── Ad-Hoc Form%s%s%s ──%s",
                              weechat_prefix("network"),
                              weechat_color("bold"),
@@ -4109,7 +4106,7 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
                              title ? "" : "",
                              weechat_color("-bold"));
     if (instr)
-        weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+        xmpp_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
                                  "%s  %s%s%s",
                                  weechat_prefix("network"),
                                  weechat_color("italic"),
@@ -4158,7 +4155,7 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         if (is_fixed)
         {
             for (auto &v : values)
-                weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+                xmpp_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
                                          "%s  %s%s%s",
                                          weechat_prefix("network"),
                                          weechat_color("darkgray"),
@@ -4262,7 +4259,7 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         }
 
         // Print: "  N. Label [var/type] = value"
-        weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+        xmpp_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
                                  "%s  %s%d.%s %s%s%s%s %s[%s%s%s%s%s]%s = %s%s",
                                  weechat_prefix("network"),
                                  // index
@@ -4288,7 +4285,7 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
 
     // Show how to submit
     if (session_id && node && jid)
-        weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
+        xmpp_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
                                  "%s  %sSubmit:%s /adhoc %s %s %s %svar%s=%svalue%s ...",
                                  weechat_prefix("network"),
                                  weechat_color("gray"), weechat_color("resetcolor"),
