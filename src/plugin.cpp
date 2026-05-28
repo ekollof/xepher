@@ -15,6 +15,9 @@
 #include <ctime>
 #include <csignal>
 #include <exception>
+#ifdef __FreeBSD__
+#include <sys/resource.h>
+#endif
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
@@ -170,6 +173,17 @@ void wrapped_signal_handler(int arg)
 extern "C"
 int weechat_plugin_init(struct t_weechat_plugin *plugin, int argc, char *argv[])
 {
+#ifdef __FreeBSD__
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur < 8 * 1024 * 1024)
+    {
+        rl.rlim_cur = 8 * 1024 * 1024;
+        if (rl.rlim_max != RLIM_INFINITY && rl.rlim_cur > rl.rlim_max)
+            rl.rlim_cur = rl.rlim_max;
+        setrlimit(RLIMIT_STACK, &rl);
+    }
+#endif
+
     try {
         weechat::plugin::instance = std::make_unique<weechat::plugin>(plugin);
         weechat::plugin::instance->init(argc, argv);
