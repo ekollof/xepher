@@ -884,6 +884,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                         user->profile.avatar_rendered = 
                                             weechat::avatar::render_unicode_blocks(image_data, 
                                                                                    avatar_data.meta.type);
+                                        user->cached_prefix_raw.clear();
                                  }
                                  
                                  XDEBUG("Avatar data received from {} ({} bytes, hash verified: {})",

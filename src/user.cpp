@@ -17,7 +17,12 @@
 
 std::string weechat::user::get_colour()
 {
-    return weechat::user::get_colour(this->profile.display_name);
+    if (cached_nick_color.empty() && !this->profile.display_name.empty())
+    {
+        auto result = weechat_info_get("nick_color", this->profile.display_name.c_str());
+        cached_nick_color = result ? result : std::string{};
+    }
+    return cached_nick_color;
 }
 
 std::string weechat::user::get_colour(std::string_view name)
@@ -28,7 +33,12 @@ std::string weechat::user::get_colour(std::string_view name)
 
 std::string weechat::user::get_colour_for_nicklist()
 {
-    return weechat::user::get_colour_for_nicklist(this->profile.display_name);
+    if (cached_nick_color_name.empty() && !this->profile.display_name.empty())
+    {
+        auto result = weechat_info_get("nick_color_name", this->profile.display_name.c_str());
+        cached_nick_color_name = result ? result : std::string{};
+    }
+    return cached_nick_color_name;
 }
 
 std::string weechat::user::get_colour_for_nicklist(std::string_view name)
@@ -39,10 +49,18 @@ std::string weechat::user::get_colour_for_nicklist(std::string_view name)
 
 std::string weechat::user::as_prefix_raw()
 {
-    std::string prefix;
-    if (!this->profile.avatar_rendered.empty())
-        prefix = this->profile.avatar_rendered + " ";
-    return prefix + weechat::user::as_prefix_raw(this->profile.display_name);
+    if (cached_prefix_raw.empty())
+    {
+        std::string prefix;
+        if (!this->profile.avatar_rendered.empty())
+            prefix = this->profile.avatar_rendered + " ";
+        auto color_ptr = weechat_info_get("nick_color", this->profile.display_name.c_str());
+        auto reset_ptr = weechat_color("reset");
+        std::string color = color_ptr ? color_ptr : std::string{};
+        std::string reset = reset_ptr ? reset_ptr : std::string{};
+        cached_prefix_raw = fmt::format("{}{}{}", color, prefix, this->profile.display_name, reset);
+    }
+    return cached_prefix_raw;
 }
 
 std::string weechat::user::as_prefix_raw(std::string_view name)

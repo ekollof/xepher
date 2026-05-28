@@ -54,6 +54,9 @@ namespace weechat
         std::string id;
         bool is_away = false;
         struct profile profile;
+        std::string cached_nick_color;
+        std::string cached_nick_color_name;
+        std::string cached_prefix_raw;
 
     public:
         user(weechat::account *account, weechat::channel *channel,

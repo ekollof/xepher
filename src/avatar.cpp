@@ -195,6 +195,7 @@ void weechat::avatar::request_data(account& acc, const char *jid,
                 user->profile.avatar_data     = cached->image_data;
                 user->profile.avatar_rendered = render_unicode_blocks(
                     cached->image_data, cached->meta.type);
+                user->cached_prefix_raw.clear();
             }
             return;  // Cache hit — no IQ needed
         }
@@ -224,6 +225,7 @@ void weechat::avatar::load_for_user(account& acc, user& user)
             cached->image_data, 
             cached->meta.type
         );
+        user.cached_prefix_raw.clear();
         
         xmpp_printf_date_tags(acc.buffer, 0, "xmpp_avatar",
                                 "%sLoaded cached avatar for %s (hash: %.8s...)",
@@ -370,6 +372,7 @@ bool weechat::avatar::publish(account& acc, const std::string& filepath)
         self->profile.avatar_hash     = hash;
         self->profile.avatar_data     = image_bytes;
         self->profile.avatar_rendered = render_unicode_blocks(image_bytes, mime_type);
+        self->cached_prefix_raw.clear();
     }
 
     weechat_printf(acc.buffer,

@@ -63,14 +63,13 @@ int nick_color_config_cb(const void *, void *, const char *, const char *)
                 continue;
             for (auto& [uid, user] : account.users)
             {
-                // Match users to this channel by comparing the bare JID of the
-                // user's map key (full JID, e.g. "room@conf/nick") against the
-                // channel id (bare JID, e.g. "room@conf").  Using display_name
-                // was wrong for MUC users whose display_name is just a nickname.
                 std::string uid_bare = jid(nullptr, uid).bare;
                 if (!uid_bare.empty() &&
                     weechat_strcasecmp(uid_bare.c_str(), channel.id.data()) == 0)
                 {
+                    user.cached_nick_color.clear();
+                    user.cached_nick_color_name.clear();
+                    user.cached_prefix_raw.clear();
                     user.nicklist_set_color(&account, &channel);
                 }
             }
