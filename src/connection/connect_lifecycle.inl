@@ -1,7 +1,3 @@
-#ifdef __FreeBSD__
-#include <sys/mman.h>
-#include <ucontext.h>
-#endif
 
     return true;
 }
