@@ -687,8 +687,8 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     // Determine the resource nick used for smart-filter lookup
     const char *res_nick = jid_resource ? jid_resource : id;
     std::string enter_tags = smart_filter_nick(res_nick)
-        ? "xmpp_presence,enter,log4,xmpp_smart_filter"
-        : "xmpp_presence,enter,log4";
+        ? "xmpp_presence,enter,log4,xmpp_smart_filter,no_trigger"
+        : "xmpp_presence,enter,log4,no_trigger";
 
     if (weechat_strcasecmp(jid_bare, id) == 0
              && type == weechat::channel::chat_type::MUC)        weechat_printf_date_tags(buffer, 0, enter_tags.c_str(), "%s%s%s%s%s %s%s%s%s %s%s%s%s%s%s%s%s%s%s%s%s%s%s",
@@ -770,8 +770,8 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
 
     const char *res_nick = jid_resource ? jid_resource : id;
     std::string leave_tags = smart_filter_nick(res_nick)
-        ? "xmpp_presence,leave,log4,xmpp_smart_filter"
-        : "xmpp_presence,leave,log4";
+        ? "xmpp_presence,leave,log4,xmpp_smart_filter,no_trigger"
+        : "xmpp_presence,leave,log4,no_trigger";
 
     if (weechat_strcasecmp(jid_bare, id) == 0
         && type == weechat::channel::chat_type::MUC)
