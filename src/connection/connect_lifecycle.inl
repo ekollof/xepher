@@ -828,5 +828,34 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
 
 void weechat::connection::process(xmpp_ctx_t *context, const unsigned long timeout)
 {
-    xmpp_run_once(context ? context : this->context(), timeout);
+    auto ctx = context ? context : this->context();
+#ifdef __FreeBSD__
+    constexpr size_t fiber_stack_size = 8 * 1024 * 1024;
+    void *fiber_stack = mmap(nullptr, fiber_stack_size, PROT_READ | PROT_WRITE,
+                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (fiber_stack == MAP_FAILED)
+    {
+        xmpp_run_once(ctx, timeout);
+        return;
+    }
+
+    struct fiber_data_t { xmpp_ctx_t *ctx; unsigned long timeout; ucontext_t caller; };
+    static thread_local fiber_data_t fiber_data;
+    fiber_data.ctx = ctx;
+    fiber_data.timeout = timeout;
+
+    ucontext_t fiber_ctx;
+    getcontext(&fiber_ctx);
+    fiber_ctx.uc_stack.ss_sp = fiber_stack;
+    fiber_ctx.uc_stack.ss_size = fiber_stack_size;
+    fiber_ctx.uc_link = &fiber_data.caller;
+
+    auto fiber_main = +[]() { xmpp_run_once(fiber_data.ctx, fiber_data.timeout); };
+    makecontext(&fiber_ctx, fiber_main, 0);
+
+    swapcontext(&fiber_data.caller, &fiber_ctx);
+    munmap(fiber_stack, fiber_stack_size);
+#else
+    xmpp_run_once(ctx, timeout);
+#endif
 }
