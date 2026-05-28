@@ -139,11 +139,12 @@ void weechat::user::nicklist_add(weechat::account *account,
     if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "owner")
         group = "~";
     ptr_group = weechat_nicklist_search_group(ptr_buffer, nullptr, group);
+    auto colour = get_colour_for_nicklist();
     weechat_nicklist_add_nick(ptr_buffer, ptr_group,
                               name,
                               this->is_away ?
                               "weechat.color.nicklist_away" :
-                              get_colour_for_nicklist().data(),
+                              colour.data(),
                               group,
                               "bar_fg",
                               1);
