@@ -21,7 +21,7 @@
 #include <strophe.h>
 
 // Forward declaration
-namespace weechat { struct account; }
+namespace weechat { class account; }
 
 // ── parse_omemo_device_id ─────────────────────────────────────────────────────
 // Parse a decimal string into a valid OMEMO device-ID (1 … 0x7FFFFFFF).
