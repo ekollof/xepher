@@ -3,9 +3,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <algorithm>
-#include <regex>
-#include <string>
 #include <sstream>
+#include <string>
 #include <vector>
 #include <cstdint>
 #include <stdio.h>
@@ -24,24 +23,27 @@ XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2)
 
 XMPP_TEST_EXPORT std::string unescape(const std::string& str)
 {
-    std::regex regex("\\&\\#(\\d+);");
-    std::sregex_iterator begin(str.begin(), str.end(), regex), end;
-    if (begin != end)
+    std::string result;
+    result.reserve(str.size());
+    std::size_t i = 0;
+    while (i < str.size())
     {
-        std::ostringstream output;
-        do {
-            std::smatch const& m = *begin;
-            if (m[1].matched)
+        if (i + 3 < str.size() && str[i] == '&' && str[i + 1] == '#')
+        {
+            std::size_t j = i + 2;
+            while (j < str.size() && str[j] >= '0' && str[j] <= '9')
+                ++j;
+            if (j < str.size() && str[j] == ';' && j > i + 2)
             {
-                auto ch = static_cast<char>(std::stoul(m.str(1)));
-                output << m.prefix() << ch;
+                auto val = std::stoul(str.substr(i + 2, j - (i + 2)));
+                result += static_cast<char>(val);
+                i = j + 1;
+                continue;
             }
-            else output << m.prefix() << m.str(0);
-        } while (++begin != end);
-        output << str.substr(str.size() - begin->position());
-        return output.str();
+        }
+        result += str[i++];
     }
-    return str;
+    return result;
 }
 
 // XEP-0393: Message Styling
