@@ -828,5 +828,21 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
 
 void weechat::connection::process(xmpp_ctx_t *context, const unsigned long timeout)
 {
-    xmpp_run_once(context ? context : this->context(), timeout);
+    auto ctx = context ? context : this->context();
+#ifdef __FreeBSD__
+    struct process_args { xmpp_ctx_t *ctx; unsigned long timeout; } args{ctx, timeout};
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 8 * 1024 * 1024);
+    pthread_t thread;
+    pthread_create(&thread, &attr, [](void *p) -> void * {
+        auto *a = static_cast<process_args *>(p);
+        xmpp_run_once(a->ctx, a->timeout);
+        return nullptr;
+    }, &args);
+    pthread_attr_destroy(&attr);
+    pthread_join(thread, nullptr);
+#else
+    xmpp_run_once(ctx, timeout);
+#endif
 }
