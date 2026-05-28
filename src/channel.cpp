@@ -100,7 +100,7 @@ void weechat::channel::set_transport(enum weechat::channel::transport transport,
     if (this->transport != transport)
     {
         this->transport = transport;
-        xmpp_printf_date_tags(buffer, 0, nullptr, "%s%sTransport: %s",
+        weechat_printf_date_tags(buffer, 0, nullptr, "%s%sTransport: %s",
                                  weechat_prefix("network"), weechat_color("gray"),
                                  weechat::channel::transport_name(this->transport));
     }
@@ -656,7 +656,7 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
 
     if (this->id == id && type == weechat::channel::chat_type::MUC)
     {
-        xmpp_printf_date_tags(buffer, 0, "log2", "%sMUC: %s",
+        weechat_printf_date_tags(buffer, 0, "log2", "%sMUC: %s",
                                  weechat_prefix("network"), id);
         return std::nullopt;
     }
@@ -691,7 +691,7 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
         : "xmpp_presence,enter,log4";
 
     if (weechat_strcasecmp(jid_bare, id) == 0
-             && type == weechat::channel::chat_type::MUC)        xmpp_printf_date_tags(buffer, 0, enter_tags.c_str(), "%s%s%s%s%s %s%s%s%s %s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+             && type == weechat::channel::chat_type::MUC)        weechat_printf_date_tags(buffer, 0, enter_tags.c_str(), "%s%s%s%s%s %s%s%s%s %s%s%s%s%s%s%s%s%s%s%s%s%s%s",
                                  weechat_prefix("join"),
                                  user->as_prefix_raw().data(),
                                  client ? " (" : "",
@@ -714,7 +714,7 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
                                  user->profile.pgp_id.has_value() ? user->profile.pgp_id->c_str() : "",
                                  user->profile.pgp_id.has_value() ? weechat_color("reset") : "");
     else
-        xmpp_printf_date_tags(buffer, 0, enter_tags.c_str(), "%s%s (%s) %s%s%s%s %s%s%s%s%s%s%s%s%s",
+        weechat_printf_date_tags(buffer, 0, enter_tags.c_str(), "%s%s (%s) %s%s%s%s %s%s%s%s%s%s%s%s%s",
                                  weechat_prefix("join"),
                                  jid_resource ? user->as_prefix_raw().data() : "You",
                                  jid_resource ? jid_resource : user->as_prefix_raw().data(),
@@ -775,7 +775,7 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
 
     if (weechat_strcasecmp(jid_bare, id) == 0
         && type == weechat::channel::chat_type::MUC)
-        xmpp_printf_date_tags(buffer, 0, leave_tags.c_str(),
+        weechat_printf_date_tags(buffer, 0, leave_tags.c_str(),
                                  "%s%s %sleft%s %s %s%s%s",
                                  weechat_prefix("quit"),
                                  jid_resource,
@@ -786,7 +786,7 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
                                  reason ? reason : "",
                                  reason ? "]" : "");
     else
-        xmpp_printf_date_tags(buffer, 0, leave_tags.c_str(),
+        weechat_printf_date_tags(buffer, 0, leave_tags.c_str(),
                                  "%s%s (%s) %sleft%s %s %s%s%s",
                                  weechat_prefix("quit"),
                                  jid_bare,
@@ -1113,7 +1113,7 @@ int weechat::channel::send_message(std::string to, std::string body,
         auto *self_user = user::search(&account, account.jid().data());
         auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
         std::string tag = "xmpp_message,message,private,notify_none,self_msg,log1,id_" + saved_id;
-        xmpp_printf_date_tags(buffer, 0,
+        weechat_printf_date_tags(buffer, 0,
                                  tag.c_str(),
                                  "%s\t%s ⌛",
                                  prefix.data(),
@@ -1170,7 +1170,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     // See docs/planning-muc-omemo.md for the full implementation checklist.
     if (account.omemo && omemo.enabled && type == weechat::channel::chat_type::MUC)
     {
-        xmpp_printf_date_tags(buffer, 0, "notify_none",
+        weechat_printf_date_tags(buffer, 0, "notify_none",
             "%s%s: OMEMO is not yet supported in MUC rooms",
             weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
         return WEECHAT_RC_ERROR;
@@ -1200,15 +1200,15 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
 
                 queue_pending_omemo_message(body_str);
                 account.omemo.request_axolotl_devicelist(account, peer_bare);
-                xmpp_printf_date_tags(buffer, 0, "notify_none", "%s%s",
+                weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
                                          weechat_prefix("network"),
                                          "OMEMO not ready yet; queued message and requested device/bundle updates");
                 return WEECHAT_RC_OK;
             }
 
-            xmpp_printf_date_tags(buffer, 0, "notify_none", "%s%s",
+            weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
                                      weechat_prefix("error"), "OMEMO Encryption Error");
-            xmpp_printf_date_tags(buffer, 0, "notify_none", "%s%s",
+            weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
                                      weechat_prefix("error"),
                                      "Message not sent; OMEMO stays enabled for this channel");
             return WEECHAT_RC_ERROR;
@@ -1243,7 +1243,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         }
         else
         {
-            xmpp_printf_date_tags(buffer, 0, "notify_none", "%s%s",
+            weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
                                      weechat_prefix("error"), "PGP Error");
             set_transport(weechat::channel::transport::PLAIN, 1);
             return WEECHAT_RC_ERROR;
@@ -1325,7 +1325,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                     }
                     if (mime.starts_with("image") || mime.starts_with("video"))
                     {
-                        xmpp_printf_date_tags(task->channel.buffer, 0,
+                        weechat_printf_date_tags(task->channel.buffer, 0,
                                 "notify_none,no_log", "[oob]\t%s%s",
                                 weechat_color("gray"), mime.data());
                         task->channel.send_message(task->to, task->body, { task->url });
@@ -1414,7 +1414,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                           transport == weechat::channel::transport::PGP);
         if (is_action)
         {
-            xmpp_printf_date_tags(buffer, 0,
+            weechat_printf_date_tags(buffer, 0,
                                      tag.c_str(),
                                      "%s%s %s%s ⌛",
                                      weechat_prefix("action"),
@@ -1424,7 +1424,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         }
         else
         {
-            xmpp_printf_date_tags(buffer, 0,
+            weechat_printf_date_tags(buffer, 0,
                                      tag.c_str(),
                                      "%s\t%s%s ⌛",
                                      prefix.data(),
@@ -1925,7 +1925,7 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
             struct tm *lt = localtime(end);
             strftime(end_str, sizeof(end_str), "%Y-%m-%d %H:%M", lt);
         }
-        xmpp_printf_date_tags(buffer, 0, "xmpp_mam_fetch,notify_none,no_log",
+        weechat_printf_date_tags(buffer, 0, "xmpp_mam_fetch,notify_none,no_log",
                                  "%sFetching history: %s → %s",
                                  weechat_prefix("network"),
                                  start_str, end_str);

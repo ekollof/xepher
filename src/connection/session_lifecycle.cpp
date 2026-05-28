@@ -11,10 +11,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <sys/utsname.h>
-#ifdef __FreeBSD__
-#include <sys/mman.h>
-#include <ucontext.h>
-#endif
 #include <fmt/core.h>
 #include <fmt/chrono.h>
 #include <weechat/weechat-plugin.h>

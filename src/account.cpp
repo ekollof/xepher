@@ -50,7 +50,7 @@ void weechat::log_emit(void *const userdata, const xmpp_log_level_t level,
 
     const char *tags = level > XMPP_LEVEL_DEBUG ? "no_log" : nullptr;
 
-    xmpp_printf_date_tags(
+    weechat_printf_date_tags(
         account ? account->buffer : nullptr,
         0, tags,
         _("%s%s (%s): %s"),

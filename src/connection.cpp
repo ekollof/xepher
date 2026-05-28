@@ -17,10 +17,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
-#ifdef __FreeBSD__
-#include <sys/mman.h>
-#include <ucontext.h>
-#endif
 #include <curl/curl.h>
 #include <openssl/sha.h>
 #include <openssl/bio.h>

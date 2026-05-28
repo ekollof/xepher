@@ -31,7 +31,6 @@
 
 #include "account.hh"
 #include "debug.hh"
-#include "plugin.hh"
 #include "connection/internal.hh"
 
 // ── parse_omemo_device_id ─────────────────────────────────────────────────────
@@ -681,7 +680,7 @@ static int og_fetch_cb(const void * /*pointer*/, void * /*data*/, int fd)
             std::string line = format_og_preview_card(
                 p.title, p.description, p.url, p.image, ctx.url);
 
-            xmpp_printf_date_tags(ctx.buffer, ctx.date,
+            weechat_printf_date_tags(ctx.buffer, ctx.date,
                 "notify_none,no_log,xmpp_og_preview",
                 "%s\t%s", ctx.display_prefix.c_str(), line.c_str());
         }

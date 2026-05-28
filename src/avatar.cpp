@@ -227,7 +227,7 @@ void weechat::avatar::load_for_user(account& acc, user& user)
         );
         user.cached_prefix_raw.clear();
         
-        xmpp_printf_date_tags(acc.buffer, 0, "xmpp_avatar",
+        weechat_printf_date_tags(acc.buffer, 0, "xmpp_avatar",
                                 "%sLoaded cached avatar for %s (hash: %.8s...)",
                                 weechat_prefix("network"),
                                 user.id.c_str(),
