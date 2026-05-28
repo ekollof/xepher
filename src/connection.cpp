@@ -17,9 +17,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
-#ifdef __FreeBSD__
-#include <pthread.h>
-#endif
 #include <curl/curl.h>
 #include <openssl/sha.h>
 #include <openssl/bio.h>

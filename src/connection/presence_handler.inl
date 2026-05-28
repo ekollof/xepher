@@ -105,7 +105,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     break;
                 case 101: // Affiliation change: room visibility changed, JID now visible to all
                     if (channel)
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger",
                                                  "%s%s[Room] Your affiliation changed; your full JID is now visible to all occupants",
                                                  weechat_prefix("network"), weechat_color("gray"));
                     break;
@@ -168,40 +168,40 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     break;
                 case 170: // Logging Active: room logging enabled — privacy notice
                     if (channel)
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger",
                                                  "%s%s[Room] Warning: room logging is now %senabled%s — messages are being stored",
                                                  weechat_prefix("network"), weechat_color("yellow"),
                                                  weechat_color("yellow,bold"), weechat_color("reset"));
                     break;
                 case 171: // Logging disabled
                     if (channel)
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger",
                                                  "%s%s[Room] Room logging is now disabled",
                                                  weechat_prefix("network"), weechat_color("gray"));
                     break;
                 case 172: // Room is now non-anonymous (full JIDs visible)
                     if (channel)
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger",
                                                  "%s%s[Room] Room is now %snon-anonymous%s — full JIDs are visible to all occupants",
                                                  weechat_prefix("network"), weechat_color("yellow"),
                                                  weechat_color("yellow,bold"), weechat_color("reset"));
                     break;
                 case 173: // Room is now semi-anonymous
                     if (channel)
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger",
                                                  "%s%s[Room] Room is now semi-anonymous — full JIDs visible to moderators only",
                                                  weechat_prefix("network"), weechat_color("gray"));
                     break;
                 case 174: // Room is now fully-anonymous
                     if (channel)
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger",
                                                  "%s%s[Room] Room is now fully-anonymous — JIDs are hidden from all occupants",
                                                  weechat_prefix("network"), weechat_color("gray"));
                     break;
                 case 201: // New room created — must accept default config to unlock it
                     is_new_room = true;
                     if (channel)
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger",
                                                  "%s%s[Room] New room created; accepting default configuration",
                                                  weechat_prefix("network"), weechat_color("gray"));
                     break;
@@ -305,7 +305,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                         // Status 210: server assigned a different nick than requested
                         const char *assigned = binding.from->resource.size()
                             ? binding.from->resource.data() : binding.from->full.data();
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none",
+                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger",
                                                  "%s%s[Room] Server assigned you the nick: %s%s%s",
                                                  weechat_prefix("network"), weechat_color("gray"),
                                                  weechat_color("irc.color.nick_change"),
