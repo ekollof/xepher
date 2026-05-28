@@ -120,7 +120,7 @@ int command__mood(const void *pointer, void *data,
             "xmpp.picker.mood",
             "Select a mood  (XEP-0107)",
             std::move(entries),
-            [ptr_account, buf = buffer](const std::string &selected) {
+            [buf = buffer](const std::string &selected) {
                 auto cmd = fmt::format("/mood {}", selected);
                 weechat_command(buf, cmd.c_str());
             },
@@ -272,7 +272,7 @@ int command__activity(const void *pointer, void *data,
             "xmpp.picker.activity",
             "Select an activity  (XEP-0108)",
             std::move(entries),
-            [ptr_account, buf = buffer](const std::string &selected) {
+            [buf = buffer](const std::string &selected) {
                 auto cmd = fmt::format("/activity {}", selected);
                 weechat_command(buf, cmd.c_str());
             },
