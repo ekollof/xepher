@@ -2875,8 +2875,7 @@ message_handler_after_omemo:
         }
     }
 
-    if (is_mam_replay)
-        weechat_string_dyn_concat(dyn_tags, ",no_trigger", -1);
+    weechat_string_dyn_concat(dyn_tags, ",no_trigger", -1);
 
     // XEP-0334: Message Processing Hints — if the sender marks the message
     // as <no-store> or <no-permanent-store>, add the WeeChat no_log tag so
