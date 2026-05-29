@@ -174,9 +174,9 @@ namespace xml {
             public:
                 item(node& node) {
                     for (auto& child : node.get_children("actor"))
-                        actors.emplace_back(child);
+                        actors.push_back(std::make_unique<actor>(child));
                     for (auto& child : node.get_children("continue"))
-                        continues.emplace_back(child);
+                        continues.push_back(std::make_unique<continue_>(child));
                     for (auto& child : node.get_children("reason"))
                         reason += child.get().text;
                     if (auto attr = node.get_attr("affiliation"))
@@ -189,8 +189,8 @@ namespace xml {
                         role = parse_role(*attr);
                 };
 
-                std::vector<actor> actors;
-                std::vector<continue_> continues;
+                std::vector<std::unique_ptr<actor>> actors;
+                std::vector<std::unique_ptr<continue_>> continues;
                 std::string reason;
                 std::optional<enum affiliation> affiliation;
                 std::optional<jid> target;
