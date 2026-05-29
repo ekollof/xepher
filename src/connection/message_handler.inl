@@ -1,4 +1,6 @@
-bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level, bool is_mam_replay)
+bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level, bool is_mam_replay,
+                                          std::string_view override_archive_id,
+                                          std::string_view override_delay_stamp)
 {
     // SM counter incremented in libstrophe wrapper, not here
     // top_level parameter kept for nested/recursive calls
@@ -736,27 +738,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             return 1;
                     }
 
-                    message = xmpp_stanza_copy(message);
-                    if (delay != nullptr)
-                        xmpp_stanza_add_child_ex(message, xmpp_stanza_copy(delay), 0);
-                    // XEP-0313 §5.1.2: the server strips <stanza-id> from the
-                    // forwarded copy on MAM replay.  Re-inject it from the outer
-                    // <result id="..."> so the display code writes stanza_id_<archive_id>
-                    // into the buffer-line tags.  This makes reply/retract/edit/reaction
-                    // lookups find the line by archive ID — the ID that clients reference
-                    // in <reply>, <retract>, <replace>, and <reactions> stanzas.
-                    if (archive_id && *archive_id &&
-                        !xmpp_stanza_get_child_by_name_and_ns(
-                            message, "stanza-id", "urn:xmpp:sid:0"))
-                    {
-                        const char *outer_from = xmpp_stanza_get_from(stanza);
-                        std::string_view by_val = outer_from ? outer_from : "";
-                        auto sid_node = stanza::xep0359::stanza_id(
-                            archive_id, by_val).build(account.context);
-                        xmpp_stanza_add_child(message, sid_node.get());
-                    }
-                    int ret = message_handler(message, false, true);  // MAM replay: suppress outgoing receipts/markers
-                    xmpp_stanza_release(message);
+                    std::string_view delay_stamp;
+                    if (delay)
+                        if (const char *ds = xmpp_stanza_get_attribute(delay, "stamp"))
+                            delay_stamp = ds;
+                    int ret = message_handler(message, false, true,
+                                             archive_id ? std::string_view(archive_id) : std::string_view{},
+                                             delay_stamp);
                     return ret;
                 }
             }
@@ -1725,7 +1713,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     
     // XEP-0359: Unique and Stable Stanza IDs
     xmpp_stanza_t *stanza_id_elem = xmpp_stanza_get_child_by_name_and_ns(stanza, "stanza-id", "urn:xmpp:sid:0");
-    const char *stanza_id = stanza_id_elem ? xmpp_stanza_get_attribute(stanza_id_elem, "id") : nullptr;
+    const char *stanza_id = !override_archive_id.empty() ? override_archive_id.data()
+                            : stanza_id_elem ? xmpp_stanza_get_attribute(stanza_id_elem, "id") : nullptr;
     const char *stanza_id_by = stanza_id_elem ? xmpp_stanza_get_attribute(stanza_id_elem, "by") : nullptr;
     
     xmpp_stanza_t *origin_id_elem = xmpp_stanza_get_child_by_name_and_ns(stanza, "origin-id", "urn:xmpp:sid:0");
@@ -2743,7 +2732,8 @@ message_handler_after_omemo:
         nick = from_bare;
     }
     delay = xmpp_stanza_get_child_by_name_and_ns(stanza, "delay", "urn:xmpp:delay");
-    timestamp = delay ? xmpp_stanza_get_attribute(delay, "stamp") : nullptr;
+    timestamp = !override_delay_stamp.empty() ? override_delay_stamp.data()
+                : delay ? xmpp_stanza_get_attribute(delay, "stamp") : nullptr;
     const char *delay_from = delay ? xmpp_stanza_get_attribute(delay, "from") : nullptr;
     if (timestamp)
     {
