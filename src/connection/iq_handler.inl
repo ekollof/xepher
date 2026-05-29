@@ -1842,24 +1842,70 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     if (id && type && weechat_strcasecmp(type, "result") == 0)
         trigger_publish_refetch(id);
 
-    // XEP-0363: HTTP File Upload - handle upload slot errors
+    // XEP-0313: MAM query error handling with stale-cursor recovery
     if (id && type && weechat_strcasecmp(type, "error") == 0)
     {
         weechat::account::mam_query failed_mam_query;
         if (account.mam_query_search(&failed_mam_query, id))
         {
             const bool is_global_query = failed_mam_query.with.empty();
-            weechat_printf(account.buffer,
-                           "%sMAM query %s failed (IQ error) — ending catchup%s",
-                           weechat_prefix("error"),
-                           failed_mam_query.id.c_str(),
-                           is_global_query ? " and flushing deferred OMEMO key-transports" : "");
-            account.mam_query_remove(failed_mam_query.id);
+            bool recovered = false;
+
             if (is_global_query)
             {
-                account.omemo.global_mam_catchup = false;
-                account.omemo.process_postponed_key_transports(account);
-                account.omemo.process_postponed_bundle_republish(account);
+                xmpp_stanza_t *err_elem = xmpp_stanza_get_child_by_name(stanza, "error");
+                if (err_elem && xmpp_stanza_get_child_by_name_and_ns(
+                        err_elem, "item-not-found",
+                        "urn:ietf:params:xml:ns:xmpp-stanzas"))
+                {
+                    weechat_printf(account.buffer,
+                                   "%sGlobal MAM cursor stale (item-not-found) — "
+                                   "clearing cursor and retrying with time-based query",
+                                   weechat_prefix("network"));
+                    account.mam_cursor_clear("global");
+                    account.mam_query_remove(failed_mam_query.id);
+
+                    time_t now = time(nullptr);
+                    time_t start = now - (7 * 86400);
+                    std::string retry_id = stanza::uuid(account.context);
+                    account.add_mam_query(retry_id.c_str(), "",
+                                          std::optional<time_t>(start),
+                                          std::optional<time_t>(now));
+
+                    stanza::xep0059::set rsm_set;
+                    rsm_set.max(50);
+
+                    stanza::xep0313::query retry_q;
+                    stanza::xep0313::x_filter xf;
+                    xf.start(fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", fmt::gmtime(start)));
+                    retry_q.filter(xf).rsm(rsm_set);
+
+                    this->send(stanza::iq()
+                        .type("set")
+                        .id(retry_id)
+                        .xep0313()
+                        .query(retry_q)
+                        .build(account.context)
+                        .get());
+
+                    recovered = true;
+                }
+            }
+
+            if (!recovered)
+            {
+                weechat_printf(account.buffer,
+                               "%sMAM query %s failed (IQ error) — ending catchup%s",
+                               weechat_prefix("error"),
+                               failed_mam_query.id.c_str(),
+                               is_global_query ? " and flushing deferred OMEMO key-transports" : "");
+                account.mam_query_remove(failed_mam_query.id);
+                if (is_global_query)
+                {
+                    account.omemo.global_mam_catchup = false;
+                    account.omemo.process_postponed_key_transports(account);
+                    account.omemo.process_postponed_bundle_republish(account);
+                }
             }
         }
 
