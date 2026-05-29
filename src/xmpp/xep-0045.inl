@@ -173,10 +173,6 @@ namespace xml {
 
             public:
                 item(node& node) {
-                    for (auto& child : node.get_children("actor"))
-                        actors.push_back(std::make_unique<actor>(child));
-                    for (auto& child : node.get_children("continue"))
-                        continues.push_back(std::make_unique<continue_>(child));
                     for (auto& child : node.get_children("reason"))
                         reason += child.get().text;
                     if (auto attr = node.get_attr("affiliation"))
@@ -189,8 +185,8 @@ namespace xml {
                         role = parse_role(*attr);
                 };
 
-                std::vector<std::unique_ptr<actor>> actors;
-                std::vector<std::unique_ptr<continue_>> continues;
+                std::unique_ptr<std::vector<std::unique_ptr<actor>>> actors;
+                std::unique_ptr<std::vector<std::unique_ptr<continue_>>> continues;
                 std::string reason;
                 std::optional<enum affiliation> affiliation;
                 std::optional<jid> target;
@@ -200,26 +196,18 @@ namespace xml {
 
         public:
             x(node& node) {
-                for (auto& child : node.get_children("decline"))
-                    declines.emplace_back(child);
-                for (auto& child : node.get_children("destroy"))
-                    destroys.emplace_back(child);
-                for (auto& child : node.get_children("invite"))
-                    invites.emplace_back(child);
                 for (auto& child : node.get_children("item"))
                     items.push_back(std::make_unique<item>(child));
-                for (auto& child : node.get_children("password"))
-                    passwords.emplace_back(child.get().text);
                 for (auto& child : node.get_children("status"))
                     if (auto code = child.get().get_attr("code"))
                         statuses.push_back(std::stoi(*code));
             }
 
-            std::vector<decline> declines;
-            std::vector<destroy> destroys;
-            std::vector<invite> invites;
+            std::unique_ptr<std::vector<decline>> declines;
+            std::unique_ptr<std::vector<destroy>> destroys;
+            std::unique_ptr<std::vector<invite>> invites;
             std::vector<std::unique_ptr<item>> items;
-            std::vector<std::string> passwords;
+            std::unique_ptr<std::vector<std::string>> passwords;
             std::vector<int> statuses;
         };
 
