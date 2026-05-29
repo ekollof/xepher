@@ -312,6 +312,7 @@ namespace xml {
         inline message(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context, stanza) {
             bind(context, stanza);
         }
+        ~message() override;
 
         std::optional<jid> from;
         std::optional<jid> to;
@@ -327,6 +328,7 @@ namespace xml {
         inline presence(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context, stanza) {
             bind(context, stanza);
         }
+        ~presence() override;
 
         std::optional<jid> from;
         std::optional<jid> to;
@@ -344,6 +346,7 @@ namespace xml {
         inline iq(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context, stanza) {
             bind(context, stanza);
         }
+        ~iq() override;
 
         std::optional<jid> from;
         std::optional<jid> to;

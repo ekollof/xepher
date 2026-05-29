@@ -20,6 +20,7 @@ namespace xml {
     /* Multi-User Chat */
     class xep0045 : virtual public node {
     public:
+        virtual ~xep0045();
         enum class affiliation {
             admin,
             member,
@@ -96,6 +97,8 @@ namespace xml {
         }
 
         class x {
+        public:
+            ~x();
         private:
             struct decline {
                 decline(node& node) {
@@ -141,6 +144,8 @@ namespace xml {
             };
 
             class item {
+            public:
+                ~item();
             private:
                 struct actor {
                     actor(node& node) {
