@@ -58,6 +58,8 @@ namespace xml {
     public:
         virtual ~node() = default;
 
+        inline node(xmpp_ctx_t *context) : context(context) {}
+
         inline node(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : context(context) {
             bind(context, stanza);
         }
@@ -309,7 +311,7 @@ namespace xml {
     class message : virtual public node,
                     public xep0027 {
     public:
-        inline message(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context, stanza) {
+        inline message(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context) {
             bind(context, stanza);
         }
         ~message() override;
@@ -325,7 +327,7 @@ namespace xml {
     class presence : virtual public node,
                      public xep0027, public xep0045, public xep0115, public xep0319 {
     public:
-        inline presence(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context, stanza) {
+        inline presence(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context) {
             bind(context, stanza);
         }
         ~presence() override;
@@ -343,7 +345,7 @@ namespace xml {
 
     class iq : virtual public node {
     public:
-        inline iq(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context, stanza) {
+        inline iq(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context) {
             bind(context, stanza);
         }
         ~iq() override;
@@ -358,7 +360,7 @@ namespace xml {
 
     class error : virtual public node {
     public:
-        inline error(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context, stanza) {
+        inline error(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context) {
             bind(context, stanza);
         }
 
