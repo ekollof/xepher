@@ -459,9 +459,29 @@ int command__whois(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    // Determine target: specified argument or current channel
+    // Determine target: specified argument, current channel, or MUC nick
+    std::string target_storage;
     if (argc > 1)
-        target = argv[1];
+    {
+        std::string_view arg(argv[1]);
+        // In a MUC buffer, treat arguments without '@' as nicks
+        if (ptr_channel && ptr_channel->type == weechat::channel::chat_type::MUC
+            && arg.find('@') == std::string_view::npos)
+        {
+            target_storage = ptr_channel->find_member_by_nick(std::string(arg));
+            if (target_storage.empty())
+            {
+                weechat_printf(buffer, "%s%s: nick '%s' not found in this MUC",
+                               weechat_prefix("error"), argv[0], argv[1]);
+                return WEECHAT_RC_OK;
+            }
+            target = target_storage.c_str();
+        }
+        else
+        {
+            target = argv[1];
+        }
+    }
     else if (ptr_channel && ptr_channel->type == weechat::channel::chat_type::PM)
         target = ptr_channel->id.data();
     else

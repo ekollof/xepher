@@ -201,6 +201,7 @@ namespace weechat
         std::optional<member*> add_member(const char *id, const char *client);
         std::optional<member*> member_search(const char *id);
         std::optional<member*> remove_member(const char *id, const char *reason);
+        std::string find_member_by_nick(const std::string& nick) const;
 
         // Smart filter helpers
         void record_speak(const char *nick);

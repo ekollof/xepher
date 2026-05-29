@@ -819,6 +819,19 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
     return member_opt;
 }
 
+std::string weechat::channel::find_member_by_nick(const std::string& nick) const
+{
+    for (const auto& [id, member_info] : members)
+    {
+        auto slash = id.rfind('/');
+        if (slash != std::string::npos
+            && slash + 1 < id.size()
+            && weechat_strcasecmp(id.c_str() + slash + 1, nick.c_str()) == 0)
+            return id;
+    }
+    return {};
+}
+
 int weechat::channel::send_message(std::string to, std::string body,
                                    std::optional<std::string> oob,
                                    std::optional<file_metadata> file_meta)
