@@ -333,8 +333,10 @@ namespace xml {
 
     private:
         std::optional<bool> _muc;
-        std::optional<std::optional<x>> _muc_user;
-        std::optional<std::optional<error>> _error;
+        bool _muc_user_parsed = false;
+        std::optional<x> _muc_user;
+        bool _error_parsed = false;
+        std::optional<error> _error;
     public:
         bool muc() {
             if (!_muc)
@@ -346,27 +348,25 @@ namespace xml {
         }
 
         std::optional<x>& muc_user() {
-            if (!_muc_user)
+            if (!_muc_user_parsed)
             {
+                _muc_user_parsed = true;
                 auto child = get_children<jabber_org::protocol::muc::user>("x");
                 if (child.size() > 0)
-                    _muc_user = child.front().get();
-                else
-                    _muc_user.emplace(std::nullopt);
+                    _muc_user.emplace(child.front().get());
             }
-            return *_muc_user;
+            return _muc_user;
         }
 
         std::optional<error>& error() {
-            if (!_error)
+            if (!_error_parsed)
             {
+                _error_parsed = true;
                 auto child = get_children("error");
                 if (child.size() > 0)
-                    _error = child.front().get();
-                else
-                    _error.emplace(std::nullopt);
+                    _error.emplace(child.front().get());
             }
-            return *_error;
+            return _error;
         }
     };
 
