@@ -188,7 +188,7 @@ void weechat::user::nicklist_add(weechat::account *account,
                               name,
                               this->is_away ?
                               "weechat.color.nicklist_away" :
-                              colour.data(),
+                              (colour.empty() ? nullptr : colour.c_str()),
                               group,
                               "bar_fg",
                               1);
@@ -222,7 +222,7 @@ void weechat::user::nicklist_set_color(weechat::account *account,
         auto colour = get_colour_for_nicklist();
         const char *color = this->is_away
             ? "weechat.color.nicklist_away"
-            : colour.data();
+            : (colour.empty() ? nullptr : colour.c_str());
         weechat_nicklist_nick_set(ptr_buffer, ptr_nick, "color", color);
     }
 }
