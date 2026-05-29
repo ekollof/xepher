@@ -327,8 +327,12 @@ weechat::channel::channel(weechat::account& account,
         // later reconnect/open, which looks like repeated/out-of-order history.
         if (last_mam_fetch > 0)
             start = last_mam_fetch;
-        else
-            start = now - (3 * 86400);
+        else {
+            time_t fetch_days = weechat::config::instance
+                ? static_cast<time_t>(weechat::config::instance->look.mam_fetch_days.integer())
+                : 3;
+            start = now - (fetch_days * 86400);
+        }
         
         time_t end = now;
         std::string mam_uuid = stanza::uuid(account.context);

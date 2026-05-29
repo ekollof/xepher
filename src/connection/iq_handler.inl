@@ -1866,7 +1866,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     account.mam_query_remove(failed_mam_query.id);
 
                     time_t now = time(nullptr);
-                    time_t start = now - (3 * 86400);
+                    time_t fetch_days = weechat::config::instance
+                        ? static_cast<time_t>(weechat::config::instance->look.mam_fetch_days.integer())
+                        : 3;
+                    time_t start = now - (fetch_days * 86400);
                     std::string retry_id = stanza::uuid(account.context);
                     account.add_mam_query(retry_id.c_str(), "",
                                           std::optional<time_t>(start),

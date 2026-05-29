@@ -161,8 +161,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                             if (channel->last_mam_fetch > 0 &&
                                 (now - channel->last_mam_fetch) < 300)
                                 start = channel->last_mam_fetch;
-                            else
-                                start = now - (3 * 86400); // fallback: last 3 days
+                            else {
+                                time_t fetch_days = weechat::config::instance
+                                    ? static_cast<time_t>(weechat::config::instance->look.mam_fetch_days.integer())
+                                    : 3;
+                                start = now - (fetch_days * 86400); // configurable fallback
+                            }
 
                             time_t end = now;
                             std::string mam_uuid = stanza::uuid(account.context);

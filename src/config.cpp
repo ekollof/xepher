@@ -195,6 +195,12 @@ weechat::config::config()
                 "(XEP-0092 §5 requires an opt-out mechanism)",
                 nullptr, 0, 0,
                 "on", nullptr, false,
+                {}, {}, {}},
+            .mam_fetch_days{file, section_look, "mam_fetch_days", "integer",
+                "number of days of message archive to fetch on connect in channels "
+                "that have no prior MAM history (1-365, default 3)",
+                nullptr, 1, 365,
+                "3", nullptr, false,
                 {}, {}, {}}}
 {
 }

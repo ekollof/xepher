@@ -394,7 +394,10 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         // an <after> token so we only fetch messages we haven't seen yet.
         // Otherwise fall back to the last 7 days.
         time_t now = time(nullptr);
-        time_t start = now - (3 * 86400);  // Last 3 days (fallback)
+        time_t fetch_days = weechat::config::instance
+            ? static_cast<time_t>(weechat::config::instance->look.mam_fetch_days.integer())
+            : 3;
+        time_t start = now - (fetch_days * 86400);  // configurable fallback
         std::string global_mam_cursor = account.mam_cursor_get("global");
         const bool has_cursor = !global_mam_cursor.empty();
 
