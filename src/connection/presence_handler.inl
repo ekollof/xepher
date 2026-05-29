@@ -9,12 +9,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
     weechat::user *user;
     weechat::channel *channel;
 
-    auto binding = xml::presence(account.context, stanza);
-    if (!binding.from)
+    auto binding = std::make_unique<xml::presence>(account.context, stanza);
+    if (!binding->from)
         return 1;
 
     std::string clientid;
-    if (auto caps = binding.capabilities())
+    if (auto caps = binding->capabilities())
     {
         auto node = caps->node;
         auto ver = caps->verification;
@@ -35,15 +35,15 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             // per-client.  A bare JID or a trailing-slash JID (empty resource)
             // is invalid as a disco target and causes the server to return an
             // error that disconnects us.
-            bool has_resource = binding.from && !binding.from->resource.empty();
+            bool has_resource = binding->from && !binding->from->resource.empty();
             if (has_resource)
             {
                 std::string disco_id = stanza::uuid(account.context);
                 account.caps_disco_queries[disco_id] = ver;  // Track this query for caching
 
                 account.connection.send(stanza::iq()
-                            .from(binding.to ? binding.to->full : "")
-                            .to(binding.from->full)
+                            .from(binding->to ? binding->to->full : "")
+                            .to(binding->from->full)
                             .type("get")
                             .id(disco_id)
                             .xep0030()
@@ -54,8 +54,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         }
     }
 
-    channel = account.channels.contains(binding.from->bare.data())
-        ? &account.channels.find(binding.from->bare.data())->second : nullptr;
+    channel = account.channels.contains(binding->from->bare.data())
+        ? &account.channels.find(binding->from->bare.data())->second : nullptr;
     
     // Note: We don't auto-create PM channels from presence anymore.
     // PM channels are only created when:
@@ -63,12 +63,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
     // - We receive a message from them
     // This allows roster contacts to appear in account nicklist instead of creating buffers
 
-    if (binding.type && *binding.type == "error" && channel)
+    if (binding->type && *binding->type == "error" && channel)
     {
-        if (auto error = binding.error())
+        if (auto error = binding->error())
         {
             const char *error_reason = error->reason();
-            const char *from_str = binding.from ? binding.from->full.data() : "unknown";
+            const char *from_str = binding->from ? binding->from->full.data() : "unknown";
             
             // Only log if the error has meaningful information
             // Skip generic "Unspecified" errors that don't have useful context
@@ -76,7 +76,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             {
                 weechat_printf(channel->buffer, "[!]\t%s%sError: %s%s%s%s",
                                weechat_color("gray"),
-                               binding.muc() ? "MUC " : "",
+                               binding->muc() ? "MUC " : "",
                                error_reason,
                                error->description ? " (" : "",
                                error->description ? error->description->data() : "",
@@ -92,7 +92,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         return 1;
     }
 
-    if (auto x = binding.muc_user())
+    if (auto x = binding->muc_user())
     {
         bool is_nick_change = false;
         bool is_new_room = false;
@@ -239,20 +239,20 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             std::string affiliation(item.affiliation ? xep0045::format_affiliation(*item.affiliation) : "");
             std::string jid = item.target ? item.target->full : clientid;
 
-            user = weechat::user::search(&account, binding.from->full.data());
+            user = weechat::user::search(&account, binding->from->full.data());
             if (!user)
             {
-                auto name = binding.from->full.data();
+                auto name = binding->from->full.data();
                 user = &account.users.emplace(std::piecewise_construct,
                                               std::forward_as_tuple(name),
                                               std::forward_as_tuple(&account, channel, name,
-                                                                    channel && weechat_strcasecmp(binding.from->bare.data(), channel->id.data()) == 0
-                                                                    ? (binding.from->resource.size() ? binding.from->resource.data() : "")
-                                                                    : binding.from->full.data())).first->second;
+                                                                    channel && weechat_strcasecmp(binding->from->bare.data(), channel->id.data()) == 0
+                                                                    ? (binding->from->resource.size() ? binding->from->resource.data() : "")
+                                                                    : binding->from->full.data())).first->second;
             }
-            auto status = binding.status();
-            auto show = binding.show();
-            auto idle = binding.idle_since();
+            auto status = binding->status();
+            auto show = binding->show();
+            auto idle = binding->idle_since();
             user->profile.status_text = status ? std::optional<std::string>(status->data()) : std::nullopt;
             user->profile.status = show ? std::optional<std::string>(show->data()) : std::nullopt;
             user->profile.idle = idle ? fmt::format("{}", *idle) : std::string();
@@ -262,7 +262,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 ? std::optional<std::string>(affiliation.data()) : std::nullopt;
             if (channel)
             {
-                if (auto signature = binding.signature();
+                if (auto signature = binding->signature();
                         signature && channel->type != weechat::channel::chat_type::MUC)
                 {
                     user->profile.pgp_id = account.pgp.verify(channel->buffer, signature->data());
@@ -275,8 +275,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     if (is_nick_change && item.nick && channel)
                     {
                         // Status 303: nick change — print rename notice instead of "left"
-                        const char *old_nick = binding.from->resource.size()
-                            ? binding.from->resource.data() : binding.from->full.data();
+                        const char *old_nick = binding->from->resource.size()
+                            ? binding->from->resource.data() : binding->from->full.data();
                         // Smart filter: suppress nick-change for users who haven't spoken recently
                         const char *nick_tags = channel->smart_filter_nick(old_nick)
                             ? "xmpp_presence,nick,log4,xmpp_smart_filter"
@@ -290,21 +290,21 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                                  weechat_color("irc.color.nick_change"),
                                                  item.nick->data());
                         // Still remove from nicklist so the new presence can re-add
-                        weechat::user *leaving = weechat::user::search(&account, binding.from->full.data());
+                        weechat::user *leaving = weechat::user::search(&account, binding->from->full.data());
                         if (leaving)
                             leaving->nicklist_remove(&account, channel);
                     }
                     else
-                        channel->remove_member(binding.from->full.data(), status ? status->data() : nullptr);
+                        channel->remove_member(binding->from->full.data(), status ? status->data() : nullptr);
                 }
                 else
                 {
-                    channel->add_member(binding.from->full.data(), jid.data());
+                    channel->add_member(binding->from->full.data(), jid.data());
                     if (is_server_nick && channel)
                     {
                         // Status 210: server assigned a different nick than requested
-                        const char *assigned = binding.from->resource.size()
-                            ? binding.from->resource.data() : binding.from->full.data();
+                        const char *assigned = binding->from->resource.size()
+                            ? binding->from->resource.data() : binding->from->full.data();
                         weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger",
                                                  "%s%s[Room] Server assigned you the nick: %s%s%s",
                                                  weechat_prefix("network"), weechat_color("gray"),
@@ -319,7 +319,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         if (is_new_room && channel)
         {
             // Status 201: new room was created — send empty config submit to unlock it
-            std::string room_jid = jid(nullptr, binding.from->full).bare;
+            std::string room_jid = jid(nullptr, binding->from->full).bare;
 
             struct x_data_submit : stanza::spec {
                 x_data_submit() : spec("x") {
@@ -354,20 +354,20 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
     }
     else
     {
-        user = user::search(&account, binding.from->full.data());
+        user = user::search(&account, binding->from->full.data());
         if (!user)
         {
-            auto name = binding.from->full.data();
+            auto name = binding->from->full.data();
             user = &account.users.emplace(std::piecewise_construct,
                                           std::forward_as_tuple(name),
                                           std::forward_as_tuple(&account, channel, name,
-                                                                channel && weechat_strcasecmp(binding.from->bare.data(), channel->id.data()) == 0
-                                                                ? (binding.from->resource.size() ? binding.from->resource.data() : "")
-                                                                : binding.from->full.data())).first->second;
+                                                                channel && weechat_strcasecmp(binding->from->bare.data(), channel->id.data()) == 0
+                                                                ? (binding->from->resource.size() ? binding->from->resource.data() : "")
+                                                                : binding->from->full.data())).first->second;
         }
-        auto status = binding.status();
-        auto show = binding.show();
-        auto idle = binding.idle_since();
+        auto status = binding->status();
+        auto show = binding->show();
+        auto idle = binding->idle_since();
         user->profile.status_text = status ? std::optional<std::string>(status->data()) : std::nullopt;
         user->profile.status = show ? std::optional<std::string>(show->data()) : std::nullopt;
         user->profile.idle = idle ? fmt::format("{}", *idle) : std::string();
@@ -378,7 +378,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         // For roster contacts (not in a MUC), manage account buffer nicklist
         if (!channel)
         {
-            if (binding.type && *binding.type == "unavailable")
+            if (binding->type && *binding->type == "unavailable")
             {
                 // User went offline, remove from account nicklist
                 user->nicklist_remove(&account, nullptr);
@@ -393,7 +393,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         
         if (channel)
         {
-            if (auto signature = binding.signature();
+            if (auto signature = binding->signature();
                     signature && channel->type != weechat::channel::chat_type::MUC)
             {
                 user->profile.pgp_id = account.pgp.verify(channel->buffer, signature->data());
@@ -402,18 +402,18 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             }
 
             if (user->profile.role.has_value())
-                channel->remove_member(binding.from->full.data(), status ? status->data() : nullptr);
+                channel->remove_member(binding->from->full.data(), status ? status->data() : nullptr);
             else
-                channel->add_member(binding.from->full.data(), clientid.data());
+                channel->add_member(binding->from->full.data(), clientid.data());
         }
     }
 
     // XEP-0283: Moved — detect JID migration notice in subscription requests.
     // Per §4.3, when we receive <presence type='subscribe'> containing
     // <moved xmlns='urn:xmpp:moved:1'><old-jid>…</old-jid></moved>, the
-    // sender's new JID is binding.from->bare and the old JID is in <old-jid>.
+    // sender's new JID is binding->from->bare and the old JID is in <old-jid>.
     // We display a notice; full verification (PEP fetch) is left to the user.
-    if (binding.type && *binding.type == "subscribe")
+    if (binding->type && *binding->type == "subscribe")
     {
         xmpp_stanza_t *moved_elem = xmpp_stanza_get_child_by_name_and_ns(
             stanza, "moved", "urn:xmpp:moved:1");
@@ -429,7 +429,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 if (old_jid_g.ptr)
                     old_jid_str = old_jid_g.ptr;
             }
-            const char *new_jid = binding.from ? binding.from->bare.data() : nullptr;
+            const char *new_jid = binding->from ? binding->from->bare.data() : nullptr;
             if (!old_jid_str.empty() && new_jid)
                 weechat_printf_date_tags(account.buffer, 0,
                     "xmpp_presence,notify_highlight",

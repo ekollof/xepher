@@ -10,7 +10,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     xmpp_stanza_t         *pubsub, *items, *item;
     xmpp_stanza_t         *storage, *conference, *nick;
 
-    auto binding = xml::iq(account.context, stanza);
+    auto binding = std::make_unique<xml::iq>(account.context, stanza);
     const char *id = xmpp_stanza_get_id(stanza);
     const char *from = xmpp_stanza_get_from(stanza);
     const char *to = xmpp_stanza_get_to(stanza);

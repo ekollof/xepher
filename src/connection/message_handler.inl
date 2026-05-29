@@ -55,7 +55,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     struct tm time = {0};
     time_t date = 0;
 
-    auto binding = xml::message(account.context, stanza);
+    auto binding = std::make_unique<xml::message>(account.context, stanza);
     body = xmpp_stanza_get_child_by_name(stanza, "body");
     xmpp_stanza_t *encrypted_without_body = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "encrypted", "eu.siacs.conversations.axolotl");
