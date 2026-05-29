@@ -92,12 +92,13 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         return 1;
     }
 
-    if (auto x = binding->muc_user())
+    if (auto& x_opt = binding->muc_user(); x_opt.has_value())
     {
+        auto& x = *x_opt;
         bool is_nick_change = false;
         bool is_new_room = false;
         bool is_server_nick = false;
-        for (int& status : x->statuses)
+        for (int& status : x.statuses)
         {
             switch (status)
             {
@@ -231,7 +232,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             }
         }
 
-        for (auto& item : x->items)
+        for (auto& item : x.items)
         {
             using xml::xep0045;
 
