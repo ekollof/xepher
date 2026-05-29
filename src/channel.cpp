@@ -328,7 +328,7 @@ weechat::channel::channel(weechat::account& account,
         if (last_mam_fetch > 0)
             start = last_mam_fetch;
         else
-            start = now - (7 * 86400);
+            start = now - (3 * 86400);
         
         time_t end = now;
         std::string mam_uuid = stanza::uuid(account.context);
