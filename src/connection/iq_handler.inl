@@ -4117,13 +4117,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // Some servers include <last/> even on the final page.
                 if (set__last__text && !fin_is_complete)
                 {
-                    time_t *start_ptr = mam_query.start ? &*mam_query.start : nullptr;
-                    time_t *end_ptr   = mam_query.end   ? &*mam_query.end   : nullptr;
-
-                    channel->second.fetch_mam(id,
-                                       start_ptr,
-                                       end_ptr,
-                                       set__last__text);
+                    account.mam_deferred_pages.push_back({
+                        channel->second.id,
+                        mam_query.id,
+                        mam_query.start,
+                        mam_query.end,
+                        std::string(set__last__text)
+                    });
+                    account.schedule_next_mam_page();
                 }
                 else
                 {
@@ -4169,32 +4170,18 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // Persist the RSM cursor so the next reconnect resumes from here
                     account.mam_cursor_set("global", set__last__text);
 
-                    // More pages — issue next page of global MAM query with <after> token
+                    // Defer the next page to the next event-loop tick so the GUI
+                    // gets a chance to render between batches.
                     account.mam_query_remove(mam_query.id);
 
-                    std::string next_id = stanza::uuid(account.context);
-                    account.add_mam_query(next_id.c_str(), "",
-                                          mam_query.start, mam_query.end);
-
-                    stanza::xep0313::query next_q;
-                    if (mam_query.start)
-                    {
-                        time_t tval = *mam_query.start;
-                        stanza::xep0313::x_filter xf;
-                        xf.start(fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", fmt::gmtime(tval)));
-                        next_q.filter(xf);
-                    }
-                    stanza::xep0059::set rsm_after;
-                    rsm_after.max(50).after(set__last__text);
-                    next_q.rsm(rsm_after);
-
-                    this->send(stanza::iq()
-                        .type("set")
-                        .id(next_id)
-                        .xep0313()
-                        .query(next_q)
-                        .build(account.context)
-                        .get());
+                    account.mam_deferred_pages.push_back({
+                        std::string{},                      // empty = global query
+                        std::string{},
+                        mam_query.start,
+                        mam_query.end,
+                        std::string(set__last__text)
+                    });
+                    account.schedule_next_mam_page();
                 }
                 else
                 {

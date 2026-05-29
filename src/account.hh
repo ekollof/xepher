@@ -386,6 +386,18 @@ namespace weechat
         void mam_query_remove(const std::string id);
         void mam_query_free_all();
 
+        struct mam_page_defer {
+            std::string channel_id;       // empty = global query
+            std::string mam_query_id;     // original mam_query id (for lookup)
+            std::optional<time_t> start;
+            std::optional<time_t> end;
+            std::string after;            // RSM <after> token
+        };
+        std::deque<mam_page_defer> mam_deferred_pages;
+        struct t_hook *mam_defer_timer = nullptr;
+        void schedule_next_mam_page();
+        static int process_deferred_mam_page_cb(const void *pointer, void *data, int remaining_calls);
+
         void disconnect(int reconnect);
         void reset();
         int connect();

@@ -257,6 +257,93 @@ void weechat::account::mam_query_free_all()
     mam_queries.clear();
 }
 
+void weechat::account::schedule_next_mam_page()
+{
+    if (!mam_defer_timer)
+        mam_defer_timer = (struct t_hook *)weechat_hook_timer(
+            1, 0, 0, &account::process_deferred_mam_page_cb,
+            this, nullptr);
+}
+
+int weechat::account::process_deferred_mam_page_cb(const void *pointer, void *data, int remaining_calls)
+{
+    (void)pointer;
+    (void)remaining_calls;
+    auto *acct = static_cast<account *>(data);
+    if (!acct || acct->mam_deferred_pages.empty()) {
+        if (acct && acct->mam_defer_timer) {
+            weechat_unhook(acct->mam_defer_timer);
+            acct->mam_defer_timer = nullptr;
+        }
+        return WEECHAT_RC_OK;
+    }
+
+    auto page = acct->mam_deferred_pages.front();
+    acct->mam_deferred_pages.pop_front();
+
+    if (page.channel_id.empty())
+    {
+        if (page.after.empty())
+        {
+            weechat_printf(acct->buffer,
+                           "%sxmpp: deferred global MAM page has no <after> token — skipping",
+                           weechat_prefix("error"));
+            return WEECHAT_RC_OK;
+        }
+
+        std::string next_id = stanza::uuid(acct->context);
+        acct->add_mam_query(next_id.c_str(), "",
+                           page.start, page.end);
+
+        stanza::xep0313::query next_q;
+        if (page.start)
+        {
+            time_t tval = *page.start;
+            std::ostringstream time_ss;
+            time_ss << std::put_time(gmtime(&tval), "%Y-%m-%dT%H:%M:%SZ");
+            stanza::xep0313::x_filter xf;
+            xf.start(time_ss.str());
+            next_q.filter(xf);
+        }
+        stanza::xep0059::set rsm_after;
+        rsm_after.max(50).after(page.after);
+        next_q.rsm(rsm_after);
+
+        acct->connection.send(stanza::iq()
+            .type("set")
+            .id(next_id)
+            .xep0313()
+            .query(next_q)
+            .build(acct->context)
+            .get());
+    }
+    else
+    {
+        auto channel = acct->channels.find(page.channel_id);
+        if (channel != acct->channels.end())
+        {
+            time_t *start_ptr = page.start ? &*page.start : nullptr;
+            time_t *end_ptr   = page.end   ? &*page.end   : nullptr;
+            channel->second.fetch_mam(
+                page.mam_query_id.empty() ? stanza::uuid(acct->context).c_str() : page.mam_query_id.c_str(),
+                start_ptr, end_ptr,
+                page.after.empty() ? nullptr : page.after.c_str());
+        }
+        else
+        {
+            XDEBUG("deferred MAM page for channel {} (no longer exists) — discarded", page.channel_id);
+        }
+    }
+
+    if (acct->mam_deferred_pages.empty() && acct->mam_defer_timer)
+    {
+        weechat_unhook(acct->mam_defer_timer);
+        acct->mam_defer_timer = nullptr;
+    }
+
+    return WEECHAT_RC_OK;
+}
+
 xmpp_log_t make_logger(void *userdata)
 {
     xmpp_log_t logger = { nullptr };
@@ -389,6 +476,14 @@ void weechat::account::disconnect(int reconnect)
         weechat_unhook(sm_ack_timer_hook);
         sm_ack_timer_hook = nullptr;
     }
+    
+    // Clean up deferred MAM page timer and queue
+    if (mam_defer_timer)
+    {
+        weechat_unhook(mam_defer_timer);
+        mam_defer_timer = nullptr;
+    }
+    mam_deferred_pages.clear();
     
     // libstrophe's built-in SM is disabled via XMPP_CONN_FLAG_DISABLE_SM
     // (set in connect()), so xmpp_conn_get_sm_state() will always return
