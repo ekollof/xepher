@@ -527,7 +527,8 @@ int command__whois(const void *pointer, void *data,
         {
             std::string_view real_jid = *(*member_opt)->real_jid;
             weechat_printf(buffer, "  Real JID:    %s", real_jid.data());
-            target_storage = std::string(real_jid);
+            // vCard requests must target the bare JID (XEP-0054 §3.2, XEP-0292 §4.1.1)
+            target_storage = ::jid(nullptr, std::string(real_jid)).bare;
             target = target_storage.c_str();
         }
         else
