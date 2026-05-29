@@ -232,8 +232,9 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             }
         }
 
-        for (auto& item : x.items)
+        for (auto& item_ptr : x.items)
         {
+            auto& item = *item_ptr;
             using xml::xep0045;
 
             std::string role(item.role ? xep0045::format_role(*item.role) : "");

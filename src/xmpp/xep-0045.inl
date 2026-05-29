@@ -202,7 +202,7 @@ namespace xml {
                 for (auto& child : node.get_children("invite"))
                     invites.emplace_back(child);
                 for (auto& child : node.get_children("item"))
-                    items.emplace_back(child);
+                    items.push_back(std::make_unique<item>(child));
                 for (auto& child : node.get_children("password"))
                     passwords.emplace_back(child.get().text);
                 for (auto& child : node.get_children("status"))
@@ -213,7 +213,7 @@ namespace xml {
             std::vector<decline> declines;
             std::vector<destroy> destroys;
             std::vector<invite> invites;
-            std::vector<item> items;
+            std::vector<std::unique_ptr<item>> items;
             std::vector<std::string> passwords;
             std::vector<int> statuses;
         };
