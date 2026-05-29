@@ -4185,7 +4185,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         next_q.filter(xf);
                     }
                     stanza::xep0059::set rsm_after;
-                    rsm_after.after(set__last__text);
+                    rsm_after.max(50).after(set__last__text);
                     next_q.rsm(rsm_after);
 
                     this->send(stanza::iq()

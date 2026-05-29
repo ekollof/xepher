@@ -407,6 +407,9 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             // replayed (Conversations-style postponed session completion).
             account.omemo.global_mam_catchup = true;
 
+            stanza::xep0059::set rsm_set;
+            rsm_set.max(50);
+
             stanza::xep0313::query mam_query;
             if (!has_cursor)
             {
@@ -415,12 +418,11 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 time_ss << std::put_time(gmtime(&start), "%Y-%m-%dT%H:%M:%SZ");
                 stanza::xep0313::x_filter xf;
                 xf.start(time_ss.str());
-                mam_query.filter(xf);
+                mam_query.filter(xf).rsm(rsm_set);
             }
             else
             {
                 // Have cursor: RSM <after> — no time filter, resume from last seen message
-                stanza::xep0059::set rsm_set;
                 rsm_set.after(global_mam_cursor);
                 mam_query.rsm(rsm_set);
             }

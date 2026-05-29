@@ -1992,12 +1992,11 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
                           end ? std::optional(*end) : std::optional<time_t>());
 
     // RSM paging: send <after> token if provided.
+    stanza::xep0059::set rsm;
+    rsm.max(50);
     if (after)
-    {
-        stanza::xep0059::set rsm;
         rsm.after(after);
-        q.rsm(rsm);
-    }
+    q.rsm(rsm);
 
     stanza::iq iq_s;
     iq_s.id(mam_id).type("set");
