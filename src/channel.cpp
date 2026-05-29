@@ -691,10 +691,12 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
         ? "xmpp_presence,enter,log4,xmpp_smart_filter,no_trigger"
         : "xmpp_presence,enter,log4,no_trigger";
 
+    std::string user_prefix = user->as_prefix_raw();
+
     if (weechat_strcasecmp(jid_bare, id) == 0
              && type == weechat::channel::chat_type::MUC)        weechat_printf_date_tags(buffer, 0, enter_tags.c_str(), "%s%s%s%s%s %s%s%s%s %s%s%s%s%s%s%s%s%s%s%s%s%s%s",
                                  weechat_prefix("join"),
-                                 user->as_prefix_raw().data(),
+                                 user_prefix.c_str(),
                                  client ? " (" : "",
                                  client ? client : "",
                                  client ? ")" : "",
@@ -717,8 +719,8 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     else
         weechat_printf_date_tags(buffer, 0, enter_tags.c_str(), "%s%s (%s) %s%s%s%s %s%s%s%s%s%s%s%s%s",
                                  weechat_prefix("join"),
-                                 jid_resource ? user->as_prefix_raw().data() : "You",
-                                 jid_resource ? jid_resource : user->as_prefix_raw().data(),
+                                 jid_resource ? user_prefix.c_str() : "You",
+                                 jid_resource ? jid_resource : user_prefix.c_str(),
                                  user->profile.status.has_value() ? "is " : "",
                                  weechat::xmpp_color("irc.color.message_join").c_str(),
                                  user->profile.status.has_value() ? user->profile.status->c_str() : (user->profile.idle.has_value() ? "idle" : "entered"),
