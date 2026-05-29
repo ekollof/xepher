@@ -516,18 +516,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 {
                     const char *from_jid = from ? from : own_jid.c_str();
 
-                    struct t_gui_buffer *target_buf = account.buffer;
-                    bool is_whois4 = false;
                     if (id)
-                    {
-                        auto it = account.whois_queries.find(id);
-                        if (it != account.whois_queries.end())
-                        {
-                            target_buf = it->second.buffer;
-                            account.whois_queries.erase(it);
-                            is_whois4 = true;
-                        }
-                    }
+                        account.whois_queries.erase(id);
 
                     xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items, "item");
                     if (item)
@@ -536,66 +526,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             item, "vcard", NS_VCARD4);
                         if (vcard4)
                         {
-                            if (is_whois4)
-                                weechat_printf(target_buf, "%svCard4 for %s:",
-                                               weechat_prefix("network"), from_jid);
-                            else
-                                XDEBUG("vCard4 auto-fetched for {}", from_jid);
-
-                            // Helper: get text of first child matching name inside parent
-                            auto vc4_text = [&](xmpp_stanza_t *p, const char *name) -> std::string {
-                                xmpp_stanza_t *el = xmpp_stanza_get_child_by_name(p, name);
-                                if (!el) return {};
-                                // vCard4 wraps values: <text>…</text> or <uri>…</uri>
-                                xmpp_stanza_t *val = xmpp_stanza_get_child_by_name(el, "text");
-                                if (!val) val = xmpp_stanza_get_child_by_name(el, "uri");
-                                if (!val) return {};
-                                char *t = xmpp_stanza_get_text(val);
-                                if (!t) return {};
-                                std::string s(t);
-                                xmpp_free(account.context, t);
-                                return s;
-                            };
-
-                            auto print_vc4 = [&](const char *label, const std::string &val) {
-                                if (!val.empty())
-                                    weechat_printf(target_buf, "  %s%s%s %s",
-                                                   weechat_color("bold"), label,
-                                                   weechat_color("reset"), val.c_str());
-                            };
-
-                            // vCard4 uses lowercase element names
-                            std::string fn       = vc4_text(vcard4, "fn");
-                            std::string nickname = vc4_text(vcard4, "nickname");
-                            std::string url      = vc4_text(vcard4, "url");
-                            std::string note     = vc4_text(vcard4, "note");
-                            std::string bday     = vc4_text(vcard4, "bday");
-                            std::string title    = vc4_text(vcard4, "title");
-                            std::string role_vc4 = vc4_text(vcard4, "role");
-
-                            // email: <email><text>…</text></email>
-                            std::string email_v4 = vc4_text(vcard4, "email");
-
-                            // tel: <tel><uri>tel:…</uri></tel>
-                            std::string tel_v4 = vc4_text(vcard4, "tel");
-
-                            // org: <org><text>…</text></org>
-                            std::string org_v4 = vc4_text(vcard4, "org");
-
-                            if (is_whois4)
-                            {
-                                print_vc4("Full name:",    fn);
-                                print_vc4("Nickname:",     nickname);
-                                print_vc4("Birthday:",     bday);
-                                print_vc4("Organisation:", org_v4);
-                                print_vc4("Title:",        title);
-                                print_vc4("Role:",         role_vc4);
-                                print_vc4("Email:",        email_v4);
-                                print_vc4("Phone:",        tel_v4);
-                                print_vc4("URL:",          url);
-                                print_vc4("Note:",         note);
-                            }
-
+                            XDEBUG("vCard4 auto-fetched for {}", from_jid);
                             return true;
                         }
                     }
