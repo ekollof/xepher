@@ -1019,20 +1019,15 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 && existing_ch->second.buffer
                                 && !existing_ch->second.joining;
 
-                            if (!is_biboumi && !already_joined)
-                            {
-                                char **command = weechat_string_dyn_alloc(256);
-                                weechat_string_dyn_concat(command, "/enter ", -1);
-                                weechat_string_dyn_concat(command, item_id, -1);
-                                const char *nick_sv = account.bookmarks[item_id].nick.c_str();
-                                if (nick_sv && nick_sv[0])
-                                {
-                                    weechat_string_dyn_concat(command, "/", -1);
-                                    weechat_string_dyn_concat(command, nick_sv, -1);
-                                }
-                                weechat_command(account.buffer, *command);
-                                weechat_string_dyn_free(command, 1);
-                            }
+                             if (!is_biboumi && !already_joined)
+                             {
+                                 const auto& bookmark = account.bookmarks[item_id];
+                                 std::string cmd = fmt::format("/enter {}{}{}",
+                                                               item_id,
+                                                               !bookmark.nick.empty() ? "/" : "",
+                                                               bookmark.nick);
+                                 weechat_command(account.buffer, cmd.c_str());
+                             }
                             else if (is_biboumi)
                             {
                                 weechat_printf(account.buffer,
@@ -2191,8 +2186,7 @@ message_handler_after_omemo:
 
     if (replace)
     {
-        std::unique_ptr<char, decltype(&free)> orig_guard(nullptr, &free);
-        char *orig = nullptr;
+        bool found_orig = false;
         void *edit_line_data = nullptr; // line_data of the original message for in-place update
         void *lines = weechat_hdata_pointer(hdata_buffer,
                                             channel->buffer, "lines");
@@ -2200,7 +2194,7 @@ message_handler_after_omemo:
         {
             void *last_line = weechat_hdata_pointer(hdata_lines,
                                                     lines, "last_line");
-            while (last_line && !orig)
+            while (last_line && !found_orig)
             {
                 void *line_data = weechat_hdata_pointer(hdata_line,
                                                         last_line, "data");
@@ -2294,14 +2288,13 @@ message_handler_after_omemo:
                                     weechat_arraylist_insert(orig_lines, 0, msg);
                             }
 
-                            char **orig_message = weechat_string_dyn_alloc(256);
+                            std::string orig_message;
                             for (int i = 0; i < weechat_arraylist_size(orig_lines); i++)
-                                weechat_string_dyn_concat(orig_message,
-                                                          (const char*)weechat_arraylist_get(orig_lines, i),
-                                                          -1);
-                            orig = *orig_message;
-                            orig_guard.reset(orig);
-                            weechat_string_dyn_free(orig_message, 0); // flag=0: free container only, return *ptr; orig_guard owns the string
+                            {
+                                if (const char *line = (const char*)weechat_arraylist_get(orig_lines, i))
+                                    orig_message += line;
+                            }
+                            found_orig = true;
                             break;
                         }
                     }
@@ -2312,7 +2305,7 @@ message_handler_after_omemo:
             }
         }
 
-        (void)orig; // diff display removed; corrected text shown as-is
+        // diff display removed; corrected text shown as-is
 
         // XEP-0308: Replace the original line in-place rather than appending a
         // new "* " line.  Original message not in buffer (e.g. scrolled out or
@@ -2599,7 +2592,7 @@ message_handler_after_omemo:
     if (reactions_id)
     {
         // Extract emoji from <reaction> elements
-        char **dyn_emojis = weechat_string_dyn_alloc(64);
+        std::string emojis_str;
         xmpp_stanza_t *reaction_elem = xmpp_stanza_get_children(reactions);
         bool first = true;
         while (reaction_elem)
@@ -2611,15 +2604,15 @@ message_handler_after_omemo:
                 const char *emoji = emoji_g.ptr;
                 if (emoji)
                 {
-                    if (!first) weechat_string_dyn_concat(dyn_emojis, " ", -1);
-                    weechat_string_dyn_concat(dyn_emojis, emoji, -1);
+                    if (!first) emojis_str += " ";
+                    emojis_str += emoji;
                     first = false;
                 }
             }
             reaction_elem = xmpp_stanza_get_next(reaction_elem);
         }
         
-        const char *emojis = *dyn_emojis;
+        const char *emojis = emojis_str.c_str();
         // Always walk the buffer to update the target line — even when emojis
         // is empty (XEP-0444 §3.2: empty <reactions> means remove all reactions).
         {
@@ -2662,7 +2655,7 @@ message_handler_after_omemo:
                                 if (rxn_pos != std::string::npos)
                                     base.resize(rxn_pos);
 
-                                std::string new_message = emojis && *emojis
+                                std::string new_message = !emojis_str.empty()
                                     ? base
                                       + " " + weechat_color("blue")
                                       + "[" + emojis + "]"
@@ -2678,8 +2671,7 @@ message_handler_after_omemo:
                                 weechat_hdata_update(hdata_line_data, line_data, hashtable);
                                 weechat_hashtable_free(hashtable);
 
-                                weechat_string_dyn_free(dyn_emojis, 1);
-                                return 1;
+                                 return 1;
                             }
                         }
                     }
@@ -2690,7 +2682,6 @@ message_handler_after_omemo:
             }
         }
         
-        weechat_string_dyn_free(dyn_emojis, 1);
         return 1;
     }
 

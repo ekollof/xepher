@@ -3559,23 +3559,17 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     }
                     else
                     {
-                        char **command = weechat_string_dyn_alloc(256);
-                        weechat_string_dyn_concat(command, "/enter ", -1);
-                        weechat_string_dyn_concat(command, jid, -1);
-                        // BUG 3 fix: only append nick if intext is non-nullptr and non-empty
-                        if (intext && intext[0])
-                        {
-                            weechat_string_dyn_concat(command, "/", -1);
-                            weechat_string_dyn_concat(command, intext, -1);
-                        }
-                        weechat_command(account.buffer, *command);
+                        std::string cmd = fmt::format("/enter {}{}{}",
+                                                      jid,
+                                                      (intext && intext[0]) ? "/" : "",
+                                                      (intext && intext[0]) ? intext : "");
+                        weechat_command(account.buffer, cmd.c_str());
                         auto ptr_channel = account.channels.find(jid);
                         struct t_gui_buffer *ptr_buffer =
                             ptr_channel != account.channels.end()
                             ? ptr_channel->second.buffer : nullptr;
                         if (ptr_buffer)
                             ptr_channel->second.update_name(name);
-                        weechat_string_dyn_free(command, 1);
                     }
                 }
 
