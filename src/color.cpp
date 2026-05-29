@@ -7,8 +7,10 @@
 #include <cstring>
 #include <string>
 #include <openssl/evp.h>
+#include <weechat/weechat-plugin.h>
 
 #include "color.hh"
+#include "plugin.hh"
 
 namespace weechat {
 
@@ -80,6 +82,14 @@ XMPP_TEST_EXPORT std::string consistent_color(const std::string& input)
     
     double angle = generate_angle(normalized);
     return angle_to_weechat_color(angle);
+}
+
+XMPP_TEST_EXPORT std::string_view xmpp_color(std::string_view name)
+{
+    if (name.empty())
+        return "";
+    const char *color = weechat_color(std::string(name).c_str());
+    return color ? std::string_view(color) : std::string_view{};
 }
 
 } // namespace weechat
