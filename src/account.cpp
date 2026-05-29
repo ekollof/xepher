@@ -267,9 +267,9 @@ void weechat::account::schedule_next_mam_page()
 
 int weechat::account::process_deferred_mam_page_cb(const void *pointer, void *data, int remaining_calls)
 {
-    (void)pointer;
+    (void)data;
     (void)remaining_calls;
-    auto *acct = static_cast<account *>(data);
+    auto *acct = const_cast<account *>(static_cast<const account *>(pointer));
     if (!acct || acct->mam_deferred_pages.empty()) {
         if (acct && acct->mam_defer_timer) {
             weechat_unhook(acct->mam_defer_timer);
