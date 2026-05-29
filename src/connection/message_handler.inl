@@ -3688,27 +3688,27 @@ message_handler_after_omemo:
     // notify_none,no_log: no highlight, no duplicate log entry.
     if (!reply_prefix.empty())
     {
-        std::string quote_line = std::string(weechat_color("darkgray"))
+        std::string quote_line = std::string(weechat::xmpp_color("darkgray"))
             + "│ "
-            + weechat_color("cyan");
+            + weechat::xmpp_color("cyan").c_str();
         if (!reply_quote_nick.empty())
-            quote_line += reply_quote_nick + weechat_color("darkgray") + ": ";
-        quote_line += weechat_color("darkgray") + reply_prefix + weechat_color("resetcolor");
+            quote_line += reply_quote_nick + weechat::xmpp_color("darkgray").c_str() + ": ";
+        quote_line += weechat::xmpp_color("darkgray").c_str() + reply_prefix + weechat::xmpp_color("resetcolor").c_str();
+        std::string msg = fmt::format("{}\t{}", display_prefix, quote_line);
         weechat_printf_date_tags(channel->buffer, date,
-            "notify_none,no_log,xmpp_reply_quote",
-            "%s\t%s", display_prefix.data(), quote_line.c_str());
+            "notify_none,no_log,xmpp_reply_quote", "%s", msg.c_str());
     }
 
     // XEP-0382: Spoiler Messages — prepend spoiler warning before the body
     if (spoiler_hint)
     {
-        std::string spoiler_prefix = std::string(weechat_color("yellow"))
+        std::string spoiler_prefix = std::string(weechat::xmpp_color("yellow"))
             + "[Spoiler"
             + (spoiler_hint && !std::string_view(spoiler_hint).empty()
                ? std::string(": ") + spoiler_hint
                : std::string(""))
             + "] "
-            + weechat_color("resetcolor");
+            + weechat::xmpp_color("resetcolor").c_str();
         if (final_text.empty())
             final_text = display_text ? display_text : "";
         final_text = spoiler_prefix + final_text;
@@ -3718,9 +3718,9 @@ message_handler_after_omemo:
     // XEP-0466: Ephemeral Messages — prepend timer indicator before the body
     if (ephemeral_timer > 0)
     {
-        std::string eph_prefix = std::string(weechat_color("magenta"))
+        std::string eph_prefix = std::string(weechat::xmpp_color("magenta"))
             + "[⏱ " + std::to_string(ephemeral_timer) + "s] "
-            + weechat_color("resetcolor");
+            + weechat::xmpp_color("resetcolor").c_str();
         if (final_text.empty())
             final_text = display_text ? display_text : "";
         final_text = eph_prefix + final_text;
@@ -3748,21 +3748,30 @@ message_handler_after_omemo:
     const char *encrypted_glyph = (encrypted || x) ? "🔒 " : "";
 
     if (channel_id == from_bare && to == channel->id)
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s[to %s]: %s%s",
-                                 display_prefix.data(),
-                                 edit, to, encrypted_glyph,
-                                 display_text ? display_text : "");
+    {
+        std::string msg = fmt::format("{}\t{}[to {}]: {}{}",
+                                      display_prefix,
+                                      edit, to, encrypted_glyph,
+                                      display_text ? display_text : "");
+        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s", msg.c_str());
+    }
     else if (weechat_string_match(text, "/me *", 0))
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s%s %s%s",
-                                 weechat_prefix("action"),
-                                 edit, display_prefix.data(),
-                                 encrypted_glyph,
-                                 display_text ? display_text+4 : "");
+    {
+        std::string msg = fmt::format("{}\t{}{}{} {}",
+                                      weechat_prefix("action"),
+                                      edit, display_prefix,
+                                      encrypted_glyph,
+                                      display_text ? display_text+4 : "");
+        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s", msg.c_str());
+    }
     else
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s\t%s%s%s",
-                                 display_prefix.data(),
-                                  edit, encrypted_glyph,
-                                  display_text ? display_text : "");
+    {
+        std::string msg = fmt::format("{}\t{}{}{}",
+                                      display_prefix,
+                                      edit, encrypted_glyph,
+                                      display_text ? display_text : "");
+        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s", msg.c_str());
+    }
 
     // XEP-0511: print each collected OG preview as a separate buffer line.
     // Using notify_none,no_log,xmpp_og_preview so these lines are never logged
@@ -3775,9 +3784,9 @@ message_handler_after_omemo:
         {
             std::string line = format_og_preview_card(
                 p.title, p.description, p.url, p.image, "");
-            weechat_printf_date_tags(channel->buffer, date,
-                "notify_none,no_log,xmpp_og_preview",
-                 "%s\t%s", display_prefix.data(), line.c_str());
+             std::string msg = fmt::format("{}\t{}", display_prefix, line);
+             weechat_printf_date_tags(channel->buffer, date,
+                 "notify_none,no_log,xmpp_og_preview", "%s", msg.c_str());
         }
     }
 
