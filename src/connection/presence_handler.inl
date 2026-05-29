@@ -74,19 +74,21 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             // Skip generic "Unspecified" errors that don't have useful context
             if (std::string_view(error_reason) != "Unspecified" || error->description)
             {
-                weechat_printf(channel->buffer, "[!]\t%s%sError: %s%s%s%s",
-                               weechat_color("gray"),
-                               binding->muc() ? "MUC " : "",
-                               error_reason,
-                               error->description ? " (" : "",
-                               error->description ? error->description->data() : "",
-                               error->description ? ")" : "");
+                std::string msg = fmt::format("[!]\t{}{}{}{}{}{}",
+                                              weechat::xmpp_color("gray").c_str(),
+                                              binding->muc() ? "MUC " : "",
+                                              error_reason,
+                                              error->description ? " (" : "",
+                                              error->description ? error->description->data() : "",
+                                              error->description ? ")" : "");
+                weechat_printf(channel->buffer, "%s", msg.c_str());
             }
             else
             {
                 // Debug: log unspecified errors with JID
-                weechat_printf(account.buffer, "%s[DEBUG] Received unspecified error from %s (presence)",
-                              weechat_prefix("network"), from_str);
+                std::string msg = fmt::format("{}[DEBUG] Received unspecified error from {} (presence)",
+                                              weechat_prefix("network"), from_str);
+                weechat_printf(account.buffer, "%s", msg.c_str());
             }
         }
         return 1;
@@ -466,14 +468,16 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     old_jid_str = old_jid_g.ptr;
             }
             const char *new_jid = binding->from ? binding->from->bare.data() : nullptr;
-            if (!old_jid_str.empty() && new_jid)
-                weechat_printf_date_tags(account.buffer, 0,
-                    "xmpp_presence,notify_highlight",
-                    "%s%sContact %s%s%s has moved to %s%s%s — verify and update your roster",
-                    weechat_prefix("network"),
-                    weechat_color("yellow"),
-                    weechat_color("bold"), old_jid_str.c_str(), weechat_color("reset"),
-                    weechat_color("bold"), new_jid, weechat_color("reset"));
+             if (!old_jid_str.empty() && new_jid)
+             {
+                 std::string msg = fmt::format("{}{}Contact {}{}{} has moved to {}{}{} — verify and update your roster",
+                                               weechat_prefix("network"),
+                                               weechat::xmpp_color("yellow").c_str(),
+                                               weechat::xmpp_color("bold").c_str(), old_jid_str, weechat::xmpp_color("reset").c_str(),
+                                               weechat::xmpp_color("bold").c_str(), new_jid, weechat::xmpp_color("reset").c_str());
+                 weechat_printf_date_tags(account.buffer, 0,
+                     "xmpp_presence,notify_highlight", "%s", msg.c_str());
+             }
         }
     }
 
