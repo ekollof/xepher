@@ -102,7 +102,7 @@ void weechat::channel::set_transport(enum weechat::channel::transport transport,
     {
         this->transport = transport;
         weechat_printf_date_tags(buffer, 0, nullptr, "%s%sTransport: %s",
-                                 weechat_prefix("network"), weechat::xmpp_color("gray"),
+                                 weechat_prefix("network"), weechat::xmpp_color("gray").c_str(),
                                  weechat::channel::transport_name(this->transport));
     }
 }
@@ -699,42 +699,42 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
                                  client ? client : "",
                                  client ? ")" : "",
                                  user->profile.status.has_value() ? "is " : "",
-                                 weechat::xmpp_color("irc.color.message_join"),
+                                 weechat::xmpp_color("irc.color.message_join").c_str(),
                                  user->profile.status.has_value() ? user->profile.status->c_str() : (user->profile.idle.has_value() ? "idle" : "entered"),
-                                 weechat::xmpp_color("reset"),
+                                 weechat::xmpp_color("reset").c_str(),
                                  id,
                                  user->profile.status_text.has_value() ? " [" : "",
                                  user->profile.status_text.has_value() ? user->profile.status_text->c_str() : "",
                                  user->profile.status_text.has_value() ? "]" : "",
-                                 weechat::xmpp_color("yellow"), " as ", weechat::xmpp_color("reset"),
+                                 weechat::xmpp_color("yellow").c_str(), " as ", weechat::xmpp_color("reset").c_str(),
                                  user->profile.affiliation.has_value() ? user->profile.affiliation->c_str() : "",
                                  user->profile.affiliation.has_value() ? " " : "",
                                  user->profile.role.has_value() ? user->profile.role->c_str() : "",
-                                 user->profile.pgp_id.has_value() ? weechat::xmpp_color("gray") : "",
+                                 user->profile.pgp_id.has_value() ? weechat::xmpp_color("gray").c_str() : "",
                                  user->profile.pgp_id.has_value() ? " with PGP:" : "",
                                  user->profile.pgp_id.has_value() ? user->profile.pgp_id->c_str() : "",
-                                 user->profile.pgp_id.has_value() ? weechat::xmpp_color("reset") : "");
+                                 user->profile.pgp_id.has_value() ? weechat::xmpp_color("reset").c_str() : "");
     else
         weechat_printf_date_tags(buffer, 0, enter_tags.c_str(), "%s%s (%s) %s%s%s%s %s%s%s%s%s%s%s%s%s",
                                  weechat_prefix("join"),
                                  jid_resource ? user->as_prefix_raw().data() : "You",
                                  jid_resource ? jid_resource : user->as_prefix_raw().data(),
                                  user->profile.status.has_value() ? "is " : "",
-                                 weechat::xmpp_color("irc.color.message_join"),
+                                 weechat::xmpp_color("irc.color.message_join").c_str(),
                                  user->profile.status.has_value() ? user->profile.status->c_str() : (user->profile.idle.has_value() ? "idle" : "entered"),
-                                 weechat::xmpp_color("reset"),
+                                 weechat::xmpp_color("reset").c_str(),
                                  user->profile.idle.has_value() ? "since " : "",
                                  user->profile.idle.has_value() ? user->profile.idle->data() : "",
                                  user->profile.status_text.has_value() ? " [" : "",
                                  user->profile.status_text.has_value() ? user->profile.status_text->c_str() : "",
                                  user->profile.status_text.has_value() ? "]" : "",
-                                 (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat::xmpp_color("gray") : "",
+                                 (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat::xmpp_color("gray").c_str() : "",
                                  (user->profile.pgp_id.has_value() || user->profile.omemo) ? " with " : "",
                                  user->profile.pgp_id.has_value() ? "PGP:" : "",
                                  user->profile.pgp_id.has_value() ? user->profile.pgp_id->c_str() : "",
                                  (user->profile.omemo && user->profile.pgp_id.has_value()) ? " and " : "",
                                  user->profile.omemo ? "OMEMO" : "",
-                                 (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat::xmpp_color("reset") : "");
+                                 (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat::xmpp_color("reset").c_str() : "");
 
     return member;
 }
@@ -780,8 +780,8 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
                                  "%s%s %sleft%s %s %s%s%s",
                                  weechat_prefix("quit"),
                                  jid_resource,
-                                 weechat::xmpp_color("irc.color.message_quit"),
-                                 weechat::xmpp_color("reset"),
+                                 weechat::xmpp_color("irc.color.message_quit").c_str(),
+                                 weechat::xmpp_color("reset").c_str(),
                                  id,
                                  reason ? "[" : "",
                                  reason ? reason : "",
@@ -792,8 +792,8 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
                                  weechat_prefix("quit"),
                                  jid_bare,
                                  jid_resource,
-                                 weechat::xmpp_color("irc.color.message_quit"),
-                                 weechat::xmpp_color("reset"),
+                                 weechat::xmpp_color("irc.color.message_quit").c_str(),
+                                 weechat::xmpp_color("reset").c_str(),
                                  id,
                                  reason ? "[" : "",
                                  reason ? reason : "",
@@ -1328,7 +1328,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                     {
                         weechat_printf_date_tags(task->channel.buffer, 0,
                                 "notify_none,no_log", "[oob]\t%s%s",
-                                weechat::xmpp_color("gray"), mime.data());
+                                weechat::xmpp_color("gray").c_str(), mime.data());
                         task->channel.send_message(task->to, task->body, { task->url });
                     }
                     else

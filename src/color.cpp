@@ -84,12 +84,13 @@ XMPP_TEST_EXPORT std::string consistent_color(const std::string& input)
     return angle_to_weechat_color(angle);
 }
 
-XMPP_TEST_EXPORT std::string_view xmpp_color(std::string_view name)
+XMPP_TEST_EXPORT std::string xmpp_color(std::string_view name)
 {
     if (name.empty())
         return "";
-    const char *color = weechat_color(std::string(name).c_str());
-    return color ? std::string_view(color) : std::string_view{};
+    if (auto color_ptr = weechat_color(std::string(name).c_str()))
+        return std::string(color_ptr);
+    return "";
 }
 
 } // namespace weechat

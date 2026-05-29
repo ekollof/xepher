@@ -16,6 +16,6 @@ XMPP_TEST_EXPORT std::string consistent_color(const std::string& input);
 XMPP_TEST_EXPORT std::string angle_to_weechat_color(double angle);
 
 // Safe C++23 WeeChat color retriever (prevents nullptr crashes on FreeBSD)
-XMPP_TEST_EXPORT std::string_view xmpp_color(std::string_view name);
+XMPP_TEST_EXPORT std::string xmpp_color(std::string_view name);
 
 } // namespace weechat
