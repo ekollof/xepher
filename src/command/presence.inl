@@ -492,6 +492,51 @@ int command__whois(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
+    // In MUC buffers, show occupant presence info and prefer the real JID
+    // for vCard lookups when the room is non-anonymous.
+    if (ptr_channel && ptr_channel->type == weechat::channel::chat_type::MUC)
+    {
+        auto member_opt = ptr_channel->member_search(target);
+        auto user = member_opt
+            ? weechat::user::search(ptr_account, (*member_opt)->id.c_str())
+            : nullptr;
+
+        weechat_printf(buffer, "%sPresence for %s:",
+                       weechat_prefix("network"), target);
+
+        if (user)
+        {
+            auto fmt_opt = [](const std::optional<std::string>& v) -> std::string_view {
+                return v ? std::string_view(*v) : std::string_view{"-"};
+            };
+            weechat_printf(buffer, "  Role:        %s",
+                           fmt_opt(user->profile.role).data());
+            weechat_printf(buffer, "  Affiliation: %s",
+                           fmt_opt(user->profile.affiliation).data());
+            weechat_printf(buffer, "  Status:      %s%s%s",
+                           user->profile.status.has_value() ? user->profile.status->c_str() : "online",
+                           user->profile.status_text.has_value() ? " [" : "",
+                           user->profile.status_text.has_value() ? user->profile.status_text->c_str() : "",
+                           user->profile.status_text.has_value() ? "]" : "");
+            if (user->profile.idle)
+                weechat_printf(buffer, "  Idle:        %s",
+                               user->profile.idle->c_str());
+        }
+
+        if (member_opt && (*member_opt)->real_jid)
+        {
+            std::string_view real_jid = *(*member_opt)->real_jid;
+            weechat_printf(buffer, "  Real JID:    %s", real_jid.data());
+            target_storage = std::string(real_jid);
+            target = target_storage.c_str();
+        }
+        else
+        {
+            weechat_printf(buffer, "  %sRoom is anonymous — vCard request sent to room JID",
+                           weechat_color("darkgray"));
+        }
+    }
+
     // Request vCard using XEP-0054 (legacy)
     xmpp_stanza_t *iq = xmpp::xep0054::vcard_request(ptr_account->context, target);
     const char *req_id = xmpp_stanza_get_id(iq);

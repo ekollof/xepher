@@ -652,7 +652,8 @@ void weechat::channel::update_name(const char* name)
         weechat_buffer_set(buffer, "short_name", "");
 }
 
-std::optional<weechat::channel::member*> weechat::channel::add_member(const char *id, const char *client)
+std::optional<weechat::channel::member*> weechat::channel::add_member(const char *id, const char *client,
+                                                                       std::optional<std::string_view> real_jid)
 {
     weechat::channel::member *member;
     weechat::user *user;
@@ -671,11 +672,15 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     {
         auto& new_member = members[std::string(id)];
         new_member.id = id;
+        if (real_jid)
+            new_member.real_jid = std::string(*real_jid);
         member = &new_member;
     }
     else
     {
         member = *member_opt;
+        if (real_jid)
+            member->real_jid = std::string(*real_jid);
         if (user)
             user->nicklist_remove(&account, this);
     }

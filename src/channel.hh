@@ -79,6 +79,7 @@ namespace weechat
 
             std::optional<std::string> role;
             std::optional<std::string> affiliation;
+            std::optional<std::string> real_jid;  // occupant's real JID if room is non-anonymous
         };
 
         struct topic
@@ -198,7 +199,8 @@ namespace weechat
         void update_name(const char* name);
         void update_purpose(const char* purpose, const char* creator, int last_set);
 
-        std::optional<member*> add_member(const char *id, const char *client);
+        std::optional<member*> add_member(const char *id, const char *client,
+                                           std::optional<std::string_view> real_jid = std::nullopt);
         std::optional<member*> member_search(const char *id);
         std::optional<member*> remove_member(const char *id, const char *reason);
         std::string find_member_by_nick(const std::string& nick) const;

@@ -341,7 +341,9 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 }
                 else
                 {
-                    channel->add_member(binding->from->full.data(), jid.data());
+                    channel->add_member(binding->from->full.data(), jid.data(),
+                                        item.target ? std::optional(std::string_view(item.target->full))
+                                                    : std::nullopt);
                     if (is_server_nick && channel)
                     {
                         // Status 210: server assigned a different nick than requested
