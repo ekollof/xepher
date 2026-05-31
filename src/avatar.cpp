@@ -320,7 +320,8 @@ bool weechat::avatar::publish(account& acc, const std::string& filepath)
         BIO_set_flags(bio_b64, BIO_FLAGS_BASE64_NO_NL);
         BIO *bio_mem = BIO_new(BIO_s_mem());
         bio_b64 = BIO_push(bio_b64, bio_mem);
-        BIO_write(bio_b64, image_bytes.data(), static_cast<int>(image_bytes.size()));
+        std::span<const uint8_t> image_span = image_bytes;
+        BIO_write(bio_b64, image_span.data(), static_cast<int>(image_span.size()));
         BIO_flush(bio_b64);
         BUF_MEM *bptr = nullptr;
         BIO_get_mem_ptr(bio_b64, &bptr);
