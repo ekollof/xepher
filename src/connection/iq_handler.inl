@@ -697,7 +697,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         for (xmpp_stanza_t *item = xmpp_stanza_get_children(items);
                              item; item = xmpp_stanza_get_next(item))
                             item_vec.push_back(item);
-                        std::stable_sort(item_vec.begin(), item_vec.end(),
+                        std::ranges::stable_sort(item_vec,
                             [&item_pubdate](xmpp_stanza_t *a, xmpp_stanza_t *b) {
                                 return item_pubdate(a) < item_pubdate(b);
                             });
@@ -941,11 +941,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 if (!ae.categories.empty())
                                 {
                                     std::string tags;
-                                    for (size_t i = 0; i < ae.categories.size(); ++i)
-                                    {
-                                        if (i) tags += ", ";
-                                        tags += ae.categories[i];
-                                    }
+                                    bool first = true;
+                                    std::ranges::for_each(ae.categories, [&](const auto &cat) {
+                                        if (!first) tags += ", ";
+                                        first = false;
+                                        tags += cat;
+                                    });
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sTags:%s %s",
                                         dim, rst, tags.c_str());
@@ -1221,9 +1222,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         {
                             // Strip CR and LF to prevent HTTP header injection
                             std::string safe_value(value);
-                            safe_value.erase(std::remove_if(safe_value.begin(), safe_value.end(),
-                                [](char c) { return c == '\r' || c == '\n'; }),
-                                safe_value.end());
+                            std::erase_if(safe_value, [](char c) { return c == '\r' || c == '\n'; });
                             std::string header_str = fmt::format("{}: {}", name, safe_value);
                             put_headers.push_back(header_str);
                             XDEBUG("PUT header: {}", header_str);
@@ -1262,7 +1261,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 if (dot_pos != std::string::npos)
                 {
                     std::string ext = filename.substr(dot_pos + 1);
-                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    std::ranges::transform(ext, ext.begin(), ::tolower);
                     
                     if (ext == "jpg" || ext == "jpeg") content_type = "image/jpeg";
                     else if (ext == "png") content_type = "image/png";
@@ -2674,11 +2673,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         if (!meta_parts.empty())
                         {
                             info_str = "[";
-                            for (size_t i = 0; i < meta_parts.size(); ++i)
-                            {
-                                if (i) info_str += ", ";
-                                info_str += meta_parts[i];
-                            }
+                            bool first = true;
+                            std::ranges::for_each(meta_parts, [&](const auto &part) {
+                                if (!first) info_str += ", ";
+                                first = false;
+                                info_str += part;
+                            });
                             info_str += "]";
                         }
 
@@ -3002,13 +3002,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         std::string(lang ? lang : "") + "/" +
                         std::string(name ? name : ""));
                 }
-                std::sort(identities.begin(), identities.end());
+                std::ranges::sort(identities);
                 for (const auto &ident : identities)
                     S += ident + "<";
 
                 // Step 4-5: features already collected above; sort and append
                 std::vector<std::string> sorted_features = features;
-                std::sort(sorted_features.begin(), sorted_features.end());
+                std::ranges::sort(sorted_features);
                 for (const auto &feat : sorted_features)
                     S += feat + "<";
 
@@ -3068,17 +3068,17 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     // (e.g. Psi sends os_version with an empty value).
                                     vals.push_back(vtext ? vtext.get() : "");
                                 }
-                                std::sort(vals.begin(), vals.end());
+                                std::ranges::sort(vals);
                                 fd.fields.emplace_back(fvar, std::move(vals));
                             }
                         }
-                        std::sort(fd.fields.begin(), fd.fields.end(),
+                        std::ranges::sort(fd.fields,
                                   [](const auto &a, const auto &b){ return a.first < b.first; });
                         forms.push_back(std::move(fd));
                     }
                 }
                 // sort forms by FORM_TYPE
-                std::sort(forms.begin(), forms.end(),
+                std::ranges::sort(forms,
                           [](const FormData &a, const FormData &b){ return a.form_type < b.form_type; });
                 for (const auto &form : forms)
                 {
@@ -3096,7 +3096,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                        from ? from : "?", S.size(), S);
                 unsigned char digest[20];
                 unsigned int  digest_len = sizeof(digest);
-                EVP_Digest(S.data(), S.size(), digest, &digest_len, EVP_sha1(), nullptr);
+                std::span<const char> S_span = S;
+                EVP_Digest(S_span.data(), S_span.size(), digest, &digest_len, EVP_sha1(), nullptr);
 
                 const int enc_size = 4 * static_cast<int>((digest_len + 2) / 3) + 1;
                 std::string computed(static_cast<std::size_t>(enc_size), '\0');
@@ -3332,7 +3333,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (!svc_jid.empty())
                     {
                         auto &kps = account.known_pubsub_services;
-                        if (std::find(kps.begin(), kps.end(), svc_jid) == kps.end())
+                        if (!std::ranges::contains(kps, svc_jid))
                             kps.push_back(svc_jid);
                     }
                 }
@@ -3430,7 +3431,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
                 else
                 {
-                    bool is_new = (account.roster.find(jid) == account.roster.end());
+                    bool is_new = !account.roster.contains(jid);
                     account.roster[jid].jid = jid;
                     account.roster[jid].name = roster_name ? roster_name : "";
                     account.roster[jid].subscription = subscription ? subscription : "none";
@@ -3909,7 +3910,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                         const auto bundle_key =
                             std::make_pair(std::string(node_owner_str), *parsed_did);
-                        if (account.omemo.pending_bundle_fetch.count(bundle_key) != 0)
+                        if (account.omemo.pending_bundle_fetch.contains(bundle_key))
                             continue;
 
                         const auto bundle_node = fmt::format(

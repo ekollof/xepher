@@ -131,7 +131,7 @@ std::string render_body(std::string_view tmpl,
             subs.push_back({p, e.tag_text, e.markdown()});
     }
     // Sort descending by position so we can replace right-to-left
-    std::sort(subs.begin(), subs.end(),
+    std::ranges::sort(subs,
               [](const subst &a, const subst &b){ return a.pos > b.pos; });
     for (const auto &s : subs)
         result.replace(s.pos, s.tag.size(), s.repl);

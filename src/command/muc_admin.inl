@@ -1567,7 +1567,7 @@ int command__feed(const void *pointer, void *data,
                 if (dp != std::string::npos)
                 {
                     std::string ext = first_emb.filename.substr(dp + 1);
-                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    std::ranges::transform(ext, ext.begin(), ::tolower);
                     if (ext == "jpg" || ext == "jpeg") ct = "image/jpeg";
                     else if (ext == "png")  ct = "image/png";
                     else if (ext == "gif")  ct = "image/gif";
@@ -1706,7 +1706,7 @@ int command__feed(const void *pointer, void *data,
 
     // If no node was given and the service looks like a user JID (contains '@'),
     // default to the PEP microblog node — so "/feed user@example.org" just works.
-    if (node_name.empty() && !fetch_all && service_jid.find('@') != std::string::npos)
+    if (node_name.empty() && !fetch_all && service_jid.contains('@'))
         node_name = "urn:xmpp:microblog:0";
 
     if (!node_name.empty())

@@ -243,8 +243,8 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             {
                 const std::string bare_jid = normalize_bare_jid(*account->context, jid);
                 const auto key = std::make_pair(bare_jid, *sender_device_id);
-                const bool already_attempted = key_transport_bootstrap_attempted.count(key) != 0;
-                const bool already_pending = pending_key_transport.count(key) != 0;
+                const bool already_attempted = key_transport_bootstrap_attempted.contains(key);
+                const bool already_pending = pending_key_transport.contains(key);
 
                 if (!already_attempted && !already_pending)
                 {
@@ -337,7 +337,7 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
         return std::nullopt;
     }
     std::array<std::uint8_t, 12> iv {};
-    std::copy_n(iv_vec.begin(), 12, iv.begin());
+    std::ranges::copy_n(iv_vec.begin(), 12, iv.begin());
     const auto result = axolotl_omemo_decrypt(legacy_transport_key->first, iv,
                                              legacy_transport_key->second, payload);
     if (!result)
@@ -519,9 +519,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
                 continue;
             }
 
-            const auto encoded_transport = base64_encode(*account->context,
-                                                         transport->first.data(),
-                                                         transport->first.size());
+            const auto encoded_transport = base64_encode(*account->context, transport->first);
             // Flat legacy layout: add <key> directly under <header>
             header_spec.add_key(stanza::xep0384::axolotl_key(
                 fmt::format("{}", *remote_device_id),
@@ -557,13 +555,11 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
     }
 
     // Legacy: include <iv>base64</iv> in the header (12-byte GCM nonce)
-    const auto encoded_iv = base64_encode(*account->context, ep->iv.data(), ep->iv.size());
+    const auto encoded_iv = base64_encode(*account->context, ep->iv);
     header_spec.add_iv(stanza::xep0384::axolotl_iv(encoded_iv));
 
     // Legacy: <payload>base64 AES-128-GCM ciphertext (auth tag stripped)</payload>
-    const auto encoded_payload = base64_encode(*account->context,
-                                               ep->payload.data(),
-                                               ep->payload.size());
+    const auto encoded_payload = base64_encode(*account->context, ep->payload);
 
     stanza::xep0384::axolotl_encrypted enc_spec;
     enc_spec.add_header(header_spec)

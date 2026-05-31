@@ -12,13 +12,15 @@ void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const c
             return {};
         std::string out;
         out.reserve(bytes.size() * 3);
-        for (std::size_t i = 0; i < bytes.size(); ++i)
+        bool first = true;
+        for (auto b : bytes)
         {
-            if (i > 0)
+            if (!first)
                 out += ':';
+            first = false;
             constexpr const char *hex = "0123456789ABCDEF";
-            out += hex[(bytes[i] >> 4) & 0xF];
-            out += hex[bytes[i] & 0xF];
+            out += hex[(b >> 4) & 0xF];
+            out += hex[b & 0xF];
         }
         return out;
     };
@@ -52,8 +54,8 @@ void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const c
                     devices.push_back(*parsed);
             }
         }
-        std::sort(devices.begin(), devices.end());
-        devices.erase(std::unique(devices.begin(), devices.end()), devices.end());
+        std::ranges::sort(devices);
+        devices.erase(std::ranges::unique(devices).begin(), devices.end());
 
         if (devices.empty())
         {
@@ -166,8 +168,8 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
         }
     }
 
-    std::sort(devices.begin(), devices.end());
-    devices.erase(std::unique(devices.begin(), devices.end()), devices.end());
+    std::ranges::sort(devices);
+    devices.erase(std::ranges::unique(devices).begin(), devices.end());
 
     if (devices.empty())
     {

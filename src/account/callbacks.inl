@@ -239,7 +239,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
                 if (dp != std::string::npos)
                 {
                     std::string ext = next_emb.filename.substr(dp + 1);
-                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    std::ranges::transform(ext, ext.begin(), ::tolower);
                     if (ext == "jpg" || ext == "jpeg") ct = "image/jpeg";
                     else if (ext == "png")  ct = "image/png";
                     else if (ext == "gif")  ct = "image/gif";

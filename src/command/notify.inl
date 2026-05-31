@@ -68,7 +68,7 @@ int command__notify(const void *pointer, void *data,
     }
 
     // Apply the setting to the bookmark and re-publish.
-    if (ptr_account->bookmarks.find(target_jid) == ptr_account->bookmarks.end())
+    if (!ptr_account->bookmarks.contains(target_jid))
     {
         // Create a minimal bookmark entry so we can persist the setting.
         ptr_account->bookmarks[target_jid].jid = target_jid;

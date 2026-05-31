@@ -1454,11 +1454,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 if (!ae.categories.empty())
                                 {
                                     std::string tags;
-                                    for (size_t i = 0; i < ae.categories.size(); ++i)
-                                    {
-                                        if (i) tags += ", ";
-                                        tags += ae.categories[i];
-                                    }
+                                    bool first = true;
+                                    std::ranges::for_each(ae.categories, [&](const auto &cat) {
+                                        if (!first) tags += ", ";
+                                        first = false;
+                                        tags += cat;
+                                    });
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sTags:%s %s",
                                         dim, rst, tags.c_str());
@@ -3367,7 +3368,7 @@ message_handler_after_omemo:
             sims_suffix += "]" + std::string(weechat_color("resetcolor"));
 
             // If OOB already shows this same URL, suppress the OOB suffix to avoid duplication
-            if (!oob_suffix.empty() && oob_suffix.find(sims_url) != std::string::npos)
+            if (!oob_suffix.empty() && oob_suffix.find(sims_url) != std::string::npos)  // .contains in C++23
                 oob_suffix.clear();
         }
     }
@@ -3959,7 +3960,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
     sorted_features.reserve(advertised_features.size());
     for (const auto feature : advertised_features)
         sorted_features.emplace_back(feature);
-    std::sort(sorted_features.begin(), sorted_features.end());
+    std::ranges::sort(sorted_features);
 
     for (const auto &ns : sorted_features)
     {

@@ -455,7 +455,7 @@ int command__bookmark(const void *pointer, void *data,
     {
         const char *jid = argv[2];
         
-        if (ptr_account->bookmarks.find(jid) == ptr_account->bookmarks.end())
+        if (!ptr_account->bookmarks.contains(jid))
         {
             weechat_printf(buffer, "%sBookmark not found: %s",
                           weechat_prefix("error"), jid);
@@ -477,7 +477,7 @@ int command__bookmark(const void *pointer, void *data,
         const char *jid = argv[2];
         const char *value = argv[3];
         
-        if (ptr_account->bookmarks.find(jid) == ptr_account->bookmarks.end())
+        if (!ptr_account->bookmarks.contains(jid))
         {
             weechat_printf(buffer, "%sBookmark not found: %s",
                           weechat_prefix("error"), jid);

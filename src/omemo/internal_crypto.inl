@@ -174,10 +174,11 @@ int crypto_encrypt(signal_buffer **output, int cipher,
     if (cipher == SG_CIPHER_AES_CBC_PKCS5)
         out = pkcs7_pad(std::string_view(reinterpret_cast<const char *>(plaintext), plaintext_len), 16);
 
-    if (gcry_cipher_encrypt(handle.get(), out.data(), out.size(), out.data(), out.size()) != 0)
+    std::span<uint8_t> out_span = out;
+    if (gcry_cipher_encrypt(handle.get(), out_span.data(), out_span.size(), out_span.data(), out_span.size()) != 0)
         return SG_ERR_UNKNOWN;
 
-    *output = signal_buffer_create(out.data(), out.size());
+    *output = signal_buffer_create(out_span.data(), out_span.size());
     return *output ? SG_SUCCESS : SG_ERR_NOMEM;
 }
 
@@ -207,7 +208,8 @@ int crypto_decrypt(signal_buffer **output, int cipher,
     }
 
     std::vector<uint8_t> out(ciphertext, ciphertext + ciphertext_len);
-    if (gcry_cipher_decrypt(handle.get(), out.data(), out.size(), out.data(), out.size()) != 0)
+    std::span<uint8_t> out_span = out;
+    if (gcry_cipher_decrypt(handle.get(), out_span.data(), out_span.size(), out_span.data(), out_span.size()) != 0)
         return SG_ERR_UNKNOWN;
 
     if (cipher == SG_CIPHER_AES_CBC_PKCS5)
@@ -219,7 +221,7 @@ int crypto_decrypt(signal_buffer **output, int cipher,
     }
     else
     {
-        *output = signal_buffer_create(out.data(), out.size());
+        *output = signal_buffer_create(out_span.data(), out_span.size());
     }
 
     return *output ? SG_SUCCESS : SG_ERR_NOMEM;
@@ -261,8 +263,9 @@ void crypto_unlock(void *user_data)
 
     unique_signal_buffer buffer {raw};
     return base64_encode(context,
-                         signal_buffer_const_data(buffer.get()),
-                         signal_buffer_len(buffer.get()));
+                         std::span<const unsigned char>(
+                             signal_buffer_const_data(buffer.get()),
+                             signal_buffer_len(buffer.get())));
 }
 
 // ---------------------------------------------------------------------------
@@ -284,8 +287,10 @@ struct axolotl_omemo_payload {
         return std::nullopt;
 
     axolotl_omemo_payload result;
-    gcry_randomize(result.key.data(), result.key.size(), GCRY_STRONG_RANDOM);
-    gcry_randomize(result.iv.data(), result.iv.size(), GCRY_STRONG_RANDOM);
+    auto key_span = std::span(result.key);
+    auto iv_span  = std::span(result.iv);
+    gcry_randomize(key_span.data(), key_span.size(), GCRY_STRONG_RANDOM);
+    gcry_randomize(iv_span.data(), iv_span.size(), GCRY_STRONG_RANDOM);
 
     gcry_cipher_hd_t cipher_raw = nullptr;
     // AES-128 = GCRY_CIPHER_AES (= GCRY_CIPHER_AES128)
@@ -293,24 +298,26 @@ struct axolotl_omemo_payload {
         return std::nullopt;
     unique_gcry_cipher cipher {cipher_raw};
 
-    if (gcry_cipher_setkey(cipher.get(), result.key.data(), result.key.size()) != 0
-        || gcry_cipher_setiv(cipher.get(), result.iv.data(), result.iv.size()) != 0)
+    if (gcry_cipher_setkey(cipher.get(), key_span.data(), key_span.size()) != 0
+        || gcry_cipher_setiv(cipher.get(), iv_span.data(), iv_span.size()) != 0)
     {
         return std::nullopt;
     }
 
     std::vector<std::uint8_t> ciphertext(plaintext.size());
-    if (gcry_cipher_encrypt(cipher.get(), ciphertext.data(), ciphertext.size(),
+    std::span<std::uint8_t> ct_span = ciphertext;
+    if (gcry_cipher_encrypt(cipher.get(), ct_span.data(), ct_span.size(),
                             plaintext.data(), plaintext.size()) != 0)
     {
         return std::nullopt;
     }
 
     // Retrieve GCM authentication tag (16 bytes)
-    if (gcry_cipher_gettag(cipher.get(), result.authtag.data(), result.authtag.size()) != 0)
+    auto authtag_span = std::span(result.authtag);
+    if (gcry_cipher_gettag(cipher.get(), authtag_span.data(), authtag_span.size()) != 0)
         return std::nullopt;
 
-    result.payload = std::move(ciphertext);
+    result.payload = std::move(ciphertext);  // (span not needed after this point)
     return result;
 }
 
@@ -329,21 +336,25 @@ struct axolotl_omemo_payload {
         return std::nullopt;
     unique_gcry_cipher cipher {cipher_raw};
 
-    if (gcry_cipher_setkey(cipher.get(), key.data(), key.size()) != 0
-        || gcry_cipher_setiv(cipher.get(), iv.data(), iv.size()) != 0)
+    auto key_span = std::span(key);
+    auto iv_span  = std::span(iv);
+    if (gcry_cipher_setkey(cipher.get(), key_span.data(), key_span.size()) != 0
+        || gcry_cipher_setiv(cipher.get(), iv_span.data(), iv_span.size()) != 0)
     {
         return std::nullopt;
     }
 
     std::vector<std::uint8_t> plaintext(ciphertext.size());
-    if (gcry_cipher_decrypt(cipher.get(), plaintext.data(), plaintext.size(),
+    std::span<std::uint8_t> pt_span = plaintext;
+    if (gcry_cipher_decrypt(cipher.get(), pt_span.data(), pt_span.size(),
                             ciphertext.data(), ciphertext.size()) != 0)
     {
         return std::nullopt;
     }
 
     // Verify the GCM authentication tag
-    if (gcry_cipher_checktag(cipher.get(), authtag.data(), authtag.size()) != 0)
+    auto authtag_span = std::span(authtag);
+    if (gcry_cipher_checktag(cipher.get(), authtag_span.data(), authtag_span.size()) != 0)
     {
         weechat_printf(nullptr, "%somemo: legacy OMEMO payload GCM authentication failed",
                        weechat_prefix("error"));
@@ -366,8 +377,9 @@ struct axolotl_omemo_payload {
 
     // Per Conversations: Signal-encrypt innerKey(16) || authTag(16) = 32 bytes
     std::array<std::uint8_t, 32> bundle {};
-    std::copy_n(ep.key.begin(), 16, bundle.begin());
-    std::copy_n(ep.authtag.begin(), 16, bundle.begin() + 16);
+    auto bundle_span = std::span(bundle);
+    std::copy_n(ep.key.begin(), 16, bundle_span.begin());
+    std::copy_n(ep.authtag.begin(), 16, bundle_span.begin() + 16);
 
     auto address = make_signal_address(jid, static_cast<std::int32_t>(remote_device_id));
 
@@ -383,7 +395,7 @@ struct axolotl_omemo_payload {
     session_cipher_set_version(cipher.get(), CIPHERTEXT_CURRENT_VERSION);
 
     ciphertext_message *message_raw = nullptr;
-    if (session_cipher_encrypt(cipher.get(), bundle.data(), bundle.size(), &message_raw) != 0)
+    if (session_cipher_encrypt(cipher.get(), bundle_span.data(), bundle_span.size(), &message_raw) != 0)
         return std::nullopt;
     libsignal::unique_ciphertext_message message {message_raw};
 
@@ -444,13 +456,14 @@ struct axolotl_omemo_payload {
 
     signal_buffer *plaintext_raw = nullptr;
     int result = SG_ERR_INVAL;
+    std::span<const uint8_t> ser_span = serialized;
     if (is_prekey)
     {
         pre_key_signal_message *message_raw = nullptr;
         int rc = pre_key_signal_message_deserialize_omemo(
-            &message_raw, serialized.data(), serialized.size(), registration_id, self.context);
+            &message_raw, ser_span.data(), ser_span.size(), registration_id, self.context);
         if (rc != 0)
-            rc = pre_key_signal_message_deserialize(&message_raw, serialized.data(), serialized.size(), self.context);
+            rc = pre_key_signal_message_deserialize(&message_raw, ser_span.data(), ser_span.size(), self.context);
         if (rc != 0)
         {
             weechat_printf(nullptr, "%somemo: (legacy) pre_key_signal_message_deserialize failed for %.*s/%u: rc=%d",
@@ -494,9 +507,9 @@ struct axolotl_omemo_payload {
     else
     {
         signal_message *message_raw = nullptr;
-        int rc = signal_message_deserialize_omemo(&message_raw, serialized.data(), serialized.size(), self.context);
+        int rc = signal_message_deserialize_omemo(&message_raw, ser_span.data(), ser_span.size(), self.context);
         if (rc != 0)
-            rc = signal_message_deserialize(&message_raw, serialized.data(), serialized.size(), self.context);
+            rc = signal_message_deserialize(&message_raw, ser_span.data(), ser_span.size(), self.context);
         if (rc != 0)
         {
             weechat_printf(nullptr, "%somemo: (legacy) signal_message_deserialize failed for %.*s/%u: rc=%d",

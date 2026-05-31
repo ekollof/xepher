@@ -12,6 +12,7 @@
 #include <memory>
 #include <numeric>
 #include <stdexcept>
+#include <span>
 #include <fmt/core.h>
 #include <gpgme.h>
 #include <weechat/weechat-plugin.h>
@@ -127,7 +128,8 @@ std::optional<std::string> weechat::xmpp::pgp::encrypt(struct t_gui_buffer *buff
     gpgme_key_t keys[3] = {nullptr, nullptr, nullptr};
     gpgme_error_t err;
 
-    err = gpgme_data_new_from_mem(&in_g.h, message.data(), message.size(), false);
+    std::span<const char> message_span = message;
+    err = gpgme_data_new_from_mem(&in_g.h, message_span.data(), message_span.size(), false);
     if (err) goto encrypt_finish;
 
     err = gpgme_data_new(&out_g.h);
@@ -181,7 +183,8 @@ std::optional<std::string> weechat::xmpp::pgp::decrypt(struct t_gui_buffer *buff
     gpgme_error_t err;
 
     std::string buf = fmt::format(PGP_MESSAGE_HEADER "{}" PGP_MESSAGE_FOOTER, ciphertext);
-    err = gpgme_data_new_from_mem(&in_g.h, buf.data(), buf.size(), false);
+    std::span<const char> buf_span = buf;
+    err = gpgme_data_new_from_mem(&in_g.h, buf_span.data(), buf_span.size(), false);
     if (err) goto decrypt_finish;
 
     err = gpgme_data_new(&out_g.h);
@@ -229,7 +232,8 @@ std::optional<std::string> weechat::xmpp::pgp::verify(struct t_gui_buffer *buffe
     gpgme_error_t err;
 
     std::string buf = fmt::format(PGP_SIGNATURE_HEADER "{}" PGP_SIGNATURE_FOOTER, certificate);
-    err = gpgme_data_new_from_mem(&in_g.h, buf.data(), buf.size(), false);
+    std::span<const char> buf_span = buf;
+    err = gpgme_data_new_from_mem(&in_g.h, buf_span.data(), buf_span.size(), false);
     if (err) goto verify_finish;
 
     err = gpgme_data_new(&out_g.h);
@@ -289,7 +293,8 @@ std::optional<std::string> weechat::xmpp::pgp::sign(struct t_gui_buffer *buffer,
     std::string signature;
     gpgme_error_t err;
 
-    err = gpgme_data_new_from_mem(&in_g.h, message.data(), message.size(), false);
+    std::span<const char> message_span = message;
+    err = gpgme_data_new_from_mem(&in_g.h, message_span.data(), message_span.size(), false);
     if (err) goto sign_finish;
 
     err = gpgme_data_new(&out_g.h);

@@ -221,7 +221,7 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
     char sig[1];
     (void)::read(fd, sig, sizeof(sig));
 
-    auto it = std::find_if(g_esfs_downloads.begin(), g_esfs_downloads.end(),
+    auto it = std::ranges::find_if(g_esfs_downloads,
                            [fd](const esfs_download_ctx &c) { return c.pipe_read_fd == fd; });
     if (it == g_esfs_downloads.end())
         return WEECHAT_RC_ERROR;
@@ -264,7 +264,7 @@ void esfs_start_download(std::string_view cipher_url,
                          std::string_view stable_id)
 {
     // Layer 1: in-flight dedup — same cipher_url already being downloaded this session.
-    bool already_inflight = std::any_of(g_esfs_downloads.begin(), g_esfs_downloads.end(),
+    bool already_inflight = std::ranges::any_of(g_esfs_downloads,
                                         [&](const esfs_download_ctx &c) {
                                             return c.cipher_url == cipher_url;
                                         });
@@ -473,13 +473,13 @@ std::list<og_pending_entry> g_og_pending;
 static size_t ifinds(std::string_view hay, std::string_view needle, size_t from = 0)
 {
     if (needle.empty()) return from;
-    auto it = std::search(hay.begin() + static_cast<std::ptrdiff_t>(from), hay.end(),
-                          needle.begin(), needle.end(),
-                          [](unsigned char a, unsigned char b) {
-                              return std::tolower(a) == std::tolower(b);
-                          });
-    if (it == hay.end()) return std::string::npos;
-    return static_cast<size_t>(it - hay.begin());
+    auto sub = hay.substr(from);
+    auto res = std::ranges::search(sub, needle,
+        [](unsigned char a, unsigned char b) {
+            return std::tolower(a) == std::tolower(b);
+        });
+    if (res.empty()) return std::string::npos;
+    return from + static_cast<size_t>(res.begin() - sub.begin());
 }
 
 // Extract the value of an HTML attribute from a tag string.
@@ -638,7 +638,7 @@ static int og_fetch_cb(const void * /*pointer*/, void * /*data*/, int fd)
     char sig[1];
     (void)::read(fd, sig, sizeof(sig));
 
-    auto it = std::find_if(g_og_fetches.begin(), g_og_fetches.end(),
+    auto it = std::ranges::find_if(g_og_fetches,
                            [fd](const og_fetch_ctx &c) { return c.pipe_read_fd == fd; });
     if (it == g_og_fetches.end())
         return WEECHAT_RC_ERROR;
@@ -819,12 +819,12 @@ void og_start_fetch(std::string_view url,
         return;
 
     // Dedup: already in-flight?
-    if (std::any_of(g_og_fetches.begin(), g_og_fetches.end(),
+    if (std::ranges::any_of(g_og_fetches,
                     [&](const og_fetch_ctx &c) { return c.url == url; }))
         return;
 
     // Dedup: already pending?
-    if (std::any_of(g_og_pending.begin(), g_og_pending.end(),
+    if (std::ranges::any_of(g_og_pending,
                     [&](const og_pending_entry &p) { return p.url == url; }))
         return;
 

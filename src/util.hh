@@ -19,7 +19,7 @@ std::string apply_xep393_styling(std::string_view text);
 // Returns a WeeChat-colour-coded string derived from `plain_text` using the
 // <markup xmlns='urn:xmpp:markup:0'> child of `stanza`, or an empty string
 // if no <markup> element is found.
-std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_text);
+std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_text);
 
 // Markdown renderer for Atom feed plain-text content.
 // Converts a barebones subset of Markdown to WeeChat colour/attribute codes.

@@ -351,7 +351,7 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_te
     if (events.empty()) return std::string(plain_text); // markup present but no actionable elements
 
     // Sort events: by byte offset, then by priority
-    std::sort(events.begin(), events.end(), [](const Event &a, const Event &b) {
+    std::ranges::sort(events, [](const Event &a, const Event &b) {
         if (a.byte_off != b.byte_off) return a.byte_off < b.byte_off;
         return a.priority < b.priority;
     });

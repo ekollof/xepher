@@ -88,12 +88,9 @@ void store_bundle(omemo &self, std::string_view jid, std::uint32_t remote_device
 
     bundle_metadata bundle;
     bundle.signed_pre_key_id = *signed_pre_key_id;
-    bundle.signed_pre_key = base64_encode_raw(signed_pre_key_public->data(),
-                                              signed_pre_key_public->size());
-    bundle.signed_pre_key_signature = base64_encode_raw(signed_pre_key_signature->data(),
-                                                        signed_pre_key_signature->size());
-    bundle.identity_key = base64_encode_raw(identity_public->data(),
-                                            identity_public->size());
+    bundle.signed_pre_key = base64_encode_raw(*signed_pre_key_public);
+    bundle.signed_pre_key_signature = base64_encode_raw(*signed_pre_key_signature);
+    bundle.identity_key = base64_encode_raw(*identity_public);
 
     if (bundle.signed_pre_key_id.empty() || !parse_uint32(bundle.signed_pre_key_id))
     {
@@ -588,7 +585,8 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     if (decoded.empty())
         return std::nullopt;
 
-    return libsignal::public_key(decoded.data(), decoded.size(), signal_context_ptr);
+    std::span<const uint8_t> decoded_span = decoded;
+    return libsignal::public_key(decoded_span.data(), decoded_span.size(), signal_context_ptr);
 }
 
 [[nodiscard]] auto establish_session_from_bundle(omemo &self, xmpp_ctx_t * /*context*/,
@@ -674,9 +672,11 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     // Validate bundle signature before invoking libsignal session setup.
     // Some broken bundles trigger signature failures; rejecting them here keeps
     // the failure explicit and avoids pushing invalid material further.
+    std::span<const uint8_t> spk_span = signed_pre_key_raw;
+    std::span<const uint8_t> sig_span = signature;
     if (curve_verify_signature(*(*identity_key),
-                               signed_pre_key_raw.data(), signed_pre_key_raw.size(),
-                               signature.data(), signature.size()) <= 0)
+                               spk_span.data(), spk_span.size(),
+                               sig_span.data(), sig_span.size()) <= 0)
     {
         weechat_printf(nullptr,
                        "%somemo: session bootstrap rejected invalid signed-prekey signature for %.*s/%u",

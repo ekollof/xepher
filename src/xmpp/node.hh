@@ -90,8 +90,7 @@ namespace xml {
         inline std::vector<std::reference_wrapper<node>>
         get_children(std::string_view name) {
             std::vector<std::reference_wrapper<node>> list;
-            std::copy_if(children.begin(), children.end(),
-                         std::back_inserter(list),
+            std::ranges::copy_if(children, std::back_inserter(list),
                          [&](node& x) {
                              return x.name == name
                                  && x.ns == std::string_view(X());
@@ -102,8 +101,7 @@ namespace xml {
         inline std::vector<std::reference_wrapper<node>>
         get_children(std::string_view name) {
             std::vector<std::reference_wrapper<node>> list;
-            std::copy_if(children.begin(), children.end(),
-                         std::back_inserter(list),
+            std::ranges::copy_if(children, std::back_inserter(list),
                          [&](node& x) {
                              return x.name == name;
                          });

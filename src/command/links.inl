@@ -131,7 +131,7 @@ int command__links(COMMAND_ARGS)
     }
 
     // Sort oldest-first so newest links appear last (chat-scroll convention).
-    std::stable_sort(urls.begin(), urls.end(),
+    std::ranges::stable_sort(urls,
                      [](const url_entry &a, const url_entry &b) {
                          return a.date < b.date;
                      });
@@ -190,9 +190,9 @@ int command__links(COMMAND_ARGS)
             continue; // already cached
 
         bool already_fetching =
-            std::any_of(g_og_fetches.begin(), g_og_fetches.end(),
+            std::ranges::any_of(g_og_fetches,
                         [&](const og_fetch_ctx &ctx) { return ctx.url == e.url; }) ||
-            std::any_of(g_og_pending.begin(), g_og_pending.end(),
+            std::ranges::any_of(g_og_pending,
                         [&](const og_pending_entry &p) { return p.url == e.url; });
         if (already_fetching)
         {

@@ -1192,7 +1192,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     // Message Carbons can correctly synchronise the message to other clients.
     // Detection: type is PM, to has a resource, and peer_bare is a known MUC.
     if (type == weechat::channel::chat_type::PM
-        && to_str.find('/') != std::string::npos
+        && to_str.find('/') != std::string::npos  // could be .contains in C++23
         && account.channels.count(peer_bare)
         && account.channels.at(peer_bare).type == weechat::channel::chat_type::MUC)
     {
@@ -1352,7 +1352,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                     std::istringstream ss(task->output);
                     std::string line, mime;
                     while (std::getline(ss, line)) {
-                        std::transform(line.begin(), line.end(), line.begin(),
+                        std::ranges::transform(line, line.begin(),
                                 [](char c) -> char { return std::tolower(c); });
                         if (line.starts_with(prefix)) {
                             mime = line.substr(prefix.size());
@@ -1556,7 +1556,7 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
                 if (head_end == std::string::npos)
                     head_end = std::min(html.size(), (size_t)8192);
                 head_html = html.substr(0, head_end);
-                std::transform(head_html.begin(), head_html.end(), head_html.begin(),
+                std::ranges::transform(head_html, head_html.begin(),
                         [](unsigned char c) { return std::tolower(c); });
             }
 

@@ -173,12 +173,13 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
 {
     std::ostringstream stream;
 
-    for (std::size_t index = 0; index < values.size(); ++index)
-    {
-        if (index != 0)
+    bool first = true;
+    std::ranges::for_each(values, [&](const auto &v) {
+        if (!first)
             stream << separator;
-        stream << values[index];
-    }
+        first = false;
+        stream << v;
+    });
 
     return stream.str();
 }
@@ -350,15 +351,15 @@ void store_tofu_trust(omemo &self,
     return (text_ptr && *text_ptr) ? std::string {text_ptr.get()} : std::string {};
 }
 
-[[nodiscard]] auto base64_encode_raw(const std::uint8_t *data, std::size_t size) -> std::string
+[[nodiscard]] auto base64_encode_raw(std::span<const std::uint8_t> data) -> std::string
 {
-    if (!data || size == 0)
+    if (data.empty())
         return {};
 
-    const int encoded_size = 4 * static_cast<int>((size + 2) / 3) + 1;
+    const int encoded_size = 4 * static_cast<int>((data.size() + 2) / 3) + 1;
     std::string encoded(static_cast<std::size_t>(encoded_size), '\0');
     const int written = weechat_string_base_encode("64",
-        reinterpret_cast<const char *>(data), static_cast<int>(size), encoded.data());
+        reinterpret_cast<const char *>(data.data()), static_cast<int>(data.size()), encoded.data());
     if (written <= 0)
         return {};
     encoded.resize(static_cast<std::size_t>(written));
@@ -366,9 +367,9 @@ void store_tofu_trust(omemo &self,
 }
 
 [[nodiscard]] auto base64_encode([[maybe_unused]] xmpp_ctx_t *context,
-                                 const unsigned char *data, std::size_t size) -> std::string
+                                 std::span<const unsigned char> data) -> std::string
 {
-    return base64_encode_raw(data, size);
+    return base64_encode_raw(data);
 }
 
 [[nodiscard]] auto base64_decode([[maybe_unused]] xmpp_ctx_t *context, std::string_view encoded)
@@ -394,7 +395,7 @@ void store_tofu_trust(omemo &self,
 void request_axolotl_devicelist(weechat::account &account, std::string_view jid)
 {
     const std::string target_jid = normalize_bare_jid(account.context, jid);
-    if (account.omemo.missing_axolotl_devicelist.count(target_jid) != 0)
+    if (account.omemo.missing_axolotl_devicelist.contains(target_jid))
         return;
     account.omemo.missing_axolotl_devicelist.insert(target_jid);
 

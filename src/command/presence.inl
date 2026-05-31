@@ -604,7 +604,7 @@ int command__setvcard(const void *pointer, void *data,
     static const std::vector<std::string> valid_fields = {
         "fn", "nickname", "email", "url", "desc", "org", "title", "tel", "bday", "note"
     };
-    if (std::find(valid_fields.begin(), valid_fields.end(), field) == valid_fields.end())
+    if (!std::ranges::contains(valid_fields, field))
     {
         weechat_printf(buffer,
                        "%s%s: unknown vCard field '%s'\n"

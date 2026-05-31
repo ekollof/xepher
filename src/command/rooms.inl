@@ -146,15 +146,16 @@ std::optional<std::string> pick_file_interactive()
         if (fp)
         {
             std::array<char, 4096> path = {};
-            if (fgets(path.data(), path.size(), fp))
+            std::span<char> path_span = path;
+            if (fgets(path_span.data(), path_span.size(), fp))
             {
                 pclose(fp);
                 // Remove trailing newline
-                size_t len = std::string_view(path.data()).size();
-                if (len > 0 && path[len-1] == '\n')
-                    path[len-1] = '\0';
-                if (path[0])
-                    return std::string(path.data());
+                size_t len = std::string_view(path_span.data()).size();
+                if (len > 0 && path_span[len-1] == '\n')
+                    path_span[len-1] = '\0';
+                if (path_span[0])
+                    return std::string(path_span.data());
             }
             pclose(fp);
         }
@@ -164,14 +165,15 @@ std::optional<std::string> pick_file_interactive()
         if (fp)
         {
             std::array<char, 4096> path = {};
-            if (fgets(path.data(), path.size(), fp))
+            std::span<char> path_span = path;
+            if (fgets(path_span.data(), path_span.size(), fp))
             {
                 pclose(fp);
-                size_t len = std::string_view(path.data()).size();
-                if (len > 0 && path[len-1] == '\n')
-                    path[len-1] = '\0';
-                if (path[0])
-                    return std::string(path.data());
+                size_t len = std::string_view(path_span.data()).size();
+                if (len > 0 && path_span[len-1] == '\n')
+                    path_span[len-1] = '\0';
+                if (path_span[0])
+                    return std::string(path_span.data());
             }
             pclose(fp);
         }
@@ -353,7 +355,7 @@ int command__upload(const void *pointer, void *data,
     if (dot_pos != std::string::npos)
     {
         std::string ext = sanitized_basename.substr(dot_pos + 1);
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        std::ranges::transform(ext, ext.begin(), ::tolower);
         
         if (ext == "jpg" || ext == "jpeg") content_type = "image/jpeg";
         else if (ext == "png") content_type = "image/png";

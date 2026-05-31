@@ -14,6 +14,7 @@
 #include <optional>
 #include <random>
 #include <span>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>

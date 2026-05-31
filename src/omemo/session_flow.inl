@@ -179,7 +179,7 @@ XMPP_TEST_EXPORT auto weechat::xmpp::omemo::has_peer_traffic(xmpp_ctx_t *context
         return false;
 
     const std::string bare_jid = normalize_bare_jid(context, jid);
-    return peers_with_observed_traffic.count(bare_jid) != 0;
+    return peers_with_observed_traffic.contains(bare_jid);
 }
 
 
@@ -293,9 +293,7 @@ static void send_key_transport(omemo &self,
     // IV is also zero (no payload to decrypt with it).
     const axolotl_omemo_payload ep{};  // all-zero key, iv, authtag, empty payload
 
-    const auto encoded_iv = base64_encode(*account.context,
-                                          ep.iv.data(),
-                                          ep.iv.size());
+    const auto encoded_iv = base64_encode(*account.context, ep.iv);
 
     const std::string own_bare_jid = [&]{
         auto b = ::jid(nullptr, account.jid().data()).bare;
@@ -318,9 +316,7 @@ static void send_key_transport(omemo &self,
         if (!target_transport)
             return false;
 
-        const auto target_encoded_transport = base64_encode(*account.context,
-                                                            target_transport->first.data(),
-                                                            target_transport->first.size());
+        const auto target_encoded_transport = base64_encode(*account.context, target_transport->first);
         header_spec.add_key(stanza::xep0384::axolotl_key(
             fmt::format("{}", target_device_id),
             target_encoded_transport,

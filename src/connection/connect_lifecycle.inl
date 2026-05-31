@@ -527,7 +527,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             // Sending disco#info to a bare JID is unreliable: many servers (including
             // Prosody) return type='error' for such queries, leaving the deferred feed
             // stuck forever.  For PEP nodes, fall straight through to XEP-0060 items.
-            bool is_pep = service_jid.find('@') != std::string::npos;
+            bool is_pep = service_jid.contains('@');
             if (is_pep)
             {
                 std::string fuid = stanza::uuid(account.context);
