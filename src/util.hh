@@ -13,7 +13,7 @@ XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2);
 XMPP_TEST_EXPORT std::string unescape(const std::string& str);
 
 // XEP-0393: Message Styling
-std::string apply_xep393_styling(const std::string& text);
+std::string apply_xep393_styling(std::string_view text);
 
 // XEP-0394: Message Markup (receive-only)
 // Returns a WeeChat-colour-coded string derived from `plain_text` using the
@@ -24,4 +24,4 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_
 // Markdown renderer for Atom feed plain-text content.
 // Converts a barebones subset of Markdown to WeeChat colour/attribute codes.
 // Applied to <content type='text'> (or no type) Atom entries.
-std::string apply_markdown_to_weechat(const std::string &text);
+std::string apply_markdown_to_weechat(std::string_view text);

@@ -484,11 +484,11 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     if (username.empty()) username = st->jid;
 
     struct ibr_set_spec : stanza::spec {
-        ibr_set_spec(const std::string &uname, const std::string &pass) : spec("iq") {
+        ibr_set_spec(std::string_view uname, std::string_view pass) : spec("iq") {
             attr("type", "set");
             attr("id", "ibr-set");
             struct query_spec : stanza::spec {
-                query_spec(const std::string &u, const std::string &p) : spec("query") {
+                query_spec(std::string_view u, std::string_view p) : spec("query") {
                     attr("xmlns", "jabber:iq:register");
                     struct text_el : stanza::spec {
                         text_el(std::string_view tag, std::string_view val) : spec(tag) {
@@ -1057,11 +1057,11 @@ void command__account_passwd(struct t_gui_buffer *buffer, int argc, char **argv)
     std::string uname = acct_jid.local.empty() ? account->jid() : acct_jid.local;
 
     struct ibr_passwd_spec : stanza::spec {
-        ibr_passwd_spec(const std::string &uname, const char *pass) : spec("iq") {
+        ibr_passwd_spec(std::string_view uname, const char *pass) : spec("iq") {
             attr("type", "set");
             attr("id", "ibr-passwd");
             struct query_spec : stanza::spec {
-                query_spec(const std::string &u, const char *p) : spec("query") {
+                query_spec(std::string_view u, const char *p) : spec("query") {
                     attr("xmlns", "jabber:iq:register");
                     struct text_el : stanza::spec {
                         text_el(std::string_view tag, std::string_view val) : spec(tag) {

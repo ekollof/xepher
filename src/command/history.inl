@@ -196,7 +196,7 @@ int command__edit(const void *pointer, void *data,
         "xmpp.picker.edit",
         "Edit message  (XEP-0308)",
         std::move(entries),
-        [buf = buffer, el = std::move(entry_list)](const std::string &selected) {
+        [buf = buffer, el = std::move(entry_list)](std::string_view selected) {
             // Find the body for the selected ID so we can pre-fill it
             std::string body;
             for (auto &e : el)
@@ -415,8 +415,8 @@ int command__retract(const void *pointer, void *data,
         "xmpp.picker.retract",
         "Retract message  (XEP-0424)",
         std::move(entries),
-        [ptr_account, ptr_channel, buf = buffer](const std::string &selected) {
-            do_retract_send(ptr_account, ptr_channel, buf, selected);
+        [ptr_account, ptr_channel, buf = buffer](std::string_view selected) {
+            do_retract_send(ptr_account, ptr_channel, buf, std::string(selected));
         },
         picker_t::close_cb{},
         buffer).release();
@@ -623,7 +623,7 @@ int command__reply(const void *pointer, void *data,
             "xmpp.picker.reply",
             "Reply to message  (XEP-0461)",
             std::move(entries),
-            [buf = buffer](const std::string &selected) {
+            [buf = buffer](std::string_view selected) {
                 // Pre-fill input bar: user types the reply body after this
                 std::string input = fmt::format("/reply-to {} ", selected);
                 weechat_buffer_set(buf, "input", input.c_str());
@@ -843,8 +843,8 @@ int command__moderate(const void *pointer, void *data,
         "xmpp.picker.moderate",
         "Moderate message  (XEP-0425)",
         std::move(entries),
-        [ptr_account, ptr_channel, buf = buffer, reason_str](const std::string &selected) {
-            do_moderate_send(ptr_account, ptr_channel, buf, selected,
+        [ptr_account, ptr_channel, buf = buffer, reason_str](std::string_view selected) {
+            do_moderate_send(ptr_account, ptr_channel, buf, std::string(selected),
                              reason_str.empty() ? nullptr : reason_str.c_str());
         },
         picker_t::close_cb{},

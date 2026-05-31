@@ -177,7 +177,7 @@ int command__adhoc(const void *pointer, void *data,
             "xmpp.picker.adhoc",
             fmt::format("Ad-hoc commands on {}  (XEP-0050)  — select to execute", target_jid),
             std::vector<picker_t::entry>{},   // populated async as disco#items result arrives
-            [acct, tjid_str](const std::string &node_uri) {
+            [acct, tjid_str](std::string_view node_uri) {
                 // on_select: run /adhoc <jid> <node>
                 std::string cmd = fmt::format("/adhoc {} {}", tjid_str, node_uri);
                 weechat_command(acct->buffer, cmd.c_str());
@@ -1639,15 +1639,15 @@ int command__feed(const void *pointer, void *data,
             {
                 std::size_t sz_val = static_cast<std::size_t>(fsz);
                 struct slot_req_spec : stanza::spec {
-                    slot_req_spec(const std::string &id, const std::string &to,
-                                  const std::string &fname, std::size_t sz,
-                                  const std::string &ct) : spec("iq") {
+                    slot_req_spec(std::string_view id, std::string_view to,
+                                  std::string_view fname, std::size_t sz,
+                                  std::string_view ct) : spec("iq") {
                         attr("type", "get");
                         attr("id", id);
                         attr("to", to);
                         struct request_spec : stanza::spec {
-                            request_spec(const std::string &fn, std::size_t sz,
-                                         const std::string &ct) : spec("request") {
+                            request_spec(std::string_view fn, std::size_t sz,
+                                         std::string_view ct) : spec("request") {
                                 attr("xmlns", "urn:xmpp:http:upload:0");
                                 attr("filename", fn);
                                 attr("size", fmt::format("{}", sz));

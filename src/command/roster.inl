@@ -143,7 +143,7 @@ int command__blocklist(const void *pointer, void *data,
         "xmpp.picker.blocklist",
         "Blocked JIDs  (XEP-0191)  — select to unblock",
         std::vector<picker_t::entry>{},  // populated async by IQ handler
-        [acct](const std::string &jid) {
+        [acct](std::string_view jid) {
             // on_select: send unblock IQ for selected JID
             stanza::xep0191::unblock ublk;
             ublk.item(jid);
@@ -153,7 +153,7 @@ int command__blocklist(const void *pointer, void *data,
             acct->connection.send(iq_s.build(acct->context).get());
 
             weechat_printf(acct->buffer, "%sUnblocking %s…",
-                           weechat_prefix("network"), jid.c_str());
+                           weechat_prefix("network"), std::string(jid).c_str());
         },
         [acct]() {
             // on_close: clear the non-owning pointer in account
@@ -288,7 +288,7 @@ int command__roster(const void *pointer, void *data,
             "xmpp.picker.roster",
             "Open chat with contact  (roster)",
             std::move(entries),
-            [buf = buffer](const std::string &selected) {
+            [buf = buffer](std::string_view selected) {
                 auto cmd = fmt::format("/open {}", selected);
                 weechat_command(buf, cmd.c_str());
             },
@@ -401,7 +401,7 @@ int command__bookmark(const void *pointer, void *data,
             "xmpp.picker.bookmark",
             "Open bookmark  (XEP-0048)",
             std::move(entries),
-            [buf = buffer](const std::string &selected) {
+            [buf = buffer](std::string_view selected) {
                 auto cmd = fmt::format("/enter {}", selected);
                 weechat_command(buf, cmd.c_str());
             },

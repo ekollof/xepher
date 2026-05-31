@@ -108,7 +108,7 @@ struct pending_feed_post
 // Returns one embed_tag per match, with tag_text, type, filename, and alt
 // filled in. filepath is NOT resolved here (caller does that).
 // -------------------------------------------------------------------------
-std::vector<embed_tag> parse_embed_tags(const std::string &body);
+std::vector<embed_tag> parse_embed_tags(std::string_view body);
 
 // -------------------------------------------------------------------------
 // render_body()
@@ -116,7 +116,7 @@ std::vector<embed_tag> parse_embed_tags(const std::string &body);
 // Substitutes every embed_tag's tag_text with its markdown() replacement
 // in `tmpl`. All tags must have been uploaded (get_url non-empty).
 // -------------------------------------------------------------------------
-std::string render_body(const std::string &tmpl,
+std::string render_body(std::string_view tmpl,
                         const std::vector<embed_tag> &embeds);
 
 } // namespace xepher

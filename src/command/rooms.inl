@@ -109,7 +109,7 @@ int command__list(const void *pointer, void *data,
         "xmpp.picker.list",
         title_str,
         std::vector<picker_t::entry>{},   // populated async as IQ results arrive
-        [acct](const std::string &jid) {
+        [acct](std::string_view jid) {
             // on_select: switch focus to origin buffer and join the room
             std::string cmd = fmt::format("/join {}", jid);
             weechat_command(acct->buffer, cmd.c_str());

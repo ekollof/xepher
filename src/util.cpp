@@ -48,9 +48,9 @@ XMPP_TEST_EXPORT std::string unescape(const std::string& str)
 
 // XEP-0393: Message Styling
 // Converts XEP-0393 markup to WeeChat color codes
-std::string apply_xep393_styling(const std::string& text)
+std::string apply_xep393_styling(std::string_view text)
 {
-    if (text.empty()) return text;
+    if (text.empty()) return std::string(text);
     
     std::string result;
     result.reserve(text.size() * 2); // Reserve extra space for color codes
@@ -211,7 +211,7 @@ std::string apply_xep393_styling(const std::string& text)
 // Applies <markup xmlns='urn:xmpp:markup:0'> to `plain_text`, returning a
 // WeeChat colour-coded string.  Returns empty string if no <markup> child
 // exists in `stanza`.
-std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_text)
+std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_text)
 {
     if (!stanza || plain_text.empty()) return {};
 
@@ -348,7 +348,7 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_
         }
     }
 
-    if (events.empty()) return plain_text; // markup present but no actionable elements
+    if (events.empty()) return std::string(plain_text); // markup present but no actionable elements
 
     // Sort events: by byte offset, then by priority
     std::sort(events.begin(), events.end(), [](const Event &a, const Event &b) {
@@ -385,14 +385,14 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, const std::string &plain_
 // Inline spans are processed left-to-right within non-code lines.
 // Images are matched before links because the pattern is longer.
 // No support for nested lists, tables, footnotes, or raw HTML pass-through.
-std::string apply_markdown_to_weechat(const std::string &text)
+std::string apply_markdown_to_weechat(std::string_view text)
 {
-    if (text.empty()) return text;
+    if (text.empty()) return std::string(text);
 
     // Split input into lines (preserving trailing newline awareness).
     std::vector<std::string> lines;
     {
-        std::istringstream ss(text);
+        std::istringstream ss{std::string(text)};
         std::string line;
         while (std::getline(ss, line))
             lines.push_back(line);
@@ -416,7 +416,7 @@ std::string apply_markdown_to_weechat(const std::string &text)
     // Processes: images, links, **bold**/__bold__, *italic*/_italic_,
     // `code`, ~~strikethrough~~.
     // `in_code_block` suppresses inline processing inside fenced blocks.
-    auto apply_inline = [&](const std::string &ln) -> std::string
+    auto apply_inline = [&](std::string_view ln) -> std::string
     {
         std::string out;
         out.reserve(ln.size() * 2);
@@ -436,7 +436,7 @@ std::string apply_markdown_to_weechat(const std::string &text)
                     size_t url_end   = ln.find(')', url_start);
                     if (url_end != std::string::npos)
                     {
-                        std::string alt = ln.substr(alt_start, alt_end - alt_start);
+                        std::string alt = std::string(ln.substr(alt_start, alt_end - alt_start));
                         out += dim;
                         out += alt.empty() ? "[Image]" : "[Image: " + alt + "]";
                         out += rst;
@@ -457,8 +457,8 @@ std::string apply_markdown_to_weechat(const std::string &text)
                     size_t url_end   = ln.find(')', url_start);
                     if (url_end != std::string::npos)
                     {
-                        std::string link_text = ln.substr(text_start, text_end - text_start);
-                        std::string url       = ln.substr(url_start, url_end - url_start);
+                        std::string link_text = std::string(ln.substr(text_start, text_end - text_start));
+                        std::string url       = std::string(ln.substr(url_start, url_end - url_start));
                         out += link_text;
                         out += " (";
                         out += blue;
@@ -476,7 +476,7 @@ std::string apply_markdown_to_weechat(const std::string &text)
                                (ln[i] == '_' && ln[i+1] == '_')))
             {
                 char marker = ln[i];
-                size_t end = ln.find({marker, marker}, i + 2);
+                size_t end = ln.find(std::string{marker, marker}, i + 2);
                 if (end != std::string::npos)
                 {
                     out += bold;

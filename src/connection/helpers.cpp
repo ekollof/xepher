@@ -254,14 +254,14 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
     return WEECHAT_RC_OK;
 }
 
-void esfs_start_download(const std::string &cipher_url,
-                         const std::string &filename,
-                         const std::string &key_b64,
-                         const std::string &iv_b64,
+void esfs_start_download(std::string_view cipher_url,
+                         std::string_view filename,
+                         std::string_view key_b64,
+                         std::string_view iv_b64,
                          struct t_gui_buffer *buf,
                          weechat::account *account_ptr,
-                         const std::string &channel_jid,
-                         const std::string &stable_id)
+                         std::string_view channel_jid,
+                         std::string_view stable_id)
 {
     // Layer 1: in-flight dedup — same cipher_url already being downloaded this session.
     bool already_inflight = std::any_of(g_esfs_downloads.begin(), g_esfs_downloads.end(),
@@ -280,14 +280,14 @@ void esfs_start_download(const std::string &cipher_url,
 
     g_esfs_downloads.push_back({});
     esfs_download_ctx &ctx = g_esfs_downloads.back();
-    ctx.cipher_url    = cipher_url;
-    ctx.filename      = filename;
-    ctx.key_b64       = key_b64;
-    ctx.iv_b64        = iv_b64;
+    ctx.cipher_url    = std::string(cipher_url);
+    ctx.filename      = std::string(filename);
+    ctx.key_b64       = std::string(key_b64);
+    ctx.iv_b64        = std::string(iv_b64);
     ctx.buffer        = buf;
     ctx.account_ptr   = account_ptr;
-    ctx.channel_jid   = channel_jid;
-    ctx.stable_id     = stable_id;
+    ctx.channel_jid   = std::string(channel_jid);
+    ctx.stable_id     = std::string(stable_id);
     ctx.pipe_read_fd  = pipe_fds[0];
     ctx.pipe_write_fd = pipe_fds[1];
 
@@ -470,7 +470,7 @@ std::list<og_fetch_ctx>    g_og_fetches;
 std::list<og_pending_entry> g_og_pending;
 
 // Case-insensitive ASCII substring search.
-static size_t ifinds(const std::string &hay, const std::string &needle, size_t from = 0)
+static size_t ifinds(std::string_view hay, std::string_view needle, size_t from = 0)
 {
     if (needle.empty()) return from;
     auto it = std::search(hay.begin() + static_cast<std::ptrdiff_t>(from), hay.end(),
@@ -484,9 +484,9 @@ static size_t ifinds(const std::string &hay, const std::string &needle, size_t f
 
 // Extract the value of an HTML attribute from a tag string.
 // e.g. attr_value("<meta property=\"og:title\" content=\"Hello\">", "content") → "Hello"
-static std::string attr_value(const std::string &tag, const std::string &attr)
+static std::string attr_value(std::string_view tag, std::string_view attr)
 {
-    std::string needle = attr + "=";
+    std::string needle = std::string(attr) + "=";
     size_t pos = ifinds(tag, needle);
     if (pos == std::string::npos) return {};
     pos += needle.size();
@@ -497,17 +497,17 @@ static std::string attr_value(const std::string &tag, const std::string &attr)
         ++pos;
         size_t end = tag.find(q, pos);
         if (end == std::string::npos) end = tag.size();
-        return tag.substr(pos, end - pos);
+        return std::string(tag.substr(pos, end - pos));
     }
     // Unquoted attribute value: scan to next whitespace or >
     size_t end = pos;
     while (end < tag.size() && tag[end] != '>' && !std::isspace((unsigned char)tag[end]))
         ++end;
-    return tag.substr(pos, end - pos);
+    return std::string(tag.substr(pos, end - pos));
 }
 
 // Decode basic HTML entities: &amp; &lt; &gt; &quot; &apos; &#NNN; &#xNNN;
-static std::string decode_html_entities(const std::string &s)
+static std::string decode_html_entities(std::string_view s)
 {
     std::string out;
     out.reserve(s.size());
@@ -524,7 +524,7 @@ static std::string decode_html_entities(const std::string &s)
             out += s[i++];
             continue;
         }
-        std::string ent = s.substr(i + 1, semi - i - 1);
+        std::string ent = std::string(s.substr(i + 1, semi - i - 1));
         if (ent == "amp")       out += '&';
         else if (ent == "lt")   out += '<';
         else if (ent == "gt")   out += '>';
@@ -543,7 +543,7 @@ static std::string decode_html_entities(const std::string &s)
             else if (cp < 0x10000){ out += static_cast<char>(0xE0 | (cp >> 12));  out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F)); out += static_cast<char>(0x80 | (cp & 0x3F)); }
             else                   out += '?';
         }
-        else out += s.substr(i, semi - i + 1); // unknown entity: pass through
+        else out += std::string(s.substr(i, semi - i + 1)); // unknown entity: pass through
         i = semi + 1;
     }
     return out;
@@ -551,7 +551,7 @@ static std::string decode_html_entities(const std::string &s)
 
 // Parse OG meta tags and <title> from an HTML string.
 // Scans only the <head> section (up to </head> or <body>) for speed.
-static og_fetch_ctx::preview_t parse_og_from_html(const std::string &html)
+static og_fetch_ctx::preview_t parse_og_from_html(std::string_view html)
 {
     og_fetch_ctx::preview_t p;
 
@@ -563,7 +563,7 @@ static og_fetch_ctx::preview_t parse_og_from_html(const std::string &html)
         size_t be = ifinds(html, "<body");
         if (be != std::string::npos && be < head_end) head_end = be;
     }
-    const std::string head = html.substr(0, head_end);
+    std::string_view head = html.substr(0, head_end);
 
     // Scan <meta ...> tags
     size_t pos = 0;
@@ -573,7 +573,7 @@ static og_fetch_ctx::preview_t parse_og_from_html(const std::string &html)
         if (tag_start == std::string::npos) break;
         size_t tag_end = head.find('>', tag_start);
         if (tag_end == std::string::npos) break;
-        std::string tag = head.substr(tag_start, tag_end - tag_start + 1);
+        std::string_view tag = head.substr(tag_start, tag_end - tag_start + 1);
         pos = tag_end + 1;
 
         // OpenGraph: <meta property="og:X" content="...">
@@ -614,7 +614,7 @@ static og_fetch_ctx::preview_t parse_og_from_html(const std::string &html)
                 size_t content_start = te + 1;
                 size_t content_end   = ifinds(head, "</title>", content_start);
                 if (content_end == std::string::npos) content_end = head.size();
-                std::string raw = head.substr(content_start, content_end - content_start);
+                std::string_view raw = head.substr(content_start, content_end - content_start);
                 // Trim whitespace
                 size_t first = raw.find_first_not_of(" \t\r\n");
                 size_t last  = raw.find_last_not_of(" \t\r\n");
@@ -748,25 +748,25 @@ void strip_url_trailing_punct(std::string &url)
 // Build a simple WeeChat preview string without box-drawing characters.
 // Uses darkgray for the whole block so it is visually distinct from chat text.
 
-std::string format_og_preview_card(const std::string &title,
-                                     const std::string &description,
-                                     const std::string &url,
-                                     const std::string &image,
-                                     const std::string &fallback_url)
+std::string format_og_preview_card(std::string_view title,
+                                     std::string_view description,
+                                     std::string_view url,
+                                     std::string_view image,
+                                     std::string_view fallback_url)
 {
-    const std::string &display_url  = url.empty() ? fallback_url : url;
-    const std::string &display_title = title.empty()
+    std::string_view display_url = url.empty() ? fallback_url : url;
+    std::string_view display_title = title.empty()
                                          ? (display_url.empty() ? "Link" : display_url)
                                          : title;
 
     std::string line;
     line += weechat_color("darkgray");
     line += weechat_color("bold");
-    line += display_title;
+    line += std::string(display_title);
     line += weechat_color("-bold");
 
     // Sanitize description: collapse any internal newlines / tabs / CRs to spaces
-    std::string desc = description;
+    std::string desc = std::string(description);
     for (char &c : desc)
     {
         if (c == '\n' || c == '\r' || c == '\t')
@@ -791,7 +791,7 @@ std::string format_og_preview_card(const std::string &title,
     {
         line += "  ";
         line += weechat_color("blue");
-        line += display_url;
+        line += std::string(display_url);
         line += weechat_color("darkgray");
     }
 
@@ -804,10 +804,10 @@ std::string format_og_preview_card(const std::string &title,
     return line;
 }
 
-void og_start_fetch(const std::string &url,
+void og_start_fetch(std::string_view url,
                     struct t_gui_buffer *buf,
                     weechat::account *account_ptr,
-                    const std::string &display_prefix,
+                    std::string_view display_prefix,
                     time_t date,
                     bool silent)
 {
@@ -815,8 +815,7 @@ void og_start_fetch(const std::string &url,
         return;
 
     // Skip non-HTTP URLs
-    if (!std::string_view(url).starts_with("http://")
-        && !std::string_view(url).starts_with("https://"))
+    if (!url.starts_with("http://") && !url.starts_with("https://"))
         return;
 
     // Dedup: already in-flight?
@@ -830,10 +829,10 @@ void og_start_fetch(const std::string &url,
         return;
 
     og_pending_entry entry;
-    entry.url            = url;
+    entry.url            = std::string(url);
     entry.buffer         = buf;
     entry.account_ptr    = account_ptr;
-    entry.display_prefix = display_prefix;
+    entry.display_prefix = std::string(display_prefix);
     entry.date           = date;
     entry.silent         = silent;
 

@@ -15,7 +15,7 @@ namespace xepher {
 // Hand-rolled parser for {{ embed|attach|video "filename" [alt="text"] }}.
 // No regex dependency — straightforward state-machine scan.
 // -------------------------------------------------------------------------
-std::vector<embed_tag> parse_embed_tags(const std::string &body)
+std::vector<embed_tag> parse_embed_tags(std::string_view body)
 {
     std::vector<embed_tag> result;
     const std::string_view sv(body);
@@ -115,10 +115,10 @@ std::vector<embed_tag> parse_embed_tags(const std::string &body)
 // -------------------------------------------------------------------------
 // render_body()
 // -------------------------------------------------------------------------
-std::string render_body(const std::string &tmpl,
+std::string render_body(std::string_view tmpl,
                         const std::vector<embed_tag> &embeds)
 {
-    std::string result = tmpl;
+    std::string result = std::string(tmpl);
     // Replace in reverse order of position so that earlier offsets remain valid
     // after each substitution.  Build a sorted (by position) list first.
     struct subst { std::size_t pos; std::string tag; std::string repl; };

@@ -332,30 +332,30 @@ private:
 
     // Return `text` with the first case-insensitive occurrence of `needle`
     // wrapped in yellow colour codes. Falls back to plain text if no match.
-    static std::string highlight_match(const std::string &text,
-                                       const std::string &needle,
+    static std::string highlight_match(std::string_view text,
+                                       std::string_view needle,
                                        bool is_selected)
     {
-        if (needle.empty()) return text;
+        if (needle.empty()) return std::string(text);
 
-        std::string text_lc = text;
-        std::string needle_lc = needle;
+        std::string text_lc = std::string(text);
+        std::string needle_lc = std::string(needle);
         std::ranges::transform(text_lc,   text_lc.begin(),   ::tolower);
         std::ranges::transform(needle_lc, needle_lc.begin(), ::tolower);
 
         auto pos = text_lc.find(needle_lc);
-        if (pos == std::string::npos) return text;
+        if (pos == std::string::npos) return std::string(text);
 
         // Temporarily suspend reverse video so the highlight colour is visible.
         std::string result;
-        result += text.substr(0, pos);
+        result += std::string(text.substr(0, pos));
         if (is_selected) result += weechat_color("reset");
         result += weechat_color("yellow");
         result += weechat_color("bold");
-        result += text.substr(pos, needle.size());
+        result += std::string(text.substr(pos, needle.size()));
         result += weechat_color("reset");
         if (is_selected) result += weechat_color("reverse");
-        result += text.substr(pos + needle.size());
+        result += std::string(text.substr(pos + needle.size()));
         return result;
     }
 

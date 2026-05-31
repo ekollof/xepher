@@ -3631,7 +3631,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     xmpp_stanza_add_child(x.get(), f4.get());
 
                     struct configure_spec : stanza::spec {
-                        configure_spec(const std::string &node_) : spec("configure") {
+                        configure_spec(std::string_view node_) : spec("configure") {
                             attr("node", node_);
                         }
                     } cfgnode(target_node);

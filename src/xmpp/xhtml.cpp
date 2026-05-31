@@ -25,7 +25,7 @@
 // css_color_to_weechat
 // ---------------------------------------------------------------------------
 
-std::string css_color_to_weechat(const std::string &css)
+std::string css_color_to_weechat(std::string_view css)
 {
     static constexpr std::array<std::pair<std::string_view, std::string_view>, 20> k_color_table = {{
         {"black",    "black"},
@@ -50,7 +50,7 @@ std::string css_color_to_weechat(const std::string &css)
         {"silver",   "250"},
     }};
 
-    std::string lc = css;
+    std::string lc = std::string(css);
     for (auto &c : lc) c = (char)tolower((unsigned char)c);
     auto s = lc.find_first_not_of(" \t");
     auto e = lc.find_last_not_of(" \t");
@@ -365,7 +365,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
 // Strip HTML tags from a raw HTML string and decode basic entities.
 // This is a best-effort plain-text approximation for Atom <content type='html'>.
 
-std::string html_strip_to_plain(const std::string &html)
+std::string html_strip_to_plain(std::string_view html)
 {
     std::string out;
     out.reserve(html.size());
@@ -442,7 +442,7 @@ std::string html_strip_to_plain(const std::string &html)
             size_t semi = html.find(';', i + 1);
             if (semi != std::string::npos && semi - i <= 10)
             {
-                std::string entity = html.substr(i + 1, semi - i - 1);
+                std::string entity = std::string(html.substr(i + 1, semi - i - 1));
                 // Lowercase for comparison
                 std::string elc = entity;
                 for (auto &ec : elc) ec = (char)tolower((unsigned char)ec);

@@ -162,10 +162,10 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             // XEP-0153: vCard-Based Avatars — broadcast own photo hash in presence
             weechat::user *self_user = weechat::user::search(&account, account.jid().data());
             struct vcard_x_spec : stanza::spec {
-                vcard_x_spec(const std::string &hash) : spec("x") {
+                vcard_x_spec(std::string_view hash) : spec("x") {
                     xmlns<vcard_temp::x::update>();
                     struct photo_spec : stanza::spec {
-                        photo_spec(const std::string &h) : spec("photo") {
+                        photo_spec(std::string_view h) : spec("photo") {
                             if (!h.empty()) text(h);
                         }
                     } photo(hash);
@@ -443,8 +443,8 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         // Uses XEP-0413 Order-By (creation date descending) so we get the newest items.
         // The result arrives as a sequence of forwarded <message> stanzas followed by
         // a <fin> IQ result, handled in iq_handler.inl's pubsub MAM fin block.
-        auto send_pubsub_mam_query = [&](const std::string &service_jid,
-                                         const std::string &node_name,
+        auto send_pubsub_mam_query = [&](std::string_view service_jid,
+                                         std::string_view node_name,
                                          int max_items)
         {
             std::string uid = stanza::uuid(account.context);
@@ -476,7 +476,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             order_spec ord;
             pubsub_mam_query mam_q(node_name, ord, rsm_set);
 
-            account.pubsub_mam_queries[uid] = {service_jid, node_name, {}, max_items};
+            account.pubsub_mam_queries[uid] = {std::string(service_jid), std::string(node_name), {}, max_items};
 
             this->send(stanza::iq()
                         .from(account.jid())
@@ -494,22 +494,22 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         // Safe to call multiple times for the same key (try_emplace is idempotent).
         // If MAM support on the service is not yet known, defers the fetch until
         // the disco#info response for the service arrives.
-        auto restore_feed = [&](const std::string &feed_key)
+        auto restore_feed = [&](std::string_view feed_key)
         {
             if (feed_key.empty()) return;
 
             // Re-create the in-memory channel object if it was lost on disconnect
             account.channels.try_emplace(
-                feed_key,
+                std::string(feed_key),
                 account, weechat::channel::chat_type::FEED,
-                feed_key, feed_key);
+                std::string(feed_key), std::string(feed_key));
 
             // Parse feed_key "service_jid/node" at the first '/'
             auto slash = feed_key.find('/');
             if (slash == std::string::npos) return;
 
-            std::string service_jid = feed_key.substr(0, slash);
-            std::string node_name   = feed_key.substr(slash + 1);
+            std::string service_jid = std::string(feed_key.substr(0, slash));
+            std::string node_name   = std::string(feed_key.substr(slash + 1));
 
             // Clear any stale cursor so reconnect always fetches the latest page
             account.mam_cursor_clear(fmt::format("pubsub:{}", feed_key));
@@ -535,7 +535,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 pep_items.max_items(static_cast<unsigned>(max_items));
                 stanza::xep0060::pubsub pep_ps;
                 pep_ps.items(pep_items);
-                account.pubsub_fetch_ids[fuid] = {service_jid, node_name, {}, max_items};
+                account.pubsub_fetch_ids[fuid] = {std::string(service_jid), std::string(node_name), {}, max_items};
                 account.connection.send(stanza::iq()
                             .from(account.jid())
                             .to(service_jid)
@@ -576,7 +576,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             }
 
             // Defer the actual fetch until the disco#info result arrives.
-            account.pubsub_mam_deferred_feeds[service_jid].push_back(feed_key);
+            account.pubsub_mam_deferred_feeds[std::string(service_jid)].push_back(std::string(feed_key));
         };
 
         // Track which feed_keys have been scheduled for restore to avoid

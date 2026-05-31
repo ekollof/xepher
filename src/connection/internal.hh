@@ -83,14 +83,14 @@ extern std::list<esfs_download_ctx> g_esfs_downloads;
 // channel_jid — bare JID of the conversation (LMDB dedup key prefix)
 // stable_id   — best stable message identifier: stanza_id ?? origin_id ?? msg id
 // account_ptr — owning account (for LMDB store on success)
-void esfs_start_download(const std::string &cipher_url,
-                         const std::string &filename,
-                         const std::string &key_b64,
-                         const std::string &iv_b64,
+void esfs_start_download(std::string_view cipher_url,
+                         std::string_view filename,
+                         std::string_view key_b64,
+                         std::string_view iv_b64,
                          struct t_gui_buffer *buf,
                          weechat::account *account_ptr,
-                         const std::string &channel_jid,
-                         const std::string &stable_id);
+                         std::string_view channel_jid,
+                         std::string_view stable_id);
 
 // ── OG / HTML-title async URL preview fetch ───────────────────────────────────
 // Fetches a URL in a background thread, parses OpenGraph meta tags (and falls
@@ -157,20 +157,20 @@ void strip_url_trailing_punct(std::string &url);
 // Silently no-ops if the URL is already cached, in-flight, or pending.
 // When silent=true the result is stored to LMDB but not displayed; instead
 // a one-line progress note is printed to the account buffer.
-void og_start_fetch(const std::string &url,
+void og_start_fetch(std::string_view url,
                      struct t_gui_buffer *buf,
                      weechat::account *account_ptr,
-                     const std::string &display_prefix,
+                     std::string_view display_prefix,
                      time_t date,
                      bool silent = false);
 
 // Format an OpenGraph preview as a WeeChat multi-line string with box-drawing chars.
 // description, url, image are the OG fields; fallback_url is used when url is empty.
-[[nodiscard]] std::string format_og_preview_card(const std::string &title,
-                                                   const std::string &description,
-                                                   const std::string &url,
-                                                   const std::string &image,
-                                                   const std::string &fallback_url);
+[[nodiscard]] std::string format_og_preview_card(std::string_view title,
+                                                   std::string_view description,
+                                                   std::string_view url,
+                                                   std::string_view image,
+                                                   std::string_view fallback_url);
 
 // ── XEP-0004: Data Forms renderer ─────────────────────────────────────────────
 // Render a <x xmlns='jabber:x:data'> form to a WeeChat buffer.

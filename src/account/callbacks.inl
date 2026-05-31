@@ -306,15 +306,15 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
 
             // Send slot request (XEP-0363 HTTP Upload)
             struct slot_iq_spec : stanza::spec {
-                slot_iq_spec(const std::string &id, const std::string &to,
-                             const std::string &fname, std::size_t sz,
-                             const std::string &ct) : spec("iq") {
+                slot_iq_spec(std::string_view id, std::string_view to,
+                             std::string_view fname, std::size_t sz,
+                             std::string_view ct) : spec("iq") {
                     attr("type", "get");
                     attr("id", id);
                     attr("to", to);
                     struct request_spec : stanza::spec {
-                        request_spec(const std::string &fname, std::size_t sz,
-                                     const std::string &ct) : spec("request") {
+                        request_spec(std::string_view fname, std::size_t sz,
+                                     std::string_view ct) : spec("request") {
                             attr("xmlns", "urn:xmpp:http:upload:0");
                             attr("filename", fname);
                             attr("size", fmt::format("{}", sz));
