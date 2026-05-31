@@ -224,7 +224,7 @@ int command__adhoc(const void *pointer, void *data,
         ptr_account->adhoc_queries[exec_id] = info;
 
         struct adhoc_exec_spec : stanza::spec {
-            adhoc_exec_spec(const std::string &id, const char *to,
+            adhoc_exec_spec(std::string_view id, const char *to,
                             const char *n) : spec("iq") {
                 attr("type", "set");
                 attr("id", id);

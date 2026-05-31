@@ -112,10 +112,11 @@ enum class omemo_trust : int {
 
 using c_string = std::unique_ptr<char, decltype(&free)>;
 
-[[nodiscard]] auto eval_path(const std::string &expression) -> std::string
+[[nodiscard]] auto eval_path(std::string_view expression) -> std::string
 {
+    std::string expr_str(expression);  // ensure null-terminated for C API
     c_string value {
-        weechat_string_eval_expression(expression.c_str(), nullptr, nullptr, nullptr),
+        weechat_string_eval_expression(expr_str.c_str(), nullptr, nullptr, nullptr),
         &free,
     };
     return value ? std::string {value.get()} : std::string {};

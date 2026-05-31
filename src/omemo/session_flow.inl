@@ -127,7 +127,7 @@ void weechat::xmpp::omemo::force_kex(weechat::account &account,
     std::size_t queued = 0;
     for (const auto remote_device_id : target_devices)
     {
-        failed_session_bootstrap.erase({bare_jid, remote_device_id});
+        failed_session_bootstrap.erase({std::string(bare_jid), remote_device_id});
 
         bool have_session = has_session(bare_jid.c_str(), remote_device_id);
         if (!have_session)
@@ -308,7 +308,7 @@ static void send_key_transport(omemo &self,
 
     // Legacy flat layout: add <key> directly under <header> (no <keys jid=...> wrapper).
     // This is the format nbxmpp/Gajim and Conversations expect.
-    auto add_axolotl_key = [&](const std::string &target_jid,
+    auto add_axolotl_key = [&](std::string_view target_jid,
                                std::uint32_t target_device_id) -> bool
     {
         if (!is_valid_omemo_device_id(target_device_id))
@@ -340,7 +340,7 @@ static void send_key_transport(omemo &self,
             if (!own_device || *own_device == self.device_id)
                 continue;
 
-            if (self.failed_session_bootstrap.count({own_bare_jid, *own_device}) > 0)
+            if (self.failed_session_bootstrap.count({std::string(own_bare_jid), *own_device}) > 0)
                 continue;
 
             if (!self.has_session(own_bare_jid.c_str(), *own_device)
@@ -416,9 +416,9 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
     if (!is_own_device && !bare_jid.empty())
         key_transport_bootstrap_attempted.insert({bare_jid, remote_device_id});
 
-    pending_bundle_fetch.erase({jid ? jid : "", remote_device_id});
-    const bool needs_key_transport = pending_key_transport.count({jid ? jid : "", remote_device_id}) > 0;
-    pending_key_transport.erase({jid ? jid : "", remote_device_id});
+    pending_bundle_fetch.erase({std::string(jid ? jid : ""), remote_device_id});
+    const bool needs_key_transport = pending_key_transport.count({std::string(jid ? jid : ""), remote_device_id}) > 0;
+    pending_key_transport.erase({std::string(jid ? jid : ""), remote_device_id});
 
     if (db_env && !bare_jid.empty())
     {
@@ -434,7 +434,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
 
             if (!is_own_device)
             {
-                failed_session_bootstrap.erase({bare_jid, remote_device_id});
+                failed_session_bootstrap.erase({std::string(bare_jid), remote_device_id});
                 const bool had_session_before = has_session(bare_jid.c_str(), remote_device_id);
                 // Only bootstrap a new session when no session exists yet.
                 // Never overwrite an existing established session: doing so resets
@@ -458,7 +458,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
                                 jid, remote_device_id, ex.what()));
                     }
                     if (!has_session(bare_jid.c_str(), remote_device_id))
-                        failed_session_bootstrap.insert({bare_jid, remote_device_id});
+                        failed_session_bootstrap.insert({std::string(bare_jid), remote_device_id});
                 }
                 const bool session_is_fresh = !had_session_before
                     && has_session(bare_jid.c_str(), remote_device_id);

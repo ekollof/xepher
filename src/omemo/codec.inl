@@ -454,8 +454,8 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
 
     stanza::xep0384::axolotl_header header_spec(fmt::format("{}", device_id));
 
-    auto add_axolotl_keys = [&](const std::string &recipient_jid,
-                               const std::string &device_list_str,
+    auto add_axolotl_keys = [&](std::string_view recipient_jid,
+                               std::string_view device_list_str,
                                int *out_incomplete_count = nullptr,
                                bool include_own_device = false) -> bool
     {
@@ -490,10 +490,10 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
                 }
             }
 
-            if (failed_session_bootstrap.count({recipient_jid, *remote_device_id}) > 0)
+            if (failed_session_bootstrap.count({std::string(recipient_jid), *remote_device_id}) > 0)
                 continue;
 
-            if (!has_session(recipient_jid.c_str(), *remote_device_id))
+            if (!has_session(std::string(recipient_jid).c_str(), *remote_device_id))
             {
                 if (!establish_session_from_bundle(*this, *account->context, recipient_jid, *remote_device_id))
                 {
