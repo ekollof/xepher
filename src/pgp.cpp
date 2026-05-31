@@ -11,6 +11,7 @@
 #include <string_view>
 #include <memory>
 #include <numeric>
+#include <stdexcept>
 #include <fmt/core.h>
 #include <gpgme.h>
 #include <weechat/weechat-plugin.h>
@@ -75,7 +76,7 @@ weechat::xmpp::pgp::pgp()
     if (err) {
         weechat_printf(nullptr, "gpg (error): %s - %s",
                 gpgme_strsource(err), gpgme_strerror(err));
-        throw nullptr;
+        throw std::runtime_error("gpgme_new failed");
     }
     gpgme_set_armor(this->gpgme, true);
 

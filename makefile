@@ -132,7 +132,6 @@ HDRS=src/plugin.hh \
 	 src/config/section.hh \
 	 src/config/account.hh \
 	 src/config/option.hh \
-	 src/data/omemo.hh \
 	 src/data/capability.hh \
 	 src/xmpp/stanza.hh \
 	 src/xmpp/ns.hh \
@@ -180,7 +179,6 @@ SRCS=src/plugin.cpp \
 	 src/config/section.cpp \
 	 src/config/account.cpp \
 	 src/config/option.cpp \
-	 src/data/omemo.cpp \
 	 src/data/capability.cpp \
 	 src/xmpp/presence.cpp \
 	 src/xmpp/iq.cpp \

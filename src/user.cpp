@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <stdint.h>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 #include <strophe.h>
@@ -258,14 +259,14 @@ weechat::user::user(weechat::account *account, weechat::channel *channel,
                     std::string_view id, std::string_view display_name)
 {
     if (!account || id.empty())
-        throw nullptr;
+        throw std::invalid_argument("user: invalid account or empty id");
 
     if (account->users.empty() && channel)
         channel->add_nicklist_groups();
 
     weechat::user *ptr_user = user::search(account, id);
     if (ptr_user)
-        throw nullptr;
+        throw std::invalid_argument("user: duplicate id in account");
 
     this->id = id;
     this->profile.display_name = display_name;

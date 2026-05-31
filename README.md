@@ -947,7 +947,7 @@ See [`scripts/README.md`](scripts/README.md) for full configuration options.
 ## Contributing
 
 Pull requests and issues are welcome.  
-Please keep to the existing indentation style (C++23, clang-format enforced).
+Please keep to the existing indentation style (C++23). clang-format is recommended for contributors but not enforced via a repo config file (match nearby code).
 
 ---
 

@@ -52,6 +52,13 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 - RAII for resource management
 - Keep functions focused and concise
 
+### Naming Conventions
+
+- Functions, variables, and most types: `snake_case` (e.g. `mam_cache_put_message`, `send_bookmarks`, `chat_type`).
+- Private / implementation member variables: trailing underscore (e.g. `filter_`, `buf_`, `on_select_`).
+- Namespaces: `weechat::`, `weechat::xmpp::`, `weechat::ui::`, `stanza::xep0384::`, etc.
+- **Primary rule**: When adding or editing code, open a nearby file in the same directory/subsystem (e.g. `src/connection/*.cpp` or `src/command/*.inl`) and match the dominant local style and indentation exactly. Avoid global style changes or renames.
+
 ### C++23 Memory Safety Features to Leverage
 
 - **`std::unique_ptr` / `std::shared_ptr`**: Already used extensively - prefer over raw pointers
@@ -229,7 +236,7 @@ Critical for proper PM buffer lifecycle:
 ### When Adding Features
 
 1. **Implement the feature** in appropriate .cpp/.hh files
-2. **Update README.org**:
+2. **Update README.md**:
    - Add to "This Fork" feature list if user-visible
    - Document new commands in Commands section (Org format with examples)
    - Mark relevant TODO items as `[X]`
@@ -243,11 +250,11 @@ Critical for proper PM buffer lifecycle:
 
 ### Documentation Format
 
-- **README.org**: Emacs Org-mode format
-  - Use `*`, `**`, `***` for heading levels
-  - Code blocks: `#+BEGIN_SRC ... #+END_SRC`
+- **README.md**: Markdown format (GitHub-flavored)
+  - Use `#`, `##`, `###` for heading levels (or keep Org-style `*` headings if present in legacy sections)
+  - Code blocks: triple-backtick fences with language (```cpp, ```sh, etc.)
   - Commands: Show usage, examples, notes
-  - Keep consistent with existing style
+  - Keep consistent with existing style in the file
 
 - **DOAP.xml**: RDF/XML format
   - Follow existing structure
@@ -344,7 +351,7 @@ gh release create vX.Y.Z \
 ```
 feat: implement /bookmark command for MUC bookmark management
 fix: typing indicator shows nickname in MUC instead of room JID
-docs: add comprehensive command documentation to README.org
+docs: add comprehensive command documentation to README.md
 ```
 
 ### Commit Workflow
@@ -554,7 +561,7 @@ Prefer the debug socket for all other interactions.
 2. **Explore existing code** - find similar patterns to follow
 3. **Make minimal changes** - surgical fixes, don't refactor unnecessarily
 4. **Build and test**: `make && <test in WeeChat>`
-5. **Update documentation** - README.org, DOAP.xml if applicable
+5. **Update documentation** - README.md, DOAP.xml if applicable
 6. **Commit with clear message** - follow conventions above
 7. **Push to repository** - backup work regularly
 
@@ -589,7 +596,7 @@ When implementing a new feature:
 - [ ] Code implementation in appropriate files
 - [ ] Build succeeds (`make`)
 - [ ] Manual testing in WeeChat (see Manual Testing Checklist)
-- [ ] README.org updated (feature list, commands, TODOs)
+- [ ] README.md updated (feature list, commands, TODOs)
 - [ ] DOAP.xml updated (if XEP-related)
 - [ ] Test critical regressions (PM recreation, typing indicators, etc.)
 - [ ] Commit with descriptive message
@@ -614,7 +621,7 @@ When implementing a new feature:
 
 When updating documentation:
 - **Code-level guidance for agents** → `.github/copilot-instructions.md` (this file)
-- **User-facing docs** → `README.org` and `DOAP.xml` in the repo root
+- **User-facing docs** → `README.md` (Markdown) and `DOAP.xml` in the repo root
 - **Wiki** → clone `https://github.com/ekollof/xepher.wiki.git`, edit, commit, push (no PRs — direct push to `master`)
 - **Website** → `gh-pages` branch; edit `index.html` directly
 
@@ -650,4 +657,4 @@ git push
 - **Test incrementally** - build after each logical change
 - **Document as you go** - don't leave docs for later
 - **Ask before major changes** - discuss architecture decisions
-- **Never create loose summary/planning documents** - only update README.org, DOAP.xml, or code comments
+- **Never create loose summary/planning documents** - only update README.md, DOAP.xml, or code comments
