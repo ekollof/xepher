@@ -186,7 +186,7 @@ int ephemeral_tombstone_cb(const void *pointer, void *data, int remaining_calls)
 std::list<esfs_download_ctx> g_esfs_downloads;
 
 // Base64-decode helper using OpenSSL BIO.
-static std::vector<unsigned char> esfs_b64_decode(const std::string &b64)
+static std::vector<unsigned char> esfs_b64_decode(std::string_view b64)
 {
     if (b64.empty()) return {};
     std::unique_ptr<BIO, decltype(&BIO_free_all)>
@@ -194,7 +194,8 @@ static std::vector<unsigned char> esfs_b64_decode(const std::string &b64)
               BIO_free_all);
     BIO_set_flags(chain.get(), BIO_FLAGS_BASE64_NO_NL);
     std::vector<unsigned char> out(b64.size());
-    int n = BIO_read(chain.get(), out.data(), static_cast<int>(out.size()));
+    std::span<unsigned char> out_view{out};
+    int n = BIO_read(chain.get(), out_view.data(), static_cast<int>(out_view.size()));
     if (n <= 0) return {};
     out.resize(static_cast<size_t>(n));
     return out;

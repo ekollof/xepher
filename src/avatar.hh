@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include <optional>
+#include <span>
 
 namespace weechat
 {
@@ -40,7 +41,7 @@ namespace weechat
                                                   int target_height = 2);
         
         // Calculate SHA-1 hash of image data (for verification)
-        static std::string calculate_hash(const std::vector<uint8_t>& data);
+        static std::string calculate_hash(std::span<const uint8_t> data);
         
         // Get avatar cache directory for account
         static std::string get_cache_dir(const account& acc);

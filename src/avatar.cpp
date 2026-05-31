@@ -20,7 +20,7 @@
 #include "xmpp/node.hh"
 #include "xmpp/xep-0084.inl"
 
-std::string weechat::avatar::calculate_hash(const std::vector<uint8_t>& data)
+std::string weechat::avatar::calculate_hash(std::span<const uint8_t> data)
 {
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int hash_len = 0;
