@@ -93,7 +93,10 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
                           weechat_prefix("error"));
         }
 
-        // Reset SM state (but don't try to enable again this session)
+        // Reset SM state for this session. We deliberately do *not* poison
+        // sm_available here — a transient <failed> (common after network
+        // outages when the server has dropped the old SM session) should not
+        // permanently disable Stream Management for future auto-reconnects.
         account.sm_enabled = false;
         account.sm_id = "";
         account.sm_h_inbound = 0;
@@ -101,11 +104,7 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         account.sm_last_ack = 0;
         account.sm_outqueue.clear();
         
-        // Mark SM as unavailable to prevent retry loops
-        // (Will be reset when user manually reconnects)
-        account.sm_available = false;
-        
-        weechat_printf(account.buffer, "%sStream Management disabled for this session",
+        weechat_printf(account.buffer, "%sStream Management session ended (will retry on next connect)",
                       weechat_prefix("network"));
     }
     else if (element_name == "a")

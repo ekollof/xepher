@@ -201,6 +201,12 @@ weechat::config::config()
                 "that have no prior MAM history (1-365, default 3)",
                 nullptr, 1, 365,
                 "3", nullptr, false,
+                {}, {}, {}},
+            .mam_max_concurrent{file, section_look, "mam_max_concurrent", "integer",
+                "maximum number of concurrent MAM history fetches allowed during initial sync or bulk joins (1-20, default 4). "
+                "Higher values increase server load and risk of rate limiting or timeouts.",
+                nullptr, 1, 20,
+                "4", nullptr, false,
                 {}, {}, {}}}
 {
 }

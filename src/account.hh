@@ -386,6 +386,10 @@ namespace weechat
         void mam_query_remove(const std::string id);
         void mam_query_free_all();
 
+        // Global MAM concurrency limiter support
+        bool try_acquire_mam_slot();
+        void release_mam_slot();
+
         struct mam_page_defer {
             std::string channel_id;       // empty = global query
             std::string mam_query_id;     // original mam_query id (for lookup)
@@ -395,6 +399,8 @@ namespace weechat
         };
         std::deque<mam_page_defer> mam_deferred_pages;
         struct t_hook *mam_defer_timer = nullptr;
+        int mam_inflight = 0;  // global concurrent MAM fetches (for limiter)
+        bool mam_jitter_next_initial = false; // used by #2 jitter logic
         void schedule_next_mam_page();
         static int process_deferred_mam_page_cb(const void *pointer, void *data, int remaining_calls);
 

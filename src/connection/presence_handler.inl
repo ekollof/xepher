@@ -160,14 +160,19 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                 account.mam_cache_load_messages(channel->id, channel->buffer);
 
                             // If we fetched recently, only request new messages.
+                            // Exception: on the very first join of this room in the current
+                            // WeeChat session (was_joining), always do the full configured
+                            // history fetch. The 300s throttle is only for subsequent
+                            // presence updates while already joined.
                             if (channel->last_mam_fetch > 0 &&
-                                (now - channel->last_mam_fetch) < 300)
+                                (now - channel->last_mam_fetch) < 300 &&
+                                !was_joining)
                                 start = channel->last_mam_fetch;
                             else {
                                 time_t fetch_days = weechat::config::instance
                                     ? static_cast<time_t>(weechat::config::instance->look.mam_fetch_days.integer())
                                     : 3;
-                                start = now - (fetch_days * 86400); // configurable fallback
+                                start = now - (fetch_days * 86400);
                             }
 
                             time_t end = now;

@@ -1794,6 +1794,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                    weechat_prefix("network"));
                     account.mam_cursor_clear("global");
                     account.mam_query_remove(failed_mam_query.id);
+                    account.release_mam_slot();
 
                     time_t now = time(nullptr);
                     time_t fetch_days = weechat::config::instance
@@ -1833,6 +1834,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                failed_mam_query.id.c_str(),
                                is_global_query ? " and flushing deferred OMEMO key-transports" : "");
                 account.mam_query_remove(failed_mam_query.id);
+                account.release_mam_slot();
                 if (is_global_query)
                 {
                     account.omemo.global_mam_catchup = false;
@@ -4077,6 +4079,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                fin_complete ? fin_complete : "(unset)",
                                fin_stable ? fin_stable : "(unset)");
                 account.mam_query_remove(mam_query.id);
+                account.release_mam_slot();
                 if (is_global_query)
                 {
                     account.omemo.global_mam_catchup = false;
@@ -4116,6 +4119,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (channel->second.type == weechat::channel::chat_type::PM)
                         account.pm_open_register(channel->second.id);
                     account.mam_query_remove(mam_query.id);
+                    account.release_mam_slot();
 
                     // Print "History loaded" completion banner matching the fetch banner
                     // printed at the start of fetch_mam().
@@ -4154,6 +4158,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // Defer the next page to the next event-loop tick so the GUI
                     // gets a chance to render between batches.
                     account.mam_query_remove(mam_query.id);
+                    account.release_mam_slot();
 
                     account.mam_deferred_pages.push_back({
                         std::string{},                      // empty = global query
@@ -4173,6 +4178,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         account.mam_cursor_set("global", set__last__text);
 
                     account.mam_query_remove(mam_query.id);
+                    account.release_mam_slot();
                         // MAM catchup done — fire deferred key transports now
                         account.omemo.global_mam_catchup = false;
                         account.omemo.process_postponed_key_transports(account);
@@ -4181,8 +4187,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
             else
             {
-                if (!set__last__text)
+                if (!set__last__text) {
                     account.mam_query_remove(mam_query.id);
+                    account.release_mam_slot();
+                }
             }
         }
     }

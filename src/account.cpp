@@ -257,6 +257,27 @@ void weechat::account::mam_query_free_all()
     mam_queries.clear();
 }
 
+bool weechat::account::try_acquire_mam_slot()
+{
+    int max_c = weechat::config::instance
+        ? weechat::config::instance->look.mam_max_concurrent.integer()
+        : 4;
+    if (mam_inflight >= max_c)
+        return false;
+    mam_inflight++;
+    return true;
+}
+
+void weechat::account::release_mam_slot()
+{
+    if (mam_inflight > 0)
+        mam_inflight--;
+    // Wake up any deferred work (including both RSM pages and initial fetches
+    // that were blocked by the concurrency limit).
+    if (!mam_deferred_pages.empty())
+        schedule_next_mam_page();
+}
+
 void weechat::account::schedule_next_mam_page()
 {
     if (!mam_defer_timer)
@@ -280,6 +301,36 @@ int weechat::account::process_deferred_mam_page_cb(const void *pointer, void *da
 
     auto page = acct->mam_deferred_pages.front();
     acct->mam_deferred_pages.pop_front();
+
+    // #2: Small randomized delay for initial (non-RSM) per-room MAM requests.
+    // This smooths out the burst when many rooms join at once during initial
+    // connect or bulk bookmark processing. RSM continuation pages are never
+    // delayed.
+    if (page.after.empty() && !page.channel_id.empty() && !acct->mam_jitter_next_initial)
+    {
+        // First time we see this initial room request in the processor → apply jitter.
+        acct->mam_jitter_next_initial = true;
+
+        int jitter_ms = 50 + (rand() % 250);
+
+        // Re-queue it. On the next timer firing (after jitter) we will let it through.
+        acct->mam_deferred_pages.push_front(std::move(page));
+
+        if (!acct->mam_defer_timer)
+        {
+            acct->mam_defer_timer = (struct t_hook *)weechat_hook_timer(
+                jitter_ms, 0, 0, &account::process_deferred_mam_page_cb,
+                acct, nullptr);
+        }
+        return WEECHAT_RC_OK;
+    }
+
+    // If we get here with an initial room request, it means we just applied jitter
+    // on the previous timer firing. Clear the flag and process it normally now.
+    if (page.after.empty() && !page.channel_id.empty())
+    {
+        acct->mam_jitter_next_initial = false;
+    }
 
     if (page.channel_id.empty())
     {
@@ -484,6 +535,8 @@ void weechat::account::disconnect(int reconnect)
         mam_defer_timer = nullptr;
     }
     mam_deferred_pages.clear();
+    mam_inflight = 0;
+    mam_jitter_next_initial = false;
     
     // libstrophe's built-in SM is disabled via XMPP_CONN_FLAG_DISABLE_SM
     // (set in connect()), so xmpp_conn_get_sm_state() will always return
@@ -602,7 +655,7 @@ int weechat::account::connect()
     return connect(false);  // Not a manual connect
 }
 
-int weechat::account::connect(bool manual)
+int weechat::account::connect([[maybe_unused]] bool manual)
 {
     if (!buffer)
     {
@@ -625,12 +678,10 @@ int weechat::account::connect(bool manual)
         xmpp_conn_set_flags(conn_ptr, flags);
     }
     
-    // Only reset SM availability on MANUAL connect (allow retry)
-    // Auto-reconnects preserve the sm_available state
-    if (manual)
-    {
-        sm_available = true;
-    }
+    // Reset SM availability on any connect attempt.
+    // We no longer permanently poison sm_available on <failed> (see
+    // stream_management.inl), so it is safe to re-try SM on auto-reconnect.
+    sm_available = true;
 
     is_connected = connection.connect(std::string(jid()), std::string(password()), tls());
 

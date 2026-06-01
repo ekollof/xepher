@@ -1946,6 +1946,31 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
                 return;
             }
         }
+
+        // Global concurrency limiter for initial sync / bulk joins.
+        if (!account.try_acquire_mam_slot())
+        {
+            if (account.mam_inflight == 0)
+            {
+                // Very first MAM request for this account in the current session
+                // (global or first room) — always let it through so MAM visibly
+                // starts on connect.
+                account.mam_inflight = 1;
+            }
+            else
+            {
+                // Defer using the existing mechanism.
+                account.mam_deferred_pages.push_back({
+                    this->id,
+                    std::string(id ? id : ""),
+                    start ? std::optional(*start) : std::optional<time_t>(),
+                    end   ? std::optional(*end)   : std::optional<time_t>(),
+                    ""   // initial request (no RSM after token yet)
+                });
+                account.schedule_next_mam_page();
+                return;
+            }
+        }
     }
 
     // Print a "Fetching history from X to Y" banner on the initial fetch only
