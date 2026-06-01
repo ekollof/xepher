@@ -574,6 +574,26 @@ void weechat::account::disconnect(int reconnect)
             weechat_prefix ("network"), WEECHAT_XMPP_PLUGIN_NAME);
     }
 
+    // On manual disconnect, close all channel buffers (PM, MUC, FEED)
+    // and the account buffer. Channel destructors persist closed state to
+    // LMDB for proper restore on /account connect. Do this AFTER reset()
+    // so the XMPP connection is already dead — buffer__close_cb checks
+    // connected() and skips sending <unavailable>/<gone> stanzas when
+    // already disconnected, and the account buffer close callback skips
+    // calling disconnect() again (avoiding recursion).
+    if (!reconnect)
+    {
+        std::vector<struct t_gui_buffer *> to_close;
+        for (auto &[name, ch] : channels)
+            if (ch.buffer)
+                to_close.push_back(ch.buffer);
+        for (auto *buf : to_close)
+            weechat_buffer_close(buf);
+
+        if (buffer)
+            weechat_buffer_close(buffer);
+    }
+
     if (reconnect)
     {
         // Exponential backoff: 5 → 10 → 20 → 40 → 80 → 120s (capped)
@@ -643,7 +663,7 @@ void weechat::account::reset()
 {
     if (connection)
     {
-        if (xmpp_conn_is_connected(connection))
+        if (xmpp_conn_is_connected(connection) || xmpp_conn_is_connecting(connection))
             xmpp_disconnect(connection);
     }
 
