@@ -1180,7 +1180,7 @@ int weechat::channel::send_message(std::string to, std::string body,
 
         // body is the aesgcm:// URL (or https:// for non-encrypted uploads).
         auto encrypted = make_encrypted(
-            account.omemo.encode(&account, buffer, to.data(), body.data()));
+            account.omemo.encode(&account, buffer, to, body));
 
         if (encrypted)
         {
@@ -1323,7 +1323,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         else
         {
             encrypted = make_encrypted(
-                account.omemo.encode(&account, buffer, to_str.c_str(), body_str.c_str()));
+                account.omemo.encode(&account, buffer, to_str, body_str));
         }
 
         if (!encrypted)

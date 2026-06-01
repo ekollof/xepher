@@ -195,7 +195,7 @@ namespace weechat {
             // Encode a plaintext message using axolotl (eu.siacs.conversations.axolotl).
             // Produces AES-128-GCM ciphertext with explicit IV.
             xmpp_stanza_t *encode(weechat::account *account, struct t_gui_buffer *buffer,
-                                  const char *jid, const char *unencrypted);
+                                  std::string_view jid, std::string_view unencrypted);
 
             // MUC variant (docs/planning-muc-omemo.md §3.1)
             // Encrypts for multiple recipient bare JIDs (occupants + own account).
@@ -203,7 +203,7 @@ namespace weechat {
             xmpp_stanza_t *encode_muc(weechat::account *account, struct t_gui_buffer *buffer,
                                       std::string_view room_jid,
                                       const std::vector<std::string>& recipient_bare_jids,
-                                      const char *unencrypted);
+                                      std::string_view unencrypted);
 
 
             // Key management helpers

@@ -400,14 +400,14 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
 
 xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
                                             struct t_gui_buffer *buffer,
-                                            const char *jid,
-                                            const char *unencrypted)
+                                            std::string_view jid,
+                                            std::string_view unencrypted)
 {
     OMEMO_ASSERT(account != nullptr, "OMEMO encode requires a valid account");
-    OMEMO_ASSERT(jid != nullptr, "OMEMO encode requires a peer jid");
-    OMEMO_ASSERT(unencrypted != nullptr, "OMEMO encode requires plaintext input");
+    OMEMO_ASSERT(!jid.empty(), "OMEMO encode requires a peer jid");
+    OMEMO_ASSERT(!unencrypted.empty(), "OMEMO encode requires plaintext input");
 
-    if (!*this || !account || !jid || !unencrypted)
+    if (!*this || !account || jid.empty() || unencrypted.empty())
         return nullptr;
 
     ensure_local_identity(*this);
@@ -421,9 +421,9 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
             account->connection.send(lbs.get());
     }
 
-    std::string target_jid = ::jid(nullptr, jid).bare;
+    std::string target_jid = ::jid(nullptr, jid.data()).bare;
     if (target_jid.empty())
-        target_jid = jid;
+        target_jid = std::string(jid);
 
     note_peer_traffic(account->context, target_jid);
 
@@ -438,7 +438,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
     }
 
     // Legacy OMEMO uses AES-128-GCM on the raw message text (no SCE wrapping)
-    const auto ep = axolotl_omemo_encrypt(std::string_view(unencrypted));
+    const auto ep = axolotl_omemo_encrypt(unencrypted);
     if (!ep)
     {
         print_error(buffer, "OMEMO: AES-128-GCM payload encryption failed.");
@@ -585,11 +585,11 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
                                                 struct t_gui_buffer *buffer,
                                                 std::string_view room_jid,
                                                 const std::vector<std::string>& recipient_bare_jids,
-                                                const char *unencrypted)
+                                                std::string_view unencrypted)
 {
     (void)room_jid;  // may be used for logging/debug in future
     OMEMO_ASSERT(account != nullptr, "MUC OMEMO encode requires a valid account");
-    if (!*this || !account || recipient_bare_jids.empty() || !unencrypted)
+    if (!*this || !account || recipient_bare_jids.empty() || unencrypted.empty())
         return nullptr;
 
     ensure_local_identity(*this);
@@ -602,7 +602,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
     }
 
     // Encrypt the plaintext payload once (AES-128-GCM). All recipients get the same ciphertext.
-    const auto ep = axolotl_omemo_encrypt(std::string_view(unencrypted));
+    const auto ep = axolotl_omemo_encrypt(unencrypted);
     if (!ep)
     {
         print_error(buffer, "MUC OMEMO: AES-128-GCM payload encryption failed.");
