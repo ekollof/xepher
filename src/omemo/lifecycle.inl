@@ -155,13 +155,7 @@ static void migrate_legacy_keys(omemo &self)
     }
 
     if (to_rename.empty())
-    {
-        // No legacy keys found — write sentinel so we never scan again.
-        auto wtxn = lmdb::txn::begin(self.db_env);
-        self.dbi.omemo.put(wtxn, "legacy_migration_done", "1");
-        wtxn.commit();
         return;
-    }
 
     // Write pass: copy under new key then delete old key.
     auto wtxn = lmdb::txn::begin(self.db_env);
