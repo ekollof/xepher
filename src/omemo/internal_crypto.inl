@@ -378,8 +378,8 @@ struct axolotl_omemo_payload {
     // Per Conversations: Signal-encrypt innerKey(16) || authTag(16) = 32 bytes
     std::array<std::uint8_t, 32> bundle {};
     auto bundle_span = std::span(bundle);
-    std::copy_n(ep.key.begin(), 16, bundle_span.begin());
-    std::copy_n(ep.authtag.begin(), 16, bundle_span.begin() + 16);
+    std::ranges::copy(ep.key, bundle_span.begin());
+    std::ranges::copy(ep.authtag, bundle_span.begin() + 16);
 
     auto address = make_signal_address(jid, static_cast<std::int32_t>(remote_device_id));
 
@@ -558,8 +558,8 @@ struct axolotl_omemo_payload {
 
     std::array<std::uint8_t, 16> inner_key {};
     std::array<std::uint8_t, 16> auth_tag {};
-    std::copy_n(signal_buffer_const_data(plaintext.get()), 16, inner_key.begin());
-    std::copy_n(signal_buffer_const_data(plaintext.get()) + 16, 16, auth_tag.begin());
+    std::ranges::copy_n(signal_buffer_const_data(plaintext.get()), 16, inner_key.begin());
+    std::ranges::copy_n(signal_buffer_const_data(plaintext.get()) + 16, 16, auth_tag.begin());
     return std::pair<std::array<std::uint8_t, 16>, std::array<std::uint8_t, 16>> {inner_key, auth_tag};
 }
 

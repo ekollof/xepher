@@ -336,7 +336,7 @@ static void send_key_transport(omemo &self,
             if (!own_device || *own_device == self.device_id)
                 continue;
 
-            if (self.failed_session_bootstrap.count({std::string(own_bare_jid), *own_device}) > 0)
+            if (self.failed_session_bootstrap.contains({std::string(own_bare_jid), *own_device}))
                 continue;
 
             if (!self.has_session(own_bare_jid.c_str(), *own_device)
@@ -413,7 +413,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
         key_transport_bootstrap_attempted.insert({bare_jid, remote_device_id});
 
     pending_bundle_fetch.erase({std::string(jid ? jid : ""), remote_device_id});
-    const bool needs_key_transport = pending_key_transport.count({std::string(jid ? jid : ""), remote_device_id}) > 0;
+    const bool needs_key_transport = pending_key_transport.contains({std::string(jid ? jid : ""), remote_device_id});
     pending_key_transport.erase({std::string(jid ? jid : ""), remote_device_id});
 
     if (db_env && !bare_jid.empty())

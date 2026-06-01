@@ -731,7 +731,7 @@ void strip_url_trailing_punct(std::string &url)
         unsigned char last = static_cast<unsigned char>(url.back());
         if (last < 0x80)
         {
-            if (kTrailing.find(static_cast<char>(last)) != std::string_view::npos)
+            if (kTrailing.contains(static_cast<char>(last)))
             {
                 url.pop_back();
                 continue;

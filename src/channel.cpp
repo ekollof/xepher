@@ -1192,8 +1192,8 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     // Message Carbons can correctly synchronise the message to other clients.
     // Detection: type is PM, to has a resource, and peer_bare is a known MUC.
     if (type == weechat::channel::chat_type::PM
-        && to_str.find('/') != std::string::npos  // could be .contains in C++23
-        && account.channels.count(peer_bare)
+        && to_str.contains('/')
+        && account.channels.contains(peer_bare)
         && account.channels.at(peer_bare).type == weechat::channel::chat_type::MUC)
     {
         auto muc_x = stanza_node(account.context, "x",

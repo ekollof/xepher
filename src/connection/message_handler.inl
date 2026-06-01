@@ -1154,7 +1154,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     node_sv.rfind("com.google.", 0) == 0 ||
                     node_sv.rfind("org.jivesoftware.", 0) == 0);
                 bool node_is_uri = !node_sv.empty() && !node_is_microblog && (
-                    node_sv.find("://") != std::string_view::npos ||
+                    node_sv.contains("://") ||
                     node_sv.substr(0, 4) == "urn:" ||
                     node_is_protocol_ns);
                 bool from_self = false;
@@ -3368,7 +3368,7 @@ message_handler_after_omemo:
             sims_suffix += "]" + std::string(weechat_color("resetcolor"));
 
             // If OOB already shows this same URL, suppress the OOB suffix to avoid duplication
-            if (!oob_suffix.empty() && oob_suffix.find(sims_url) != std::string::npos)  // .contains in C++23
+            if (!oob_suffix.empty() && oob_suffix.contains(sims_url))
                 oob_suffix.clear();
         }
     }
@@ -3510,11 +3510,11 @@ message_handler_after_omemo:
 
         // Skip if SIMS already covered this URL
         if (!sfs_url.empty() && !sims_suffix.empty()
-            && sims_suffix.find(sfs_url) != std::string::npos)
+            && sims_suffix.contains(sfs_url))
             continue;
         // Also skip if the OOB suffix already covers it
         if (!sfs_url.empty() && !oob_suffix.empty()
-            && oob_suffix.find(sfs_url) != std::string::npos)
+            && oob_suffix.contains(sfs_url))
         {
             oob_suffix.clear(); // show the richer SFS line instead
         }

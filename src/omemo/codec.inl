@@ -115,7 +115,7 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             found_keys_for_our_bare_jid = true;
         }
 
-        if (keys_jid && std::string_view {keys_jid}.find('/') != std::string_view::npos)
+        if (keys_jid && std::string_view {keys_jid}.contains('/'))
         {
             print_error(buffer, fmt::format(
                 "OMEMO message has non-bare keys jid '{}'; ignoring non-compliant element.",
@@ -490,7 +490,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
                 }
             }
 
-            if (failed_session_bootstrap.count({std::string(recipient_jid), *remote_device_id}) > 0)
+            if (failed_session_bootstrap.contains({std::string(recipient_jid), *remote_device_id}))
                 continue;
 
             if (!has_session(std::string(recipient_jid).c_str(), *remote_device_id))
