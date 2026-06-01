@@ -1,6 +1,6 @@
 # Planning: OMEMO Encrypted Multi-User Chats (MUCs)
 
-> Status: **v1 implementation complete + AGENTS.md compliance verified + committed** (de78d33). 27/27 green at commit. Next: live manual testing pass (section 8) in real WeeChat + non-anon MUC.
+> Status: **Implementation complete + committed (de78d33) but live testing not yet performed.** Marked "complete-but-untested" until section 8 checklist is executed in real WeeChat + non-anonymous MUC. 27/27 green.
 
 ---
 
@@ -107,7 +107,8 @@ Before any encryption/decryption code can work, the following plumbing must be i
 - 2.3 Devicelist fetching: Fully implemented for all known occupants (multiple trigger points + centralization in `add_member`).
 - 2.4 Bundle fetching + blocking: **Complete**. Per-channel `pending_bundles` counter + helpers. Increment on real_jid discovery for MUC occupants (main path) and on explicit bundle requests for occupants. Decrement on bundle result processing in `handle_axolotl_bundle` for MUC occupants. Option B blocking guard in `send_message`. 27/27 green.
 
-**Implementation + AGENTS.md compliance complete.** Section 8 testing checklist annotated (static verification done; live runs remain). Ready for final manual testing in WeeChat.
+**Implementation + AGENTS.md compliance complete and committed (de78d33).**  
+**Live testing status**: The full checklist in section 8 has **not yet been executed** in a real WeeChat session with a non-anonymous MUC. All items below have only received static code review + unit test verification. The feature is marked complete-but-untested until the live pass is performed and documented.
 
 The hard MUC blocks have already been softened to use `all_occupants_have_real_jid()` in several places.
 
@@ -122,7 +123,9 @@ The hard MUC blocks have already been softened to use `all_occupants_have_real_j
 - **Section 7 (MAM)**: MAM OMEMO replay safety reinforced with comments (cache-first to protect the ratchet for MUC history).
 - **Section 6 (Trust model)**: Added explicit blind-trust (BTBV) warnings in code comments (MUC devicelist handler + encode_muc) and a one-time note when enabling OMEMO in a MUC via `/omemo`. Addresses the plan's "new concern" for v1 without changing default behavior. 27/27 green.
 
-27/27 tests remain green. MUC OMEMO is in a solid v1 state.
+27/27 tests remain green.
+
+**Marked complete-but-untested**: Implementation and compliance work finished and committed as de78d33. Live manual testing (section 8) is still pending. No production use should be made of MUC OMEMO until the testing checklist has been run and any issues addressed.
 
 **AGENTS.md compliance pass (ranges + pure C++23 printf hygiene + raw-loop re-audit) — completed:**
 
@@ -203,7 +206,8 @@ The `<keys jid='...'>` selection inside decode already supports multiple wrapper
 
 **Recommendation**: User performs the live checklist (with `/set xmpp.look.raw_xml_log on`, `/set xmpp.look.debug on`, and `tools/correlate_omemo_xml.sh` if needed). Report back any wire-format, decrypt, or edge-case surprises.
 
-**Committed as**: `de78d33` ("feat: add OMEMO support for non-anonymous MUCs (XEP-0384 legacy axolotl)"). Tree was clean + 27/27 green at commit time.
+**Committed as**: `de78d33` ("feat: add OMEMO support for non-anonymous MUCs (XEP-0384 legacy axolotl)").  
+**Feature status**: Implementation + compliance complete and committed. **Live testing pending** (this document now explicitly marks the feature "complete-but-untested").
 
 ---
 
