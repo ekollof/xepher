@@ -718,7 +718,7 @@ Each nick in a MUC room displays a prefix indicating their role or affiliation
 |---------|-------------|
 | `/omemo` | Enable OMEMO for the current buffer. Works for both PMs and non-anonymous MUCs (MUC OMEMO support is **experimental and untested** — see planning doc). |
 | `/omemo check` | Verify OMEMO bundle is published |
-| `/omemo republish` | Republish OMEMO:2 + legacy nodes |
+| `/omemo republish` | Republish legacy OMEMO bundle nodes (axolotl namespace) |
 | `/omemo status` | Show device ID and status |
 | `/omemo reset-keys` | Reset key database (forces renegotiation) |
 | `/omemo fetch [jid] [device-id]` | Force devicelist/bundle refresh |
@@ -1014,7 +1014,7 @@ Please keep to the existing indentation style (C++23). clang-format is recommend
 - ✅ XEP-0372: References
 - ✅ XEP-0380: Explicit Message Encryption
 - ✅ XEP-0382: Spoiler Messages
-- ✅ XEP-0384: OMEMO Encryption (OMEMO:2 + legacy axolotl; random pre-key selection; own-device encryption for carbon-copy and self-message decryption; pre-key ID continuity across signed pre-key rotation; stale-session recovery via MAM bundle re-fetch)
+- ✅ XEP-0384: OMEMO Encryption (legacy axolotl namespace `eu.siacs.conversations.axolotl` only — OMEMO:2 / `urn:xmpp:omemo:2` is **not supported**; random pre-key selection; own-device encryption for carbon-copy and self-message decryption; pre-key ID continuity across signed pre-key rotation; stale-session recovery via MAM bundle re-fetch)
 - ✅ XEP-0385: Stateless Inline Media Sharing (SIMS `<reference uri>` extraction fixed for `urn:xmpp:reference:0` sources)
 - ✅ XEP-0392: Consistent Color Generation
 - ✅ XEP-0402: PEP Native Bookmarks

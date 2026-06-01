@@ -340,7 +340,7 @@
         <xmpp:version>0.9.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >OMEMO Encryption with auto-detection, OMEMO:2 + legacy OMEMO:1 (axolotl) interoperability, per-device bundle/bootstrap mode selection, and key-transport based session recovery; Signal-spec compliant random pre-key selection on session establishment; own-device encryption always included for carbon-copy decodability and self-message decryption; pre-key ID counter persisted across signed pre-key rotation (no ID reuse); stale-session recovery via MAM bundle re-fetch; XEP-0450 ATM trust with TOFU fallback</xmpp:note>
+                >OMEMO Encryption using the legacy axolotl namespace (`eu.siacs.conversations.axolotl`) only. OMEMO:2 (`urn:xmpp:omemo:2`) is not published or supported. Includes auto-detection, per-device bundle/bootstrap, key-transport based session recovery; Signal-spec compliant random pre-key selection; own-device encryption for carbon-copy and self-message decryption; pre-key ID continuity; stale-session recovery via MAM; XEP-0450 ATM with TOFU fallback (MUC support experimental/untested)</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -651,7 +651,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0450.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.4.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Automatic Trust Management (XEP-0450) - TOFU: SHA-256 fingerprint of identity key stored as trusted on first OMEMO session; trust decisions propagated to own endpoints via OMEMO+SCE encrypted XEP-0434 trust messages (OMEMO:2 and legacy); distrust decisions broadcast as &lt;distrust&gt; trust messages before wiping keys; incoming trust/distrust messages gated on sender authentication; deferred trust queues for unauthenticated senders (drained on authentication) and unfetched keys (applied on identity_save); trust decisions applied to LMDB trust store and enforced in identity_is_trusted; /omemo fingerprint shows real hex fingerprints with per-device trust status; /omemo approve and /omemo distrust allow manual trust management per JID or per fingerprint; configurable via xmpp.look.omemo_atm</xmpp:note>
+        <xmpp:note xml:lang='en'>Automatic Trust Management (XEP-0450) - TOFU: SHA-256 fingerprint of identity key stored as trusted on first OMEMO session; trust decisions propagated to own endpoints via OMEMO+SCE encrypted XEP-0434 trust messages (legacy axolotl namespace only); distrust decisions broadcast as &lt;distrust&gt; trust messages before wiping keys; incoming trust/distrust messages gated on sender authentication; deferred trust queues for unauthenticated senders (drained on authentication) and unfetched keys (applied on identity_save); trust decisions applied to LMDB trust store and enforced in identity_is_trusted; /omemo fingerprint shows real hex fingerprints with per-device trust status; /omemo approve and /omemo distrust allow manual trust management per JID or per fingerprint; configurable via xmpp.look.omemo_atm</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
