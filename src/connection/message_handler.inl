@@ -321,7 +321,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             // build the correct feed_key from the query context (service JID from
             // our IQ) rather than from the inner message's from= attribute.
             const char *queryid = xmpp_stanza_get_attribute(result, "queryid");
-            if (queryid && account.pubsub_mam_queries.count(queryid))
+            if (queryid && account.pubsub_mam_queries.contains(queryid))
             {
                 const auto &pq = account.pubsub_mam_queries.at(queryid);
                 std::string feed_service = pq.service;
@@ -3824,7 +3824,7 @@ message_handler_after_omemo:
             if (url.empty()) { pos = end; continue; }
             pos = end;
 
-            if (already_shown.count(url)) continue;
+            if (already_shown.contains(url)) continue;
             og_start_fetch(url, channel->buffer, &account,
                            std::string(display_prefix), date);
         }

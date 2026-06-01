@@ -11,7 +11,6 @@
 #include <iostream>
 #include <sstream>
 #include <utility>
-#include <algorithm>
 #include <optional>
 #include <memory>
 #include <array>

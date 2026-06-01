@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>
-#include <algorithm>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 #include <libxml/xmlwriter.h>

@@ -284,7 +284,7 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                 {
                     // Live delivery: aggressively recover — delete stale session and
                     // immediately request bundle + queue key-transport.
-                    if (key_transport_bootstrap_attempted.count(kex_key) == 0)
+                    if (!key_transport_bootstrap_attempted.contains(kex_key))
                     {
                         key_transport_bootstrap_attempted.insert(kex_key);
                         if (!quiet)
@@ -307,8 +307,8 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                     // MAM catchup ends (process_postponed_key_transports will send it).
                     // Do not delete the session here — if we still have a valid session
                     // from a more recent message, we do not want to clobber it.
-                    if (key_transport_bootstrap_attempted.count(kex_key) == 0
-                        && pending_key_transport.count(kex_key) == 0)
+                    if (!key_transport_bootstrap_attempted.contains(kex_key)
+                        && !pending_key_transport.contains(kex_key))
                     {
                         XDEBUG("omemo: MAM decrypt failed for {}/{} — queuing deferred session recovery",
                                bare_jid, *sender_device_id);
@@ -373,7 +373,7 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             heartbeat_sent.erase(hb_key);
         if (ratchet_message_counter && *ratchet_message_counter >= 53
             && !global_mam_catchup
-            && heartbeat_sent.count(hb_key) == 0)
+            && !heartbeat_sent.contains(hb_key))
         {
             heartbeat_sent.insert(hb_key);
             XDEBUG("omemo: sending heartbeat to {}/{} (counter={})",
@@ -387,7 +387,7 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     {
         const std::string bare_jid = normalize_bare_jid(*account->context, jid);
         const auto pk_key = std::make_pair(bare_jid, *sender_device_id);
-        if (prekey_reply_sent.count(pk_key) == 0)
+        if (!prekey_reply_sent.contains(pk_key))
         {
             prekey_reply_sent.insert(pk_key);
             XDEBUG("omemo (legacy): sending prekey-reply key-transport to {}/{}",

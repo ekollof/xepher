@@ -9,7 +9,6 @@
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types"
 #endif
 
-#include <algorithm>
 #include <cstdlib>
 #include <cstdint>
 #include <ctime>

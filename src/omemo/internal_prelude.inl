@@ -450,7 +450,7 @@ void request_axolotl_bundle(weechat::account &account, std::string_view jid, std
     }
 
     const auto key = std::make_pair(target_jid, device_id);
-    if (account.omemo.pending_bundle_fetch.count(key))
+    if (account.omemo.pending_bundle_fetch.contains(key))
     {
         XDEBUG("omemo: legacy bundle request for {}/{} already pending (skipping)",
                target_jid, device_id);

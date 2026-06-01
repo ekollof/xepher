@@ -229,7 +229,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     }
 
     // XEP-0441: MAM Preferences — handle <prefs xmlns='urn:xmpp:mam:2'> result/error
-    if (id && account.mam_prefs_queries.count(id))
+    if (id && account.mam_prefs_queries.contains(id))
     {
         struct t_gui_buffer *prefs_buf = account.mam_prefs_queries[id];
         if (!prefs_buf) prefs_buf = account.buffer;
@@ -1305,7 +1305,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                 // If this upload was triggered by an embed tag in a pending feed post,
                 // mark the context so upload_fd_cb routes to the feed-post path.
-                if (account.pending_feed_posts.count(id))
+                if (account.pending_feed_posts.contains(id))
                     ctx->feed_post_upload_id = id;
 
                 // Copy strings that will be used by the worker thread (the
@@ -1761,7 +1761,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, id);
         }
     }
-    else if (id && account.upload_requests.count(id))
+    else if (id && account.upload_requests.contains(id))
     {
         weechat_printf(account.buffer, "%s%s: upload slot response malformed or wrong type (type: %s)",
                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, type ? type : "(null)");
@@ -1890,7 +1890,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         // flush deferred feeds via XEP-0060 plain items IQ (fallback path).
         // Without this, the deferred feeds hang forever since the success path
         // (inside the `if (query && type)` block) is only entered for type=result.
-        if (id && account.pubsub_mam_disco_queries.count(id))
+        if (id && account.pubsub_mam_disco_queries.contains(id))
         {
             std::string svc_jid = account.pubsub_mam_disco_queries[id];
             account.pubsub_mam_disco_queries.erase(id);
@@ -2244,7 +2244,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         bool is_commands_node = items_node
             && std::string_view(items_node) == "http://jabber.org/protocol/commands";
         const char *iq_id = xmpp_stanza_get_id(stanza);
-        bool is_adhoc_query = iq_id && account.adhoc_queries.count(iq_id);
+        bool is_adhoc_query = iq_id && account.adhoc_queries.contains(iq_id);
 
         if (is_commands_node && is_adhoc_query)
         {
@@ -2319,7 +2319,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         }
 
         // XEP-0060: /feed <service> — auto-fetch all discovered nodes
-        if (iq_id && account.pubsub_disco_queries.count(iq_id))
+        if (iq_id && account.pubsub_disco_queries.contains(iq_id))
         {
             std::string feed_service = account.pubsub_disco_queries[iq_id];
             account.pubsub_disco_queries.erase(iq_id);
@@ -2396,7 +2396,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     if (adhoc_command && type)
     {
         const char *iq_id = xmpp_stanza_get_id(stanza);
-        bool is_adhoc_query = iq_id && account.adhoc_queries.count(iq_id);
+        bool is_adhoc_query = iq_id && account.adhoc_queries.contains(iq_id);
         struct t_gui_buffer *adhoc_buf = is_adhoc_query
             ? (account.adhoc_queries[iq_id].buffer
                ? account.adhoc_queries[iq_id].buffer : account.buffer)
@@ -2461,7 +2461,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     // XEP-0433: Extended Channel Search — handle <result> or <search> IQ responses
     {
         const char *cs_id = xmpp_stanza_get_id(stanza);
-        bool is_cs_query = cs_id && account.channel_search_queries.count(cs_id);
+        bool is_cs_query = cs_id && account.channel_search_queries.contains(cs_id);
 
         if (is_cs_query && type)
         {
@@ -2793,7 +2793,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         const char *stanza_id = xmpp_stanza_get_id(stanza);
 
         // /list enrichment path: compact room metadata from follow-up disco#info.
-        if (stanza_id && account.channel_search_disco_queries.count(stanza_id))
+        if (stanza_id && account.channel_search_disco_queries.contains(stanza_id))
         {
             auto dq = account.channel_search_disco_queries[stanza_id];
             struct t_gui_buffer *out = dq.buffer ? dq.buffer : account.buffer;
@@ -2945,8 +2945,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
         if (weechat_strcasecmp(type, "result") == 0)
         {
-            bool user_initiated = stanza_id && account.user_disco_queries.count(stanza_id);
-            bool caps_query = stanza_id && account.caps_disco_queries.count(stanza_id);
+            bool user_initiated = stanza_id && account.user_disco_queries.contains(stanza_id);
+            bool caps_query = stanza_id && account.caps_disco_queries.contains(stanza_id);
             
             // Extract features for capability caching
             std::vector<std::string> features;
@@ -3121,7 +3121,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
             
             // Check if this is a response to upload service discovery
-            bool upload_disco = stanza_id && account.upload_disco_queries.count(stanza_id);
+            bool upload_disco = stanza_id && account.upload_disco_queries.contains(stanza_id);
             std::string upload_service_jid; // kept alive for the identity loop below
             if (upload_disco)
             {
@@ -3188,7 +3188,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
             // XEP-0442: handle MAM-support discovery response for a pubsub service.
             bool pubsub_mam_disco = stanza_id
-                && account.pubsub_mam_disco_queries.count(stanza_id);
+                && account.pubsub_mam_disco_queries.contains(stanza_id);
             if (pubsub_mam_disco)
             {
                 std::string svc_jid = account.pubsub_mam_disco_queries[stanza_id];

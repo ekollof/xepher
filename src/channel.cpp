@@ -617,7 +617,7 @@ bool weechat::channel::is_chat_state_supported(const std::string& to_jid) const
 
     // For PM: only send if the contact has previously sent us a chat state,
     // or if the full JID (with resource) or bare JID is in the support set.
-    if (chat_state_supported.count(to_jid))
+    if (chat_state_supported.contains(to_jid))
         return true;
 
     // Also check bare JID
@@ -625,7 +625,7 @@ bool weechat::channel::is_chat_state_supported(const std::string& to_jid) const
     if (sep != std::string::npos)
     {
         std::string bare = to_jid.substr(0, sep);
-        if (chat_state_supported.count(bare))
+        if (chat_state_supported.contains(bare))
             return true;
     }
 

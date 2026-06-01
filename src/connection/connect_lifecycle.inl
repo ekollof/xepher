@@ -517,7 +517,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             const int max_items = 20;
 
             // XEP-0442: if the service is known to support MAM, query via MAM.
-            if (account.pubsub_mam_services.count(service_jid))
+            if (account.pubsub_mam_services.contains(service_jid))
             {
                 send_pubsub_mam_query(service_jid, node_name, max_items);
                 return;
