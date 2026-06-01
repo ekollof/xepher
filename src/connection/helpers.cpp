@@ -6,6 +6,7 @@
 // Definitions of everything declared in connection/internal.hh.
 
 #include <algorithm>
+#include <expected>
 #include <charconv>
 #include <cctype>
 #include <filesystem>
@@ -186,17 +187,21 @@ int ephemeral_tombstone_cb(const void *pointer, void *data, int remaining_calls)
 std::list<esfs_download_ctx> g_esfs_downloads;
 
 // Base64-decode helper using OpenSSL BIO.
-static std::vector<unsigned char> esfs_b64_decode(std::string_view b64)
+// Returns unexpected on decode error, or the decoded bytes on success
+// (empty input produces empty output — that's valid).
+[[nodiscard]] static auto esfs_b64_decode(std::string_view b64)
+    -> std::expected<std::vector<unsigned char>, std::string>
 {
-    if (b64.empty()) return {};
+    if (b64.empty()) return std::vector<unsigned char>{};
     std::unique_ptr<BIO, decltype(&BIO_free_all)>
         chain(BIO_push(BIO_new(BIO_f_base64()), BIO_new_mem_buf(b64.data(), static_cast<int>(b64.size()))),
               BIO_free_all);
+    if (!chain) return std::unexpected("esfs: BIO allocation failed");
     BIO_set_flags(chain.get(), BIO_FLAGS_BASE64_NO_NL);
     std::vector<unsigned char> out(b64.size());
     std::span<unsigned char> out_view{out};
     int n = BIO_read(chain.get(), out_view.data(), static_cast<int>(out_view.size()));
-    if (n <= 0) return {};
+    if (n <= 0) return std::unexpected("esfs: base64 decode failed");
     out.resize(static_cast<size_t>(n));
     return out;
 }
@@ -330,10 +335,13 @@ void esfs_start_download(std::string_view cipher_url,
         auto key_bytes = esfs_b64_decode(ctx.key_b64);
         auto iv_bytes  = esfs_b64_decode(ctx.iv_b64);
 
-        if (key_bytes.size() != 32 || iv_bytes.size() != 12)
+        if (!key_bytes || !iv_bytes || key_bytes->size() != 32 || iv_bytes->size() != 12)
         {
             ctx.success   = false;
-            ctx.error_msg = "esfs: invalid key or IV length after base64 decode";
+            ctx.error_msg = !key_bytes ? key_bytes.error()
+                          : !iv_bytes  ? iv_bytes.error()
+                          : fmt::format("esfs: invalid key/IV length (key={} IV={})",
+                                        key_bytes->size(), iv_bytes->size());
             ::write(ctx.pipe_write_fd, "x", 1);
             return;
         }
@@ -389,7 +397,7 @@ void esfs_start_download(std::string_view cipher_url,
             || EVP_CIPHER_CTX_ctrl(dec_ctx.get(), EVP_CTRL_GCM_SET_IVLEN,
                                    12, nullptr) != 1
             || EVP_DecryptInit_ex(dec_ctx.get(), nullptr,
-                                  nullptr, key_bytes.data(), iv_bytes.data()) != 1)
+                                  nullptr, key_bytes->data(), iv_bytes->data()) != 1)
         {
             ctx.success   = false;
             ctx.error_msg = "esfs: EVP decrypt init failed";

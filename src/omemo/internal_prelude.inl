@@ -59,7 +59,7 @@ std::unordered_map<omemo *, std::unique_ptr<signal_store_state>> g_signal_store_
 [[nodiscard]] auto make_signal_address(std::string_view jid, std::int32_t device_id)
     -> signal_address_view;
 
-[[nodiscard]] auto pkcs7_unpad(const std::vector<std::uint8_t> &padded) -> std::optional<std::string>;
+[[nodiscard]] auto pkcs7_unpad(const std::vector<std::uint8_t> &padded) -> std::expected<std::string, std::string>;
 
 struct signal_buffer_deleter {
     void operator()(signal_buffer *buffer) const noexcept

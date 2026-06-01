@@ -8,6 +8,7 @@
 #include <charconv>
 #include <cstdint>
 #include <ctime>
+#include <expected>
 #include <filesystem>
 #include <iomanip>
 #include <memory>

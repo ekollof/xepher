@@ -237,19 +237,19 @@ void crypto_unlock(void *user_data)
     (void) user_data;
 }
 
-[[nodiscard]] auto pkcs7_unpad(const std::vector<std::uint8_t> &padded) -> std::optional<std::string>
+[[nodiscard]] auto pkcs7_unpad(const std::vector<std::uint8_t> &padded) -> std::expected<std::string, std::string>
 {
     if (padded.empty())
-        return std::nullopt;
+        return std::unexpected("pkcs7: empty input");
 
     const std::uint8_t padding = padded.back();
     if (padding == 0 || padding > 16 || padding > padded.size())
-        return std::nullopt;
+        return std::unexpected(fmt::format("pkcs7: invalid padding byte {}", padding));
 
     for (std::size_t index = padded.size() - padding; index < padded.size(); ++index)
     {
         if (padded[index] != padding)
-            return std::nullopt;
+            return std::unexpected("pkcs7: padding bytes inconsistent");
     }
 
     return std::string {padded.begin(), padded.end() - padding};
