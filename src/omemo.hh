@@ -197,6 +197,14 @@ namespace weechat {
             xmpp_stanza_t *encode(weechat::account *account, struct t_gui_buffer *buffer,
                                   const char *jid, const char *unencrypted);
 
+            // MUC variant (docs/planning-muc-omemo.md §3.1)
+            // Encrypts for multiple recipient bare JIDs (occupants + own account).
+            // The resulting stanza will contain multiple <keys jid='...'> wrappers.
+            xmpp_stanza_t *encode_muc(weechat::account *account, struct t_gui_buffer *buffer,
+                                      const char *room_jid,
+                                      const std::vector<std::string>& recipient_bare_jids,
+                                      const char *unencrypted);
+
 
             // Key management helpers
             // Show fingerprint (hex of public identity key) for own key or a peer JID.

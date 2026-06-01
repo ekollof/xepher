@@ -296,13 +296,14 @@ int command__omemo(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    // OMEMO in MUCs is not yet implemented (requires per-occupant device lists,
-    // multi-recipient encryption, and real-JID mapping).  See docs/planning-muc-omemo.md.
-    if (ptr_channel->type == weechat::channel::chat_type::MUC)
+    // Per docs/planning-muc-omemo.md §2.1: reject OMEMO in rooms where we do not
+    // have real JIDs for all occupants (anonymous or not-yet-visible).
+    if (ptr_channel->type == weechat::channel::chat_type::MUC &&
+        !ptr_channel->all_occupants_have_real_jid())
     {
         weechat_printf(
             buffer,
-            "%s%s: OMEMO is not yet supported in MUC rooms",
+            "%s%s: OMEMO requires a non-anonymous room where real JIDs are visible for all occupants",
             weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
         return WEECHAT_RC_OK;
     }
@@ -313,6 +314,15 @@ int command__omemo(const void *pointer, void *data,
     ptr_channel->set_transport(weechat::channel::transport::OMEMO, 0);
 
     weechat_bar_item_update("xmpp_encryption");
+
+    // docs/planning-muc-omemo.md §6: Surface the blind-trust concern for MUCs.
+    if (ptr_channel->type == weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer, "%s",
+            fmt::format("{}: Note: OMEMO in this MUC uses blind trust (BTBV) for all occupants by default. "
+                        "Manually verify important devices with /omemo trust if desired.",
+                        weechat_prefix("network")).c_str());
+    }
 
     return WEECHAT_RC_OK;
 }
@@ -494,8 +504,8 @@ int command__xml(const void *pointer, void *data,
             }
             catch (const std::invalid_argument& ex) {
                 while (std::getline(ss, line))
-                    weechat_printf(nullptr, "%ssxml: %s", weechat_prefix("info"), line.data());
-                weechat_printf(nullptr, "%ssxml: %s", weechat_prefix("error"), ex.what());
+                    weechat_printf(nullptr, "%s", fmt::format("{}sxml: {}", weechat_prefix("info"), line).c_str());
+                weechat_printf(nullptr, "%s", fmt::format("{}sxml: {}", weechat_prefix("error"), ex.what()).c_str());
                 return false;
             }
         };

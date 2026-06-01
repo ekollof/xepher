@@ -70,3 +70,10 @@ namespace {
 const char *OMEMO_ADVICE = "[OMEMO encrypted message (XEP-0384)]";
 
 #include "omemo/api.inl"
+
+// MUC OMEMO entry point (docs/planning-muc-omemo.md §3.1)
+// Full multi-recipient support is implemented (multiple <keys jid=...> blocks,
+// proper real-JID handling on send/receive, bundle tracking, etc.).
+// The implementation lives in codec.inl (included via api.inl).
+// Declaration is in omemo.hh.
+

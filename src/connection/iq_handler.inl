@@ -2217,6 +2217,84 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     
     if (items_query && type && weechat_strcasecmp(type, "result") == 0)
     {
+        // docs/planning-muc-omemo.md §2.2: disco#items result for a joined MUC?
+        // If so, populate the channel's members map with every nick from the
+        // room's item list. Real JIDs (if visible) were already recorded from
+        // presence <x xmlns='muc#user'><item jid='...'/></x>. Having the full
+        // occupant list here makes all_occupants_have_real_jid() reliable.
+        if (from)
+        {
+            std::string from_bare = ::jid(nullptr, from).bare;
+            auto ch_it = account.channels.find(from_bare);
+            if (ch_it != account.channels.end() &&
+                ch_it->second.type == weechat::channel::chat_type::MUC)
+            {
+                xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items_query, "item");
+                while (item)
+                {
+                    const char *item_jid = xmpp_stanza_get_attribute(item, "jid");
+                    if (item_jid)
+                    {
+                        std::string nick = ::jid(nullptr, item_jid).resource;
+                        if (!nick.empty())
+                        {
+                            ch_it->second.add_member(nick.c_str(), nullptr, std::nullopt);
+                        }
+                    }
+                    item = xmpp_stanza_get_next(item);
+                }
+
+                // docs/planning-muc-omemo.md §2.3: Now that we have the full occupant
+                // list from disco#items, request devicelists for any that have a
+                // visible real_jid (idempotent — the request path early-returns if
+                // already in flight or recently requested).
+                auto& ch = ch_it->second;
+                for (const auto& [occ_id, member] : ch.members)
+                {
+                    if (member.real_jid && !member.real_jid->empty())
+                    {
+                        account.omemo.request_axolotl_devicelist(account, *member.real_jid);
+                    }
+                }
+
+                return true; // occupant list handled; do not mis-treat nicks as upload services
+            }
+        }
+
+        // XEP-0045 §9.3 / docs/planning-muc-omemo.md §2.2 (admin affiliation fallback):
+        // If this is a muc#admin result for a MUC we are in, the <item> children
+        // contain real JIDs (jid attr) + nicks when the requester has sufficient
+        // affiliation. Feed them through add_member so the central real_jid logic
+        // (and automatic devicelist request) runs.
+        xmpp_stanza_t *admin_query = xmpp_stanza_get_child_by_name_and_ns(
+            stanza, "query", "http://jabber.org/protocol/muc#admin");
+        if (admin_query && type && weechat_strcasecmp(type, "result") == 0)
+        {
+            if (from)
+            {
+                std::string from_bare = ::jid(nullptr, from).bare;
+                auto ch_it = account.channels.find(from_bare);
+                if (ch_it != account.channels.end() &&
+                    ch_it->second.type == weechat::channel::chat_type::MUC)
+                {
+                    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(admin_query, "item");
+                    while (item)
+                    {
+                        const char *nick = xmpp_stanza_get_attribute(item, "nick");
+                        const char *real_jid = xmpp_stanza_get_attribute(item, "jid");
+                        if (nick && real_jid)
+                        {
+                            ch_it->second.add_member(nick, nullptr,
+                                std::optional<std::string_view>(real_jid));
+                        }
+                        item = xmpp_stanza_get_next(item);
+                    }
+                    // Do not return here — let other admin result processing (if any)
+                    // or fallthrough continue; this is discovery only.
+                }
+            }
+        }
+
         // Look for HTTP upload service in items
         xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items_query, "item");
         while (item)

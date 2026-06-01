@@ -52,6 +52,17 @@ namespace stanza {
             }
         };
 
+        // For retrieving affiliation lists (XEP-0045 §9.3) to discover real JIDs
+        // for MUC OMEMO (plan 2.2 admin fallback). Usage:
+        //   xep0045admin::item_by_affiliation it("member");
+        //   q.item(it);
+        struct item_by_affiliation : virtual public spec {
+            explicit item_by_affiliation(std::string_view affiliation)
+                : spec("item") {
+                attr("affiliation", affiliation);
+            }
+        };
+
         // <query xmlns='http://jabber.org/protocol/muc#admin'>…</query>
         struct query : virtual public spec {
             query() : spec("query") {
@@ -59,6 +70,7 @@ namespace stanza {
             }
             query& item(item_by_nick& it) { child(it); return *this; }
             query& item(item_by_jid& it)  { child(it); return *this; }
+            query& item(item_by_affiliation& it) { child(it); return *this; }
         };
 
         // stanza::iq mixin

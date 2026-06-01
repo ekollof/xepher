@@ -180,6 +180,57 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                             if (!mam_uuid.empty())
                                 channel->fetch_mam(mam_uuid.c_str(), &start, &end, nullptr);
                         }
+
+                        // docs/planning-muc-omemo.md §2.2: After initial self-presence (110)
+                        // on MUC join, kick off member list discovery so we can obtain
+                        // real JIDs for all occupants (required for MUC OMEMO).
+                        // We use disco#items here; results are handled in iq_handler.
+                        if (was_joining && channel->type == weechat::channel::chat_type::MUC)
+                        {
+                            std::string disco_id = stanza::uuid(account.context);
+                            account.connection.send(
+                                stanza::iq()
+                                    .type("get")
+                                    .to(channel->id)
+                                    .id(disco_id)
+                                    .xep0030()
+                                    .query_items()
+                                    .build(account.context)
+                                    .get()
+                            );
+
+                            // docs/planning-muc-omemo.md §2.2: Send XEP-0045 muc#admin affiliation
+                            // queries (member/admin/owner) as fallback to obtain real JIDs for
+                            // more occupants. Results are handled by the muc#admin handler in
+                            // iq_handler (which feeds them through add_member + centralized
+                            // devicelist request).
+                            {
+                                for (const char *aff : {"member", "admin", "owner"}) {
+                                    std::string admin_id = stanza::uuid(account.context);
+                                    stanza::xep0045admin::query q;
+                                    stanza::xep0045admin::item_by_affiliation it(aff);
+                                    q.item(it);
+
+                                    auto adm_iq = stanza::iq()
+                                        .type("get")
+                                        .to(channel->id)
+                                        .id(admin_id);
+                                    adm_iq.muc_admin(q);
+                                    account.connection.send(adm_iq.build(account.context).get());
+                                }
+                            }
+
+                            // docs/planning-muc-omemo.md §2.3: For occupants whose real JID we already
+                            // know from presence, start fetching their OMEMO devicelist now.
+                            // This is done in parallel with the full disco#items for completeness.
+                            for (const auto& [occ_id, member] : channel->members)
+                            {
+                                if (member.real_jid && !member.real_jid->empty())
+                                {
+                                    account.omemo.request_axolotl_devicelist(account, *member.real_jid);
+                                }
+                            }
+                        }
                     }
                     break;
                 case 170: // Logging Active: room logging enabled — privacy notice
@@ -352,6 +403,17 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                         item.target ? std::optional(std::string_view(item.target->full))
                                                     : std::nullopt,
                                         user);
+
+                    // docs/planning-muc-omemo.md §2.3: Whenever we learn (or re-learn) a
+                    // real JID for a MUC occupant via presence, proactively request their
+                    // OMEMO devicelist so we can fetch bundles and build sessions early.
+                    if (item.target && channel &&
+                        channel->type == weechat::channel::chat_type::MUC &&
+                        account.omemo)
+                    {
+                        account.omemo.request_axolotl_devicelist(account, item.target->full);
+                    }
+
                     if (is_server_nick && channel)
                     {
                         // Status 210: server assigned a different nick than requested

@@ -638,6 +638,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         // Use plaintext body if available; otherwise check omemo_plaintext cache.
                         // OMEMO messages carry <body>OMEMO_ADVICE</body> — the cache holds the
                         // real plaintext, so look it up even when msg_text is the placeholder.
+                        //
+                        // For MUC OMEMO (plan §7): we deliberately serve the cached cleartext
+                        // on MAM replay instead of calling decode(). This avoids advancing the
+                        // Signal ratchet for historical messages. The cache key uses the room
+                        // bare JID (channel_jid) for MUCs.
                         std::optional<std::string> omemo_body;
                         if (!msg_text || std::string_view(msg_text) == OMEMO_ADVICE)
                             omemo_body = account.mam_cache_lookup_omemo_plaintext(channel_jid, msg_id);
@@ -1952,12 +1957,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         }
     }
     
-    // Auto-enable OMEMO for PM channels when receiving encrypted messages
+    // Auto-enable OMEMO when receiving encrypted messages (PM or MUC).
+    // MUC auto-enable is now safe because we have real-JID tracking + bundle readiness checks.
     if (encrypted && !is_self_outbound_copy
-        && channel && channel->type == weechat::channel::chat_type::PM && !channel->omemo.enabled)
+        && channel && !channel->omemo.enabled)
     {
-        weechat_printf(channel->buffer, "%sAuto-enabling OMEMO (received encrypted message)",
-                       weechat_prefix("network"));
+        weechat_printf(channel->buffer, "%s", fmt::format("{}Auto-enabling OMEMO (received encrypted message)",
+                       weechat_prefix("network")).c_str());
         channel->omemo.enabled = 1;
         channel->set_transport(weechat::channel::transport::OMEMO, 0);
     }
@@ -1966,8 +1972,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // Auto-enable PGP for PM channels when receiving PGP encrypted messages
     if (x && channel && channel->type == weechat::channel::chat_type::PM && !channel->pgp.enabled)
     {
-        weechat_printf(channel->buffer, "%sAuto-enabling PGP (received encrypted message)",
-                       weechat_prefix("network"));
+        weechat_printf(channel->buffer, "%s", fmt::format("{}Auto-enabling PGP (received encrypted message)",
+                       weechat_prefix("network")).c_str());
         channel->pgp.enabled = 1;
         channel->set_transport(weechat::channel::transport::PGP, 0);
     }
@@ -1979,6 +1985,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         // If found, use it directly and skip Signal decryption entirely — the ratchet
         // key was consumed in the original session and decryption would fail with
         // SG_ERR_DUPLICATE_MESSAGE.  This mirrors Gajim's SQLite archive approach.
+        //
+        // For MUC OMEMO: this cache path is especially important. We pass the
+        // sender's real bare JID (from the member table) to decode() only as a
+        // fallback. The primary safety is serving the cached cleartext so we
+        // never touch the ratchet on historical replay. channel_id is the room
+        // bare JID for MUC messages.
         if (is_mam_replay && stable_id && channel_id)
         {
             auto cached = account.mam_cache_lookup_omemo_plaintext(
@@ -1991,11 +2003,40 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 goto message_handler_after_omemo;
             }
         }
+        // For MUC OMEMO (plan §4.1): the stanza 'from' is room@service/nick.
+        // We must pass the *sender's real bare JID* (from the member table) to
+        // decode() so that Signal sessions and trust are looked up correctly.
+        // If we don't have the real JID yet (semi-anonymous or race), fall back
+        // to the room bare JID — decode will fail gracefully and we show a
+        // placeholder (as recommended by the plan).
+        //
+        // Note on MAM replay safety (plan §7): the early cache check above
+        // (using channel_id + stable_id) should already have supplied the
+        // cleartext for historical MUC OMEMO messages, avoiding any ratchet
+        // touch. This decode_jid mapping is a defensive fallback.
+        const char *decode_jid = from_bare;
+        std::string muc_sender_real_storage;
+        if (channel && channel->type == weechat::channel::chat_type::MUC)
+        {
+            std::string sender_nick = ::jid(nullptr, from).resource;
+            if (!sender_nick.empty())
+            {
+                if (auto member_opt = channel->member_search(sender_nick.c_str()))
+                {
+                    if ((*member_opt)->real_jid && !(*member_opt)->real_jid->empty())
+                    {
+                        muc_sender_real_storage = *(*member_opt)->real_jid;
+                        decode_jid = muc_sender_real_storage.c_str();
+                    }
+                }
+            }
+        }
+
         // Always attempt decryption — MAM messages can be decrypted if the
         // Signal session is still valid.  quiet=false so errors are logged.
         // out_is_duplicate distinguishes "already seen live" (SG_ERR_DUPLICATE_MESSAGE)
         // from a genuine session failure, matching Gajim's DuplicateMessage→NodeProcessed.
-        auto omemo_result = account.omemo.decode(&account, channel->buffer, from_bare, encrypted,
+        auto omemo_result = account.omemo.decode(&account, channel->buffer, decode_jid, encrypted,
                                                  /*quiet=*/false, &omemo_is_duplicate,
                                                  /*suppress_peer_traffic=*/is_mam_replay);
         if (omemo_result)

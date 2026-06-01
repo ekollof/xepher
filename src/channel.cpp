@@ -10,6 +10,8 @@
 #include <iomanip>
 #include <fmt/core.h>
 #include <optional>
+#include <ranges>
+#include <iterator>
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>
 
@@ -689,6 +691,16 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
             user->nicklist_remove(&account, this);
     }
 
+    // docs/planning-muc-omemo.md §2.3: Central place — whenever a real_jid becomes
+    // known for a MUC occupant (via presence, future admin affiliation results, etc.),
+    // kick off their devicelist fetch so bundles can be requested next. The request
+    // path is idempotent.
+    if (real_jid && type == weechat::channel::chat_type::MUC && account.omemo)
+    {
+        account.omemo.request_axolotl_devicelist(account, *real_jid);
+        inc_pending_omemo_bundles();  // §2.4: we will soon request bundles for this occupant
+    }
+
     if (user)
         user->nicklist_add(&account, this);
     else return member; // no user object yet; member was created above, return it without printing a join line
@@ -839,6 +851,51 @@ std::string weechat::channel::find_member_by_nick(const std::string& nick) const
             return id;
     }
     return {};
+}
+
+bool weechat::channel::all_occupants_have_real_jid() const
+{
+    if (type != weechat::channel::chat_type::MUC)
+        return true; // non-MUC: not applicable
+
+    if (members.empty())
+        return false; // no occupants known yet → treat as unsafe for OMEMO
+
+    return std::ranges::all_of(members, [](const auto& pair) {
+        const auto& m = pair.second;
+        return m.real_jid.has_value() && !m.real_jid->empty();
+    });
+}
+
+void weechat::channel::inc_pending_omemo_bundles()
+{
+    if (type == weechat::channel::chat_type::MUC)
+    {
+        ++omemo.pending_bundles;
+        weechat_bar_item_update("xmpp_encryption");
+    }
+}
+
+void weechat::channel::dec_pending_omemo_bundles()
+{
+    if (type == weechat::channel::chat_type::MUC && omemo.pending_bundles > 0)
+    {
+        --omemo.pending_bundles;
+        weechat_bar_item_update("xmpp_encryption");
+    }
+}
+
+std::string weechat::channel::omemo_status() const
+{
+    if (!omemo.enabled)
+        return {};
+
+    if (type == weechat::channel::chat_type::MUC && omemo.pending_bundles > 0)
+    {
+        return "🔒OMEMO (pending)";
+    }
+
+    return "🔒OMEMO";
 }
 
 int weechat::channel::send_message(std::string to, std::string body,
@@ -1205,14 +1262,25 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         xmpp_stanza_add_child(message.get(), muc_x.get());
     }
 
-    // OMEMO in MUCs is not yet implemented.  If somehow enabled (e.g. older
-    // config or a race), refuse to send rather than encrypt for the room JID.
-    // See docs/planning-muc-omemo.md for the full implementation checklist.
-    if (account.omemo && omemo.enabled && type == weechat::channel::chat_type::MUC)
+    // OMEMO for MUCs requires visible real JIDs for all occupants (non-anonymous room)
+    // and no pending bundle fetches.
+    if (account.omemo && omemo.enabled && type == weechat::channel::chat_type::MUC &&
+        !all_occupants_have_real_jid())
     {
         weechat_printf_date_tags(buffer, 0, "notify_none",
-            "%s%s: OMEMO is not yet supported in MUC rooms",
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            "%s", fmt::format("{}: OMEMO requires a non-anonymous room (real JIDs visible for all occupants)",
+                              weechat_prefix("error")).c_str());
+        return WEECHAT_RC_ERROR;
+    }
+
+    // docs/planning-muc-omemo.md §2.4: Block MUC OMEMO sends while bundles are
+    // still being fetched for occupants (Option B). Prefer per-channel counter.
+    if (account.omemo && omemo.enabled && type == weechat::channel::chat_type::MUC &&
+        (omemo.pending_bundles > 0 || !account.omemo.pending_bundle_fetch.empty()))
+    {
+        weechat_printf_date_tags(buffer, 0, "notify_none",
+            "%s", fmt::format("{}: OMEMO not ready yet (fetching occupant bundles… {} pending)",
+                              weechat_prefix("error"), omemo.pending_bundles).c_str());
         return WEECHAT_RC_ERROR;
     }
 
@@ -1228,8 +1296,35 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
             return { raw, xmpp_stanza_release };
         };
 
-        encrypted = make_encrypted(
-            account.omemo.encode(&account, buffer, to_str.c_str(), body_str.c_str()));
+        if (type == weechat::channel::chat_type::MUC)
+        {
+            // docs/planning-muc-omemo.md §3.1: Collect all occupants with visible
+            // real JIDs as recipients for multi-recipient OMEMO encoding.
+            std::vector<std::string> recipients;
+            auto has_real = [](const auto& p) {
+                const auto& m = p.second;
+                return m.real_jid && !m.real_jid->empty();
+            };
+            auto extract = [](const auto& p) { return *p.second.real_jid; };
+
+            std::ranges::copy(
+                members | std::views::filter(has_real) | std::views::transform(extract),
+                std::back_inserter(recipients)
+            );
+            // Always include our own devices so other clients (and carbons) can decrypt.
+            const std::string own_bare = ::jid(nullptr, account.jid()).bare;
+            if (!own_bare.empty())
+                recipients.push_back(own_bare);
+
+            encrypted = make_encrypted(
+                account.omemo.encode_muc(&account, buffer, id.c_str(),
+                                         recipients, body_str.c_str()));
+        }
+        else
+        {
+            encrypted = make_encrypted(
+                account.omemo.encode(&account, buffer, to_str.c_str(), body_str.c_str()));
+        }
 
         if (!encrypted)
         {
@@ -1485,6 +1580,10 @@ void weechat::channel::queue_pending_omemo_message(const std::string& body)
 
 void weechat::channel::flush_pending_omemo_messages()
 {
+    // docs/planning-muc-omemo.md §5.2: For MUCs we intentionally use Option B
+    // (block) in v1 rather than a full pending queue, because queuing across
+    // many occupants with partial bundle failures is complex. The queue
+    // mechanism remains PM-only for now.
     if (type != weechat::channel::chat_type::PM)
         return;
 

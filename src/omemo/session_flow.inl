@@ -258,7 +258,27 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
         return;
 
     auto &ch = ch_it->second;
-    if (ch.type != weechat::channel::chat_type::PM || ch.pending_omemo_messages.empty())
+
+    // MUC OMEMO support (docs/planning-muc-omemo.md §2.4 + §6):
+    // After a devicelist arrives for an occupant (or PM), proactively request
+    // bundles for all their devices. This is the main path that satisfies
+    // "After each devicelist arrives, fetch bundles for every new/updated device ID".
+    //
+    // Trust note: These occupants were discovered with real JIDs (via presence,
+    // disco#items, or admin affiliation queries). They will be treated with
+    // default BTBV (blind) trust unless the user manually verifies them.
+    for (const auto &dev : devices)
+    {
+        const auto remote_device_id = parse_uint32(dev);
+        if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
+            continue;
+
+        // Request the bundle (existing function). For MUC occupants this
+        // populates the sessions we will need for multi-recipient encode.
+        request_axolotl_bundle(*account, bare_jid, *remote_device_id);
+    }
+
+    if (ch.pending_omemo_messages.empty())
         return;
 
     bool has_any_session = false;
@@ -300,8 +320,26 @@ static void send_key_transport(omemo &self,
         return b.empty() ? std::string(account.jid()) : b;
     }();
 
+    // Compute destination + type early so the multi-recipient KT logic below can use it.
+    std::string dest = peer_jid;
+    std::string msg_type = "chat";
+
+    // docs/planning-muc-omemo.md §3.3: If the peer is a MUC occupant,
+    // we will send as groupchat to the room and encrypt for all occupants.
+    for (auto& [room_id, ch] : account.channels) {
+        if (ch.type == weechat::channel::chat_type::MUC) {
+            for (const auto& [nick, m] : ch.members) {
+                if (m.real_jid && *m.real_jid == std::string(peer_jid)) {
+                    dest = room_id;
+                    msg_type = "groupchat";
+                    break;
+                }
+            }
+        }
+    }
+
     stanza::xep0384::axolotl_header header_spec(fmt::format("{}", self.device_id));
-    bool peer_has_keys = false;
+    bool any_keys = false;
     bool own_has_keys = false;
 
     // Legacy flat layout: add <key> directly under <header> (no <keys jid=...> wrapper).
@@ -324,8 +362,43 @@ static void send_key_transport(omemo &self,
         return true;
     };
 
-    if (add_axolotl_key(peer_jid, remote_device_id))
-        peer_has_keys = true;
+    // docs/planning-muc-omemo.md §3.3: For MUC key transport, encrypt the (zero)
+    // payload for every current occupant (multi-recipient), not just the single peer.
+    if (msg_type == "groupchat")
+    {
+        // We are sending to a room — collect all known occupants' real JIDs
+        // from the channel we are about to send to.
+        auto ch_it = account.channels.find(dest);
+        if (ch_it != account.channels.end() && ch_it->second.type == weechat::channel::chat_type::MUC)
+        {
+            for (const auto& [nick, m] : ch_it->second.members)
+            {
+                if (m.real_jid && !m.real_jid->empty())
+                {
+                    const std::string &occ_jid = *m.real_jid;
+                    const auto dl = load_string(self, key_for_axolotl_devicelist(occ_jid));
+                    if (dl && !dl->empty())
+                    {
+                        for (const auto &dev : split(*dl, ';'))
+                        {
+                            const auto did = parse_uint32(dev);
+                            if (did && is_valid_omemo_device_id(*did))
+                            {
+                                if (add_axolotl_key(occ_jid, *did))
+                                    any_keys = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        // Normal 1:1 / PM key transport
+        if (add_axolotl_key(peer_jid, remote_device_id))
+            any_keys = true;
+    }
 
     const auto own_legacy_devicelist = load_string(self, key_for_axolotl_devicelist(own_bare_jid));
     if (own_legacy_devicelist && !own_legacy_devicelist->empty())
@@ -351,7 +424,7 @@ static void send_key_transport(omemo &self,
         }
     }
 
-    if (!peer_has_keys && !own_has_keys)
+    if (!any_keys && !own_has_keys)
     {
         print_error(buffer, fmt::format(
             "OMEMO: key-transport encrypt failed for {}/{}",
@@ -367,10 +440,9 @@ static void send_key_transport(omemo &self,
     print_info(buffer, fmt::format(
         "OMEMO: sending key-transport to {}/{}",
         peer_jid, remote_device_id));
-
     auto msg_sp = stanza::message()
-        .type("chat")
-        .to(peer_jid)
+        .type(msg_type)
+        .to(dest)
         .id(stanza::uuid(*account.context))
         .omemo_axolotl_encrypted(enc_spec)
         .omemo_store_hint(stanza::xep0384::store_hint{})
@@ -478,6 +550,26 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
                 print_info(buffer, fmt::format(
                     "OMEMO (legacy) received bundle for {}/{} ({} prekeys).",
                     bare_jid, remote_device_id, lpks.size()));
+            }
+
+            // §2.4: If this bundle was for a MUC occupant, decrement the per-channel
+            // pending bundle counter so the send guard can release when ready.
+            if (account && !bare_jid.empty() && !is_own_device)
+            {
+                for (auto& [ch_id, ch] : account->channels)
+                {
+                    if (ch.type == weechat::channel::chat_type::MUC)
+                    {
+                        for (const auto& [nick, m] : ch.members)
+                        {
+                            if (m.real_jid && *m.real_jid == bare_jid)
+                            {
+                                ch.dec_pending_omemo_bundles();
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
         else

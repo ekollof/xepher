@@ -122,6 +122,7 @@ namespace weechat
             int enabled;
             struct t_hashtable *devicelist_requests;
             struct t_hashtable *bundle_requests;
+            int pending_bundles = 0;  // §2.4: per-channel count for MUC OMEMO bundle fetching
         } omemo;
         struct {
             int enabled = 0;
@@ -205,6 +206,18 @@ namespace weechat
         std::optional<member*> member_search(const char *id);
         std::optional<member*> remove_member(const char *id, const char *reason);
         std::string find_member_by_nick(const std::string& nick) const;
+
+        // For MUC OMEMO: returns true only if every known occupant has a real_jid
+        // (i.e., the room is non-anonymous and we have seen their real JID in presence).
+        bool all_occupants_have_real_jid() const;
+
+        // Short status string used by the xmpp_encryption bar item.
+        // For MUC OMEMO with pending bundles this can surface "pending" state.
+        std::string omemo_status() const;
+
+        // §2.4: simple per-channel bundle fetch tracking for MUC OMEMO.
+        void inc_pending_omemo_bundles();
+        void dec_pending_omemo_bundles();
 
         // Smart filter helpers
         void record_speak(const char *nick);

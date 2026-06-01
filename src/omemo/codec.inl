@@ -569,3 +569,177 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
     xmpp_stanza_clone(sp.get());  // bump refcount; shared_ptr dtor will release its ref
     return sp.get();              // caller owns one ref; must call xmpp_stanza_release()
 }
+
+// Multi-recipient encode for MUC OMEMO (docs/planning-muc-omemo.md §3.1 + §6).
+// Encrypts the payload once, then for each recipient bare JID produces a
+// <keys jid="..."> wrapper containing the encrypted transport keys for
+// that recipient's devices (plus own devices). Uses the legacy axolotl
+// namespace as required by the project.
+//
+// Trust note: Occupants are looked up by their real bare JID. New occupants
+// discovered via presence/disco/admin are treated with the project's default
+// BTBV trust (BLIND). Only VERIFIED and BLIND devices receive key material.
+// This is intentional for v1 but users should be aware they are blind-trusting
+// everyone in the room by default.
+xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
+                                                struct t_gui_buffer *buffer,
+                                                const char *room_jid,
+                                                const std::vector<std::string>& recipient_bare_jids,
+                                                const char *unencrypted)
+{
+    (void)room_jid;  // may be used for logging/debug in future
+    OMEMO_ASSERT(account != nullptr, "MUC OMEMO encode requires a valid account");
+    if (!*this || !account || recipient_bare_jids.empty() || !unencrypted)
+        return nullptr;
+
+    ensure_local_identity(*this);
+    ensure_registration_id(*this);
+    if (ensure_prekeys(*this, *account->context))
+    {
+        print_info(buffer, "OMEMO: prekeys regenerated — republishing bundle");
+        if (std::shared_ptr<xmpp_stanza_t> lbs { get_axolotl_bundle(*account->context, nullptr, nullptr), xmpp_stanza_release })
+            account->connection.send(lbs.get());
+    }
+
+    // Encrypt the plaintext payload once (AES-128-GCM). All recipients get the same ciphertext.
+    const auto ep = axolotl_omemo_encrypt(std::string_view(unencrypted));
+    if (!ep)
+    {
+        print_error(buffer, "MUC OMEMO: AES-128-GCM payload encryption failed.");
+        return nullptr;
+    }
+
+    const std::string own_jid = [&]{
+        auto b = ::jid(nullptr, account->jid().data()).bare;
+        return b.empty() ? std::string(account->jid()) : b;
+    }();
+
+    stanza::xep0384::axolotl_header header_spec(fmt::format("{}", device_id));
+
+    bool added_any_key = false;
+    int total_incomplete = 0;
+    std::vector<std::string> failed_recipients;  // for better error reporting (plan §3.2)
+
+    auto encrypt_for_recipient = [&](std::string_view recipient_jid,
+                                     std::string_view device_list_str,
+                                     bool include_own_device) -> bool
+    {
+        bool added = false;
+        stanza::xep0384::axolotl_keys keys_for_this(recipient_jid);
+
+        for (const auto &dev : split(device_list_str, ';'))
+        {
+            const auto remote_device_id = parse_uint32(dev);
+            if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
+                continue;
+
+            if (own_jid == recipient_jid && *remote_device_id == device_id && !include_own_device)
+                continue;
+
+            {
+                const auto trust = load_tofu_trust(*this, recipient_jid, *remote_device_id);
+                if (trust == omemo_trust::UNTRUSTED || trust == omemo_trust::UNDECIDED)
+                    continue;
+            }
+
+            if (failed_session_bootstrap.contains({std::string(recipient_jid), *remote_device_id}))
+                continue;
+
+            if (!has_session(std::string(recipient_jid).c_str(), *remote_device_id))
+            {
+                if (!establish_session_from_bundle(*this, *account->context, recipient_jid, *remote_device_id))
+                {
+                    request_axolotl_bundle(*account, recipient_jid, *remote_device_id);
+                    ++total_incomplete;
+                    if (std::ranges::find(failed_recipients, std::string(recipient_jid)) == failed_recipients.end())
+                        failed_recipients.push_back(std::string(recipient_jid));
+                    continue;
+                }
+            }
+
+            const auto transport = encrypt_axolotl_transport_key(*this, recipient_jid, *remote_device_id, *ep);
+            if (!transport)
+            {
+                ++total_incomplete;
+                if (std::ranges::find(failed_recipients, std::string(recipient_jid)) == failed_recipients.end())
+                    failed_recipients.push_back(std::string(recipient_jid));
+                auto stale_addr = make_signal_address(recipient_jid, static_cast<std::int32_t>(*remote_device_id));
+                signal_protocol_session_delete_session(store_context, &stale_addr.address);
+                request_axolotl_bundle(*account, recipient_jid, *remote_device_id);
+                continue;
+            }
+
+            const auto encoded_transport = base64_encode(*account->context, transport->first);
+            keys_for_this.add_key(stanza::xep0384::axolotl_key(
+                fmt::format("{}", *remote_device_id),
+                encoded_transport,
+                transport->second));
+            added = true;
+        }
+
+        if (added)
+        {
+            header_spec.add_keys(keys_for_this);
+            added_any_key = true;
+        }
+        return added;
+    };
+
+    // For every recipient provided by the MUC caller
+    for (const auto& rec : recipient_bare_jids)
+    {
+        std::string r = ::jid(nullptr, rec).bare;
+        if (r.empty()) r = rec;
+
+        const auto dl = load_string(*this, key_for_axolotl_devicelist(r));
+        if (dl && !dl->empty())
+        {
+            encrypt_for_recipient(r, *dl, /*include_own_device*/ false);
+        }
+        else
+        {
+            request_axolotl_devicelist(*account, r);
+            ++total_incomplete;
+            if (std::ranges::find(failed_recipients, r) == failed_recipients.end())
+                failed_recipients.push_back(r);
+        }
+    }
+
+    // Own devices (so other of our clients can decrypt the MUC message)
+    {
+        const auto own_dl = load_string(*this, key_for_axolotl_devicelist(own_jid));
+        if (own_dl && !own_dl->empty())
+        {
+            encrypt_for_recipient(own_jid, *own_dl, /*include_own_device*/ true);
+        }
+    }
+
+    if (total_incomplete > 0 || !added_any_key)
+    {
+        if (!failed_recipients.empty())
+        {
+            std::string jids = failed_recipients.front();
+            for (size_t i = 1; i < failed_recipients.size(); ++i)
+                jids += ", " + failed_recipients[i];
+            print_error(buffer, fmt::format("MUC OMEMO: could not encrypt for all required devices. Missing keys for: {}", jids));
+        }
+        else
+        {
+            print_error(buffer, "MUC OMEMO: could not encrypt for all required devices (some bundles still pending).");
+        }
+        return nullptr;
+    }
+
+    const auto encoded_iv = base64_encode(*account->context, ep->iv);
+    header_spec.add_iv(stanza::xep0384::axolotl_iv(encoded_iv));
+
+    const auto encoded_payload = base64_encode(*account->context, ep->payload);
+
+    stanza::xep0384::axolotl_encrypted enc_spec;
+    enc_spec.add_header(header_spec)
+            .add_payload(stanza::xep0384::axolotl_payload(encoded_payload));
+
+    auto sp = enc_spec.build(*account->context);
+    xmpp_stanza_clone(sp.get());
+    return sp.get();
+}

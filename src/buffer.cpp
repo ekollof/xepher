@@ -80,10 +80,13 @@ char *buffer__encryption_bar_cb(const void *pointer, void *data,
     // Check encryption status
     if (channel->omemo.enabled)
     {
-        std::string_view sv = "🔒OMEMO";
-        auto buf = std::make_unique<char[]>(sv.size() + 1);
-        sv.copy(buf.get(), sv.size());
-        buf[sv.size()] = '\0';
+        std::string status = channel->omemo_status();
+        if (status.empty())
+            status = "🔒OMEMO";
+
+        auto buf = std::make_unique<char[]>(status.size() + 1);
+        status.copy(buf.get(), status.size());
+        buf[status.size()] = '\0';
         return buf.release();
     }
     else if (channel->pgp.enabled)
