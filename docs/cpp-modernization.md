@@ -1,6 +1,6 @@
 # C++23 Modernization Effort
 
-> **Status**: Active (as of 2026-06)
+> **Status**: Complete (as of 2026-06-01)
 > This document captures the plan, progress, and remaining work for adopting modern C++23 features as recommended in the project's agent instructions.
 
 ## Background
@@ -10,14 +10,17 @@ This work originated from a full compliance audit against the rules in:
 - [AGENTS.md](../AGENTS.md)
 - [.github/copilot-instructions.md](../.github/copilot-instructions.md)
 
-The audit (documented in the private session plan) identified that while the project claims C++23 as its standard, adoption of the specific "C++23 Memory Safety Features to Leverage" was only partial:
+The audit identified that while the project claimed C++23 as its standard, adoption of the
+specific "C++23 Memory Safety Features to Leverage" was only partial:
 
 - Heavy use of `std::string_view`, `std::optional`, `std::make_unique`
 - Almost no use of `std::span`
 - Almost no use of `std::ranges::`
 - Zero use of `std::expected`
 
-The instructions explicitly call out these features as things agents should leverage.
+As of 2026-06-01, all of these gaps have been closed. The codebase now has zero remaining
+classical `std::algorithm` calls in `.cpp`/`.inl` files, and all recommended C++23 features
+are in active use.
 
 ## Goals
 
@@ -74,17 +77,23 @@ The instructions explicitly call out these features as things agents should leve
   `std::ranges::` equivalents (sort, stable_sort, transform, any_of,
   find_if, find, copy_if, unique, for_each, search, copy_n, contains).
 
-### 6. Modern Container & String APIs ✅
+### 6. Final C++23 API Sweep ✅
 
-- `.count(key) != 0` → `.contains(key)` (C++20)
-- `str.find(...) != npos` → `str.contains(...)` (C++23)
+- **`.find(X) != npos` → `.contains(X)`**: 7 locations (helpers.cpp,
+  message_handler.inl, codec.inl, channel.cpp)
+- **`.count(K) > 0` → `.contains(K)`**: 4 locations (codec.inl,
+  session_flow.inl, channel.cpp — map/set/.unordered_map)
+- **`std::copy_n` → `std::ranges::copy`/`copy_n`**: 4 locations in
+  internal_crypto.inl
+- **Zero remaining classical `std::algorithm` calls** in `.cpp`/`.inl`
+  files (lone exception: a commented-out `std::find` in plugin.cpp).
 
 ## Current Status (2026-06-01)
 
 - **Builds cleanly** with `make`
 - **All tests pass** (27/27 cases, 286/286 assertions)
 - All phases from the original plan are now complete.
-- The codebase has zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
+- Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
 - `std::span` is used wherever owned buffers pass through C API boundaries.
@@ -97,37 +106,20 @@ The instructions explicitly call out these features as things agents should leve
 | `std::ranges::to` | 0 | 1 |
 | `std::span` | 0 | 29 |
 | `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
+| `.find(X) != npos` | 15+ | 0 |
+| `.count(K) > 0` | 5+ | 0 |
+| `std::copy_n` | 4 | 0 |
 
-## Remaining Opportunities
+## Notes for Future Work
 
-### Lower Priority
-- **Deeper `std::views` usage** on remaining manual loops where value is clear
-  (many loops involve C APIs that don't benefit from views: LMDB cursors,
-  libstrophe XML iteration, WeeChat hook callbacks)
-- **More `std::expected`** in error-returning functions — the pattern is
-  established, can be adopted incrementally
-- **Large-scale loop refactors** — not worth the churn for marginal value
-
-## How to Pick This Up Later
-
-1. Read this document + the original `.github/copilot-instructions.md` section on C++23 features.
-2. Build the project (`make`) to get a clean baseline.
-3. Look at recent changes (or the uncommitted diff if available) for the established patterns:
-   - `std::string_view` for read-only strings
-   - Local `std::span<T>` variables for owned buffers
-   - `std::ranges::X` instead of `std::X`
-4. Good places to continue:
-   - `src/omemo/internal_crypto.inl` and friends (more spans)
-   - Any file with manual `for (size_t i = 0; ...)` loops over containers
-   - Error handling paths (for `std::expected`)
-5. Always run `make` after changes. Prefer small, focused commits.
+- **LMDB cursors, libstrophe XML iteration, and WeeChat C hooks** are constrained
+  by C ABI boundaries — not candidates for `std::ranges::views` or `std::span`.
+- **Manual index loops** over non-standard data (C arrays, opaque handles) remain
+  where necessary; converting them would add indirection without benefit.
+- **`std::expected`** can be adopted further in error-returning functions — the
+  pattern is established, adoption should be incremental.
 
 ## Related Documents
 
 - [AGENTS.md](../AGENTS.md)
-- [.github/copilot-instructions.md](../.github/copilot-instructions.md) (especially the "C++23 Memory Safety Features to Leverage" section)
-- The original private session plan (contains the full audit findings and detailed step-by-step history)
-
----
-
-*This document was generated from an interactive modernization session in June 2026. It is intended to make the work resumable by future agents or contributors.*
+- [.github/copilot-instructions.md](../.github/copilot-instructions.md)
