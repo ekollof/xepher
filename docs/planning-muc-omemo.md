@@ -34,7 +34,11 @@ Before any encryption/decryption code can work, the following plumbing must be i
 
 ### 2.4 Bundle fetching for all occupant devices
 - [x] After each devicelist arrives, fetch bundles for every new/updated device ID. (Proactive fetch already present in `handle_axolotl_devicelist`; extended to MUC occupants via our devicelist request paths.)
-- [~] Track per-channel `pending_bundle_count`; block sends until all bundles are fetched. (Partial: Added `pending_bundles` counter on channel + `inc/dec` helpers. Wired increment on real_jid discovery for MUCs. Basic blocking guard in `send_message` (Option B). Full decrement + precise per-occupant tracking still needs wiring on bundle result paths.)
+- [x] Track per-channel `pending_bundles` counter and block sends until all bundles are fetched (adopted **Option B** for v1). Implemented via:
+  - `channel::inc_pending_omemo_bundles()` called from `add_member()` when a real JID is discovered for a MUC occupant.
+  - `channel::dec_pending_omemo_bundles()` called from the bundle result handler in `session_flow` when a bundle arrives for a known MUC occupant.
+  - Blocking guard in `send_message()` (and status in `omemo_status()` / encryption bar item).
+  - Simple counter (not per-occupant fine-grained tracking) as chosen for v1. 27/27 green.
 
 ---
 
@@ -43,19 +47,18 @@ Before any encryption/decryption code can work, the following plumbing must be i
 `omemo::encode()` is currently strictly 1:1. It must learn to encrypt for multiple recipients.
 
 ### 3.1 Multi-recipient `encode()`
-- [ ] Change `encode()` signature (or add overload `encode_muc()`) to accept:
-  - `std::vector<std::string>` of recipient bare JIDs (all occupants + own account JID).
+All items below were implemented via a new `encode_muc()` entry point (declared in `omemo.hh`, implemented in `codec.inl`, called from `channel::send_message` for MUCs):
+
+- [x] Added `encode_muc()` overload that accepts:
+  - `std::vector<std::string>` of recipient bare JIDs (occupants + own account JID).
   - `struct t_gui_buffer *buf` (for error logging).
-  - `const char *room_jid` (for the `<keys jid='…'>` wrapper).
+  - `const char *room_jid`.
   - `const char *payload` (plaintext body).
-- [ ] For each recipient bare JID:
-  - Load their devicelist from LMDB.
-  - For each device ID, build/fetch a Signal session.
-  - Encrypt the same payload key for every device.
-  - Emit `<keys jid='recipient_bare_jid'>` containing all `<key rid='device_id'>` children.
-- [ ] Include own devices in the `<keys>` wrappers so other clients can decrypt.
-- [ ] Message type must be `groupchat`.
-- [ ] Body must be `OMEMO_ADVICE`.
+- [x] For each recipient bare JID: load devicelist from LMDB, build sessions for each device, encrypt the same payload key, emit `<keys jid='recipient_bare_jid'>` containing `<key rid='device_id'>` children (using the stanza builder).
+- [x] Own devices are included in the `<keys>` wrappers so other clients (and carbons) can decrypt.
+- [x] Message is sent as `type="groupchat"`.
+- [x] Body contains the `OMEMO_ADVICE` placeholder string.
+- 27/27 green. See `Current Implementation Status` and `src/channel.cpp:1299` + `src/omemo/codec.inl:584`.
 
 ### 3.2 Partial failure handling
 - [x] On any encryption failure for one or more recipients (missing devicelist, no bundle, transport key failure), we fail the entire send (as recommended for v1).
