@@ -205,8 +205,12 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
                                        &account);
         }
 
-        weechat_buffer_set(ptr_buffer, "highlight_words_add",
-                           account.nickname().data());
+        // WeeChat auto-highlights MUC nicknames — only add account nick as
+        // a highlight word for non-MUC buffers (PM, FEED) where there is no
+        // automatic nick-based highlighting.
+        if (type != weechat::channel::chat_type::MUC)
+            weechat_buffer_set(ptr_buffer, "highlight_words_add",
+                               account.nickname().data());
         weechat_buffer_set(ptr_buffer, "highlight_tags_restrict",
                            "message");
     }
