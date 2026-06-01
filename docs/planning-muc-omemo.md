@@ -31,6 +31,7 @@ Before any encryption/decryption code can work, the following plumbing must be i
 - [x] Iterate occupant bare JIDs and call `request_axolotl_devicelist()` for each. (Done via 110 block, disco#items result handler, admin result handler, live presence, and centralized in `channel::add_member`.)
 - [x] Cache results in the existing LMDB `axolotl:devicelist:{jid}` table (no schema change needed). (Existing behavior.)
 - [x] Handle devicelist updates (pubsub notifications) for any occupant while joined. (Global handler path works for MUC occupant bare JIDs.)
+- Hardened PEP feed classification (message_handler) to explicitly drop legacy OMEMO nodes (`eu.siacs.conversations.axolotl.*`) with XDEBUG logging. Prevents MUC OMEMO occupant discovery from creating spurious FEED buffers. Defense-in-depth on top of `node_is_protocol_ns`.
 
 ### 2.4 Bundle fetching for all occupant devices
 - [x] After each devicelist arrives, fetch bundles for every new/updated device ID. (Proactive fetch already present in `handle_axolotl_devicelist`; extended to MUC occupants via our devicelist request paths.)

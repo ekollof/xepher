@@ -1156,6 +1156,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     || (node_sv.rfind("urn:xmpp:microblog:0:comments/", 0) == 0);
                 // Treat reversed-domain protocol namespaces (e.g. eu.siacs.conversations.axolotl.*)
                 // the same as urn: URIs — they are OMEMO/PEP protocol nodes, not user feeds.
+                // This is especially important now that MUC OMEMO causes us to request
+                // devicelists/bundles for room occupants, generating extra legacy OMEMO PEP traffic.
                 bool node_is_protocol_ns = !node_sv.empty() && !node_is_microblog && (
                     node_sv.rfind("eu.siacs.", 0) == 0 ||
                     node_sv.rfind("com.google.", 0) == 0 ||
@@ -1173,7 +1175,19 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 weechat_strcasecmp(own_bare_fs.c_str(), from_bare_fs.c_str()) == 0;
                 }
 
+                // Explicitly skip legacy OMEMO protocol nodes (eu.siacs.conversations.axolotl.*).
+                // These arrive as PEP pushes (especially after MUC OMEMO occupant discovery)
+                // and must never be turned into user-visible FEED buffers.
+                bool is_legacy_omemo_node = !node_sv.empty() &&
+                    (node_sv.rfind("eu.siacs.conversations.axolotl", 0) == 0);
+
+                if (is_legacy_omemo_node) {
+                    XDEBUG("Dropping PEP event for legacy OMEMO node (not a user feed): {} from {}",
+                           node_sv, feed_service_sv);
+                }
+
                 if (!node_sv.empty() && !feed_service_sv.empty() && !node_is_uri && !from_self
+                    && !is_legacy_omemo_node
                     && node_sv != "urn:xmpp:omemo:2:devices"
                     && node_sv != "urn:xmpp:avatar:metadata"
                     && node_sv != "urn:xmpp:avatar:data"
