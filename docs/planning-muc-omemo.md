@@ -1,6 +1,6 @@
 # Planning: OMEMO Encrypted Multi-User Chats (MUCs)
 
-> Status: **v1 implementation complete + AGENTS.md compliance verified** (ranges + fmt printf hygiene on all MUC OMEMO changes; 27/27 green). Next: live manual testing pass (section 8) in real WeeChat + non-anon MUC. See "Current Implementation Status" and new "Testing verification" subsection below.
+> Status: **v1 implementation complete + AGENTS.md compliance verified + committed** (de78d33). 27/27 green at commit. Next: live manual testing pass (section 8) in real WeeChat + non-anon MUC.
 
 ---
 
@@ -202,6 +202,8 @@ The `<keys jid='...'>` selection inside decode already supports multiple wrapper
 **Summary after static + build verification**: All *code* for the 8 items is present, guarded, and 27/27 green. The remaining work is **live manual testing in a real WeeChat session with a non-anonymous MUC containing ≥2 other OMEMO users** (plus raw XML log inspection and MAM replay). No further code changes expected for v1 unless live testing reveals issues.
 
 **Recommendation**: User performs the live checklist (with `/set xmpp.look.raw_xml_log on`, `/set xmpp.look.debug on`, and `tools/correlate_omemo_xml.sh` if needed). Report back any wire-format, decrypt, or edge-case surprises.
+
+**Committed as**: `de78d33` ("feat: add OMEMO support for non-anonymous MUCs (XEP-0384 legacy axolotl)"). Tree was clean + 27/27 green at commit time.
 
 ---
 
