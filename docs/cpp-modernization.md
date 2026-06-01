@@ -31,83 +31,82 @@ The instructions explicitly call out these features as things agents should leve
 
 3. Leave the codebase in a state where future agents can easily continue the work.
 
-## Completed Work (as of latest session)
+## Completed Work (as of 2026-06-01)
 
-### 1. `std::string_view` Campaign (Largely Complete)
+### 1. `std::expected` (Phase 1 ✅)
 
-- Converted the vast majority of read-only `const std::string&` parameters to `std::string_view` across:
-  - Utility functions (`util.cpp/hh`)
-  - OMEMO layer (many internal helpers and lambdas)
-  - Connection and command code
-  - Picker callbacks and local spec structs
-  - Stanza-building helpers
+- Converted two functions from losing error information to carrying
+  diagnostic strings via `std::expected<T, std::string>`:
+  - `esfs_b64_decode` (helpers.cpp) — now reports specific BIO failures
+  - `pkcs7_unpad` (internal_crypto.inl) — now distinguishes empty input,
+    invalid padding byte, and inconsistent padding bytes
+- Pattern: error type is `std::string`, `std::unexpected(...)` for errors,
+  `.error()` to read the message, `->` to access the value.
+- Includes added to `helpers.cpp` and `api.cpp`.
 
-- Updated all call sites and necessary internal logic (with `std::string(...)` conversions only where storage or C APIs required it).
+### 2. `std::views` (Phase 2 ✅)
 
-**Result**: Dramatic reduction in unnecessary string copies for read-only data.
+- **`std::views::split`**: replaced manual comma-split parsing loop in
+  `caps_cache_load` (lmdb_cache.inl) — 9 lines → 2 lines
+- **`std::views::filter | transform`**: converted two device-list parsing
+  functions in `omemo/commands.inl`:
+  - `get_cached_device_ids`: split → transform(parse) → filter(valid) →
+    transform(unwrap) → `std::ranges::to<std::vector>()`
+  - `show_fingerprints` device collection: same pipeline with
+    `std::ranges::copy` + `back_inserter`
+- **`std::ranges::to`** (C++23): confirmed working with GCC 16
 
-### 2. `std::span` Campaign (Very Advanced)
+### 3. `std::string_view` Campaign ✅
 
-- Introduced `std::span` for owned byte buffers in:
-  - OMEMO base64 layer (`base64_encode` / `base64_encode_raw`)
-  - Main GCM crypto functions (`crypto_encrypt`, `crypto_decrypt`, `axolotl_omemo_encrypt/decrypt`)
-  - Key/IV/authtag arrays
-  - Transport key encryption (`encrypt_axolotl_transport_key`)
-  - PGP `gpgme_data_new_from_mem` paths
-  - File path buffers (`rooms.inl`)
-  - Various internal working buffers
+- Converted read-only `const std::string&` parameters to `std::string_view`
+  across utility functions, OMEMO layer, connection/command code, picker
+  callbacks, and stanza-building helpers.
 
-- Pattern established: When we own a `std::vector` / `std::array`, create a local `std::span` and pass `.data()/.size()` through it.
+### 4. `std::span` Campaign ✅
 
-**Result**: Much better compliance with the explicit recommendation to use `std::span` instead of pointer+size pairs.
+- Adopted for owned byte buffers in OMEMO base64/crypto layers, PGP
+  `gpgme_data_new_from_mem` paths, file path buffers, and OpenSSL BIO paths.
+- Pattern: create local `std::span<T>` from owned `std::vector<T>` / `std::array<T>`.
 
-### 3. `std::ranges` Adoption (Strong Start)
+### 5. `std::ranges` Algorithm Migration ✅
 
-- Upgraded dozens of classical algorithms:
-  - `std::sort` / `std::stable_sort` → `std::ranges::sort` / `stable_sort`
-  - `std::transform` → `std::ranges::transform`
-  - `std::any_of` / `std::find_if` / `std::find` → `std::ranges::` equivalents
-  - `std::copy_if` → `std::ranges::copy_if`
-  - `std::unique` + erase → `std::ranges::unique` + erase
-  - Manual join / comma-list loops → `std::ranges::for_each`
-  - `std::search` → `std::ranges::search`
-  - `std::copy_n` → `std::ranges::copy_n`
+- All classical algorithm calls in `.cpp`/`.inl` files upgraded to
+  `std::ranges::` equivalents (sort, stable_sort, transform, any_of,
+  find_if, find, copy_if, unique, for_each, search, copy_n, contains).
 
-- Added `#include <ranges>` in key translation units (`api.cpp`, etc.).
+### 6. Modern Container & String APIs ✅
 
-**Result**: Clear, consistent use of the `std::ranges` namespace in many hot paths.
+- `.count(key) != 0` → `.contains(key)` (C++20)
+- `str.find(...) != npos` → `str.contains(...)` (C++23)
 
-### 4. Modern Container & String APIs
-
-- Upgraded many `.count(key) != 0` → `.contains(key)` (C++20)
-- Upgraded several `str.find(...) != npos` → `str.contains(...)` (C++23)
-- These are small but very visible modernizations.
-
-## Current Status (as of this document)
+## Current Status (2026-06-01)
 
 - **Builds cleanly** with `make`
 - **All tests pass** (27/27 cases, 286/286 assertions)
-- A large body of modernization work is complete but **not yet committed** (as of the session when this doc was written).
-- The easy-to-medium wins in the three main recommended areas (`string_view`, `span`, `ranges` algorithms) are substantially done.
+- All phases from the original plan are now complete.
+- The codebase has zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
+- `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
+  ready for wider adoption.
+- `std::span` is used wherever owned buffers pass through C API boundaries.
 
-**Files touched**: 20+ across `src/` (utility, connection, command, OMEMO, PGP, XMPP helpers, etc.).
+**Adoption counts** (approximate):
+| Feature | Before | After |
+|---------|--------|-------|
+| `std::expected` | 0 | 2 |
+| `std::views::` | 0 | 4 |
+| `std::ranges::to` | 0 | 1 |
+| `std::span` | 0 | 29 |
+| `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
 
 ## Remaining Opportunities
 
-### High Value / Relatively Easy
-- **More `std::span`** on remaining owned buffers passed to C APIs (gcrypt, libsignal, OpenSSL EVP/BIO, etc.). Many direct `.data(), .size()` calls remain.
-- **Deeper `std::ranges` views** (`std::views::filter`, `transform`, `take`, `enumerate`, `reverse`, `join`, etc.).
-- **More `std::ranges::for_each`** on manual index-based or complex loops.
-- **First real `std::expected` usage** (the biggest remaining zero-adoption item from the original audit).
-
-### Medium / More Invasive
-- Full `std::ranges` algorithms on more complex manual loops (some loops have early `continue` / state that makes pure algorithms harder).
-- Using `std::ranges::to` for container conversions (C++23).
-- `std::expected` propagation through larger call chains.
-
-### Lower Priority / Riskier
-- Changing C callback signatures (libsignal, gcrypt provider functions) to take spans — would require significant wrapper work.
-- Large-scale loop refactors just for aesthetics.
+### Lower Priority
+- **Deeper `std::views` usage** on remaining manual loops where value is clear
+  (many loops involve C APIs that don't benefit from views: LMDB cursors,
+  libstrophe XML iteration, WeeChat hook callbacks)
+- **More `std::expected`** in error-returning functions — the pattern is
+  established, can be adopted incrementally
+- **Large-scale loop refactors** — not worth the churn for marginal value
 
 ## How to Pick This Up Later
 
