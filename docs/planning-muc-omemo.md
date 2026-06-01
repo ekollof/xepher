@@ -52,7 +52,7 @@ All items below were implemented via a new `encode_muc()` entry point (declared 
 - [x] Added `encode_muc()` overload that accepts:
   - `std::vector<std::string>` of recipient bare JIDs (occupants + own account JID).
   - `struct t_gui_buffer *buf` (for error logging).
-  - `const char *room_jid`.
+  - `std::string_view room_jid` (modernized for consistency with other JID parameters in the OMEMO API).
   - `const char *payload` (plaintext body).
 - [x] For each recipient bare JID: load devicelist from LMDB, build sessions for each device, encrypt the same payload key, emit `<keys jid='recipient_bare_jid'>` containing `<key rid='device_id'>` children (using the stanza builder).
 - [x] Own devices are included in the `<keys>` wrappers so other clients (and carbons) can decrypt.

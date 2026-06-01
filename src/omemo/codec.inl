@@ -583,7 +583,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
 // everyone in the room by default.
 xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
                                                 struct t_gui_buffer *buffer,
-                                                const char *room_jid,
+                                                std::string_view room_jid,
                                                 const std::vector<std::string>& recipient_bare_jids,
                                                 const char *unencrypted)
 {

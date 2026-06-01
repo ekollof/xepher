@@ -1317,7 +1317,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                 recipients.push_back(own_bare);
 
             encrypted = make_encrypted(
-                account.omemo.encode_muc(&account, buffer, id.c_str(),
+                account.omemo.encode_muc(&account, buffer, id,
                                          recipients, body_str.c_str()));
         }
         else
