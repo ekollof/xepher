@@ -743,6 +743,16 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
     static const unsigned ka_timeout_sec = 60;
     static const unsigned ka_timeout_ivl = 1;
 
+    // Force-clean the connection state before reconnecting.
+    // xmpp_disconnect is a no-op if already disconnected, but ensures
+    // any lingering handlers/timers from a previous session are torn down.
+    if (m_conn)
+        xmpp_disconnect(m_conn);
+
+    // Handlers are tied to the xmpp_conn_t and may have been cleared
+    // by the disconnect above — re-register on the next conn_handler.
+    account.sm_handlers_registered = false;
+
     m_conn.set_keepalive(ka_timeout_sec, ka_timeout_ivl);
 
     const char *resource = account.resource().data();
@@ -766,6 +776,7 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
     }
 
     int flags = m_conn.get_flags();
+    flags |= XMPP_CONN_FLAG_DISABLE_SM;  // Disable libstrophe's built-in SM
     switch (tls)
     {
         case weechat::tls_policy::disable:
@@ -783,14 +794,16 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
     }
     m_conn.set_flags(flags);
 
-    // Register a certfail handler so that TLS certificate verification failures
+    // Register a certfail handler (once) so that TLS certificate verification failures
     // are surfaced as warnings rather than silently leaving conn->tls == nullptr.
     // A nullptr conn->tls with a TLS write interface still set causes a crash in
     // libstrophe's tls_write() when xmpp_run_once() flushes the send queue.
     // Accepting the cert here keeps conn->tls valid; the user sees a clear
     // warning and can use tls_policy::trust to suppress it intentionally.
-    m_conn.set_certfail_handler([](const xmpp_tlscert_t *cert,
-                                   const char *const errormsg) -> int {
+    static bool certfail_handler_set = false;
+    if (!certfail_handler_set) {
+        m_conn.set_certfail_handler([](const xmpp_tlscert_t *cert,
+                                        const char *const errormsg) -> int {
         xmpp_conn_t *conn = xmpp_tlscert_get_conn(cert);
         // JID is not yet known at TLS handshake time; use the cert subject
         // (contains the server CN/hostname) and expiry for context instead.
@@ -809,7 +822,9 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
             notafter ? notafter : "?",
             errormsg ? errormsg : "(no details)");
         return 1; // accept cert, keep conn->tls valid, avoid nullptr-deref crash
-    });
+        });
+        certfail_handler_set = true;
+    }
 
     if (!connect_client(
             nullptr, 0, [](xmpp_conn_t *conn, xmpp_conn_event_t status,

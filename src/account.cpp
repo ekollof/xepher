@@ -687,17 +687,6 @@ int weechat::account::connect([[maybe_unused]] bool manual)
 
     reset();
     
-    // CRITICAL: Disable libstrophe's built-in Stream Management
-    // Libstrophe has automatic SM support that persists across reconnects
-    // and can cause connection issues. We're implementing our own SM.
-    xmpp_conn_t *conn_ptr = connection;
-    if (conn_ptr)
-    {
-        long flags = xmpp_conn_get_flags(conn_ptr);
-        flags |= XMPP_CONN_FLAG_DISABLE_SM;  // Set the disable flag
-        xmpp_conn_set_flags(conn_ptr, flags);
-    }
-    
     // Reset SM availability on any connect attempt.
     // We no longer permanently poison sm_available on <failed> (see
     // stream_management.inl), so it is safe to re-try SM on auto-reconnect.
