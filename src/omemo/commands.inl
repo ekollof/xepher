@@ -47,12 +47,12 @@ void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const c
         const auto devlist = load_string(*this, key_for_axolotl_devicelist(jid));
         if (devlist && !devlist->empty())
         {
-            for (const auto &dev : split(*devlist, ';'))
-            {
-                const auto parsed = parse_uint32(dev);
-                if (parsed && is_valid_omemo_device_id(*parsed))
-                    devices.push_back(*parsed);
-            }
+            std::ranges::copy(
+                split(*devlist, ';')
+                | std::views::transform(parse_uint32)
+                | std::views::filter([](auto p) { return p && is_valid_omemo_device_id(*p); })
+                | std::views::transform([](auto p) { return *p; }),
+                std::back_inserter(devices));
         }
         std::ranges::sort(devices);
         devices.erase(std::ranges::unique(devices).begin(), devices.end());
@@ -184,18 +184,19 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
 
 std::vector<std::uint32_t> weechat::xmpp::omemo::get_cached_device_ids(std::string_view jid)
 {
-    std::vector<std::uint32_t> result;
     if (!db_env || jid.empty())
-        return result;
+        return {};
     const auto devlist = load_string(*this, key_for_axolotl_devicelist(jid));
     if (!devlist || devlist->empty())
-        return result;
-    for (const auto &dev : split(*devlist, ';'))
-    {
-        const auto parsed = parse_uint32(dev);
-        if (parsed && is_valid_omemo_device_id(*parsed))
-            result.push_back(*parsed);
-    }
+        return {};
+
+    std::vector<std::uint32_t> result;
+    std::ranges::copy(
+        split(*devlist, ';')
+        | std::views::transform(parse_uint32)
+        | std::views::filter([](auto p) { return p && is_valid_omemo_device_id(*p); })
+        | std::views::transform([](auto p) { return *p; }),
+        std::back_inserter(result));
     return result;
 }
 

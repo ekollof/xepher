@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <algorithm>
+#include <ranges>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 #include <libxml/xmlwriter.h>

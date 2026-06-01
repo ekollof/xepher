@@ -775,18 +775,8 @@ void weechat::account::caps_cache_load()
             
             // Parse features (stored as comma-separated)
             std::vector<std::string> features;
-            size_t pos = 0;
-            while (pos < features_str.length())
-            {
-                size_t next = features_str.find(',', pos);
-                if (next == std::string::npos)
-                {
-                    features.push_back(features_str.substr(pos));
-                    break;
-                }
-                features.push_back(features_str.substr(pos, next - pos));
-                pos = next + 1;
-            }
+            for (auto r : std::views::split(features_str, ','))
+                features.emplace_back(r.begin(), r.end());
             
             caps_cache[ver_hash] = features;
             count++;
