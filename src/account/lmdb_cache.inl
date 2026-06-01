@@ -145,6 +145,28 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
         mdb_cursor_open(txn.handle(), mam_dbi.messages.handle(), &cursor_raw);
         std::unique_ptr<MDB_cursor, decltype(&mdb_cursor_close)> cursor(cursor_raw, &mdb_cursor_close);
 
+        // Preload retractions for this channel (single cursor scan instead of
+        // per-message LMDB transactions — avoids hundreds of txn open/close cycles).
+        std::string retract_prefix = channel_jid + ":";
+        MDB_val rk = {retract_prefix.size(), (void*)retract_prefix.data()};
+        MDB_val rv;
+        MDB_cursor *rcursor_raw = nullptr;
+        mdb_cursor_open(txn.handle(), mam_dbi.retractions.handle(), &rcursor_raw);
+        std::unique_ptr<MDB_cursor, decltype(&mdb_cursor_close)> rcursor(rcursor_raw, &mdb_cursor_close);
+        std::unordered_set<std::string> retracted_ids;
+        int rrc = mdb_cursor_get(rcursor.get(), &rk, &rv, MDB_SET_RANGE);
+        while (rrc == 0)
+        {
+            std::string_view rkv(static_cast<const char*>(rk.mv_data), rk.mv_size);
+            if (!rkv.starts_with(retract_prefix))
+                break;
+            size_t colon = rkv.find(':');
+            if (colon != std::string_view::npos)
+                retracted_ids.emplace(rkv.substr(colon + 1));
+            rrc = mdb_cursor_get(rcursor.get(), &rk, &rv, MDB_NEXT);
+        }
+        rcursor.reset();
+
         // Start with channel prefix
         std::string prefix = channel_jid + ":";
         MDB_val key = {prefix.size(), (void*)prefix.data()};
@@ -164,53 +186,50 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
             // Parse key: channel_jid:timestamp:message_id
             size_t colon1 = key_str.find(':', prefix.size());
             size_t colon2 = key_str.find(':', colon1 + 1);
-            std::string message_id;
+            
             if (colon2 != std::string::npos)
-                message_id = key_str.substr(colon2 + 1);
-            
-            // Parse value: from|timestamp|body
-            std::string value_str((char*)value.mv_data, value.mv_size);
-            size_t pos1 = value_str.find('|');
-            size_t pos2 = value_str.find('|', pos1 + 1);
-            
-            if (pos1 != std::string::npos && pos2 != std::string::npos)
             {
-                std::string from = value_str.substr(0, pos1);
-                std::string timestamp_str = value_str.substr(pos1 + 1, pos2 - pos1 - 1);
-                std::string body = value_str.substr(pos2 + 1);
+                std::string message_id = key_str.substr(colon2 + 1);
+                // Tag with id_<message-id> so MAM dedup can suppress later replays.
+                bool is_retracted = !message_id.empty() && retracted_ids.contains(message_id);
+                std::string tags = is_retracted
+                    ? "xmpp_cached,xmpp_retracted,no_highlight"
+                    : "xmpp_cached,no_highlight";
+                if (!message_id.empty())
+                    tags += ",id_" + message_id;
+
+                // Parse value: from|timestamp|body
+                std::string value_str((char*)value.mv_data, value.mv_size);
+                size_t pos1 = value_str.find('|');
+                size_t pos2 = value_str.find('|', pos1 + 1);
                 
-                time_t timestamp = std::stoll(timestamp_str);
-                
-                // Check if message is retracted
-                bool is_retracted = !message_id.empty() && mam_cache_is_retracted(channel_jid, message_id);
-                
-                // Display cached message with gray prefix
-                if (is_retracted)
+                if (pos1 != std::string::npos && pos2 != std::string::npos)
                 {
-                    std::string tags = "xmpp_cached,xmpp_retracted,no_highlight";
-                    // Tag with id_<message-id> so MAM dedup can suppress later replays.
-                    if (!message_id.empty())
-                        tags += ",id_" + message_id;
-                    weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
-                                            "%s%s\t%s[Message deleted]%s",
-                                            weechat_color("darkgray"),
-                                            from.c_str(),
-                                            weechat_color("darkgray"),
-                                            weechat_color("resetcolor"));
+                    std::string from = value_str.substr(0, pos1);
+                    std::string timestamp_str = value_str.substr(pos1 + 1, pos2 - pos1 - 1);
+                    std::string body = value_str.substr(pos2 + 1);
+                    time_t timestamp = std::stoll(timestamp_str);
+
+                    // Display cached message with gray prefix
+                    if (is_retracted)
+                    {
+                        weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
+                                                "%s%s\t%s[Message deleted]%s",
+                                                weechat_color("darkgray"),
+                                                from.c_str(),
+                                                weechat_color("darkgray"),
+                                                weechat_color("resetcolor"));
+                    }
+                    else
+                    {
+                        weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
+                                                "%s%s\t%s",
+                                                weechat_color("darkgray"),
+                                                from.c_str(),
+                                                body.c_str());
+                    }
+                    count++;
                 }
-                else
-                {
-                    std::string tags = "xmpp_cached,no_highlight";
-                    // Tag with id_<message-id> so MAM dedup can suppress later replays.
-                    if (!message_id.empty())
-                        tags += ",id_" + message_id;
-                    weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
-                                            "%s%s\t%s",
-                                            weechat_color("darkgray"),
-                                            from.c_str(),
-                                            body.c_str());
-                }
-                count++;
             }
             
             rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_NEXT);
@@ -219,9 +238,13 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
         cursor.reset();
         txn.abort();
         
+        // Only print the summary count — skip individual message replay.
+        // The subsequent MAM fetch will populate the buffer with fresh messages;
+        // replaying up to 100 cached messages via weechat_printf_date_tags per
+        // channel during the join flood triggers expensive GUI redraws.
         if (count > 0)
         {
-            weechat_printf(buffer, "%s--- %d cached messages loaded ---",
+            weechat_printf(buffer, "%s--- %d cached messages available (MAM fetch will refresh)",
                           weechat_prefix("network"), count);
         }
     } catch (const lmdb::error& ex) {

@@ -54,8 +54,10 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         }
     }
 
-    channel = account.channels.contains(binding->from->bare.data())
-        ? &account.channels.find(binding->from->bare.data())->second : nullptr;
+    {
+        auto ch_it = account.channels.find(binding->from->bare.data());
+        channel = ch_it != account.channels.end() ? &ch_it->second : nullptr;
+    }
     
     // Note: We don't auto-create PM channels from presence anymore.
     // PM channels are only created when:
@@ -343,7 +345,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 {
                     channel->add_member(binding->from->full.data(), jid.data(),
                                         item.target ? std::optional(std::string_view(item.target->full))
-                                                    : std::nullopt);
+                                                    : std::nullopt,
+                                        user);
                     if (is_server_nick && channel)
                     {
                         // Status 210: server assigned a different nick than requested
@@ -448,7 +451,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             if (user->profile.role.has_value())
                 channel->remove_member(binding->from->full.data(), status ? status->data() : nullptr);
             else
-                channel->add_member(binding->from->full.data(), clientid.data());
+                channel->add_member(binding->from->full.data(), clientid.data(), std::nullopt, user);
         }
     }
 

@@ -712,7 +712,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             {
                                 struct t_gui_line *ln = (struct t_gui_line*)
                                     weechat_hdata_pointer(hdata_lines, own_lines, "last_line");
-                                while (ln && !already_displayed)
+                                int scan_count = 0;
+                                while (ln && !already_displayed && scan_count < 256)
                                 {
                                     struct t_gui_line_data *ld = (struct t_gui_line_data*)
                                         weechat_hdata_pointer(hdata_line, ln, "data");
@@ -730,6 +731,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     }
                                     ln = (struct t_gui_line*)
                                         weechat_hdata_move(hdata_line, ln, -1);
+                                    ++scan_count;
                                 }
                             }
                         }

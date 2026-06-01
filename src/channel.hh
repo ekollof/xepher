@@ -200,7 +200,8 @@ namespace weechat
         void update_purpose(const char* purpose, const char* creator, int last_set);
 
         std::optional<member*> add_member(const char *id, const char *client,
-                                           std::optional<std::string_view> real_jid = std::nullopt);
+                                           std::optional<std::string_view> real_jid = std::nullopt,
+                                           weechat::user *known_user = nullptr);
         std::optional<member*> member_search(const char *id);
         std::optional<member*> remove_member(const char *id, const char *reason);
         std::string find_member_by_nick(const std::string& nick) const;

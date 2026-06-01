@@ -273,9 +273,7 @@ weechat::channel::channel(weechat::account& account,
         }
     }
 
-    self_typing_hook_timer = weechat_hook_timer(1 * 1000, 0, 0,
-                                                &weechat::channel::self_typing_cb,
-                                                this, nullptr);
+    self_typing_hook_timer = nullptr;  // created lazily on first self-typing event
 
     omemo.enabled = 0;
     omemo.devicelist_requests = weechat_hashtable_new(64,
@@ -536,6 +534,11 @@ int weechat::channel::add_self_typing(weechat::user *user)
     (void)the_typing;  // Used for side effects, suppress warning
     self_typing_cb(this, nullptr, 0);
 
+    if (!self_typing_hook_timer)
+        self_typing_hook_timer = (struct t_hook *)weechat_hook_timer(
+            1 * 1000, 0, 0, &weechat::channel::self_typing_cb,
+            this, nullptr);
+
     return ret;
 }
 
@@ -653,12 +656,13 @@ void weechat::channel::update_name(const char* name)
 }
 
 std::optional<weechat::channel::member*> weechat::channel::add_member(const char *id, const char *client,
-                                                                       std::optional<std::string_view> real_jid)
+                                                                       std::optional<std::string_view> real_jid,
+                                                                       weechat::user *known_user)
 {
     weechat::channel::member *member;
     weechat::user *user;
 
-    user = user::search(&account, id);
+    user = known_user ? known_user : user::search(&account, id);
 
     if (this->id == id && type == weechat::channel::chat_type::MUC)
     {

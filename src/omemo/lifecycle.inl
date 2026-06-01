@@ -122,6 +122,14 @@ static void migrate_legacy_keys(omemo &self)
     if (!self.db_env)
         return;
 
+    // Sentinel check: if already migrated, skip the O(N) key scan.
+    {
+        auto rtxn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+        std::string_view sentinel;
+        if (self.dbi.omemo.get(rtxn, "legacy_migration_done", sentinel))
+            return;
+    }
+
     // Collect keys to migrate in a read-only pass first (cursor invalidation safety).
     std::vector<std::pair<std::string, std::string>> to_rename; // {old_key, new_key}
     {
@@ -147,7 +155,13 @@ static void migrate_legacy_keys(omemo &self)
     }
 
     if (to_rename.empty())
+    {
+        // No legacy keys found — write sentinel so we never scan again.
+        auto wtxn = lmdb::txn::begin(self.db_env);
+        self.dbi.omemo.put(wtxn, "legacy_migration_done", "1");
+        wtxn.commit();
         return;
+    }
 
     // Write pass: copy under new key then delete old key.
     auto wtxn = lmdb::txn::begin(self.db_env);
@@ -161,6 +175,7 @@ static void migrate_legacy_keys(omemo &self)
             XDEBUG("omemo: migrated LMDB key '{}' → '{}'", old_key, new_key);
         }
     }
+    self.dbi.omemo.put(wtxn, "legacy_migration_done", "1");
     wtxn.commit();
 
     weechat_printf(nullptr,
