@@ -71,6 +71,23 @@ struct signal_buffer_deleter {
 
 using unique_signal_buffer = std::unique_ptr<signal_buffer, signal_buffer_deleter>;
 
+// C ABI bridge: Signal protocol callbacks use void* for context pointers.
+// make_signal_ctx<T>() creates a heap-allocated T and returns a raw T*
+// (caller casts to void* when passing to Signal). free_signal_ctx<T>(void*)
+// is called from Signal cleanup callbacks to destroy the object.
+// These centralize the make_unique + release + delete sequence so the rest
+// of the OMEMO code never touches raw allocation/deallocation.
+template<typename T, typename... Args>
+[[nodiscard]] auto make_signal_ctx(Args&&... args) -> T*
+{
+    return std::make_unique<T>(std::forward<Args>(args)...).release();
+}
+template<typename T>
+void free_signal_ctx(void *ctx)
+{
+    delete static_cast<T*>(ctx);  // sole delete in OMEMO; required by Signal C API
+}
+
 struct pre_key_list_deleter {
     void operator()(signal_protocol_key_helper_pre_key_list_node *node) const noexcept
     {

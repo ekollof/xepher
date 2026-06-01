@@ -47,12 +47,12 @@ int crypto_hmac_sha256_init(void **hmac_context, const uint8_t *key, size_t key_
     if (gcry_mac_open(&mac_raw, GCRY_MAC_HMAC_SHA256, 0, nullptr) != 0)
         return SG_ERR_UNKNOWN;
 
-    auto context = std::make_unique<mac_context>();
+    auto *context = make_signal_ctx<mac_context>();
     context->handle.reset(mac_raw);
     if (gcry_mac_setkey(context->handle.get(), key, key_len) != 0)
         return SG_ERR_UNKNOWN;
 
-    *hmac_context = context.release();
+    *hmac_context = static_cast<void *>(context);
     return SG_SUCCESS;
 }
 
@@ -87,9 +87,7 @@ int crypto_hmac_sha256_final(void *hmac_context, signal_buffer **output, void *u
 void crypto_hmac_sha256_cleanup(void *hmac_context, void *user_data)
 {
     (void) user_data;
-    // RAII exception: Signal C API transfers ownership via void* — delete is the
-    // mandatory cleanup paired with the make_unique<mac_context>().release() above.
-    delete static_cast<mac_context *>(hmac_context); // NOLINT(cppcoreguidelines-owning-memory)
+    free_signal_ctx<mac_context>(hmac_context);
 }
 
 int crypto_sha512_init(void **digest_context_ptr, void *user_data)
@@ -99,11 +97,11 @@ int crypto_sha512_init(void **digest_context_ptr, void *user_data)
     if (!digest_context_ptr)
         return SG_ERR_INVAL;
 
-    auto context = std::make_unique<digest_context>();
+    auto *context = make_signal_ctx<digest_context>();
     if (gcry_md_open(&context->handle, GCRY_MD_SHA512, 0) != 0)
         return SG_ERR_UNKNOWN;
 
-    *digest_context_ptr = context.release();
+    *digest_context_ptr = static_cast<void *>(context);
     return SG_SUCCESS;
 }
 
@@ -140,9 +138,7 @@ int crypto_sha512_final(void *digest_context_ptr, signal_buffer **output, void *
 void crypto_sha512_cleanup(void *digest_context_ptr, void *user_data)
 {
     (void) user_data;
-    // RAII exception: Signal C API transfers ownership via void* — delete is the
-    // mandatory cleanup paired with the make_unique<digest_context>().release() above.
-    delete static_cast<digest_context *>(digest_context_ptr); // NOLINT(cppcoreguidelines-owning-memory)
+    free_signal_ctx<digest_context>(digest_context_ptr);
 }
 
 int crypto_encrypt(signal_buffer **output, int cipher,

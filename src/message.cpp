@@ -17,6 +17,15 @@
 #include "user.hh"
 #include "message.hh"
 
+// RAII wrapper for POSIX regex_t — calls regfree() on scope exit.
+struct regex_guard {
+    regex_guard() = default;
+    ~regex_guard() { regfree(&reg); }
+    regex_guard(const regex_guard&) = delete;
+    regex_guard& operator=(const regex_guard&) = delete;
+    regex_t reg{};
+};
+
 static const char format_regex[] = "<([^>]*?)>";
 static const size_t max_groups = 2;
 
@@ -156,15 +165,15 @@ std::string message__decode(weechat::account *account,
                            std::string_view text)
 {
     int rc;
-    regex_t reg;
+    regex_guard rg;
     regmatch_t groups[max_groups];
     const char *cursor;
     size_t offset;
 
-    if ((rc = regcomp(&reg, format_regex, REG_EXTENDED)))
+    if ((rc = regcomp(&rg.reg, format_regex, REG_EXTENDED)))
     {
         std::string msgbuf(100, '\0');
-        regerror(rc, &reg, msgbuf.data(), msgbuf.size());
+        regerror(rc, &rg.reg, msgbuf.data(), msgbuf.size());
         weechat_printf(
             account->buffer,
             _("%s%s: error compiling message formatting regex: %s"),
@@ -176,7 +185,7 @@ std::string message__decode(weechat::account *account,
     std::string decoded_text;
     decoded_text.reserve(MESSAGE_MAX_LENGTH);
 
-    for (cursor = text.data(); regexec(&reg, cursor, max_groups, groups, 0) == 0; cursor += offset)
+    for (cursor = text.data(); regexec(&rg.reg, cursor, max_groups, groups, 0) == 0; cursor += offset)
     {
         offset = groups[0].rm_eo;
 
@@ -196,6 +205,5 @@ std::string message__decode(weechat::account *account,
     message__htmldecode(htmldec.data(), decoded_text.c_str(), decoded_text.size() + 1);
     htmldec.resize(std::string_view(htmldec.c_str()).size());
 
-    regfree(&reg);
     return htmldec;
 }
