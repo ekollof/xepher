@@ -190,14 +190,11 @@ std::vector<std::uint32_t> weechat::xmpp::omemo::get_cached_device_ids(std::stri
     if (!devlist || devlist->empty())
         return {};
 
-    std::vector<std::uint32_t> result;
-    std::ranges::copy(
-        split(*devlist, ';')
+    return split(*devlist, ';')
         | std::views::transform(parse_uint32)
         | std::views::filter([](auto p) { return p && is_valid_omemo_device_id(*p); })
-        | std::views::transform([](auto p) { return *p; }),
-        std::back_inserter(result));
-    return result;
+        | std::views::transform([](auto p) { return *p; })
+        | std::ranges::to<std::vector>();
 }
 
 void weechat::xmpp::omemo::show_status(struct t_gui_buffer *buffer,
