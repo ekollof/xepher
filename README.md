@@ -168,7 +168,7 @@ Use `/help account` for full details.
 ### Encryption status indicator
 
 Add the `xmpp_encryption` bar item to your status bar to see the current
-buffer's encryption mode (🔒OMEMO / 🔒PGP / empty for plaintext):
+buffer's encryption mode (🔒OMEMO / 🔒PGP / empty for plaintext). In MUCs it may show "🔒OMEMO (pending)" while fetching occupant bundles.
 
 ```
 /set weechat.bar.status.items "[time],[buffer_last_number],[buffer_plugin],buffer_number+:+buffer_name+(buffer_modes)+{buffer_nicklist_count}+buffer_zoom+buffer_filter,xmpp_encryption,[lag],[hotlist],completion"
@@ -712,9 +712,11 @@ Each nick in a MUC room displays a prefix indicating their role or affiliation
 
 ### Encryption
 
+**Note:** OMEMO for non-anonymous MUC rooms (XEP-0384 multi-recipient) is implemented but **experimental and untested**. Use at your own risk. See `docs/planning-muc-omemo.md` for the current status (complete-but-untested as of the latest commits). PM OMEMO remains the primary tested path.
+
 | Command | Description |
 |---------|-------------|
-| `/omemo` | Enable OMEMO for the current PM buffer (MUCs not yet supported) |
+| `/omemo` | Enable OMEMO for the current buffer. Works for both PMs and non-anonymous MUCs (MUC OMEMO support is **experimental and untested** — see planning doc). |
 | `/omemo check` | Verify OMEMO bundle is published |
 | `/omemo republish` | Republish OMEMO:2 + legacy nodes |
 | `/omemo status` | Show device ID and status |
