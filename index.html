@@ -234,7 +234,7 @@
   <div class="features">
     <div class="feature">
       <h3>OMEMO Encryption</h3>
-      <p>End-to-end encryption via XEP-0384 (OMEMO:2 + legacy) for direct messages and <strong>non-anonymous MUCs</strong> (multi-recipient). Keys stored in LMDB. <strong>MUC OMEMO is experimental and untested</strong> (complete-but-untested as of latest commits; see docs/planning-muc-omemo.md).</p>
+      <p>End-to-end encryption via XEP-0384 using the <strong>legacy axolotl namespace only</strong> (`eu.siacs.conversations.axolotl`). OMEMO:2 (`urn:xmpp:omemo:2`) is not supported. Works for direct messages and <strong>non-anonymous MUCs</strong> (multi-recipient). <strong>MUC OMEMO is experimental and untested</strong> (see docs/planning-muc-omemo.md).</p>
     </div>
     <div class="feature">
       <h3>Message Archive (MAM)</h3>
@@ -328,7 +328,7 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
         <tr><td>XEP-0363</td><td>HTTP File Upload</td><td></td></tr>
         <tr><td>XEP-0372</td><td>References</td><td></td></tr>
         <tr><td>XEP-0382</td><td>Spoiler Messages</td><td></td></tr>
-        <tr><td>XEP-0384</td><td>OMEMO Encryption</td><td>OMEMO:2 + legacy</td></tr>
+        <tr><td>XEP-0384</td><td>OMEMO Encryption</td><td>legacy axolotl only (no OMEMO:2)</td></tr>
         <tr><td>XEP-0393</td><td>Message Styling</td><td></td></tr>
         <tr><td>XEP-0402</td><td>PEP Native Bookmarks</td><td></td></tr>
         <tr><td>XEP-0410</td><td>MUC Self-Ping</td><td></td></tr>
