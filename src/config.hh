@@ -55,6 +55,7 @@ namespace weechat
             config_option share_os_info;
             config_option mam_fetch_days;
             config_option mam_max_concurrent;
+            config_option highlight_words;
         } look;
 
     public:

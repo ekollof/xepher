@@ -207,6 +207,13 @@ weechat::config::config()
                 "Higher values increase server load and risk of rate limiting or timeouts.",
                 nullptr, 1, 20,
                 "4", nullptr, false,
+                {}, {}, {}},
+            .highlight_words{file, section_look, "highlight_words", "boolean",
+                "automatically add the account nickname as a highlight word to PM and "
+                "FEED buffers so messages containing it trigger a notification "
+                "(MUC buffers rely on WeeChat's native nick highlighting instead)",
+                nullptr, 0, 0,
+                "on", nullptr, false,
                 {}, {}, {}}}
 {
 }
