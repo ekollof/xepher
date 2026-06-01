@@ -202,6 +202,20 @@ Sent messages display an inline status glyph that updates automatically:
 | ✓ | Delivered — recipient's client received it (XEP-0184) |
 | ✓✓ | Read — recipient marked it displayed (XEP-0333) |
 
+### Highlight words
+
+The account nickname is automatically added as a highlight word to PM
+and FEED buffers so messages containing it trigger a notification.
+MUC rooms use WeeChat's native nick-based highlighting instead.
+
+To disable this behaviour (e.g. if your short nickname causes false
+highlights):
+
+```
+/set xmpp.look.highlight_words off
+/save
+```
+
 ### XHTML-IM rendering (XEP-0071)
 
 When a message contains an `<html>` body, the plugin renders it with WeeChat
