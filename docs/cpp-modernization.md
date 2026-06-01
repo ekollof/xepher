@@ -8,7 +8,6 @@
 This work originated from a full compliance audit against the rules in:
 
 - [AGENTS.md](../AGENTS.md)
-- [.github/copilot-instructions.md](../.github/copilot-instructions.md)
 
 The audit identified that while the project claimed C++23 as its standard, adoption of the
 specific "C++23 Memory Safety Features to Leverage" was only partial:
@@ -24,7 +23,7 @@ are in active use.
 
 ## Goals
 
-1. **Systematically adopt** the features recommended in the copilot instructions:
+1. **Systematically adopt** the features recommended in the agent instructions:
    - `std::string_view` for read-only string parameters (instead of `const std::string&`)
    - `std::span` for array/byte buffer views (instead of raw pointer + size)
    - `std::ranges` algorithms and views (instead of manual loops or classical `<algorithm>`)
@@ -122,4 +121,3 @@ are in active use.
 ## Related Documents
 
 - [AGENTS.md](../AGENTS.md)
-- [.github/copilot-instructions.md](../.github/copilot-instructions.md)
