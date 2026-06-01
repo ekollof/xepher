@@ -160,6 +160,7 @@ int command__blocklist(const void *pointer, void *data,
             acct->blocklist_picker = nullptr;
         },
         buffer);
+    if (!*p) return WEECHAT_RC_ERROR;
 
     // Store non-owning pointer so the IQ handler can call add_entry().
     ptr_account->blocklist_picker = p.release();
@@ -284,7 +285,7 @@ int command__roster(const void *pointer, void *data,
             entries.push_back({ jid, label, sublabel, true });
         }
 
-        std::make_unique<picker_t>(
+        auto p = std::make_unique<picker_t>(
             "xmpp.picker.roster",
             "Open chat with contact  (roster)",
             std::move(entries),
@@ -294,7 +295,9 @@ int command__roster(const void *pointer, void *data,
             },
             picker_t::close_cb{},
             buffer,
-            true /* sort_entries */).release();
+            true /* sort_entries */);
+        if (!*p) return WEECHAT_RC_ERROR;
+        p.release();
         return WEECHAT_RC_OK;
     }
 
@@ -397,7 +400,7 @@ int command__bookmark(const void *pointer, void *data,
                 sublabel += sublabel.empty() ? "autojoin" : "  autojoin";
             entries.push_back({jid, label, sublabel});
         }
-        std::make_unique<picker_t>(
+        auto p = std::make_unique<picker_t>(
             "xmpp.picker.bookmark",
             "Open bookmark  (XEP-0048)",
             std::move(entries),
@@ -407,7 +410,9 @@ int command__bookmark(const void *pointer, void *data,
             },
             picker_t::close_cb{},
             buffer,
-            true /* sort_entries */).release();
+            true /* sort_entries */);
+        if (!*p) return WEECHAT_RC_ERROR;
+        p.release();
         return WEECHAT_RC_OK;
     }
 

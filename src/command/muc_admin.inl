@@ -189,6 +189,7 @@ int command__adhoc(const void *pointer, void *data,
                     if (info.picker == raw) info.picker = nullptr;
             },
             buffer);
+        if (!*p) return WEECHAT_RC_ERROR;
         *p_holder = p.release();
 
         std::string query_id = stanza::uuid(ptr_account->context);

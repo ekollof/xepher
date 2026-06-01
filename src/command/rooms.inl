@@ -122,6 +122,7 @@ int command__list(const void *pointer, void *data,
                 if (info.picker == raw) info.picker = nullptr;
         },
         buffer);
+    if (!*p) return WEECHAT_RC_ERROR;
     *p_holder = p.get();
     picker_t *raw_p = p.release();
 

@@ -108,8 +108,8 @@ public:
             &picker::s_close_cb, this, nullptr);
 
         if (!buf_) {
-            // If buffer creation fails, self-destruct immediately.
-            delete this;
+            // Buffer creation failed — leave buf_ null. The caller's
+            // unique_ptr will destroy the picker normally via RAII.
             return;
         }
 
@@ -145,6 +145,8 @@ public:
         if (picker_base::s_active == this)
             picker_base::s_active = nullptr;
     }
+
+    [[nodiscard]] explicit operator bool() const noexcept { return buf_ != nullptr; }
 
     // Add an entry (for async/streaming use cases).
     void add_entry(entry e)
