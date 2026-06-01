@@ -13,6 +13,7 @@
 #include <utility>
 #include <optional>
 #include <memory>
+#include <span>
 #include <array>
 #include <fmt/core.h>
 #include <fmt/chrono.h>

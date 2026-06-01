@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fstream>
+#include <span>
 #include <string>
 #include <openssl/evp.h>
 #include <openssl/bio.h>

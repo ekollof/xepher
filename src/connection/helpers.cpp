@@ -11,6 +11,7 @@
 #include <cctype>
 #include <filesystem>
 #include <list>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
