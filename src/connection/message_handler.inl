@@ -1781,8 +1781,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     xmpp_stanza_t *origin_id_elem = xmpp_stanza_get_child_by_name_and_ns(stanza, "origin-id", "urn:xmpp:sid:0");
     const char *origin_id = origin_id_elem ? xmpp_stanza_get_attribute(origin_id_elem, "id") : nullptr;
     
-    // Prefer stanza-id over origin-id over regular id for stable message identification
-    const char *stable_id = stanza_id ? stanza_id : (origin_id ? origin_id : id);
+    // Prefer origin-id (client-assigned) over stanza-id (server-assigned)
+    // over the message id attribute. The omemo_plaintext cache is keyed by
+    // the client-assigned id (saved_id in the send path), so using origin-id
+    // first ensures cache hits for self-sent OMEMO messages.
+    const char *stable_id = origin_id ? origin_id : (stanza_id ? stanza_id : id);
     
     replace = xmpp_stanza_get_child_by_name_and_ns(stanza, "replace",
                                                    "urn:xmpp:message-correct:0");
