@@ -27,6 +27,7 @@
 #include "debug.hh"
 #include "pgp.hh"
 #include "util.hh"
+#include "message.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
 
@@ -1217,11 +1218,15 @@ int weechat::channel::send_message(std::string to, std::string body,
         auto *self_user = user::search(&account, account.jid().data());
         auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
         std::string tag = "xmpp_message,message,private,notify_none,self_msg,log1,id_" + saved_id;
+        std::string display_body = weechat::config::instance
+            && weechat::config::instance->look.emoticons.boolean()
+            ? replace_emoticons(body)
+            : std::string(body);
         weechat_printf_date_tags(buffer, 0,
                                  tag.c_str(),
                                  "%s\t%s ⌛",
                                  prefix.data(),
-                                 body.data());
+                                 display_body.c_str());
     }
 
     return WEECHAT_RC_OK;
@@ -1557,6 +1562,10 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
             is_action ? "action," : "", saved_id);
         bool encrypted = (transport == weechat::channel::transport::OMEMO ||
                           transport == weechat::channel::transport::PGP);
+        std::string display_body = weechat::config::instance
+            && weechat::config::instance->look.emoticons.boolean()
+            ? replace_emoticons(body_str)
+            : body_str;
         if (is_action)
         {
             weechat_printf_date_tags(buffer, 0,
@@ -1565,7 +1574,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                                      weechat_prefix("action"),
                                      prefix.data(),
                                      encrypted ? "🔒 " : "",
-                                     body_str.c_str() + 4);
+                                     display_body.c_str() + 4);
         }
         else
         {
@@ -1574,7 +1583,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                                      "%s\t%s%s ⌛",
                                      prefix.data(),
                                      encrypted ? "🔒 " : "",
-                                     body_str.c_str());
+                                     display_body.c_str());
         }
     }
 
