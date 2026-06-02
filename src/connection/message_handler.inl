@@ -1734,10 +1734,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     if (!ch)
                     {
                         // Create PM channel for the buzz
-                        ch = &account.channels.emplace(
+                        auto [it_ch, _ins] = account.channels.emplace(
                             std::make_pair(bare_s, weechat::channel {
                                     account, weechat::channel::chat_type::PM, bare_s, bare_s
-                                })).first->second;
+                                }));
+                        auto& [_, c] = *it_ch;
+                        ch = &c;
                     }
                     weechat_printf_date_tags(ch->buffer, 0, "xmpp_attention,notify_highlight",
                                             "%s%s is requesting your attention! (/buzz)",
