@@ -1378,6 +1378,8 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         // Self-sent OMEMO messages cannot be decrypted on replay (Signal does
         // not support self-decryption), so without this cache the user would
         // see only the OMEMO_ADVICE placeholder on every restart.
+        XDEBUG("omemo cache store: peer_bare={} saved_id={} body_len={}",
+               peer_bare, saved_id, body_str.size());
         account.mam_cache_store_omemo_plaintext(peer_bare, saved_id, body_str);
     }
     else if (pgp.enabled && !pgp.ids.empty())

@@ -2055,9 +2055,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             std::string(channel_id), std::string(stable_id));
         if (cached)
         {
+            XDEBUG("omemo cache hit: channel_id={} stable_id={} body_len={}",
+                   channel_id, stable_id, cached->size());
             omemo_cleartext_storage = std::move(*cached);
             cleartext = omemo_cleartext_storage.data();
             goto message_handler_after_omemo;
+        }
+        else
+        {
+            XDEBUG("omemo cache miss: channel_id={} stable_id={}",
+                   channel_id, stable_id);
         }
     }
 
