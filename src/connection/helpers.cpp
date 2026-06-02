@@ -919,19 +919,9 @@ static void og_launch_one(og_pending_entry entry)
                                     ? wc->data.size() - n - 8 : 0;
                 std::string_view tail(wc->data.c_str() + scan_start,
                                       wc->data.size() - scan_start);
-                auto ipos = [&](std::string_view needle) -> bool {
-                    if (tail.size() < needle.size()) return false;
-                    for (size_t i = 0; i + needle.size() <= tail.size(); ++i)
-                    {
-                        bool ok = true;
-                        for (size_t j = 0; j < needle.size() && ok; ++j)
-                            ok = std::tolower((unsigned char)tail[i+j])
-                                 == (unsigned char)needle[j];
-                        if (ok) return true;
-                    }
-                    return false;
-                };
-                if (ipos("</head>") || ipos("<body"))
+                // Reuse established case-insensitive search (std::ranges::search + tolower pred).
+                if (ifinds(tail, "</head>") != std::string::npos ||
+                    ifinds(tail, "<body") != std::string::npos)
                 {
                     wc->head_done = true;
                     return 0; // signal early-abort to curl

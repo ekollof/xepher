@@ -1,6 +1,6 @@
 # C++23 Modernization Effort
 
-> **Status**: Structured complete for map iters in .cpp/.inl; for_each; ongoing.
+> **Status**: Structured complete for map iters in .cpp/.inl; for_each; views tokenization + search; ongoing.
 > This document captures the plan, progress, and remaining work for adopting modern C++23 features as recommended in the project's agent instructions.
 
 ## Background
@@ -17,9 +17,9 @@ specific "C++23 Memory Safety Features to Leverage" was only partial:
 - Almost no use of `std::ranges::`
 - Zero use of `std::expected`
 
-As of 2026-06-01, the initial gaps (span, ranges algos, expected, views) were closed, with zero remaining
+As of 2026-06-02, the initial gaps (span, ranges algos, expected, views) were closed, with zero remaining
 classical `std::algorithm` calls in `.cpp`/`.inl` files. Views adoption was further extended in subsequent
-work (see below). All recommended C++23 features are in active use.
+work (see below; e.g. split tokenization, search replacement). All recommended C++23 features are in active use.
 
 ## Goals
 
@@ -110,28 +110,31 @@ work (see below). All recommended C++23 features are in active use.
 - Additional: ... ; iq MUC ch_it for disco items (items_query and admin) modernized to if-init + binding + if(type); more pending_iq_jid in iq; dl_jid_it; etc. (channel.inl reverted to clean due to temp brace issue during edit, other modern kept).
 - **Zero remaining classical `std::algorithm` calls** in `.cpp`/`.inl`
   files (lone exception: a commented-out `std::find` in plugin.cpp).
+- `std::views::split` + range-for modernization of manual pointer/char walk tokenizer (in `user.cpp:compute_nick_color` for weechat nick_colors comma list; matches the established split style from omemo/internal_prelude).
+- Replaced manual double-for byte search loop (case-insens head/body scan in OG fetch write-cb) with reuse of existing `ifinds` (which uses `std::ranges::search` + tolower predicate) in `connection/helpers.cpp`. Removed duplication, one call site.
 
-## Current Status (2026-06-01)
+## Current Status (2026-06-02)
 
 - **Builds cleanly** with `make`
 - **All tests pass** (27/27 cases, 286/286 assertions)
 - Initial phases from the original plan are complete; `std::views` adoption and other
   C++23 (structured bindings, more expected, string .contains, ranges for_each) being incrementally extended as surgical
   opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto, mam lmdb lookups, tolower and sanitize transforms).
-- Continued ... ( + omemo complete; user for_each; all ->second in .cpp/.inl gone (only .hh left)).
+- Continued ... ( + omemo complete; user for_each + views split tokenization; helpers search modern; all ->second in .cpp/.inl gone (only .hh left)).
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
 - `std::span` is used wherever owned buffers pass through C API boundaries.
+- `std::ranges::search` + predicate established for case-insens (via ifinds helper).
 
 **Adoption counts** (approximate):
 | Feature | Before | After |
 |---------|--------|-------|
 | `std::expected` | 0 | 12 (b64, pkcs7, 2x parse_*, load_tofu_trust, og_cache_lookup, aes_mode_for_signal, avatar load_from_cache, axolotl_omemo_encrypt/decrypt, 2x mam_cache_lookup_*) |
-| `std::views::` | 0 | 8+ (split x3, join_with attempt, take, filter/transform pipelines x3+, etc.) |
+| `std::views::` | 0 | 9+ (split x4 including nick color tokenization, join_with attempt, take, filter/transform pipelines x3+, etc.) |
 | `std::ranges::to` | 0 | 1+ |
 | `std::span` | 0 | 29 |
-| `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
+| `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) + 1 manual search replaced by ranges::search via ifinds |
 | Structured bindings in for/find | few | more (all ->second in .cpp/.inl eliminated). |
 | `.find(X) != npos` | 15+ | fewer (string .contains for existence checks) |
 | `.count(K) > 0` | 5+ | 0 |
@@ -154,7 +157,7 @@ work (see below). All recommended C++23 features are in active use.
   pipe compatibility.
 - **Structured bindings** (`auto [k, v]`) and `if` init + structured can be applied
   more to map/set iterations and find() results for clarity.
-- Additional `std::ranges::for_each` for in-place transforms like tolower on strings (replacing manual for-range assign in color, xhtml, avatar) and char filtering/building in san_name (callbacks, rooms).
+- Additional `std::ranges::for_each` for in-place transforms like tolower on strings (replacing manual for-range assign in color, xhtml, avatar) and char filtering/building in san_name (callbacks, rooms). Manual index/pointer parsers (entity decode, %decode, JPEG SOF scan, libstrophe child walks, hdata tag walks, WeeChat C arrays) left in place per C-ABI / complexity rules.
 
 ## Related Documents
 

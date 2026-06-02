@@ -38,18 +38,13 @@ std::string compute_nick_color(std::string_view name)
         return {};
 
     std::vector<std::string> palette;
-    std::string token;
-    for (const char *p = colors_str; *p; ++p)
+    std::string_view sv(colors_str);
+    for (auto r : sv | std::views::split(','))
     {
-        if (*p == ',')
-        {
-            if (!token.empty()) palette.push_back(std::move(token));
-            token.clear();
-        }
-        else
-            token += *p;
+        std::string s(r.begin(), r.end());
+        if (!s.empty())
+            palette.push_back(std::move(s));
     }
-    if (!token.empty()) palette.push_back(std::move(token));
 
     if (palette.empty()) return {};
     return palette[nick_hash(name) % palette.size()];
