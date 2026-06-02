@@ -112,7 +112,7 @@ work (see below). All recommended C++23 features are in active use.
 - **All tests pass** (27/27 cases, 286/286 assertions)
 - Initial phases from the original plan are complete; `std::views` adoption and other
   C++23 (structured bindings, more expected, string .contains, ranges for_each) being incrementally extended as surgical
-  opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto, mam lmdb lookups, tolower transforms).
+  opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto, mam lmdb lookups, tolower and sanitize transforms).
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
@@ -148,7 +148,7 @@ work (see below). All recommended C++23 features are in active use.
   pipe compatibility.
 - **Structured bindings** (`auto [k, v]`) and `if` init + structured can be applied
   more to map/set iterations and find() results for clarity.
-- Additional `std::ranges::for_each` for in-place transforms like tolower on strings (replacing manual for-range assign in color, xhtml, avatar).
+- Additional `std::ranges::for_each` for in-place transforms like tolower on strings (replacing manual for-range assign in color, xhtml, avatar) and char filtering/building in san_name (callbacks, rooms).
 
 ## Related Documents
 

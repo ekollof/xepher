@@ -268,14 +268,13 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
 
             // Sanitize filename
             std::string san_name;
-            for (char c : next_emb.filename)
-            {
+            std::ranges::for_each(next_emb.filename, [&](char c) {
                 if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
                     (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_')
                     san_name += c;
                 else
                     san_name += '-';
-            }
+            });
             {
                 size_t p2 = 0;
                 while ((p2 = san_name.find("--", p2)) != std::string::npos)

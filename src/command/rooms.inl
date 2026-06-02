@@ -319,8 +319,7 @@ int command__upload(const void *pointer, void *data,
     // Sanitize filename: allow alphanumeric, dots, dashes, and underscores
     // Some servers are very strict about filenames (XEP-0363 doesn't specify allowed chars)
     std::string sanitized_basename;
-    for (char c : basename)
-    {
+    std::ranges::for_each(basename, [&](char c) {
         if ((c >= 'a' && c <= 'z') || 
             (c >= 'A' && c <= 'Z') || 
             (c >= '0' && c <= '9') || 
@@ -332,7 +331,7 @@ int command__upload(const void *pointer, void *data,
         {
             sanitized_basename += '-';  // Replace any other char with dash
         }
-    }
+    });
     
     // Remove consecutive dashes
     size_t pos = 0;
