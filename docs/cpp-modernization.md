@@ -1,6 +1,6 @@
 # C++23 Modernization Effort
 
-> **Status**: Structured bindings sweep continued (channel/account map lookups in handlers); views/structured/expected ongoing (as of 2026-06-03)
+> **Status**: Structured bindings + for_each continued (iq pubsub/upload maps, caps hash, CSI hooks); views/structured ongoing (as of 2026-06-03)
 > This document captures the plan, progress, and remaining work for adopting modern C++23 features as recommended in the project's agent instructions.
 
 ## Background
@@ -103,7 +103,9 @@ work (see below). All recommended C++23 features are in active use.
 - **Structured bindings**: modernized several map iterations and find results
   (e.g. `for (auto& [_, acc] : accounts)`, `auto& [_, acc] = *it`, similar in
   channel::members, disconnect loops, timer callbacks, save_pgp etc.).
-- Additional structured sweep (this batch): converted ~8-10 `it->second` / ternary lookups for `account.channels` (and similar maps) in `src/connection/presence_handler.inl`, `message_handler.inl`, `iq_handler.inl` (safe sites only), `src/account/callbacks.inl`, `src/account.cpp`, `src/channel.cpp` to `if (auto it = m.find(k); it != end()) { auto& [_, v] = *it; use(v); }` (and ref binding after try_emplace in a couple places). Kept feed_ch one in original form to avoid scope/brace issues in complex handler; MUC disco blocks left for later due to edit complexity. All with ccache incremental builds.
+- Additional structured sweep (batch 2): converted many more `->second` accesses for non-channel maps (pubsub_publish_ids, pubsub_fetch_ids, pubsub_*_queries, upload_requests, setvcard_queries, user_ping_queries, etc.) in `src/connection/iq_handler.inl` to if-init + `auto& [_, v] = *it;` (or direct binding in if). Also modernized upload req success path accesses. ~15+ sites. Plus prior channel ones.
+- Converted side-effect for (const auto &ident : ...) and features in caps hash computation (iq_handler) to `std::ranges::for_each(..., lambda)`.
+- Modernized fixed C-array loop `for (int i=0; i<3; i++)` over csi_activity_hooks to `for (auto &h : csi_activity_hooks)`.
 - **Zero remaining classical `std::algorithm` calls** in `.cpp`/`.inl`
   files (lone exception: a commented-out `std::find` in plugin.cpp).
 
@@ -114,7 +116,7 @@ work (see below). All recommended C++23 features are in active use.
 - Initial phases from the original plan are complete; `std::views` adoption and other
   C++23 (structured bindings, more expected, string .contains, ranges for_each) being incrementally extended as surgical
   opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto, mam lmdb lookups, tolower and sanitize transforms).
-- Continued structured binding modernization on remaining `->second` / find() sites for account.channels and similar maps (presence_handler, message_handler, iq_handler, account/callbacks, account.cpp, channel.cpp) using if-init + `auto& [_, ch] = *it;` pattern to match established style in buffer/account.
+- Continued structured binding modernization on remaining `->second` / find() sites (previous + this batch: many pubsub_*, upload_requests, ping, setvcard etc. in iq_handler + prior channels) using if-init + structured destructuring. Also for_each on caps computation loops and range-for on hook arrays.
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
@@ -128,7 +130,7 @@ work (see below). All recommended C++23 features are in active use.
 | `std::ranges::to` | 0 | 1+ |
 | `std::span` | 0 | 29 |
 | `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
-| Structured bindings in for/find | few | more (accounts, channels, members, buffer lookups, config, completion, commands, lambdas in channel, command/account etc. across 20+ sites; +10+ in handler channel lookups during this batch) |
+| Structured bindings in for/find | few | more (accounts, channels, members, buffer lookups, config, completion, commands, lambdas in channel, command/account etc. across 20+ sites; +10+ in handler channel lookups previous batch; +15+ pubsub/upload/ping/setvcard/etc maps in iq_handler this batch) |
 | `.find(X) != npos` | 15+ | fewer (string .contains for existence checks) |
 | `.count(K) > 0` | 5+ | 0 |
 | `std::copy_n` | 4 | 0 |

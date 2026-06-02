@@ -33,10 +33,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             account.pubsub_publish_ids.erase(iq_id);
             return;
         }
-        std::string pub_service   = pub_it->second.service;
-        std::string pub_node      = pub_it->second.node;
-        std::string pub_item_id   = pub_it->second.item_id;
-        bool        pub_is_retract = pub_it->second.is_retract;
+        auto& [_, pub] = *pub_it;
+        std::string pub_service   = pub.service;
+        std::string pub_node      = pub.node;
+        std::string pub_item_id   = pub.item_id;
+        bool        pub_is_retract = pub.is_retract;
         account.pubsub_publish_ids.erase(pub_it);
 
         if (pub_service.empty() || pub_node.empty())
@@ -88,7 +89,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                  : account.user_ping_queries.end();
         if (ping_it != account.user_ping_queries.end())
         {
-            time_t start_time = ping_it->second;
+            auto& [_, start_time] = *ping_it;
             time_t now = time(nullptr);
             long rtt_ms = (now - start_time) * 1000;  // Convert to milliseconds
 
@@ -316,10 +317,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         // Check if this is a /setvcard read-merge response (self-fetch before update).
         if (id)
         {
-            auto sv_it = account.setvcard_queries.find(id);
-            if (sv_it != account.setvcard_queries.end())
+            if (auto sv_it = account.setvcard_queries.find(id); sv_it != account.setvcard_queries.end())
             {
-                auto &sv = sv_it->second;
+                auto& [_, sv] = *sv_it;
                 struct t_gui_buffer *sv_buf = sv.buffer;
 
                 // Build a vcard_fields struct pre-populated from the server's vCard.
@@ -546,13 +546,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             // comments/blog buffer updates immediately (server echoed <publish> back).
             trigger_publish_refetch(id);
 
-            auto fetch_it = account.pubsub_fetch_ids.find(id);
-            if (fetch_it != account.pubsub_fetch_ids.end())
+            if (auto fetch_it = account.pubsub_fetch_ids.find(id); fetch_it != account.pubsub_fetch_ids.end())
             {
-                std::string feed_service    = fetch_it->second.service;
-                std::string node_name       = fetch_it->second.node;
-                std::string before_cursor   = fetch_it->second.before_cursor;
-                int         max_items_req   = fetch_it->second.max_items;
+                auto& [_, fi] = *fetch_it;
+                std::string feed_service    = fi.service;
+                std::string node_name       = fi.node;
+                std::string before_cursor   = fi.before_cursor;
+                int         max_items_req   = fi.max_items;
                 account.pubsub_fetch_ids.erase(fetch_it);
 
                 std::string feed_key = fmt::format("{}/{}", feed_service, node_name);
@@ -1056,10 +1056,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             stanza, "pubsub", "http://jabber.org/protocol/pubsub");
         if (pubsub_subs && id && type && weechat_strcasecmp(type, "result") == 0)
         {
-            auto subs_it = account.pubsub_subscriptions_queries.find(id);
-            if (subs_it != account.pubsub_subscriptions_queries.end())
+            if (auto subs_it = account.pubsub_subscriptions_queries.find(id); subs_it != account.pubsub_subscriptions_queries.end())
             {
-                std::string feed_service = subs_it->second;
+                auto& [_, feed_service] = *subs_it;
                 account.pubsub_subscriptions_queries.erase(subs_it);
 
                 xmpp_stanza_t *subscriptions = xmpp_stanza_get_child_by_name(pubsub_subs, "subscriptions");
@@ -1146,25 +1145,23 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             stanza, "pubsub", "http://jabber.org/protocol/pubsub");
         if (pubsub_res && id && type && weechat_strcasecmp(type, "result") == 0)
         {
-            auto sub_ok_it = account.pubsub_subscribe_queries.find(id);
-            if (sub_ok_it != account.pubsub_subscribe_queries.end())
+            if (auto sub_ok_it = account.pubsub_subscribe_queries.find(id); sub_ok_it != account.pubsub_subscribe_queries.end())
             {
-                struct t_gui_buffer *fb = sub_ok_it->second.buffer
-                                         ? sub_ok_it->second.buffer : account.buffer;
+                auto& [_, sub] = *sub_ok_it;
+                struct t_gui_buffer *fb = sub.buffer ? sub.buffer : account.buffer;
                 weechat_printf(fb,
                     "%sSubscribed to %s",
-                    weechat_prefix("network"), sub_ok_it->second.feed_key.c_str());
+                    weechat_prefix("network"), sub.feed_key.c_str());
                 account.pubsub_subscribe_queries.erase(sub_ok_it);
             }
 
-            auto unsub_ok_it = account.pubsub_unsubscribe_queries.find(id);
-            if (unsub_ok_it != account.pubsub_unsubscribe_queries.end())
+            if (auto unsub_ok_it = account.pubsub_unsubscribe_queries.find(id); unsub_ok_it != account.pubsub_unsubscribe_queries.end())
             {
-                struct t_gui_buffer *fb = unsub_ok_it->second.buffer
-                                         ? unsub_ok_it->second.buffer : account.buffer;
+                auto& [_, unsub] = *unsub_ok_it;
+                struct t_gui_buffer *fb = unsub.buffer ? unsub.buffer : account.buffer;
                 weechat_printf(fb,
                     "%sUnsubscribed from %s",
-                    weechat_prefix("network"), unsub_ok_it->second.feed_key.c_str());
+                    weechat_prefix("network"), unsub.feed_key.c_str());
                 account.pubsub_unsubscribe_queries.erase(unsub_ok_it);
             }
         }
@@ -1178,9 +1175,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     {
         XDEBUG("Upload slot response received (id: {})", id);
         
-        auto req_it = account.upload_requests.find(id);
-        if (req_it != account.upload_requests.end())
+        if (auto req_it = account.upload_requests.find(id); req_it != account.upload_requests.end())
         {
+            auto& [_, req] = *req_it;
             XDEBUG("Found matching upload request");
             // Extract PUT and GET URLs
             xmpp_stanza_t *put_elem = xmpp_stanza_get_child_by_name(slot, "put");
@@ -1243,19 +1240,19 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                               weechat_prefix("network"));
                 
                 // Verify file exists and get file size
-                FILE *file = fopen(req_it->second.filepath.c_str(), "rb");
+                FILE *file = fopen(req.filepath.c_str(), "rb");
                 if (!file)
                 {
                     weechat_printf(account.buffer, "%s%s: failed to open file for upload: %s",
                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                                  req_it->second.filepath.c_str());
+                                  req.filepath.c_str());
                     account.upload_requests.erase(req_it);
                     return 1;
                 }
                 fclose(file);
                 
                 // Get Content-Type from filename extension
-                std::string filename = req_it->second.filename;
+                std::string filename = req.filename;
                 std::string content_type = "application/octet-stream";
                 size_t dot_pos = filename.find_last_of('.');
                 if (dot_pos != std::string::npos)
@@ -1290,8 +1287,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                 // Build the completion context (everything the callback needs)
                 auto ctx = std::make_shared<weechat::account::upload_completion>();
-                ctx->channel_id    = req_it->second.channel_id;
-                ctx->filename      = req_it->second.filename;
+                ctx->channel_id    = req.channel_id;
+                ctx->filename      = req.filename;
                 ctx->content_type  = content_type;
                 ctx->pipe_write_fd = pipe_fds[1];
 
@@ -1314,7 +1311,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // Copy strings that will be used by the worker thread (the
                 // upload_requests entry will be erased below, so we must copy
                 // before erasing).
-                std::string filepath_copy  = req_it->second.filepath;
+                std::string filepath_copy  = req.filepath;
                 std::string put_url_copy   = put_url;
                 std::string get_url_copy   = get_url;
 
@@ -1847,8 +1844,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
         }
 
-        auto req_it = account.upload_requests.find(id);
-        if (req_it != account.upload_requests.end())
+        if (auto req_it = account.upload_requests.find(id); req_it != account.upload_requests.end())
         {
             xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
             const char *error_type = error_elem ? xmpp_stanza_get_attribute(error_elem, "type") : nullptr;
@@ -1932,10 +1928,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
         // XEP-0060: pubsub publish error — report to the originating buffer.
         {
-            auto pub_it = account.pubsub_publish_ids.find(id);
-            if (pub_it != account.pubsub_publish_ids.end())
+            if (auto pub_it = account.pubsub_publish_ids.find(id); pub_it != account.pubsub_publish_ids.end())
             {
-                auto &ctx = pub_it->second;
+                auto& [_, ctx] = *pub_it;
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
                 std::string error_cond = "unknown error";
                 if (error_elem)
@@ -1970,9 +1965,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
         // XEP-0060: pubsub subscribe/unsubscribe error
         {
-            auto sub_it = account.pubsub_subscribe_queries.find(id);
-            if (sub_it != account.pubsub_subscribe_queries.end())
+            if (auto sub_it = account.pubsub_subscribe_queries.find(id); sub_it != account.pubsub_subscribe_queries.end())
             {
+                auto& [_, sub] = *sub_it;
                 std::string error_cond = "unknown error";
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
                 if (error_elem)
@@ -1994,19 +1989,18 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         }
                     }
                 }
-                struct t_gui_buffer *fb = sub_it->second.buffer
-                                         ? sub_it->second.buffer : account.buffer;
+                struct t_gui_buffer *fb = sub.buffer ? sub.buffer : account.buffer;
                 weechat_printf(fb,
                     "%s%s: subscribe to %s failed: %s",
                     weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                    sub_it->second.feed_key.c_str(), error_cond.c_str());
+                    sub.feed_key.c_str(), error_cond.c_str());
                 account.pubsub_subscribe_queries.erase(sub_it);
             }
         }
         {
-            auto unsub_it = account.pubsub_unsubscribe_queries.find(id);
-            if (unsub_it != account.pubsub_unsubscribe_queries.end())
+            if (auto unsub_it = account.pubsub_unsubscribe_queries.find(id); unsub_it != account.pubsub_unsubscribe_queries.end())
             {
+                auto& [_, unsub] = *unsub_it;
                 std::string error_cond = "unknown error";
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
                 if (error_elem)
@@ -2028,23 +2022,22 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         }
                     }
                 }
-                struct t_gui_buffer *fb = unsub_it->second.buffer
-                                         ? unsub_it->second.buffer : account.buffer;
+                struct t_gui_buffer *fb = unsub.buffer ? unsub.buffer : account.buffer;
                 weechat_printf(fb,
                     "%s%s: unsubscribe from %s failed: %s",
                     weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                    unsub_it->second.feed_key.c_str(), error_cond.c_str());
+                    unsub.feed_key.c_str(), error_cond.c_str());
                 account.pubsub_unsubscribe_queries.erase(unsub_it);
             }
         }
 
         // XEP-0060: pubsub item-fetch error (e.g. forbidden, item-not-found)
         {
-            auto fetch_it = account.pubsub_fetch_ids.find(id);
-            if (fetch_it != account.pubsub_fetch_ids.end())
+            if (auto fetch_it = account.pubsub_fetch_ids.find(id); fetch_it != account.pubsub_fetch_ids.end())
             {
-                const std::string &err_service = fetch_it->second.service;
-                const std::string &err_node    = fetch_it->second.node;
+                auto& [_, fi] = *fetch_it;
+                const std::string &err_service = fi.service;
+                const std::string &err_node    = fi.node;
 
                 std::string error_cond = "unknown error";
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
@@ -3089,14 +3082,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         std::string(name ? name : ""));
                 }
                 std::ranges::sort(identities);
-                for (const auto &ident : identities)
-                    S += ident + "<";
+                std::ranges::for_each(identities, [&](const auto& ident){ S += ident + "<"; });
 
                 // Step 4-5: features already collected above; sort and append
                 std::vector<std::string> sorted_features = features;
                 std::ranges::sort(sorted_features);
-                for (const auto &feat : sorted_features)
-                    S += feat + "<";
+                std::ranges::for_each(sorted_features, [&](const auto& feat){ S += feat + "<"; });
 
                 // Step 6-7: x-data forms (XEP-0128)
                 struct FormData {

@@ -514,12 +514,12 @@ void weechat::account::disconnect(int reconnect)
         idle_timer_hook = nullptr;
     }
     
-    for (int i = 0; i < 3; i++)
+    for (auto &h : csi_activity_hooks)
     {
-        if (csi_activity_hooks[i])
+        if (h)
         {
-            weechat_unhook(csi_activity_hooks[i]);
-            csi_activity_hooks[i] = nullptr;
+            weechat_unhook(h);
+            h = nullptr;
         }
     }
     
