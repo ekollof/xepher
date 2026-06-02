@@ -643,7 +643,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         // on MAM replay instead of calling decode(). This avoids advancing the
                         // Signal ratchet for historical messages. The cache key uses the room
                         // bare JID (channel_jid) for MUCs.
-                        std::optional<std::string> omemo_body;
+                        std::expected<std::string, std::string> omemo_body = std::unexpected("");
                         if (!msg_text || std::string_view(msg_text) == OMEMO_ADVICE)
                             omemo_body = account.mam_cache_lookup_omemo_plaintext(channel_jid, msg_id);
 
@@ -2001,7 +2001,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     {
         auto cached = account.mam_cache_lookup_omemo_plaintext(
             std::string(channel_id), std::string(stable_id));
-        if (cached.has_value())
+        if (cached)
         {
             omemo_cleartext_storage = std::move(*cached);
             cleartext = omemo_cleartext_storage.data();

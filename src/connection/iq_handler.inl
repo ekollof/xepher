@@ -112,7 +112,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (resource == account.nickname())
                     {
                         // Check if we have a channel for this room
-                        if (account.channels.find(room_jid) != account.channels.end())
+                        if (account.channels.contains(room_jid))
                         {
                             is_muc_selfping = true;
                         }

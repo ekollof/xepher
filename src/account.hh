@@ -423,12 +423,12 @@ namespace weechat
         // OMEMO plaintext cache: store decrypted body on live delivery; look up on MAM replay
         void mam_cache_store_omemo_plaintext(const std::string& channel_jid, const std::string& msg_id,
                                              const std::string& body);
-        std::optional<std::string> mam_cache_lookup_omemo_plaintext(const std::string& channel_jid,
+        std::expected<std::string, std::string> mam_cache_lookup_omemo_plaintext(const std::string& channel_jid,
                                                                      const std::string& msg_id);
         // ESFS download deduplication: record saved path by stable message ID; look up on MAM replay
         void mam_cache_store_esfs_download(const std::string& channel_jid, const std::string& stable_id,
                                            const std::string& saved_path);
-        std::optional<std::string> mam_cache_lookup_esfs_download(const std::string& channel_jid,
+        std::expected<std::string, std::string> mam_cache_lookup_esfs_download(const std::string& channel_jid,
                                                                    const std::string& stable_id);
         // PM buffer persistence across restarts (stored in cursors LMDB table)
         void pm_open_register(const std::string& pm_jid);

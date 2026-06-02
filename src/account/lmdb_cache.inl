@@ -606,10 +606,10 @@ void weechat::account::mam_cache_store_omemo_plaintext(const std::string& channe
     }
 }
 
-std::optional<std::string> weechat::account::mam_cache_lookup_omemo_plaintext(
+std::expected<std::string, std::string> weechat::account::mam_cache_lookup_omemo_plaintext(
     const std::string& channel_jid, const std::string& msg_id)
 {
-    if (!mam_db_env || channel_jid.empty() || msg_id.empty()) return std::nullopt;
+    if (!mam_db_env || channel_jid.empty() || msg_id.empty()) return std::unexpected("invalid args");
 
     try {
         lmdb::txn parentTransaction{nullptr};
@@ -631,7 +631,7 @@ std::optional<std::string> weechat::account::mam_cache_lookup_omemo_plaintext(
         // Silently ignore read errors
     }
 
-    return std::nullopt;
+    return std::unexpected("not found or db error");
 }
 
 void weechat::account::mam_cache_store_esfs_download(const std::string& channel_jid,
@@ -655,10 +655,10 @@ void weechat::account::mam_cache_store_esfs_download(const std::string& channel_
     }
 }
 
-std::optional<std::string> weechat::account::mam_cache_lookup_esfs_download(
+std::expected<std::string, std::string> weechat::account::mam_cache_lookup_esfs_download(
     const std::string& channel_jid, const std::string& stable_id)
 {
-    if (!mam_db_env || channel_jid.empty() || stable_id.empty()) return std::nullopt;
+    if (!mam_db_env || channel_jid.empty() || stable_id.empty()) return std::unexpected("invalid args");
 
     try {
         lmdb::txn parentTransaction{nullptr};
@@ -680,7 +680,7 @@ std::optional<std::string> weechat::account::mam_cache_lookup_esfs_download(
         // Silently ignore read errors
     }
 
-    return std::nullopt;
+    return std::unexpected("not found or db error");
 }
 
 void weechat::account::send_bookmarks()

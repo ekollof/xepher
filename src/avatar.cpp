@@ -273,7 +273,7 @@ bool weechat::avatar::publish(account& acc, const std::string& filepath)
         if (dot != std::string::npos)
         {
             std::string ext = filepath.substr(dot + 1);
-            for (auto& c : ext) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+            std::ranges::for_each(ext, [](char &c) { c = static_cast<char>(tolower(static_cast<unsigned char>(c))); });
             if (ext == "jpg" || ext == "jpeg")
                 mime_type = "image/jpeg";
             else if (ext == "gif")

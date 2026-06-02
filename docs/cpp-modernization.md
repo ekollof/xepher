@@ -112,7 +112,7 @@ work (see below). All recommended C++23 features are in active use.
 - **All tests pass** (27/27 cases, 286/286 assertions)
 - Initial phases from the original plan are complete; `std::views` adoption and other
   C++23 (structured bindings, more expected, string .contains) being incrementally extended as surgical
-  opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto encrypt/decrypt, aes_mode).
+  opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto, mam lmdb lookups).
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
@@ -121,7 +121,7 @@ work (see below). All recommended C++23 features are in active use.
 **Adoption counts** (approximate):
 | Feature | Before | After |
 |---------|--------|-------|
-| `std::expected` | 0 | 10 (b64, pkcs7, 2x parse_*, load_tofu_trust, og_cache_lookup, aes_mode_for_signal, avatar load_from_cache, axolotl_omemo_encrypt/decrypt) |
+| `std::expected` | 0 | 12 (b64, pkcs7, 2x parse_*, load_tofu_trust, og_cache_lookup, aes_mode_for_signal, avatar load_from_cache, axolotl_omemo_encrypt/decrypt, 2x mam_cache_lookup_*) |
 | `std::views::` | 0 | 8+ (split x3, join_with attempt, take, filter/transform pipelines x3+, etc.) |
 | `std::ranges::to` | 0 | 1+ |
 | `std::span` | 0 | 29 |
@@ -138,7 +138,7 @@ work (see below). All recommended C++23 features are in active use.
 - **Manual index loops** over non-standard data (C arrays, opaque handles) remain
   where necessary; converting them would add indirection without benefit.
 - **`std::expected`** can be adopted further in error-returning functions — the
-  pattern is established, adoption should be incremental (parse_* , load_tofu_trust, og_cache_lookup, aes_mode, avatar_load, axolotl_omemo_* done; more in
+  pattern is established, adoption should be incremental (parse_* , load_tofu_trust, og_cache_lookup, aes_mode, avatar_load, axolotl_omemo_*, 2x mam_cache_lookup done; more in
   decode/load paths possible without rippling too far, e.g. other lmdb lookups).
 - **Further `std::views`** opportunities exist for other list comprehensions, string
   tokenization, or filtering side-effect loops (e.g. device lists, MUC members, etc.).
