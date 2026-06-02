@@ -362,6 +362,26 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         return WEECHAT_RC_OK;
     }
 
+    // Compute the user-visible link (aesgcm://...#ivkey for ESFS/OMEMO uploads so
+    // clients can fetch+decrypt the https ciphertext; plain https otherwise).
+    // The data/source URI for metadata (SFS/SIMS url-data targets) must always be
+    // the raw https (the actual bytes on the upload server, plain or cipher).
+    // This ensures that "File uploaded" status and sent body use the correct
+    // link (aesgcm for omemo uploads to self/MUC), while meta uses the https
+    // for the actual data location. Prevents users seeing/pasting raw https
+    // that serves cipher "garbage" for ESFS cases.
+    std::string data_url = ctx->get_url;
+    std::string visible_link = data_url;
+    if (ctx->encrypted && !ctx->esfs_aesgcm_fragment.empty())
+    {
+        if (visible_link.starts_with("https://"))
+            visible_link = "aesgcm://" + visible_link.substr(8);
+        else if (visible_link.starts_with("http://"))
+            visible_link = "aesgcm://" + visible_link.substr(7);
+        visible_link += '#';
+        visible_link += ctx->esfs_aesgcm_fragment;
+    }
+
     // Always surface a visible text link (in the originating channel buffer when
     // still present). The rich SFS/SIMS send below (when channel found) provides
     // preview metadata for clients; this printf is the fallback for MUC/closed
@@ -393,30 +413,17 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             meta.size = ctx->original_file_size;
         }
 
-        // XEP-0448: for encrypted uploads, replace https:// with aesgcm:// and
-        // append #hex(iv)hex(key) as the URL fragment so the receiver can decrypt.
-        std::string effective_url = ctx->get_url;
-        if (ctx->encrypted && !ctx->esfs_aesgcm_fragment.empty())
-        {
-            if (effective_url.starts_with("https://"))
-                effective_url = "aesgcm://" + effective_url.substr(8);
-            else if (effective_url.starts_with("http://"))
-                effective_url = "aesgcm://" + effective_url.substr(7);
-            effective_url += '#';
-            effective_url += ctx->esfs_aesgcm_fragment;
-        }
-
         ch.send_message(
             ch.id,
-            effective_url,
-            std::optional<std::string>(effective_url),
+            visible_link,  // body: aesgcm (or https) for the visible link
+            std::optional<std::string>(data_url),  // oob/meta sources: always the https bytes location
             std::optional<weechat::channel::file_metadata>(meta)
         );
     }
 
     weechat_printf_date_tags(status_buf, 0, "no_trigger,notify_none",
                   "%sFile uploaded! Sharing link… %s",
-                  weechat_prefix("network"), ctx->get_url.c_str());
+                  weechat_prefix("network"), visible_link.c_str());
 
     return WEECHAT_RC_OK;
 }
