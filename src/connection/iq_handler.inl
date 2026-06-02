@@ -961,9 +961,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 for (const auto &att : ae.attachments)
                                 {
                                     bool is_image = !att.media_type.empty() &&
-                                                    att.media_type.rfind("image/", 0) == 0;
+                                                    att.media_type.starts_with("image/");
                                     bool is_video = !att.media_type.empty() &&
-                                                    att.media_type.rfind("video/", 0) == 0;
+                                                    att.media_type.starts_with("video/");
                                     std::string kind_str = (att.disposition == "attachment") ? "File"
                                                          : is_image ? "Image"
                                                          : is_video ? "Video"
@@ -3271,11 +3271,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 account.pubsub_mam_disco_queries.erase(stanza_id);
 
                 // Check whether this service advertises urn:xmpp:mam:2
-                bool has_mam = false;
-                for (const auto &feat : features)
-                {
-                    if (feat == "urn:xmpp:mam:2") { has_mam = true; break; }
-                }
+                bool has_mam = std::ranges::any_of(features, [](const auto &feat) {
+                    return feat == "urn:xmpp:mam:2";
+                });
 
                 if (has_mam)
                     account.pubsub_mam_services.insert(svc_jid);

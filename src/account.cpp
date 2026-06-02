@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <algorithm>
+#include <ranges>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 #include <libxml/xmlwriter.h>
@@ -819,8 +820,7 @@ std::string weechat::account::save_feed_draft(const xepher::pending_feed_post &p
     // Filename: <account>-<timestamp>.md
     std::string path = fmt::format("{}/{}-{}.md", drafts_dir, name, post.timestamp);
     // Replace colons in timestamp (Windows-safe, also avoids shell issues)
-    for (auto &c : path)
-        if (c == ':') c = '-';
+    std::ranges::for_each(path, [](char &c) { if (c == ':') c = '-'; });
 
     FILE *f = fopen(path.c_str(), "w");
     if (!f)
@@ -1004,7 +1004,7 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     {
         constexpr std::string_view kCommentsPfx2 = "urn:xmpp:microblog:0:comments/";
         const std::string reply_ref_node =
-            (pub_node.rfind(kCommentsPfx2, 0) == 0)
+            (pub_node.starts_with(kCommentsPfx2))
             ? "urn:xmpp:microblog:0"
             : pub_node;
         const std::string reply_feed_key = fmt::format("{}/{}", pub_service, reply_ref_node);
@@ -1021,7 +1021,7 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
 
     // Determine target service/node
     constexpr std::string_view k_comments_pfx = "urn:xmpp:microblog:0:comments/";
-    const bool is_comments_node = (pub_node.rfind(k_comments_pfx, 0) == 0);
+    const bool is_comments_node = (pub_node.starts_with(k_comments_pfx));
     const std::string target_service = (!reply_target_service.empty())
         ? reply_target_service : pub_service;
     const std::string target_node    = (!reply_target_node.empty())

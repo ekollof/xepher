@@ -1028,7 +1028,7 @@ int command__feed(const void *pointer, void *data,
 
         std::string comments_service;
         std::string comments_node;
-        if (replies_uri.rfind("xmpp:", 0) == 0)
+        if (replies_uri.starts_with("xmpp:"))
         {
             auto qpos = replies_uri.find('?');
             comments_service = (qpos == std::string::npos)
@@ -1319,7 +1319,7 @@ int command__feed(const void *pointer, void *data,
             // XEP-0472 §5: replies go to the comments node, not the blog node.
             const std::string replies_uri_for_reply =
                 ptr_account->feed_replies_link_get(pub_feed_key, reply_to_id);
-            if (!replies_uri_for_reply.empty() && replies_uri_for_reply.rfind("xmpp:", 0) == 0)
+            if (!replies_uri_for_reply.empty() && replies_uri_for_reply.starts_with("xmpp:"))
             {
                 auto qpos = replies_uri_for_reply.find('?');
                 reply_target_service = (qpos == std::string::npos)
@@ -1369,7 +1369,7 @@ int command__feed(const void *pointer, void *data,
             if (reply_target_service.empty() || reply_target_node.empty())
             {
                 constexpr std::string_view kCommentsPfx = "urn:xmpp:microblog:0:comments/";
-                if (pub_node.rfind(kCommentsPfx, 0) == 0)
+                if (pub_node.starts_with(kCommentsPfx))
                 {
                     // Already in a comments buffer — post into the same node.
                     reply_target_service = pub_service;
@@ -1418,7 +1418,7 @@ int command__feed(const void *pointer, void *data,
             // post is routed back into the same comments node.
             // The comments node name is "urn:xmpp:microblog:0:comments/<parent-id>".
             constexpr std::string_view kCommentsPfx = "urn:xmpp:microblog:0:comments/";
-            if (reply_to_id.empty() && pub_node.rfind(kCommentsPfx, 0) == 0)
+            if (reply_to_id.empty() && pub_node.starts_with(kCommentsPfx))
             {
                 reply_to_id          = pub_node.substr(kCommentsPfx.size());
                 reply_target_service = pub_service;
@@ -1459,7 +1459,7 @@ int command__feed(const void *pointer, void *data,
          // Embed tags are only supported for top-level microblog posts, not
          // comments (urn:xmpp:microblog:0:comments/<uuid> nodes).
          constexpr std::string_view kCommentsPfx = "urn:xmpp:microblog:0:comments/";
-         const bool is_comments_post = (pub_node.rfind(kCommentsPfx, 0) == 0);
+         const bool is_comments_post = (pub_node.starts_with(kCommentsPfx));
          auto embed_tags = xepher::parse_embed_tags(body);
          if (is_comments_post && !embed_tags.empty())
          {
