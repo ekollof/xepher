@@ -4250,12 +4250,14 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         else
         {
             // text-multi / list-multi: join with " | "
-            for (size_t i = 0; i < values.size(); ++i)
-            {
-                if (i) val_display += std::string(weechat_color("darkgray"))
-                                    + " | " + weechat_color("resetcolor");
-                val_display += values[i];
-            }
+            bool first = true;
+            std::ranges::for_each(values, [&](const auto &v) {
+                if (!first)
+                    val_display += std::string(weechat_color("darkgray"))
+                                   + " | " + weechat_color("resetcolor");
+                first = false;
+                val_display += v;
+            });
         }
 
         // Collect available options for list-single/list-multi

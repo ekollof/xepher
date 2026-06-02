@@ -200,25 +200,25 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
     return device_id != 0 && device_id <= kMaxOmemoDeviceId;
 }
 
-[[nodiscard]] auto parse_uint32(std::string_view value) -> std::optional<std::uint32_t>
+[[nodiscard]] auto parse_uint32(std::string_view value) -> std::expected<std::uint32_t, std::string>
 {
     std::uint32_t parsed = 0;
     const auto *begin = value.data();
     const auto *end = value.data() + value.size();
     const auto [ptr, error] = std::from_chars(begin, end, parsed);
     if (error != std::errc {} || ptr != end)
-        return std::nullopt;
+        return std::unexpected("invalid uint32");
     return parsed;
 }
 
-[[nodiscard]] auto parse_int64(std::string_view value) -> std::optional<std::int64_t>
+[[nodiscard]] auto parse_int64(std::string_view value) -> std::expected<std::int64_t, std::string>
 {
     std::int64_t parsed = 0;
     const auto *begin = value.data();
     const auto *end = value.data() + value.size();
     const auto [ptr, error] = std::from_chars(begin, end, parsed);
     if (error != std::errc {} || ptr != end)
-        return std::nullopt;
+        return std::unexpected("invalid int64");
     return parsed;
 }
 

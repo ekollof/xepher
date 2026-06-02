@@ -160,12 +160,12 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
     const auto devlist = load_string(*this, key_for_axolotl_devicelist(jid));
     if (devlist && !devlist->empty())
     {
-        for (const auto &device : split(*devlist, ';'))
-        {
-            const auto parsed = parse_uint32(device);
-            if (parsed && is_valid_omemo_device_id(*parsed))
-                devices.push_back(*parsed);
-        }
+        std::ranges::copy(
+            split(*devlist, ';')
+            | std::views::transform(parse_uint32)
+            | std::views::filter([](auto p) { return p && is_valid_omemo_device_id(*p); })
+            | std::views::transform([](auto p) { return *p; }),
+            std::back_inserter(devices));
     }
 
     std::ranges::sort(devices);

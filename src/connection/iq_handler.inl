@@ -2938,11 +2938,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (!meta.empty())
                     {
                         meta_s = " [";
-                        for (size_t i = 0; i < meta.size(); ++i)
-                        {
-                            if (i) meta_s += ", ";
-                            meta_s += meta[i];
-                        }
+                        bool first = true;
+                        std::ranges::for_each(meta, [&](const auto &m) {
+                            if (!first) meta_s += ", ";
+                            first = false;
+                            meta_s += m;
+                        });
                         meta_s += "]";
                     }
 

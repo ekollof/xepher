@@ -66,18 +66,19 @@ bool weechat::account::search(weechat::account* &out,
 
     if (casesensitive)
     {
-        for (auto& account : weechat::accounts)
+        for (auto& [_, acc] : weechat::accounts)
         {
-            if (weechat_strcasecmp(account.second.name.data(), name.data()) == 0)
+            if (weechat_strcasecmp(acc.name.data(), name.data()) == 0)
             {
-                out = &account.second;
+                out = &acc;
                 return true;
             }
         }
     }
-    else if (auto account = accounts.find(name); account != accounts.end())
+    else if (auto it = accounts.find(name); it != accounts.end())
     {
-        out = &account->second;
+        auto& [_, acc] = *it;
+        out = &acc;
         return true;
     }
 
