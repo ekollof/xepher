@@ -324,7 +324,7 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     // The session is now established from our side.
     if (!payload_stanza || payload.empty())
     {
-        print_info(buffer, "OMEMO: received KeyTransportElement — session established.");
+        XDEBUG("OMEMO: received KeyTransportElement — session established.");
         return std::nullopt;
     }
 

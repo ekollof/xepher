@@ -437,9 +437,8 @@ static void send_key_transport(omemo &self,
     stanza::xep0384::axolotl_encrypted enc_spec;
     enc_spec.add_header(header_spec);
 
-    print_info(buffer, fmt::format(
-        "OMEMO: sending key-transport to {}/{}",
-        peer_jid, remote_device_id));
+    XDEBUG("OMEMO: sending key-transport to {}/{}",
+           peer_jid, remote_device_id);
     auto msg_sp = stanza::message()
         .type(msg_type)
         .to(dest)
@@ -544,12 +543,11 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
                 }
             }
 
-            if (buffer && !bare_jid.empty() && !is_own_device)
+            if (!bare_jid.empty() && !is_own_device)
             {
                 const auto &lpks = bundle->prekeys;
-                print_info(buffer, fmt::format(
-                    "OMEMO (legacy) received bundle for {}/{} ({} prekeys).",
-                    bare_jid, remote_device_id, lpks.size()));
+                XDEBUG("OMEMO (legacy) received bundle for {}/{} ({} prekeys).",
+                       bare_jid, remote_device_id, lpks.size());
             }
 
             // §2.4: If this bundle was for a MUC occupant, decrement the per-channel
