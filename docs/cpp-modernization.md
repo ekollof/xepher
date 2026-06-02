@@ -1,6 +1,6 @@
 # C++23 Modernization Effort
 
-> **Status**: More structured + ranges::for_each (helpers, lmdb, muc_admin, channel, xhtml, config, message, user, callbacks, command/*, notify, iq deferred); ongoing (as of 2026-06-03)
+> **Status**: More structured (iq MUC ch_it, pending_iq, dl_jid etc.); ongoing (as of 2026-06-03)
 > This document captures the plan, progress, and remaining work for adopting modern C++23 features as recommended in the project's agent instructions.
 
 ## Background
@@ -107,7 +107,7 @@ work (see below). All recommended C++23 features are in active use.
 - Converted side-effect for (const auto &ident : ...) and features in caps hash computation (iq_handler) to `std::ranges::for_each(..., lambda)`.
 - Modernized fixed C-array loop `for (int i=0; i<3; i++)` over csi_activity_hooks to `for (auto &h : csi_activity_hooks)`.
 - Batch continue: structured on emplace returns and finds for users/channels in message_handler, presence_handler (2 sites); safe iq_handler maps (feed_ch, pq, cfg, dl_ch, ptr_channel, whois, mam channel); lmdb_cache caps/peer it->second; account.cpp mam_query and last pgp channel; avatar calculate_hash index loop to ranges::for_each + span. 
-- Additional: modernized for (char &c : str) sanitizers in src/connection/helpers.cpp and lmdb_cache to std::ranges::for_each; san_name char filter in muc_admin to ranges::for_each; smart_filter_nick in channel.cpp with structured; css color table in xhtml.cpp with if-init+structured; config accounts emplace; message iterator; user search with structured; callbacks pending uploads/feed posts; command/account and channel emplaces; notify bookmarks; iq def_it deferred feeds; also added <ranges> where needed. Multiple ccache builds, 27/286 always.
+- Additional: ... ; iq MUC ch_it for disco items (items_query and admin) modernized to if-init + binding + if(type); more pending_iq_jid in iq; dl_jid_it; etc. (channel.inl reverted to clean due to temp brace issue during edit, other modern kept).
 - **Zero remaining classical `std::algorithm` calls** in `.cpp`/`.inl`
   files (lone exception: a commented-out `std::find` in plugin.cpp).
 
@@ -118,7 +118,7 @@ work (see below). All recommended C++23 features are in active use.
 - Initial phases from the original plan are complete; `std::views` adoption and other
   C++23 (structured bindings, more expected, string .contains, ranges for_each) being incrementally extended as surgical
   opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto, mam lmdb lookups, tolower and sanitize transforms).
-- Continued ... ( + more in callbacks uploads, command account/channel emplaces+channel, notify, iq def feeds, etc).
+- Continued ... ( + iq MUC ch_it for items/admin, pending_iq_jid, dl_jid_it; temp revert of one channel.inl edit for brace fix during restructure).
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
@@ -132,7 +132,7 @@ work (see below). All recommended C++23 features are in active use.
 | `std::ranges::to` | 0 | 1+ |
 | `std::span` | 0 | 29 |
 | `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
-| Structured bindings in for/find | few | more (accounts, channels, members, buffer lookups, config, completion, commands, lambdas in channel, command/account etc. across 20+ sites; +10+ previous; +15+ iq pubsub; + users/emplaces in message/presence; more in lmdb/account; + in xhtml, config, message, user, channel, callbacks, command/account+channel, notify, iq) |
+| Structured bindings in for/find | few | more (... + MUC ch_it in iq disco, more in iq pending_iq/dl , etc.) |
 | `.find(X) != npos` | 15+ | fewer (string .contains for existence checks) |
 | `.count(K) > 0` | 5+ | 0 |
 | `std::copy_n` | 4 | 0 |

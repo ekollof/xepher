@@ -2223,30 +2223,30 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         if (from)
         {
             std::string from_bare = ::jid(nullptr, from).bare;
-            auto ch_it = account.channels.find(from_bare);
-            if (ch_it != account.channels.end() &&
-                ch_it->second.type == weechat::channel::chat_type::MUC)
+            if (auto ch_it = account.channels.find(from_bare); ch_it != account.channels.end())
             {
-                xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items_query, "item");
-                while (item)
+                auto& [_, ch] = *ch_it;
+                if (ch.type == weechat::channel::chat_type::MUC)
                 {
-                    const char *item_jid = xmpp_stanza_get_attribute(item, "jid");
-                    if (item_jid)
+                    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items_query, "item");
+                    while (item)
                     {
-                        std::string nick = ::jid(nullptr, item_jid).resource;
-                        if (!nick.empty())
+                        const char *item_jid = xmpp_stanza_get_attribute(item, "jid");
+                        if (item_jid)
                         {
-                            ch_it->second.add_member(nick.c_str(), nullptr, std::nullopt);
+                            std::string nick = ::jid(nullptr, item_jid).resource;
+                            if (!nick.empty())
+                            {
+                                ch.add_member(nick.c_str(), nullptr, std::nullopt);
+                            }
                         }
+                        item = xmpp_stanza_get_next(item);
                     }
-                    item = xmpp_stanza_get_next(item);
-                }
 
                 // docs/planning-muc-omemo.md §2.3: Now that we have the full occupant
                 // list from disco#items, request devicelists for any that have a
                 // visible real_jid (idempotent — the request path early-returns if
                 // already in flight or recently requested).
-                auto& ch = ch_it->second;
                 for (const auto& [occ_id, member] : ch.members)
                 {
                     if (member.real_jid && !member.real_jid->empty())
@@ -2256,6 +2256,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
 
                 return true; // occupant list handled; do not mis-treat nicks as upload services
+                }
             }
         }
 
@@ -2271,21 +2272,23 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (from)
             {
                 std::string from_bare = ::jid(nullptr, from).bare;
-                auto ch_it = account.channels.find(from_bare);
-                if (ch_it != account.channels.end() &&
-                    ch_it->second.type == weechat::channel::chat_type::MUC)
+                if (auto ch_it = account.channels.find(from_bare); ch_it != account.channels.end())
                 {
-                    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(admin_query, "item");
-                    while (item)
+                    auto& [_, ch] = *ch_it;
+                    if (ch.type == weechat::channel::chat_type::MUC)
                     {
-                        const char *nick = xmpp_stanza_get_attribute(item, "nick");
-                        const char *real_jid = xmpp_stanza_get_attribute(item, "jid");
-                        if (nick && real_jid)
+                        xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(admin_query, "item");
+                        while (item)
                         {
-                            ch_it->second.add_member(nick, nullptr,
-                                std::optional<std::string_view>(real_jid));
+                            const char *nick = xmpp_stanza_get_attribute(item, "nick");
+                            const char *real_jid = xmpp_stanza_get_attribute(item, "jid");
+                            if (nick && real_jid)
+                            {
+                                ch.add_member(nick, nullptr,
+                                    std::optional<std::string_view>(real_jid));
+                            }
+                            item = xmpp_stanza_get_next(item);
                         }
-                        item = xmpp_stanza_get_next(item);
                     }
                     // Do not return here — let other admin result processing (if any)
                     // or fallthrough continue; this is discovery only.
@@ -3769,10 +3772,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             // Resolve which JID this looked up — use pending_iq_jid first,
             // fall back to bare `from` of the error response.
             std::string dl_target_jid;
-            auto dl_jid_it = account.omemo.pending_iq_jid.find(id);
-            if (dl_jid_it != account.omemo.pending_iq_jid.end())
+            if (auto dl_jid_it = account.omemo.pending_iq_jid.find(id); dl_jid_it != account.omemo.pending_iq_jid.end())
             {
-                dl_target_jid = dl_jid_it->second;
+                auto& [_, jid] = *dl_jid_it;
+                dl_target_jid = jid;
                 account.omemo.pending_iq_jid.erase(dl_jid_it);
             }
             else if (from)
@@ -3806,10 +3809,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             // A transient or cross-domain error — clear guard entries so next
             // encode attempt can retry.
             std::string dl_target_jid;
-            auto dl_jid_it = account.omemo.pending_iq_jid.find(id);
-            if (dl_jid_it != account.omemo.pending_iq_jid.end())
+            if (auto dl_jid_it = account.omemo.pending_iq_jid.find(id); dl_jid_it != account.omemo.pending_iq_jid.end())
             {
-                dl_target_jid = dl_jid_it->second;
+                auto& [_, jid] = *dl_jid_it;
+                dl_target_jid = jid;
                 account.omemo.pending_iq_jid.erase(dl_jid_it);
             }
             else if (from)
@@ -3881,9 +3884,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         auto resolve_node_owner = [&]() -> std::string {
             std::string owner;
             if (id) {
-                auto it = account.omemo.pending_iq_jid.find(id);
-                if (it != account.omemo.pending_iq_jid.end()) {
-                    owner = it->second;
+                if (auto it = account.omemo.pending_iq_jid.find(id); it != account.omemo.pending_iq_jid.end()) {
+                    auto& [_, j] = *it;
+                    owner = j;
                     account.omemo.pending_iq_jid.erase(it);
                 }
             }
@@ -4023,10 +4026,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 std::string bundle_jid;
                 if (account.omemo && id)
                 {
-                    auto it = account.omemo.pending_iq_jid.find(id);
-                    if (it != account.omemo.pending_iq_jid.end())
+                    if (auto it = account.omemo.pending_iq_jid.find(id); it != account.omemo.pending_iq_jid.end())
                     {
-                        bundle_jid = it->second;
+                        auto& [_, j] = *it;
+                        bundle_jid = j;
                         account.omemo.pending_iq_jid.erase(it);
                     }
                 }
