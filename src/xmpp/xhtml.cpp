@@ -12,6 +12,7 @@
 #include <cctype>
 #include <cstring>
 #include <ranges>
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -51,7 +52,7 @@ std::string css_color_to_weechat(std::string_view css)
     }};
 
     std::string lc = std::string(css);
-    for (auto &c : lc) c = (char)tolower((unsigned char)c);
+    std::ranges::for_each(lc, [](char &c) { c = (char)tolower((unsigned char)c); });
     auto s = lc.find_first_not_of(" \t");
     auto e = lc.find_last_not_of(" \t");
     if (s == std::string::npos) return "";
@@ -118,7 +119,7 @@ std::pair<std::string, std::string> css_style_to_weechat(const char *style)
             if (a == std::string::npos) { str.clear(); return; }
             auto b = str.find_last_not_of(" \t");
             str = str.substr(a, b - a + 1);
-            for (auto &c : str) c = (char)tolower((unsigned char)c);
+            std::ranges::for_each(str, [](char &c) { c = (char)tolower((unsigned char)c); });
         };
         trim(prop);
         trim(val);
@@ -445,7 +446,7 @@ std::string html_strip_to_plain(std::string_view html)
                 std::string entity = std::string(html.substr(i + 1, semi - i - 1));
                 // Lowercase for comparison
                 std::string elc = entity;
-                for (auto &ec : elc) ec = (char)tolower((unsigned char)ec);
+                std::ranges::for_each(elc, [](char &ec) { ec = (char)tolower((unsigned char)ec); });
 
                 if      (elc == "amp")  { out += '&';  i = semi + 1; continue; }
                 else if (elc == "lt")   { out += '<';  i = semi + 1; continue; }

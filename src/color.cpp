@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <ranges>
+#include <algorithm>
 #include <openssl/evp.h>
 #include <weechat/weechat-plugin.h>
 
@@ -77,8 +79,9 @@ XMPP_TEST_EXPORT std::string consistent_color(const std::string& input)
     
     // Normalize input to lowercase for consistency (per XEP-0392)
     std::string normalized = input;
-    for (char& c : normalized)
+    std::ranges::for_each(normalized, [](char& c) {
         c = std::tolower(static_cast<unsigned char>(c));
+    });
     
     double angle = generate_angle(normalized);
     return angle_to_weechat_color(angle);
