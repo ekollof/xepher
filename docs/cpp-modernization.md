@@ -1,6 +1,6 @@
 # C++23 Modernization Effort
 
-> **Status**: More structured + for_each (omemo, user); ongoing (as of 2026-06-03)
+> **Status**: More structured (omemo complete), for_each; ongoing (as of 2026-06-03)
 > This document captures the plan, progress, and remaining work for adopting modern C++23 features as recommended in the project's agent instructions.
 
 ## Background
@@ -118,7 +118,7 @@ work (see below). All recommended C++23 features are in active use.
 - Initial phases from the original plan are complete; `std::views` adoption and other
   C++23 (structured bindings, more expected, string .contains, ranges for_each) being incrementally extended as surgical
   opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto, mam lmdb lookups, tolower and sanitize transforms).
-- Continued ... ( + omemo session ch_it etc; user.cpp nick_hash to for_each; ).
+- Continued ... ( + omemo all ->second to structured (session, codec); user nick_hash for_each; maybe_unused on omemo internals).
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
@@ -132,7 +132,7 @@ work (see below). All recommended C++23 features are in active use.
 | `std::ranges::to` | 0 | 1+ |
 | `std::span` | 0 | 29 |
 | `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
-| Structured bindings in for/find | few | more (... + omemo, etc.); for_each in user hash. |
+| Structured bindings in for/find | few | more (all omemo ->second gone, etc.); for_each added. |
 | `.find(X) != npos` | 15+ | fewer (string .contains for existence checks) |
 | `.count(K) > 0` | 5+ | 0 |
 | `std::copy_n` | 4 | 0 |

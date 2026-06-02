@@ -338,8 +338,8 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     }
     std::array<std::uint8_t, 12> iv {};
     std::ranges::copy_n(iv_vec.begin(), 12, iv.begin());
-    const auto result = axolotl_omemo_decrypt(legacy_transport_key->first, iv,
-                                             legacy_transport_key->second, payload);
+    const auto& [lkey, ltag] = *legacy_transport_key;
+    const auto result = axolotl_omemo_decrypt(lkey, iv, ltag, payload);
     if (!result)
     {
         print_error(buffer, "OMEMO (legacy) payload decryption failed.");
@@ -519,12 +519,13 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
                 continue;
             }
 
-            const auto encoded_transport = base64_encode(*account->context, transport->first);
+            const auto& [tkey, is_kex] = *transport;
+            const auto encoded_transport = base64_encode(*account->context, tkey);
             // Flat legacy layout: add <key> directly under <header>
             header_spec.add_key(stanza::xep0384::axolotl_key(
                 fmt::format("{}", *remote_device_id),
                 encoded_transport,
-                transport->second));
+                is_kex));
             added_keys = true;
         }
 
@@ -669,11 +670,12 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
                 continue;
             }
 
-            const auto encoded_transport = base64_encode(*account->context, transport->first);
+            const auto& [tkey, is_kex] = *transport;
+            const auto encoded_transport = base64_encode(*account->context, tkey);
             keys_for_this.add_key(stanza::xep0384::axolotl_key(
                 fmt::format("{}", *remote_device_id),
                 encoded_transport,
-                transport->second));
+                is_kex));
             added = true;
         }
 

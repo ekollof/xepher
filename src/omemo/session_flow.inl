@@ -354,11 +354,12 @@ static void send_key_transport(omemo &self,
         if (!target_transport)
             return false;
 
-        const auto target_encoded_transport = base64_encode(*account.context, target_transport->first);
+        const auto& [tkey, is_kex] = *target_transport;
+        const auto target_encoded_transport = base64_encode(*account.context, tkey);
         header_spec.add_key(stanza::xep0384::axolotl_key(
             fmt::format("{}", target_device_id),
             target_encoded_transport,
-            target_transport->second));
+            is_kex));
         return true;
     };
 
