@@ -1515,10 +1515,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                         dim, rst, tags.c_str());
                                 }
 
-                                for (const auto &enclosure : ae.enclosures)
+                                std::ranges::for_each(ae.enclosures, [&](const auto &enclosure) {
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sAttachment:%s %s",
                                         dim, rst, enclosure.c_str());
+                                });
 
                                 for (const auto &att : ae.attachments)
                                 {
@@ -4070,8 +4071,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
 
     std::vector<std::string> sorted_features;
     sorted_features.reserve(advertised_features.size());
-    for (const auto feature : advertised_features)
-        sorted_features.emplace_back(feature);
+    std::ranges::for_each(advertised_features, [&](const auto &f) { sorted_features.emplace_back(f); });
     std::ranges::sort(sorted_features);
 
     for (const auto &ns : sorted_features)

@@ -1,6 +1,6 @@
 # C++23 Modernization Effort
 
-> **Status**: Structured complete for map iters in .cpp/.inl; for_each; views tokenization + search; ongoing.
+> **Status**: Structured complete for map iters in .cpp/.inl; for_each + any_of; views tokenization + search; ongoing.
 > This document captures the plan, progress, and remaining work for adopting modern C++23 features as recommended in the project's agent instructions.
 
 ## Background
@@ -19,7 +19,7 @@ specific "C++23 Memory Safety Features to Leverage" was only partial:
 
 As of 2026-06-02, the initial gaps (span, ranges algos, expected, views) were closed, with zero remaining
 classical `std::algorithm` calls in `.cpp`/`.inl` files. Views adoption was further extended in subsequent
-work (see below; e.g. split tokenization, search replacement). All recommended C++23 features are in active use.
+work (see below; e.g. split tokenization, search replacement, for_each/any_of). All recommended C++23 features are in active use.
 
 ## Goals
 
@@ -112,6 +112,8 @@ work (see below; e.g. split tokenization, search replacement). All recommended C
   files (lone exception: a commented-out `std::find` in plugin.cpp).
 - `std::views::split` + range-for modernization of manual pointer/char walk tokenizer (in `user.cpp:compute_nick_color` for weechat nick_colors comma list; matches the established split style from omemo/internal_prelude).
 - Replaced manual double-for byte search loop (case-insens head/body scan in OG fetch write-cb) with reuse of existing `ifinds` (which uses `std::ranges::search` + tolower predicate) in `connection/helpers.cpp`. Removed duplication, one call site.
+- Side-effect `std::ranges::for_each` for simple print loops over enclosures (in feed rendering paths in both `message_handler.inl` and `iq_handler.inl`); `std::ranges::any_of` replaced manual "any + flag + break" loop for allowed HTTP header name check (XEP-0363 upload header forwarding) in `iq_handler.inl`.
+- `std::ranges::for_each` + emplace for advertised features list copy (string_view elements) before sort in caps generation (`message_handler.inl`); direct `ranges::copy` not used due to conversion constraints (emplace path matches prior manual).
 
 ## Current Status (2026-06-02)
 
@@ -120,12 +122,13 @@ work (see below; e.g. split tokenization, search replacement). All recommended C
 - Initial phases from the original plan are complete; `std::views` adoption and other
   C++23 (structured bindings, more expected, string .contains, ranges for_each) being incrementally extended as surgical
   opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto, mam lmdb lookups, tolower and sanitize transforms).
-- Continued ... ( + omemo complete; user for_each + views split tokenization; helpers search modern; all ->second in .cpp/.inl gone (only .hh left)).
+- Continued ... ( + omemo complete; user for_each + views split tokenization; helpers search modern; connection handlers for_each/any_of on lists; all ->second in .cpp/.inl gone (only .hh left)).
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
 - `std::span` is used wherever owned buffers pass through C API boundaries.
 - `std::ranges::search` + predicate established for case-insens (via ifinds helper).
+- `std::ranges::for_each` and `any_of` used for side-effect iteration and queries on containers (headers, enclosures, features lists).
 
 **Adoption counts** (approximate):
 | Feature | Before | After |
@@ -134,7 +137,7 @@ work (see below; e.g. split tokenization, search replacement). All recommended C
 | `std::views::` | 0 | 9+ (split x4 including nick color tokenization, join_with attempt, take, filter/transform pipelines x3+, etc.) |
 | `std::ranges::to` | 0 | 1+ |
 | `std::span` | 0 | 29 |
-| `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) + 1 manual search replaced by ranges::search via ifinds |
+| `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) + 1 manual search replaced by ranges::search via ifinds + for_each/any_of on lists (enclosures, headers, features) |
 | Structured bindings in for/find | few | more (all ->second in .cpp/.inl eliminated). |
 | `.find(X) != npos` | 15+ | fewer (string .contains for existence checks) |
 | `.count(K) > 0` | 5+ | 0 |

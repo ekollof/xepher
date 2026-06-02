@@ -952,10 +952,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                         dim, rst, tags.c_str());
                                 }
 
-                                for (const auto &enclosure : ae.enclosures)
+                                std::ranges::for_each(ae.enclosures, [&](const auto &enclosure) {
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "  %sAttachment:%s %s",
                                         dim, rst, enclosure.c_str());
+                                });
 
                                 for (const auto &att : ae.attachments)
                                 {
@@ -1206,15 +1207,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (name && value)
                     {
                         // Only forward headers explicitly listed in §9.2
-                        bool allowed = false;
-                        for (const auto &allowed_name : allowed_headers)
-                        {
-                            if (weechat_strcasecmp(name, allowed_name.data()) == 0)
-                            {
-                                allowed = true;
-                                break;
-                            }
-                        }
+                        bool allowed = std::ranges::any_of(allowed_headers, [&](const auto& allowed_name) {
+                            return weechat_strcasecmp(name, allowed_name.data()) == 0;
+                        });
                         if (allowed)
                         {
                             // Strip CR and LF to prevent HTTP header injection
@@ -1710,8 +1705,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     headers = curl_slist_append(
                         headers,
                         fmt::format("Content-Type: {}", content_type_copy).c_str());
-                    for (const auto &hdr : put_headers_copy)
+                    std::ranges::for_each(put_headers_copy, [&](const auto &hdr) {
                         headers = curl_slist_append(headers, hdr.c_str());
+                    });
                     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
                     CURLcode res = curl_easy_perform(curl);
