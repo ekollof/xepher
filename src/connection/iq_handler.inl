@@ -383,10 +383,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         bool is_whois = false;
         if (id)
         {
-            auto it = account.whois_queries.find(id);
-            if (it != account.whois_queries.end())
+            if (auto it = account.whois_queries.find(id); it != account.whois_queries.end())
             {
-                target_buf = it->second.buffer;
+                auto& [_, w] = *it;
+                target_buf = w.buffer;
                 account.whois_queries.erase(it);
                 is_whois = true;
             }
@@ -565,7 +565,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 if (inserted)
                     account.feed_open_register(feed_key);
                 {
-                    weechat::channel &feed_ch = ch_it->second;
+                    auto& [_, feed_ch] = *ch_it;
 
                     // XEP-0059 RSM: read <set> metadata BEFORE rendering items so we
                     // can detect a stale oldest-page result and skip rendering it.
@@ -3394,9 +3394,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                 if (category == "conference")
                 {
-                    auto ptr_channel = account.channels.find(from);
-                    if (ptr_channel != account.channels.end())
-                        ptr_channel->second.update_name(name.data());
+                    if (auto ptr_channel = account.channels.find(from); ptr_channel != account.channels.end())
+                    {
+                        auto& [_, ch] = *ptr_channel;
+                        ch.update_name(name.data());
+                    }
                 }
 
                 // XEP-0060: record pubsub service components discovered at
@@ -3622,12 +3624,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                                       (intext && intext[0]) ? "/" : "",
                                                       (intext && intext[0]) ? intext : "");
                         weechat_command(account.buffer, cmd.c_str());
-                        auto ptr_channel = account.channels.find(jid);
-                        struct t_gui_buffer *ptr_buffer =
-                            ptr_channel != account.channels.end()
-                            ? ptr_channel->second.buffer : nullptr;
-                        if (ptr_buffer)
-                            ptr_channel->second.update_name(name);
+                        struct t_gui_buffer *ptr_buffer = nullptr;
+                        if (auto ptr_channel = account.channels.find(jid); ptr_channel != account.channels.end())
+                        {
+                            auto& [_, ch] = *ptr_channel;
+                            ptr_buffer = ch.buffer;
+                            if (ptr_buffer)
+                                ch.update_name(name);
+                        }
                     }
                 }
 
@@ -3782,10 +3786,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 bool first_legacy_miss = account.omemo.missing_axolotl_devicelist.insert(dl_target_jid).second;
 
-                auto dl_ch_it = account.channels.find(dl_target_jid);
-                if (dl_ch_it != account.channels.end())
+                if (auto dl_ch_it = account.channels.find(dl_target_jid); dl_ch_it != account.channels.end())
                 {
-                    auto &dl_ch = dl_ch_it->second;
+                    auto& [_, dl_ch] = *dl_ch_it;
                     if (!dl_ch.pending_omemo_messages.empty() && first_legacy_miss)
                     {
                         weechat_printf(dl_ch.buffer,
@@ -3837,10 +3840,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     // devicelist that originally failed with precondition-not-met.
     if (type && weechat_strcasecmp(type, "result") == 0 && account.omemo && id)
     {
-        auto cfg_it = account.omemo.pending_configure_retry.find(id);
-        if (cfg_it != account.omemo.pending_configure_retry.end())
+        if (auto cfg_it = account.omemo.pending_configure_retry.find(id); cfg_it != account.omemo.pending_configure_retry.end())
         {
-            const std::string retry_node = cfg_it->second;
+            auto& [_, retry_node] = *cfg_it;
             account.omemo.pending_configure_retry.erase(cfg_it);
 
             weechat_printf(account.buffer,
@@ -4089,11 +4091,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             stanza, "fin", "urn:xmpp:mam:2");
         if (pmam_fin && id && type && weechat_strcasecmp(type, "result") == 0)
         {
-            auto pq_it = account.pubsub_mam_queries.find(id);
-            if (pq_it != account.pubsub_mam_queries.end())
+            if (auto pq_it = account.pubsub_mam_queries.find(id); pq_it != account.pubsub_mam_queries.end())
             {
-                std::string svc_jid   = pq_it->second.service;
-                std::string node_name = pq_it->second.node;
+                auto& [_, pq] = *pq_it;
+                std::string svc_jid   = pq.service;
+                std::string node_name = pq.node;
                 account.pubsub_mam_queries.erase(pq_it);
 
                 std::string feed_key = fmt::format("{}/{}", svc_jid, node_name);
@@ -4164,20 +4166,20 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 return true;
             }
             
-            auto channel = account.channels.find(mam_query.with.data());
-
-            set__last = set ? xmpp_stanza_get_child_by_name(set, "last") : nullptr;
-            set__last__text = set__last
-                ? xmpp_stanza_get_text(set__last) : nullptr;
-
-            if (channel != account.channels.end())
+            if (auto channel_it = account.channels.find(mam_query.with.data()); channel_it != account.channels.end())
             {
+                auto& [_, ch] = *channel_it;
+
+                set__last = set ? xmpp_stanza_get_child_by_name(set, "last") : nullptr;
+                set__last__text = set__last
+                    ? xmpp_stanza_get_text(set__last) : nullptr;
+
                 // Only page when the result set is not complete.
                 // Some servers include <last/> even on the final page.
                 if (set__last__text && !fin_is_complete)
                 {
                     account.mam_deferred_pages.push_back({
-                        channel->second.id,
+                        ch.id,
                         mam_query.id,
                         mam_query.start,
                         mam_query.end,
@@ -4188,17 +4190,17 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 else
                 {
                     // MAM fetch complete, update last fetch timestamp
-                    channel->second.last_mam_fetch = time(nullptr);
-                    account.mam_cache_set_last_timestamp(channel->second.id, channel->second.last_mam_fetch);
+                    ch.last_mam_fetch = time(nullptr);
+                    account.mam_cache_set_last_timestamp(ch.id, ch.last_mam_fetch);
                     // Persist this PM JID so it can be restored on the next full restart
-                    if (channel->second.type == weechat::channel::chat_type::PM)
-                        account.pm_open_register(channel->second.id);
+                    if (ch.type == weechat::channel::chat_type::PM)
+                        account.pm_open_register(ch.id);
                     account.mam_query_remove(mam_query.id);
                     account.release_mam_slot();
 
                     // Print "History loaded" completion banner matching the fetch banner
                     // printed at the start of fetch_mam().
-                    if (channel->second.buffer)
+                    if (ch.buffer)
                     {
                         char start_str[32] = "the beginning";
                         char end_str[32]   = "now";
@@ -4214,7 +4216,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             struct tm *lt = localtime(&tval);
                             strftime(end_str, sizeof(end_str), "%Y-%m-%d %H:%M", lt);
                         }
-                        weechat_printf_date_tags(channel->second.buffer, 0,
+                        weechat_printf_date_tags(ch.buffer, 0,
                                                  "xmpp_mam_fin,notify_none,no_log",
                                                  "%sHistory loaded: %s → %s",
                                                  weechat_prefix("network"),

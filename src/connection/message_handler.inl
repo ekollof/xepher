@@ -128,17 +128,21 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             {
                 if (weechat_strcasecmp(type, "groupchat") == 0)
                 {
-                    channel = &account.channels.emplace(
+                    auto [it_muc, _ins_muc] = account.channels.emplace(
                         std::make_pair(from_bare, weechat::channel {
                                 account, weechat::channel::chat_type::MUC, from_bare, from_bare
-                            })).first->second;
+                            }));
+                    auto& [_, ch_muc] = *it_muc;
+                    channel = &ch_muc;
                 }
                 else
                 {
-                    channel = &account.channels.emplace(
+                    auto [it_pm, _ins_pm] = account.channels.emplace(
                         std::make_pair(from_bare, weechat::channel {
                                 account, weechat::channel::chat_type::PM, from_bare, from_bare
-                            })).first->second;
+                            }));
+                    auto& [_, ch_pm] = *it_pm;
+                    channel = &ch_pm;
                 }
             }
             channel->update_topic(intext ? intext : "", from, 0);
@@ -178,11 +182,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             if (!user)
             {
                 auto name = from;
-                user = &account.users.emplace(std::piecewise_construct,
+                auto [it_usr, _ins_usr] = account.users.emplace(std::piecewise_construct,
                                               std::forward_as_tuple(name),
                                               std::forward_as_tuple(&account, channel, name,
                                                                     weechat_strcasecmp(from_bare, channel->id.data()) == 0
-                                                                    ? nick : from)).first->second;
+                                                                    ? nick : from));
+                auto& [_, u] = *it_usr;
+                user = &u;
             }
 
             // XEP-0085 §5.1: record that this JID supports chat states so we
@@ -705,9 +711,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
                         struct t_gui_buffer *chk_buf = nullptr;
                         if (channel_jid_chk) {
-                            auto it = account.channels.find(channel_jid_chk);
-                            if (it != account.channels.end())
-                                chk_buf = it->second.buffer;
+                            if (auto it = account.channels.find(channel_jid_chk); it != account.channels.end())
+                            {
+                                auto& [_, ch] = *it;
+                                chk_buf = ch.buffer;
+                            }
                         }
 
                         bool already_displayed = false;
@@ -1129,7 +1137,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         // Find the channel for this peer and clear its unreads
                         // up to and including last_id (or all if id unknown)
                         weechat::channel *ch = nullptr;
-                        { auto it = account.channels.find(peer_jid); ch = it != account.channels.end() ? &it->second : nullptr; }
+                        if (auto it = account.channels.find(peer_jid); it != account.channels.end())
+                        {
+                            auto& [_, c] = *it;
+                            ch = &c;
+                        }
                         if (!ch)
                             continue;
 
@@ -1793,22 +1805,26 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     channel = parent_channel;
     if (!channel)
     {
-        channel = &account.channels.emplace(
+        auto [it_ch, _ins_ch] = account.channels.emplace(
             std::make_pair(channel_id, weechat::channel {
                     account,
                     weechat_strcasecmp(type, "groupchat") == 0
                         ? weechat::channel::chat_type::MUC : weechat::channel::chat_type::PM,
                     channel_id, channel_id
-                })).first->second;
+                }));
+        auto& [_, ch_new] = *it_ch;
+        channel = &ch_new;
     }
     if (channel && channel->type == weechat::channel::chat_type::MUC
         && weechat_strcasecmp(type, "chat") == 0)
     {
-        channel = &account.channels.emplace(
+        auto [it_pm, _ins_pm] = account.channels.emplace(
             std::make_pair(pm_id, weechat::channel {
                     account, weechat::channel::chat_type::PM,
                     pm_id, pm_id
-                })).first->second;
+                }));
+        auto& [_, ch_pm] = *it_pm;
+        channel = &ch_pm;
     }
 
     // XEP-0333 §5 Business Rules: MUST NOT send Displayed Markers for outgoing
@@ -3047,9 +3063,11 @@ message_handler_after_omemo:
     if (!date && !is_from_self && channel)
     {
         std::string_view channel_notify;
-        auto bm_it = account.bookmarks.find(channel->id);
-        if (bm_it != account.bookmarks.end())
-            channel_notify = bm_it->second.notify_setting;
+        if (auto bm_it = account.bookmarks.find(channel->id); bm_it != account.bookmarks.end())
+        {
+            auto& [_, bm] = *bm_it;
+            channel_notify = bm.notify_setting;
+        }
 
         if (channel_notify == "never")
         {

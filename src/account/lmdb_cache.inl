@@ -847,10 +847,10 @@ void weechat::account::caps_cache_save(const std::string& verification_hash,
 bool weechat::account::caps_cache_get(const std::string& verification_hash,
                                        std::vector<std::string>& features)
 {
-    auto it = caps_cache.find(verification_hash);
-    if (it != caps_cache.end())
+    if (auto it = caps_cache.find(verification_hash); it != caps_cache.end())
     {
-        features = it->second;
+        auto& [_, fs] = *it;
+        features = fs;
         return true;
     }
     return false;
@@ -885,7 +885,7 @@ bool weechat::account::peer_supports_feature(const std::string& jid,
     if (it == peer_features.end())
         return false;
 
-    const auto &features = it->second;
+    const auto& [_, features] = *it;
     return features.contains(feature);
 }
 

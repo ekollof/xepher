@@ -347,12 +347,14 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             if (!user)
             {
                 auto name = binding->from->full.data();
-                user = &account.users.emplace(std::piecewise_construct,
+                auto [it_u, _ins_u] = account.users.emplace(std::piecewise_construct,
                                               std::forward_as_tuple(name),
                                               std::forward_as_tuple(&account, channel, name,
                                                                     channel && weechat_strcasecmp(binding->from->bare.data(), channel->id.data()) == 0
                                                                     ? (binding->from->resource.size() ? binding->from->resource.data() : "")
-                                                                    : binding->from->full.data())).first->second;
+                                                                    : binding->from->full.data()));
+                auto& [_, u] = *it_u;
+                user = &u;
             }
             auto status = binding->status();
             auto show = binding->show();
@@ -476,12 +478,14 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         if (!user)
         {
             auto name = binding->from->full.data();
-            user = &account.users.emplace(std::piecewise_construct,
+            auto [it_u, _ins_u] = account.users.emplace(std::piecewise_construct,
                                           std::forward_as_tuple(name),
                                           std::forward_as_tuple(&account, channel, name,
                                                                 channel && weechat_strcasecmp(binding->from->bare.data(), channel->id.data()) == 0
                                                                 ? (binding->from->resource.size() ? binding->from->resource.data() : "")
-                                                                : binding->from->full.data())).first->second;
+                                                                : binding->from->full.data()));
+            auto& [_, u] = *it_u;
+            user = &u;
         }
         auto status = binding->status();
         auto show = binding->show();

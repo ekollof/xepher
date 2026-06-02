@@ -241,7 +241,8 @@ bool weechat::account::mam_query_search(weechat::account::mam_query* out,
 
     if (auto mam_query = mam_queries.find(id); mam_query != mam_queries.end())
     {
-        *out = mam_query->second;  // Dereference pointer to copy the query data
+        auto& [_, q] = *mam_query;
+        *out = q;  // copy the query data
         return true;
     }
 
@@ -784,10 +785,10 @@ void weechat::account::load_pgp_keys()
             std::string keyid = parts[1];
             
             // Find or create channel and add key
-            auto channel_it = channels.find(jid);
-            if (channel_it != channels.end())
+            if (auto channel_it = channels.find(jid); channel_it != channels.end())
             {
-                channel_it->second.pgp.ids.emplace(keyid);
+                auto& [_, ch] = *channel_it;
+                ch.pgp.ids.emplace(keyid);
             }
         }
         if (parts)

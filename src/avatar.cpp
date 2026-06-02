@@ -31,8 +31,9 @@ std::string weechat::avatar::calculate_hash(std::span<const uint8_t> data)
 
     std::string hex;
     hex.reserve(hash_len * 2);
-    for (unsigned int i = 0; i < hash_len; i++)
-        hex += fmt::format("{:02x}", hash[i]);
+    std::ranges::for_each(std::span<const unsigned char>(hash, hash_len), [&](unsigned char b) {
+        hex += fmt::format("{:02x}", b);
+    });
     
     return hex;
 }
