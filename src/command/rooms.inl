@@ -303,7 +303,8 @@ int command__upload(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
     
-    weechat_printf(buffer, "%sRequesting upload slot for %s (%ld bytes)...",
+    weechat_printf_date_tags(buffer, 0, "no_trigger,notify_none",
+                  "%sRequesting upload slot for %s (%ld bytes)...",
                   weechat_prefix("network"), filename.c_str(), filesize);
     
     // Generate request ID

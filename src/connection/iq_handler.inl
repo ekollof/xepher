@@ -1231,7 +1231,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             
             if (put_url && get_url)
             {
-                weechat_printf(account.buffer, "%sUpload slot received, uploading file...",
+                weechat_printf_date_tags(account.buffer, 0, "no_trigger,notify_none",
+                              "%sUpload slot received, uploading file...",
                               weechat_prefix("network"));
                 
                 // Verify file exists (non-blocking, no FILE* needed)

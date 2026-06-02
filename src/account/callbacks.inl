@@ -337,7 +337,8 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         // All uploads done — build and publish the Atom entry
         xepher::pending_feed_post finished_post = std::move(post);
         ptr_account->pending_feed_posts.erase(post_it);
-        weechat_printf(finished_post.buffer, "%sAll embeds uploaded, publishing post…",
+        weechat_printf_date_tags(finished_post.buffer, 0, "no_trigger,notify_none",
+                       "%sAll embeds uploaded, publishing post…",
                        weechat_prefix("network"));
         ptr_account->build_and_publish_post(finished_post);
         return WEECHAT_RC_OK;
@@ -361,7 +362,8 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         return WEECHAT_RC_OK;
     }
 
-    weechat_printf(ptr_account->buffer, "%sFile uploaded! Sharing link…",
+    weechat_printf_date_tags(ptr_account->buffer, 0, "no_trigger,notify_none",
+                  "%sFile uploaded! Sharing link…",
                   weechat_prefix("network"));
 
     if (auto channel_it = ptr_account->channels.find(ctx->channel_id); channel_it != ptr_account->channels.end())
