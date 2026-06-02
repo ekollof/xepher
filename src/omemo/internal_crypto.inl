@@ -12,7 +12,7 @@ struct digest_context {
     }
 };
 
-[[nodiscard]] auto aes_mode_for_signal(int cipher) -> std::optional<int>
+[[nodiscard]] auto aes_mode_for_signal(int cipher) -> std::expected<int, std::string>
 {
     switch (cipher)
     {
@@ -21,7 +21,7 @@ struct digest_context {
         case SG_CIPHER_AES_CBC_PKCS5:
             return GCRY_CIPHER_MODE_CBC;
         default:
-            return std::nullopt;
+            return std::unexpected("unknown cipher mode");
     }
 }
 

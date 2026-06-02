@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include <optional>
+#include <expected>
 #include <span>
 
 namespace weechat
@@ -47,7 +48,7 @@ namespace weechat
         static std::string get_cache_dir(const account& acc);
         
         // Load avatar from cache
-        static std::optional<data> load_from_cache(const account& acc, 
+        static std::expected<data, std::string> load_from_cache(const account& acc, 
                                                     const std::string& hash);
         
         // Save avatar to cache

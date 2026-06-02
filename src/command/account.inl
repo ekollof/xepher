@@ -197,9 +197,9 @@ void command__account_list(int argc, char **argv)
         {
             weechat_printf(nullptr, "");
             weechat_printf(nullptr, _("All accounts:"));
-            for (auto& ptr_account2 : weechat::accounts)
+            for (auto& [_, acc2] : weechat::accounts)
             {
-                command__display_account(&ptr_account2.second);
+                command__display_account(&acc2);
             }
         }
         else

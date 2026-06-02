@@ -7,6 +7,7 @@
 #include <fstream>
 #include <span>
 #include <ranges>
+#include <expected>
 #include <string>
 #include <openssl/evp.h>
 #include <openssl/bio.h>
@@ -51,17 +52,17 @@ std::string weechat::avatar::get_cache_dir(const account& acc)
     return cache_dir;
 }
 
-std::optional<weechat::avatar::data> weechat::avatar::load_from_cache(
+std::expected<weechat::avatar::data, std::string> weechat::avatar::load_from_cache(
     const account& acc, const std::string& hash)
 {
     std::string cache_dir = get_cache_dir(acc);
     if (cache_dir.empty())
-        return std::nullopt;
+        return std::unexpected("no cache dir");
     
     std::string filepath = cache_dir + "/" + hash + ".dat";
     std::ifstream file(filepath, std::ios::binary);
     if (!file)
-        return std::nullopt;
+        return std::unexpected("open failed");
     
     data avatar_data;
     
