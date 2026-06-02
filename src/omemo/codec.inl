@@ -481,7 +481,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
             // BTBV trust gate: skip devices that are UNTRUSTED or UNDECIDED
             {
                 const auto trust = load_tofu_trust(*this, recipient_jid, *remote_device_id);
-                if (trust == omemo_trust::UNTRUSTED || trust == omemo_trust::UNDECIDED)
+                if (trust && (*trust == omemo_trust::UNTRUSTED || *trust == omemo_trust::UNDECIDED))
                 {
                     XDEBUG("omemo encode: skipping device {}/{} (trust={})",
                            recipient_jid, *remote_device_id,
@@ -638,7 +638,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
 
             {
                 const auto trust = load_tofu_trust(*this, recipient_jid, *remote_device_id);
-                if (trust == omemo_trust::UNTRUSTED || trust == omemo_trust::UNDECIDED)
+                if (trust && (*trust == omemo_trust::UNTRUSTED || *trust == omemo_trust::UNDECIDED))
                     continue;
             }
 

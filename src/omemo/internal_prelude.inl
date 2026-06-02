@@ -264,17 +264,17 @@ void store_tofu_trust(omemo &self,
 [[nodiscard]] auto load_tofu_trust(omemo &self,
                                    std::string_view jid,
                                    std::uint32_t device_id)
-    -> std::optional<omemo_trust>
+    -> std::expected<omemo_trust, std::string>
 {
     if (!self.db_env || jid.empty() || device_id == 0)
-        return std::nullopt;
+        return std::unexpected("no db or invalid device");
     auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
     std::string_view value;
     if (!self.dbi.omemo.get(txn, key_for_tofu_trust(jid, device_id), value))
-        return std::nullopt;
+        return std::unexpected("trust not found");
     const auto parsed = parse_uint32(value);
     if (!parsed || *parsed > 3)
-        return std::nullopt;
+        return std::unexpected("bad trust value");
     return static_cast<omemo_trust>(*parsed);
 }
 

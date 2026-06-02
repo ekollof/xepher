@@ -784,10 +784,10 @@ std::optional<weechat::channel::member*> weechat::channel::member_search(const c
     if (!id)
         return std::nullopt;
 
-    for (auto& ptr_member : members)
+    for (auto& [_, m] : members)
     {
-        if (weechat_strcasecmp(ptr_member.second.id.c_str(), id) == 0)
-            return &ptr_member.second;
+        if (weechat_strcasecmp(m.id.c_str(), id) == 0)
+            return &m;
     }
 
     return std::nullopt;

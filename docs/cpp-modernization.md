@@ -102,7 +102,8 @@ work (see below). All recommended C++23 features are in active use.
 - **`std::copy_n` → `std::ranges::copy`/`copy_n`**: 4 locations in
   internal_crypto.inl
 - **Structured bindings**: modernized several map iterations and find results
-  (e.g. `for (auto& [_, acc] : accounts)`, `auto& [_, acc] = *it`).
+  (e.g. `for (auto& [_, acc] : accounts)`, `auto& [_, acc] = *it`, similar in
+  channel::members, disconnect loops, timer callbacks, save_pgp etc.).
 - **Zero remaining classical `std::algorithm` calls** in `.cpp`/`.inl`
   files (lone exception: a commented-out `std::find` in plugin.cpp).
 
@@ -121,12 +122,12 @@ work (see below). All recommended C++23 features are in active use.
 **Adoption counts** (approximate):
 | Feature | Before | After |
 |---------|--------|-------|
-| `std::expected` | 0 | 4 (b64, pkcs7, 2x parse_*) |
+| `std::expected` | 0 | 5 (b64, pkcs7, 2x parse_*, load_tofu_trust) |
 | `std::views::` | 0 | 8+ (split x3, join_with attempt, take, filter/transform pipelines x3+, etc.) |
 | `std::ranges::to` | 0 | 1+ |
 | `std::span` | 0 | 29 |
 | `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
-| Structured bindings in for/find | few | more (accounts, iters, etc.) |
+| Structured bindings in for/find | few | more (accounts, channels, members, etc. across 10+ sites) |
 | `.find(X) != npos` | 15+ | 0 |
 | `.count(K) > 0` | 5+ | 0 |
 | `std::copy_n` | 4 | 0 |
@@ -138,8 +139,8 @@ work (see below). All recommended C++23 features are in active use.
 - **Manual index loops** over non-standard data (C arrays, opaque handles) remain
   where necessary; converting them would add indirection without benefit.
 - **`std::expected`** can be adopted further in error-returning functions — the
-  pattern is established, adoption should be incremental (parse_* done; more in
-  decode/load paths possible without rippling too far).
+  pattern is established, adoption should be incremental (parse_* , load_tofu_trust done; more in
+  decode/load paths possible without rippling too far, e.g. cache loads).
 - **Further `std::views`** opportunities exist for other list comprehensions, string
   tokenization, or filtering side-effect loops (e.g. device lists, MUC members, etc.).
   Continue the surgical pattern: prefer views pipelines over manual loops or eager

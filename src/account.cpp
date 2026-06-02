@@ -552,13 +552,13 @@ void weechat::account::disconnect(int reconnect)
          */
         if (buffer)
             weechat_nicklist_remove_all(buffer);
-        for (auto& ptr_channel : channels)
+        for (auto& [_, ch] : channels)
         {
-            if (ptr_channel.second.buffer)
+            if (ch.buffer)
             {
-                weechat_nicklist_remove_all(ptr_channel.second.buffer);
+                weechat_nicklist_remove_all(ch.buffer);
                 weechat_printf(
-                    ptr_channel.second.buffer,
+                    ch.buffer,
                     _("%s%s: disconnected from account"),
                     weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
             }
@@ -626,9 +626,9 @@ void weechat::account::disconnect(int reconnect)
 
 void weechat::account::disconnect_all()
 {
-    for (auto& account : accounts)
+    for (auto& [_, acc] : accounts)
     {
-        account.second.disconnect(0);
+        acc.disconnect(0);
     }
 }
 
@@ -725,22 +725,22 @@ int weechat::account::timer_cb(const void *pointer, void *data, int remaining_ca
         if (accounts.empty()) 
             return WEECHAT_RC_ERROR;
 
-        for (auto& ptr_account : accounts)
+        for (auto& [_, acc] : accounts)
         {
-            if (ptr_account.second.is_connected
-                && (xmpp_conn_is_connecting(ptr_account.second.connection)
-                    || xmpp_conn_is_connected(ptr_account.second.connection)))
-                ptr_account.second.connection.process(ptr_account.second.context, 10);
-            else if (ptr_account.second.disconnected);
-            else if (ptr_account.second.reconnect_start > 0
-                     && ptr_account.second.reconnect_start < time(nullptr))
+            if (acc.is_connected
+                && (xmpp_conn_is_connecting(acc.connection)
+                    || xmpp_conn_is_connected(acc.connection)))
+                acc.connection.process(acc.context, 10);
+            else if (acc.disconnected);
+            else if (acc.reconnect_start > 0
+                     && acc.reconnect_start < time(nullptr))
             {
                 // Clear reconnect_start BEFORE calling connect() so that a
                 // failed connect() does not cause an immediate re-fire on the
                 // next timer tick. The next disconnect() call will set a new
                 // (longer) reconnect_start via the exponential backoff.
-                ptr_account.second.reconnect_start = 0;
-                ptr_account.second.connect();
+                acc.reconnect_start = 0;
+                acc.connect();
             }
         }
 
@@ -755,9 +755,8 @@ int weechat::account::timer_cb(const void *pointer, void *data, int remaining_ca
 void weechat::account::save_pgp_keys()
 {
     std::vector<std::string> key_entries;
-    for (auto& channel_pair : channels)
+    for (auto& [_, channel] : channels)
     {
-        auto& channel = channel_pair.second;
         for (const auto& key : channel.pgp.ids)
             key_entries.push_back(fmt::format("{}:{}", channel.id, key));
     }
