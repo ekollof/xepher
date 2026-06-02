@@ -1741,6 +1741,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     if (!esfs_tmpfile_path.empty())
                         ::unlink(esfs_tmpfile_path.c_str());
 
+                    // Remove source snapshot temp (created in command__upload at the
+                    // exact moment the user invoked /upload). This guarantees the
+                    // bytes we hashed, sized, and PUT are the ones from the selected
+                    // file, regardless of later changes to the original path.
+                    if (filepath_copy.rfind("/tmp/xepher-upload-", 0) == 0)
+                        ::unlink(filepath_copy.c_str());
+
                     c.http_code = http_code;
                     c.get_url   = get_url_copy;
                     if (res != CURLE_OK)

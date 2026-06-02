@@ -388,10 +388,73 @@ int command__upload(const void *pointer, void *data,
     bool channel_omemo = ptr_account->omemo && ptr_channel->omemo.enabled;
     size_t slot_size = channel_omemo ? file_size + 16 : file_size;
 
-    // Store upload request with metadata for SIMS
+    // Snapshot the exact bytes of the selected file to a private temp right now.
+    // The async worker (launched after the IQ roundtrip) will open *this* temp
+    // for size/hash/dims/upload. This guarantees the content uploaded (and the
+    // SHA/size/dims we advertise in metadata) matches the file the user chose
+    // at /upload time, even if the original path is overwritten, deleted, or
+    // is itself a temp that changes between the command and the worker.
+    // The temp is cleaned up in the worker after the PUT (plain or ESFS case).
+    std::string src_path = filename;
+    char src_tmpl[] = "/tmp/xepher-upload-XXXXXX";
+    int src_fd = ::mkstemp(src_tmpl);
+    if (src_fd < 0)
+    {
+        weechat_printf(buffer, "%s%s: failed to create temp snapshot for upload",
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+    std::string src_tmp_path = src_tmpl;
+    {
+        FILE *src_f = fopen(src_path.c_str(), "rb");
+        if (!src_f)
+        {
+            ::close(src_fd);
+            ::unlink(src_tmp_path.c_str());
+            weechat_printf(buffer, "%s%s: cannot reopen selected file for snapshot: %s",
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, src_path.c_str());
+            return WEECHAT_RC_OK;
+        }
+        FILE *dst_f = fdopen(src_fd, "wb");
+        if (!dst_f)
+        {
+            fclose(src_f);
+            ::close(src_fd);
+            ::unlink(src_tmp_path.c_str());
+            weechat_printf(buffer, "%s%s: failed to fdopen upload temp",
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            return WEECHAT_RC_OK;
+        }
+        char cbuf[8192];
+        size_t cn;
+        while ((cn = fread(cbuf, 1, sizeof(cbuf), src_f)) > 0)
+        {
+            if (fwrite(cbuf, 1, cn, dst_f) != cn)
+            {
+                fclose(src_f);
+                fclose(dst_f);
+                ::unlink(src_tmp_path.c_str());
+                weechat_printf(buffer, "%s%s: failed to write upload snapshot",
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                return WEECHAT_RC_OK;
+            }
+        }
+        fclose(src_f);
+        if (fflush(dst_f) != 0 || fclose(dst_f) != 0)
+        {
+            ::unlink(src_tmp_path.c_str());
+            weechat_printf(buffer, "%s%s: failed to finalize upload snapshot",
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            return WEECHAT_RC_OK;
+        }
+    }
+
+    // Store upload request with metadata for SIMS. Use the *snapshot* temp as
+    // the filepath the worker will open (stable content). The sanitized name
+    // is still used for the upload service filename attr.
     ptr_account->upload_requests[id] = {
         id, 
-        filename, 
+        src_tmp_path, 
         sanitized_basename, 
         ptr_channel->id,
         content_type,

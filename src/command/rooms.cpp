@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>  // mkstemp, close, unlink for upload source snapshot temps
 #include <iostream>
 #include <sstream>
 #include <utility>
