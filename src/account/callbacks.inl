@@ -169,15 +169,17 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     auto& [_, ctx] = *it;
     XDEBUG("Upload: fd_cb processing upload, success={}", ctx->success);
 
-    // Drain the pipe (1 byte signal)
-    char sig[1];
-    (void)::read(fd, sig, sizeof(sig));
+    // Drain the pipe if worker_done is still set (not already
+    // processed by the timer callback).
+    if (ctx->worker_done.exchange(false))
+    {
+        char sig[1];
+        (void)::read(fd, sig, sizeof(sig));
+        if (ctx->worker.joinable())
+            ctx->worker.join();
+    }
 
-    // Join the worker thread
-    if (ctx->worker.joinable())
-        ctx->worker.join();
-
-    // Unhook and close fds
+    // Unhook and close fds (safe even if timer callback already ran)
     if (ctx->hook)
         weechat_unhook(ctx->hook);
     close(fd);

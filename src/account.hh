@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <ctime>
 #include <cstdint>
 #include <deque>
@@ -117,6 +118,7 @@ namespace weechat
             int pipe_write_fd = -1;     // write end (closed by thread after writing)
             struct t_hook *hook = nullptr;           // weechat_hook_fd (filled after thread starts)
             std::thread worker;         // owns the background thread
+            std::atomic<bool> worker_done{false};  // set by thread when upload completes
             // Non-empty when this upload belongs to a pending feed post (embed tag).
             // Set to the upload slot IQ id that originated this upload.
             std::string feed_post_upload_id;

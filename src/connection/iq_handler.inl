@@ -1746,7 +1746,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         c.success = true;
                     }
 
-                    // Signal the main thread
+                    // Signal the main thread via pipe and atomic flag.
+                    // The pipe wakes weechat_hook_fd in the normal case;
+                    // the atomic flag lets the timer callback detect
+                    // completion even when the event loop is stalled
+                    // (Python deadlocks, etc.).
+                    c.worker_done.store(true);
                     XDEBUG("Upload: thread done, success={}", c.success);
                     ::write(c.pipe_write_fd, "x", 1);
                 });

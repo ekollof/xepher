@@ -730,6 +730,22 @@ int weechat::account::timer_cb(const void *pointer, void *data, int remaining_ca
 
         for (auto& [_, acc] : accounts)
         {
+            // Drain completed uploads that finished while the main thread
+            // was blocked (e.g. Python hook deadlocks). The upload worker
+            // thread writes to a pipe, and weechat_hook_fd may not fire if
+            // the event loop is stalled. Check directly from the timer.
+            for (auto& [rd_fd, ctx] : acc.pending_uploads)
+            {
+                if (ctx->worker_done.exchange(false))
+                {
+                    char sig[1];
+                    (void)::read(rd_fd, sig, sizeof(sig));
+                    if (ctx->worker.joinable())
+                        ctx->worker.join();
+                    acc.upload_fd_cb(nullptr, &acc, rd_fd);
+                }
+            }
+
             if (acc.is_connected
                 && (xmpp_conn_is_connecting(acc.connection)
                     || xmpp_conn_is_connected(acc.connection)))
