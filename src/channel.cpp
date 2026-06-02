@@ -1186,6 +1186,9 @@ int weechat::channel::send_message(std::string to, std::string body,
 
     // XEP-0384: OMEMO-encrypt the file-share stanza when the channel has OMEMO active.
     // This protects the ESFS key/IV XML children from eavesdroppers on the server.
+    // For MUC, use encode_muc with real-JID recipients (like regular sends) so the
+    // OMEMO header is correct for the room; otherwise the MUC may reject with
+    // service-unavailable and no link/preview appears in the room.
     if (account.omemo && omemo.enabled)
     {
         constexpr const char *eme_namespace = "eu.siacs.conversations.axolotl";
@@ -1195,9 +1198,52 @@ int weechat::channel::send_message(std::string to, std::string body,
             return { raw, xmpp_stanza_release };
         };
 
-        // body is the aesgcm:// URL (or https:// for non-encrypted uploads).
-        auto encrypted = make_encrypted(
-            account.omemo.encode(&account, buffer, to, body));
+        std::shared_ptr<xmpp_stanza_t> encrypted;
+        if (type == weechat::channel::chat_type::MUC)
+        {
+            // Pre-checks (adapted from regular send; for upload we fallback instead of error
+            // since the file is already uploaded).
+            if (!all_occupants_have_real_jid())
+            {
+                // fall through to plaintext send with SFS (aesgcm body)
+            }
+            else if (omemo.pending_bundles > 0 || !account.omemo.pending_bundle_fetch.empty())
+            {
+                // fall through
+            }
+            else
+            {
+                std::vector<std::string> recipients;
+                auto has_real = [](const auto& p) {
+                    const auto& [_, m] = p;
+                    return m.real_jid && !m.real_jid->empty();
+                };
+                auto extract = [](const auto& p) {
+                    const auto& [_, m] = p;
+                    return *m.real_jid;
+                };
+                std::ranges::copy(
+                    members | std::views::filter(has_real) | std::views::transform(extract),
+                    std::back_inserter(recipients)
+                );
+                const std::string own_bare = ::jid(nullptr, account.jid()).bare;
+                if (!own_bare.empty())
+                    recipients.push_back(own_bare);
+
+                if (!recipients.empty())
+                {
+                    encrypted = make_encrypted(
+                        account.omemo.encode_muc(&account, buffer, to,
+                                                 recipients, body.c_str()));
+                }
+            }
+        }
+        if (!encrypted)
+        {
+            // PM or MUC fallback
+            encrypted = make_encrypted(
+                account.omemo.encode(&account, buffer, to, body));
+        }
 
         if (encrypted)
         {
