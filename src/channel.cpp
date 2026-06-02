@@ -1057,6 +1057,15 @@ int weechat::channel::send_message(std::string to, std::string body,
             xmpp_stanza_add_child(file_elem.get(), hash_elem.get());
         }
 
+        // width / height — only for images (duplicated from SFS path for clients
+        // that consume the legacy SIMS <file> element for preview/layout, e.g.
+        // Conversations and similar).
+        if (file_meta->width > 0 && file_meta->height > 0)
+        {
+            add_text_child(file_elem.get(), "width",  nullptr, std::to_string(file_meta->width).c_str());
+            add_text_child(file_elem.get(), "height", nullptr, std::to_string(file_meta->height).c_str());
+        }
+
         xmpp_stanza_add_child(media_sharing.get(), file_elem.get());
 
         auto sources = make_child(nullptr, "sources");
