@@ -1298,9 +1298,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // XEP-0448: If the destination channel has OMEMO active, encrypt the file
                 // before uploading so it arrives as an Encrypted File Share stanza.
                 {
-                    auto ch_it = account.channels.find(ctx->channel_id);
-                    if (ch_it != account.channels.end() && ch_it->second.omemo.enabled)
-                        ctx->encrypted = true;
+                    if (auto ch_it = account.channels.find(ctx->channel_id); ch_it != account.channels.end())
+                    {
+                        auto& [_, ch] = *ch_it;
+                        if (ch.omemo.enabled)
+                            ctx->encrypted = true;
+                    }
                 }
 
                 // If this upload was triggered by an embed tag in a pending feed post,
@@ -2069,9 +2072,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // otherwise fall back to the account buffer.
                 std::string feed_key = fmt::format("{}/{}", err_service, err_node);
                 struct t_gui_buffer *err_buf = account.buffer;
-                auto ch_it = account.channels.find(feed_key);
-                if (ch_it != account.channels.end())
-                    err_buf = ch_it->second.buffer;
+                if (auto ch_it = account.channels.find(feed_key); ch_it != account.channels.end())
+                {
+                    auto& [_, ch] = *ch_it;
+                    err_buf = ch.buffer;
+                }
 
                 weechat_printf(err_buf,
                     "%s%s: cannot fetch feed %s/%s: %s",

@@ -118,7 +118,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             std::string from_resource_s = ::jid(nullptr, from).resource;
             from_bare = from_bare_s.c_str();
             from = from_resource_s.c_str();
-            { auto it = account.channels.find(from_bare); channel = it != account.channels.end() ? &it->second : nullptr; }
+            channel = nullptr;
+            if (auto it = account.channels.find(from_bare); it != account.channels.end())
+            {
+                auto& [_, ch] = *it;
+                channel = &ch;
+            }
             if (!channel)
             {
                 if (weechat_strcasecmp(type, "groupchat") == 0)
@@ -161,7 +166,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             std::string cs_nick_s = ::jid(nullptr, from).resource;
             from_bare = cs_from_bare_s.c_str();
             nick = cs_nick_s.c_str();
-            { auto it = account.channels.find(from_bare); channel = it != account.channels.end() ? &it->second : nullptr; }
+            channel = nullptr;
+            if (auto it = account.channels.find(from_bare); it != account.channels.end())
+            {
+                auto& [_, ch] = *it;
+                channel = &ch;
+            }
             if (!channel)
                 return 1;
             auto user = user::search(&account, from);
@@ -332,9 +342,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     feed_key,
                     account, weechat::channel::chat_type::FEED,
                     feed_key, feed_key);
+                auto& [_, feed_ch] = *ch_it;
                 if (inserted)
                     account.feed_open_register(feed_key);
-                weechat::channel &feed_ch = ch_it->second;
 
                 forwarded = xmpp_stanza_get_child_by_name_and_ns(
                     result, "forwarded", "urn:xmpp:forward:0");
@@ -915,13 +925,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
                             account.bookmarks.erase(retract_id);
 
-                            auto ch_it = account.channels.find(retract_id);
-                            if (ch_it != account.channels.end() && ch_it->second.buffer)
+                            if (auto ch_it = account.channels.find(retract_id); ch_it != account.channels.end())
                             {
-                                weechat_printf(ch_it->second.buffer,
-                                               "%sBookmark removed — leaving room",
-                                               weechat_prefix("network"));
-                                weechat_buffer_close(ch_it->second.buffer);
+                                auto& [_, ch] = *ch_it;
+                                if (ch.buffer)
+                                {
+                                    weechat_printf(ch.buffer,
+                                                   "%sBookmark removed — leaving room",
+                                                   weechat_prefix("network"));
+                                    weechat_buffer_close(ch.buffer);
+                                }
                             }
                             continue;
                         }
@@ -1021,10 +1034,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             // without this guard every bookmark publish during a session
                             // triggers a redundant /enter, producing a flood of join
                             // presences visible to other clients (e.g. Movim).
-                            auto existing_ch = account.channels.find(item_id);
-                            bool already_joined = existing_ch != account.channels.end()
-                                && existing_ch->second.buffer
-                                && !existing_ch->second.joining;
+                            bool already_joined = false;
+                            if (auto existing_ch = account.channels.find(item_id); existing_ch != account.channels.end())
+                            {
+                                auto& [_, ch] = *existing_ch;
+                                already_joined = ch.buffer && !ch.joining;
+                            }
 
                              if (!is_biboumi && !already_joined)
                              {
@@ -1052,14 +1067,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             // bookmark list as individual PEP notifications; closing
                             // buffers here at that point would destroy channels that
                             // were just created by the XEP-0049 autojoin flow.
-                            auto ch_it = account.channels.find(item_id);
-                            if (ch_it != account.channels.end() && ch_it->second.buffer
-                                && !ch_it->second.joining)
+                            if (auto ch_it = account.channels.find(item_id); ch_it != account.channels.end())
                             {
-                                weechat_printf(ch_it->second.buffer,
-                                               "%sBookmark autojoin disabled — leaving room",
-                                               weechat_prefix("network"));
-                                weechat_buffer_close(ch_it->second.buffer);
+                                auto& [_, ch] = *ch_it;
+                                if (ch.buffer && !ch.joining)
+                                {
+                                    weechat_printf(ch.buffer,
+                                                   "%sBookmark autojoin disabled — leaving room",
+                                                   weechat_prefix("network"));
+                                    weechat_buffer_close(ch.buffer);
+                                }
                             }
                         }
                     }
@@ -1204,7 +1221,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         weechat::channel::chat_type::FEED,
                         feed_key,
                         feed_key);
-                    weechat::channel &feed_ch = ch_it->second;
+                    auto& [_, feed_ch] = *ch_it;
                     if (inserted)
                         account.feed_open_register(feed_key);
 
@@ -1642,8 +1659,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 if (receipt_from && acked_id)
                 {
                     std::string bare_s = ::jid(nullptr, receipt_from).bare;
-                    auto ch_it = account.channels.find(bare_s);
-                    weechat::channel *ch = ch_it != account.channels.end() ? &ch_it->second : nullptr;
+                    weechat::channel *ch = nullptr;
+                    if (auto ch_it = account.channels.find(bare_s); ch_it != account.channels.end())
+                    {
+                        auto& [_, c] = *ch_it;
+                        ch = &c;
+                    }
                     if (ch && ch->type != weechat::channel::chat_type::MUC)
                     {
                         // Find the sent message line tagged id_<acked_id> and update glyph ⌛→✓
@@ -1666,8 +1687,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 if (marker_from && acked_id)
                 {
                     std::string bare_s = ::jid(nullptr, marker_from).bare;
-                    auto ch_it = account.channels.find(bare_s);
-                    weechat::channel *ch = ch_it != account.channels.end() ? &ch_it->second : nullptr;
+                    weechat::channel *ch = nullptr;
+                    if (auto ch_it = account.channels.find(bare_s); ch_it != account.channels.end())
+                    {
+                        auto& [_, c] = *ch_it;
+                        ch = &c;
+                    }
                     if (ch && ch->type != weechat::channel::chat_type::MUC)
                     {
                         // Find the sent message line tagged id_<acked_id> and update glyph ⌛/✓→✓✓
@@ -1688,8 +1713,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 if (attn_from)
                 {
                     std::string bare_s = ::jid(nullptr, attn_from).bare;
-                    auto ch_it = account.channels.find(bare_s);
-                    weechat::channel *ch = ch_it != account.channels.end() ? &ch_it->second : nullptr;
+                    weechat::channel *ch = nullptr;
+                    if (auto ch_it = account.channels.find(bare_s); ch_it != account.channels.end())
+                    {
+                        auto& [_, c] = *ch_it;
+                        ch = &c;
+                    }
                     if (!ch)
                     {
                         // Create PM channel for the buzz
@@ -1754,8 +1783,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         stanza, "delay", "urn:xmpp:delay") != nullptr;
 
     const char *channel_id = account.jid() == from_bare ? to_bare : from_bare;
-    auto parent_ch_it = account.channels.find(channel_id);
-    parent_channel = parent_ch_it != account.channels.end() ? &parent_ch_it->second : nullptr;
+    parent_channel = nullptr;
+    if (auto parent_ch_it = account.channels.find(channel_id); parent_ch_it != account.channels.end())
+    {
+        auto& [_, ch] = *parent_ch_it;
+        parent_channel = &ch;
+    }
     const char *pm_id = account.jid() == from_bare ? to : from;
     channel = parent_channel;
     if (!channel)
@@ -3251,13 +3284,12 @@ message_handler_after_omemo:
                         {
                             int newline_count = 0;
                             int line_len = 0;
-                            for (char c : clean_text)
-                            {
+                            std::ranges::for_each(clean_text, [&](char c) {
                                 if (c == '\n') { ++newline_count; line_len = 0; }
                                 else           { ++line_len; }
                                 if (newline_count > 5 || line_len > 200)
-                                { do_truncate = true; break; }
-                            }
+                                { do_truncate = true; }
+                            });
                         }
 
                         std::string excerpt = (do_truncate && clean_text.size() > 40)

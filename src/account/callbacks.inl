@@ -342,10 +342,12 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     {
         // Report the error in the channel buffer where the upload was initiated,
         // falling back to the account buffer if the channel is gone.
-        auto ch_it = ptr_account->channels.find(ctx->channel_id);
-        struct t_gui_buffer *err_buf = (ch_it != ptr_account->channels.end())
-                                       ? ch_it->second.buffer
-                                       : ptr_account->buffer;
+        struct t_gui_buffer *err_buf = ptr_account->buffer;
+        if (auto ch_it = ptr_account->channels.find(ctx->channel_id); ch_it != ptr_account->channels.end())
+        {
+            auto& [_, ch] = *ch_it;
+            err_buf = ch.buffer;
+        }
         weechat_printf(err_buf,
                         "%s%s: file upload failed (%s)",
                         weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
@@ -356,9 +358,9 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     weechat_printf(ptr_account->buffer, "%sFile uploaded! Sharing link…",
                   weechat_prefix("network"));
 
-    auto channel_it = ptr_account->channels.find(ctx->channel_id);
-    if (channel_it != ptr_account->channels.end())
+    if (auto channel_it = ptr_account->channels.find(ctx->channel_id); channel_it != ptr_account->channels.end())
     {
+        auto& [_, ch] = *channel_it;
         weechat::channel::file_metadata meta;
         meta.filename     = ctx->filename;
         meta.content_type = ctx->content_type;
@@ -392,8 +394,8 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             effective_url += ctx->esfs_aesgcm_fragment;
         }
 
-        channel_it->second.send_message(
-            channel_it->second.id,
+        ch.send_message(
+            ch.id,
             effective_url,
             std::optional<std::string>(effective_url),
             std::optional<weechat::channel::file_metadata>(meta)

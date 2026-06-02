@@ -93,7 +93,8 @@ bool weechat::account::search_device(weechat::account::device* out, std::uint32_
 
     if (auto device = devices.find(id); device != devices.end())
     {
-        *out = device->second;
+        auto& [_, d] = *device;
+        *out = d;
         return true;
     }
 
@@ -371,12 +372,12 @@ int weechat::account::process_deferred_mam_page_cb(const void *pointer, void *da
     }
     else
     {
-        auto channel = acct->channels.find(page.channel_id);
-        if (channel != acct->channels.end())
+        if (auto channel = acct->channels.find(page.channel_id); channel != acct->channels.end())
         {
+            auto& [_, ch] = *channel;
             time_t *start_ptr = page.start ? &*page.start : nullptr;
             time_t *end_ptr   = page.end   ? &*page.end   : nullptr;
-            channel->second.fetch_mam(
+            ch.fetch_mam(
                 page.mam_query_id.empty() ? stanza::uuid(acct->context).c_str() : page.mam_query_id.c_str(),
                 start_ptr, end_ptr,
                 page.after.empty() ? nullptr : page.after.c_str());

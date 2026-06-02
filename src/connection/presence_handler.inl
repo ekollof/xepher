@@ -55,8 +55,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
     }
 
     {
-        auto ch_it = account.channels.find(binding->from->bare.data());
-        channel = ch_it != account.channels.end() ? &ch_it->second : nullptr;
+        channel = nullptr;
+        if (auto ch_it = account.channels.find(binding->from->bare.data()); ch_it != account.channels.end())
+        {
+            auto& [_, ch] = *ch_it;
+            channel = &ch;
+        }
     }
     
     // Note: We don't auto-create PM channels from presence anymore.
