@@ -3880,8 +3880,13 @@ message_handler_after_omemo:
             pos = end;
 
             if (already_shown.contains(url)) continue;
+            // For self-sent messages, use silent mode — the XEP-0511 metadata
+            // from the <rdf:Description> carbon copy already displayed the
+            // preview, and we sent the OG metadata ourselves.
+            const bool is_self = from_bare
+                && weechat_strcasecmp(from_bare, account.jid().data()) == 0;
             og_start_fetch(url, channel->buffer, &account,
-                           std::string(display_prefix), date);
+                           std::string(display_prefix), date, is_self);
         }
     }
 
