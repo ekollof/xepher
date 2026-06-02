@@ -1117,8 +1117,8 @@ int command__feed(const void *pointer, void *data,
             || ((subcmd == "post") && (argc >= 3)
                 && (argc < 5
                     || (ptr_channel && ptr_channel->type == weechat::channel::chat_type::FEED
-                        && std::string_view(argv[2]).find('.') == std::string_view::npos
-                        && std::string_view(argv[2]).find('@') == std::string_view::npos
+                        && !std::string_view(argv[2]).contains('.')
+                        && !std::string_view(argv[2]).contains('@')
                         && std::string_view(argv[2]) != "--open")));
 
         // --edit flag: delegate to feed-compose Python script.

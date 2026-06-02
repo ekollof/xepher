@@ -95,8 +95,7 @@ work (see below). All recommended C++23 features are in active use.
 
 ### 6. Final C++23 API Sweep ✅
 
-- **`.find(X) != npos` → `.contains(X)`**: 7 locations (helpers.cpp,
-  message_handler.inl, codec.inl, channel.cpp)
+- **`.find(X) != npos` → `.contains(X)`**: more locations (string contains for chars like '@' '.' in presence/muc_admin/channel; container ones already done)
 - **`.count(K) > 0` → `.contains(K)`**: 4 locations (codec.inl,
   session_flow.inl, channel.cpp — map/set/.unordered_map)
 - **`std::copy_n` → `std::ranges::copy`/`copy_n`**: 4 locations in
@@ -112,7 +111,7 @@ work (see below). All recommended C++23 features are in active use.
 - **Builds cleanly** with `make`
 - **All tests pass** (27/27 cases, 286/286 assertions)
 - Initial phases from the original plan are complete; `std::views` adoption and other
-  C++23 (structured bindings, more expected) being incrementally extended as surgical
+  C++23 (structured bindings, more expected, string .contains) being incrementally extended as surgical
   opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, small crypto helpers like aes_mode).
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
@@ -128,7 +127,7 @@ work (see below). All recommended C++23 features are in active use.
 | `std::span` | 0 | 29 |
 | `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
 | Structured bindings in for/find | few | more (accounts, channels, members, buffer lookups, config, completion, commands, lambdas in channel, command/account etc. across 20+ sites) |
-| `.find(X) != npos` | 15+ | 0 |
+| `.find(X) != npos` | 15+ | fewer (string .contains for existence checks) |
 | `.count(K) > 0` | 5+ | 0 |
 | `std::copy_n` | 4 | 0 |
 

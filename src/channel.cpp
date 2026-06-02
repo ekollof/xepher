@@ -57,7 +57,7 @@ std::string channel_short_name(weechat::channel::chat_type type, std::string_vie
             return fmt::format("={} (blog)", local);
 
         // Named node (no ':' in it, e.g. "lunduke") → use the node name directly.
-        if (node.find(':') == std::string_view::npos)
+        if (!node.contains(':'))
             return fmt::format("={}", node);
 
         // Generic URN node → use the last ':'-delimited segment.

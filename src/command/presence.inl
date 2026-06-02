@@ -470,7 +470,7 @@ int command__whois(const void *pointer, void *data,
         std::string_view arg(argv[1]);
         // In a MUC buffer, treat arguments without '@' as nicks
         if (ptr_channel && ptr_channel->type == weechat::channel::chat_type::MUC
-            && arg.find('@') == std::string_view::npos)
+            && !arg.contains('@'))
         {
             target_storage = ptr_channel->find_member_by_nick(std::string(arg));
             if (target_storage.empty())
