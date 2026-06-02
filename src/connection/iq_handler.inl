@@ -4006,9 +4006,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         account.connection.send(iq_s.build(account.context).get());
                     }
 
-                    XDEBUG("omemo: requested %d legacy bundle(s) for %s",
+                    XDEBUG("omemo: requested {} legacy bundle(s) for {}",
                            legacy_device_count,
-                           node_owner_str.c_str());
+                           node_owner_str);
                 }
             }
             else if (items_node
