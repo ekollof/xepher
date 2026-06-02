@@ -906,7 +906,7 @@ void weechat::account::og_cache_store(const std::string& url,
         // Encode: replace any literal \t in field values with a space (safe lossy).
         auto sanitize = [](const std::string& s) {
             std::string out = s;
-            for (char& c : out) if (c == '\t') c = ' ';
+            std::ranges::for_each(out, [](char& c){ if (c == '\t') c = ' '; });
             return out;
         };
         std::string value = fmt::format("{}\t{}\t{}\t{}",

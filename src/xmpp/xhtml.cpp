@@ -58,9 +58,12 @@ std::string css_color_to_weechat(std::string_view css)
     if (s == std::string::npos) return "";
     lc = lc.substr(s, e - s + 1);
 
-    auto it = std::ranges::find_if(k_color_table,
-        [&](const auto &entry) { return entry.first == lc; });
-    if (it != k_color_table.end()) return std::string(it->second);
+    if (auto it = std::ranges::find_if(k_color_table,
+            [&](const auto &entry) { return entry.first == lc; });
+        it != k_color_table.end()) {
+        auto& [_, col] = *it;
+        return std::string(col);
+    }
 
     if (lc.size() >= 4 && lc[0] == '#')
     {

@@ -606,10 +606,11 @@ bool weechat::channel::smart_filter_nick(const char *nick) const
 
     auto it = last_speak.find(std::string(nick));
     if (it == last_speak.end()) return true; // never spoken
+    auto& [_, last] = *it;
 
     int delay_minutes = weechat::config::instance->look.smart_filter_delay.integer();
     time_t threshold = std::time(nullptr) - static_cast<time_t>(delay_minutes) * 60;
-    return it->second < threshold;
+    return last < threshold;
 }
 
 void weechat::channel::mark_chat_state_supported(const std::string& from_jid)

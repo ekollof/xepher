@@ -29,9 +29,11 @@ bool account_read_cb(weechat::config_section& /* section */,
     weechat::account* account = nullptr;
     if (!weechat::account::search(account, account_name))
     {
-        account = &weechat::accounts.emplace(
+        auto [it, _ins] = weechat::accounts.emplace(
             std::piecewise_construct, std::forward_as_tuple(account_name),
-            std::forward_as_tuple(weechat::config::instance->file, account_name)).first->second;
+            std::forward_as_tuple(weechat::config::instance->file, account_name));
+        auto& [_, acc] = *it;
+        account = &acc;
     }
     if (account)
     {

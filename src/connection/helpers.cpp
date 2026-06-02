@@ -11,6 +11,7 @@
 #include <cctype>
 #include <filesystem>
 #include <list>
+#include <ranges>
 #include <span>
 #include <string>
 #include <thread>
@@ -325,8 +326,7 @@ void esfs_start_download(std::string_view cipher_url,
         // Sanitize JID for use as a directory name: replace '/' with '_'
         // (bare JIDs don't contain '/' but be defensive; '\0' can't appear).
         std::string safe_jid = ctx.channel_jid;
-        for (char &c : safe_jid)
-            if (c == '/') c = '_';
+        std::ranges::for_each(safe_jid, [](char &c){ if (c == '/') c = '_'; });
 
         downloads_dir = base + "/xmpp/" + safe_jid + "/" + date_buf;
     }
@@ -435,8 +435,7 @@ void esfs_start_download(std::string_view cipher_url,
         plaintext.resize(pt_len);
 
         std::string safe_name = ctx.filename;
-        for (char &c : safe_name)
-            if (c == '/' || c == '\0') c = '_';
+        std::ranges::for_each(safe_name, [](char &c){ if (c == '/' || c == '\0') c = '_'; });
         if (safe_name.empty()) safe_name = "esfs_file";
 
         std::string out_path = downloads_dir + "/" + safe_name;
@@ -776,11 +775,7 @@ std::string format_og_preview_card(std::string_view title,
 
     // Sanitize description: collapse any internal newlines / tabs / CRs to spaces
     std::string desc = std::string(description);
-    for (char &c : desc)
-    {
-        if (c == '\n' || c == '\r' || c == '\t')
-            c = ' ';
-    }
+    std::ranges::for_each(desc, [](char &c){ if (c == '\n' || c == '\r' || c == '\t') c = ' '; });
 
     if (!desc.empty())
     {

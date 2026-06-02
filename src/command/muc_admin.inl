@@ -1602,14 +1602,13 @@ int command__feed(const void *pointer, void *data,
 
             // Sanitize filename for the upload server
             std::string san_name;
-            for (char c : first_emb.filename)
-            {
+            std::ranges::for_each(first_emb.filename, [&](char c) {
                 if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
                     (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_')
                     san_name += c;
                 else
                     san_name += '-';
-            }
+            });
             // Collapse repeated dashes
             {
                 size_t p2 = 0;

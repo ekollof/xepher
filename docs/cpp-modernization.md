@@ -1,6 +1,6 @@
 # C++23 Modernization Effort
 
-> **Status**: More structured (message/presence/account/lmdb/iq safe maps, emplaces, users); for_each (avatar hash); ongoing (as of 2026-06-03)
+> **Status**: More structured + ranges::for_each (helpers sanitizers, muc_admin san, lmdb, channel, xhtml, config, message, user); ongoing (as of 2026-06-03)
 > This document captures the plan, progress, and remaining work for adopting modern C++23 features as recommended in the project's agent instructions.
 
 ## Background
@@ -106,7 +106,8 @@ work (see below). All recommended C++23 features are in active use.
 - Additional structured sweep (batch 2): converted many more `->second` accesses for non-channel maps (pubsub_publish_ids, pubsub_fetch_ids, pubsub_*_queries, upload_requests, setvcard_queries, user_ping_queries, etc.) in `src/connection/iq_handler.inl` to if-init + `auto& [_, v] = *it;` (or direct binding in if). Also modernized upload req success path accesses. ~15+ sites. Plus prior channel ones.
 - Converted side-effect for (const auto &ident : ...) and features in caps hash computation (iq_handler) to `std::ranges::for_each(..., lambda)`.
 - Modernized fixed C-array loop `for (int i=0; i<3; i++)` over csi_activity_hooks to `for (auto &h : csi_activity_hooks)`.
-- Batch continue: structured on emplace returns and finds for users/channels in message_handler, presence_handler (2 sites); safe iq_handler maps (feed_ch, pq, cfg, dl_ch, ptr_channel, whois, mam channel); lmdb_cache caps/peer it->second; account.cpp mam_query and last pgp channel; avatar calculate_hash index loop to ranges::for_each + span. Multiple ccache builds, 27/286 always.
+- Batch continue: structured on emplace returns and finds for users/channels in message_handler, presence_handler (2 sites); safe iq_handler maps (feed_ch, pq, cfg, dl_ch, ptr_channel, whois, mam channel); lmdb_cache caps/peer it->second; account.cpp mam_query and last pgp channel; avatar calculate_hash index loop to ranges::for_each + span. 
+- Additional: modernized for (char &c : str) sanitizers in src/connection/helpers.cpp and lmdb_cache to std::ranges::for_each; san_name char filter in muc_admin to ranges::for_each; smart_filter_nick in channel.cpp with structured; css color table in xhtml.cpp with if-init+structured; config accounts emplace; message iterator; user search with structured. Also added <ranges> where needed. Multiple ccache builds, 27/286 always.
 - **Zero remaining classical `std::algorithm` calls** in `.cpp`/`.inl`
   files (lone exception: a commented-out `std::find` in plugin.cpp).
 
@@ -117,7 +118,7 @@ work (see below). All recommended C++23 features are in active use.
 - Initial phases from the original plan are complete; `std::views` adoption and other
   C++23 (structured bindings, more expected, string .contains, ranges for_each) being incrementally extended as surgical
   opportunities arise in list/string processing and error paths (e.g. more maps, avatar cache load, crypto, mam lmdb lookups, tolower and sanitize transforms).
-- Continued ... ( + emplaces for users in handlers, more iq safe, lmdb, account, avatar for_each on hash bytes).
+- Continued ... ( + for_each sanitizers in helpers/lmdb, ranges for san_name in muc_admin, structured in channel smart filter, xhtml color, config emplace, message, user search, etc).
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
@@ -131,7 +132,7 @@ work (see below). All recommended C++23 features are in active use.
 | `std::ranges::to` | 0 | 1+ |
 | `std::span` | 0 | 29 |
 | `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
-| Structured bindings in for/find | few | more (accounts, channels, members, buffer lookups, config, completion, commands, lambdas in channel, command/account etc. across 20+ sites; +10+ previous; +15+ iq pubsub; + users/emplaces in message/presence; more in lmdb/account) |
+| Structured bindings in for/find | few | more (accounts, channels, members, buffer lookups, config, completion, commands, lambdas in channel, command/account etc. across 20+ sites; +10+ previous; +15+ iq pubsub; + users/emplaces in message/presence; more in lmdb/account; + in xhtml, config, message, user, channel) |
 | `.find(X) != npos` | 15+ | fewer (string .contains for existence checks) |
 | `.count(K) > 0` | 5+ | 0 |
 | `std::copy_n` | 4 | 0 |

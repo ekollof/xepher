@@ -139,8 +139,10 @@ weechat::user *weechat::user::search(weechat::account *account,
     if (!account || id.empty())
         return nullptr;
 
-    if (auto it = account->users.find(std::string(id)); it != account->users.end())
-        return &it->second;
+    if (auto it = account->users.find(std::string(id)); it != account->users.end()) {
+        auto& [_, u] = *it;
+        return &u;
+    }
 
     return nullptr;
 }

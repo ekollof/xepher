@@ -59,8 +59,9 @@ static std::string message__translate_code(weechat::account *account,
                 channel = account->channels.find(identifier.c_str()+1);
                 if (channel != account->channels.end())
                 {
+                    auto& [_, ch] = *channel;
                     prefix = "#";
-                    symbol = channel->second.name;
+                    symbol = ch.name;
                 }
                 else
                 {
