@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdexcept>
 #include <string_view>
+#include <ranges>
 #include <vector>
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>
@@ -23,8 +24,9 @@ namespace {
 unsigned long nick_hash(std::string_view name)
 {
     unsigned long hash = 5381;
-    for (char c : name)
+    std::ranges::for_each(name, [&](char c) {
         hash = ((hash << 5) + hash) + static_cast<unsigned char>(c);
+    });
     return hash;
 }
 
