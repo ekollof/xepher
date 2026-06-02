@@ -1247,7 +1247,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     return 1;
                 }
                 fclose(file);
-                
                 // Get Content-Type from filename extension
                 std::string filename = req.filename;
                 std::string content_type = "application/octet-stream";
@@ -1266,6 +1265,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     else if (ext == "pdf") content_type = "application/pdf";
                     else if (ext == "txt") content_type = "text/plain";
                 }
+                XDEBUG("Upload: content_type={} starting async PUT", content_type);
                 
                 // Async HTTP PUT upload via pipe + worker thread.
                 // The worker thread does all blocking I/O (file read, SHA-256,
@@ -1332,6 +1332,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                            put_url_copy, get_url_copy,
                                            put_headers_copy, content_type_copy]()
                 {
+                    XDEBUG("Upload: thread started for {}", filepath_copy);
                     auto &c = *ctx_copy;
 
                     // Open file with RAII guard
@@ -1743,6 +1744,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     }
 
                     // Signal the main thread
+                    XDEBUG("Upload: thread done, success={}", c.success);
                     ::write(c.pipe_write_fd, "x", 1);
                 });
             }

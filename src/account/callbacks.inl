@@ -161,9 +161,13 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     // Find the completion context for this fd
     auto it = ptr_account->pending_uploads.find(fd);
     if (it == ptr_account->pending_uploads.end())
+    {
+        XDEBUG("Upload: fd_cb fired but no pending upload for fd {}", fd);
         return WEECHAT_RC_ERROR;
+    }
 
     auto& [_, ctx] = *it;
+    XDEBUG("Upload: fd_cb processing upload, success={}", ctx->success);
 
     // Drain the pipe (1 byte signal)
     char sig[1];
