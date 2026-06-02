@@ -1763,35 +1763,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     else
                     {
                         c.success = true;
-                        // Queue the stanza from the worker thread via
-                        // xmpp_send() (thread-safe). The main thread
-                        // flushes it when xmpp_run_once() next runs.
-                        struct upload_msg : stanza::spec {
-                            upload_msg(xmpp_ctx_t *ctx,
-                                       std::string_view to,
-                                       std::string_view body,
-                                       std::string_view oob_url)
-                                : spec("message") {
-                                attr("type", "chat");
-                                attr("to", to);
-                                attr("id", stanza::uuid(ctx));
-                                struct body_s : stanza::spec {
-                                    body_s(std::string_view b) : spec("body") { text(b); }
-                                } bd(body);
-                                child(bd);
-                                struct oob_s : stanza::spec {
-                                    oob_s(std::string_view u) : spec("x") {
-                                        xmlns<jabber::x::oob>();
-                                        struct url_s : stanza::spec {
-                                            url_s(std::string_view v) : spec("url") { text(v); }
-                                        } ur(u);
-                                        child(ur);
-                                    }
-                                } oo(oob_url);
-                                child(oo);
-                            }
-                        } msg(ctx_ptr, c.channel_id, c.get_url, c.get_url);
-                        conn_ptr->send_threadsafe(msg.build(ctx_ptr).get());
+                        // Note: the actual result message (rich SFS/SIMS with correct
+                        // visible_link/aesgcm body + meta, and proper groupchat for MUC)
+                        // is posted from fd_cb in main thread via ch.send_message (and
+                        // status printf with visible url to ch.buffer). We no longer
+                        // send a minimal always-https "chat" from worker, as that caused
+                        // type errors/rejects in MUC and wrong link type for ESFS.
                     }
 
                     // Signal the main thread via pipe and atomic flag.
