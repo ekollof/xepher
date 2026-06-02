@@ -1375,37 +1375,40 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     }
                     c.file_size = static_cast<size_t>(file_size);
 
-                    // Close and reopen to get a fresh FILE* at position 0 for hashing.
-                    // This avoids seeks on the upload handle and keeps stream state clean.
-                    upload_file_guard.reset();
-                    upload_file = nullptr;
+                    // Rewind so subsequent operations (hash, dims, upload read) use
+                    // the exact same open file descriptor/content as the size we just
+                    // measured. This guarantees the SHA-256 we advertise matches the
+                    // bytes we actually PUT, even if the path on disk is replaced or
+                    // deleted after we opened it. Also keeps the guard alive for the
+                    // final upload read (no close/reopen for the plain case).
+                    if (fseek(upload_file, 0, SEEK_SET) != 0)
+                    {
+                        c.success    = false;
+                        c.curl_error = "failed to rewind file after measuring size";
+                        ::write(c.pipe_write_fd, "x", 1);
+                        return;
+                    }
 
-                    // Calculate SHA-256 hash for SIMS — use a dedicated read handle.
+                    // Calculate SHA-256 hash for SIMS — use the already-open handle
+                    // (rewound above) so the hashed bytes are exactly the ones that
+                    // will be uploaded.
                     unsigned char hash[EVP_MAX_MD_SIZE];
                     unsigned int  hash_len = 0;
                     {
-                        std::unique_ptr<FILE, decltype(file_deleter)>
-                            hash_file_guard(fopen(filepath_copy.c_str(), "rb"), file_deleter);
-                        FILE *hash_file = hash_file_guard.get();
-                        if (!hash_file)
-                        {
-                            c.success    = false;
-                            c.curl_error = "failed to reopen file for hashing";
-                            ::write(c.pipe_write_fd, "x", 1);
-                            return;
-                        }
                         std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>
                             sha256_ctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
                         EVP_DigestInit_ex(sha256_ctx.get(), EVP_sha256(), nullptr);
                         unsigned char buf[8192];
                         size_t bytes_read;
                         do {
-                            bytes_read = fread(buf, 1, sizeof(buf), hash_file);
+                            bytes_read = fread(buf, 1, sizeof(buf), upload_file);
                             if (bytes_read > 0)
                                 EVP_DigestUpdate(sha256_ctx.get(), buf, bytes_read);
-                        } while (!feof(hash_file) && !ferror(hash_file));
+                        } while (!feof(upload_file) && !ferror(upload_file));
                         EVP_DigestFinal_ex(sha256_ctx.get(), hash, &hash_len);
-                    } // hash_file and sha256_ctx freed here
+                    } // sha256_ctx freed here
+                    // Note: upload_file is now at EOF; we will rewind before giving
+                    // it to curl (plain case) or using it for encrypt pt read.
 
                     // Base64-encode the hash (RAII BIO chain)
                     {
@@ -1672,16 +1675,19 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     }
                     else
                     {
-                        // Open a fresh handle for upload (avoids any seek/EOF state issues).
-                        upload_file_guard.reset(fopen(filepath_copy.c_str(), "rb"));
-                        upload_file = upload_file_guard.get();
-                        if (!upload_file)
+                        // Rewind the handle we used for size+hash (now at EOF) so
+                        // curl reads the same bytes we hashed. The guard from the
+                        // initial open is still alive and will close it after the
+                        // PUT.
+                        if (fseek(upload_file, 0, SEEK_SET) != 0)
                         {
                             c.success    = false;
-                            c.curl_error = "failed to reopen file for upload";
+                            c.curl_error = "failed to rewind file for upload";
                             ::write(c.pipe_write_fd, "x", 1);
                             return;
                         }
+                        // upload_file and guard are already set from the size open;
+                        // no new fopen needed.
                     }
 
                     // Initialize curl
