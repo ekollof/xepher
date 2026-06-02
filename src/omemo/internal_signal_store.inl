@@ -507,7 +507,7 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
 // Generate a fresh pre-key with the same ID as `used_id`, store it to LMDB,
 // and update the kPrekeys index so the bundle reflects the new public key.
 // Returns true if the replacement succeeded.
-[[nodiscard]] bool replace_used_prekey(omemo &self, xmpp_ctx_t *context, std::uint32_t used_id)
+[[maybe_unused]] [[nodiscard]] bool replace_used_prekey(omemo &self, xmpp_ctx_t *context, std::uint32_t used_id)
 {
     OMEMO_ASSERT(self.context, "signal context required for pre-key replacement");
     OMEMO_ASSERT(context != nullptr, "xmpp context required for pre-key replacement");
@@ -1059,7 +1059,7 @@ int sender_key_load(signal_buffer **record, signal_buffer **user_record,
     return *record ? 1 : SG_SUCCESS;
 }
 
-void remove_prefixed_keys(omemo &self, std::string_view prefix)
+[[maybe_unused]] void remove_prefixed_keys(omemo &self, std::string_view prefix)
 {
     auto transaction = lmdb::txn::begin(self.db_env);
     auto cursor = lmdb::cursor::open(transaction, self.dbi.omemo);

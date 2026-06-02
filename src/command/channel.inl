@@ -207,14 +207,16 @@ int command__open(const void *pointer, void *data,
                     ptr_account->omemo.request_axolotl_devicelist(*ptr_account, jid);
             }
 
+            auto& [_, ch] = *channel;
+
             if (argc > 2)
             {
                 text = argv_eol[2];
 
-                channel->second.send_message(jid, text);
+                ch.send_message(jid, text);
             }
 
-            int num = weechat_buffer_get_integer(channel->second.buffer, "number");
+            int num = weechat_buffer_get_integer(ch.buffer, "number");
             auto buf = fmt::format("/buffer {}", num);
             weechat_command(ptr_account->buffer, buf.c_str());
         }

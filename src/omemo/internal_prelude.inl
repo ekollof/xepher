@@ -238,7 +238,7 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
 // Signal crypto is identical.  Only the XMPP stanza wrapping differs.
 // We use a separate LMDB key prefix so we can tell which namespace the bundle
 // came from when deciding which encode path to use.
-[[nodiscard]] auto key_for_axolotl_bundle(std::string_view jid, std::uint32_t device_id) -> std::string
+[[maybe_unused]] [[nodiscard]] auto key_for_axolotl_bundle(std::string_view jid, std::uint32_t device_id) -> std::string
 {
     return fmt::format("axolotl_bundle:{}:{}", jid, device_id);
 }

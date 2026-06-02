@@ -257,7 +257,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
     if (ch_it == account->channels.end())
         return;
 
-    auto &ch = ch_it->second;
+    auto& [_, ch] = *ch_it;
 
     // MUC OMEMO support (docs/planning-muc-omemo.md §2.4 + §6):
     // After a devicelist arrives for an occupant (or PM), proactively request
@@ -368,24 +368,27 @@ static void send_key_transport(omemo &self,
     {
         // We are sending to a room — collect all known occupants' real JIDs
         // from the channel we are about to send to.
-        auto ch_it = account.channels.find(dest);
-        if (ch_it != account.channels.end() && ch_it->second.type == weechat::channel::chat_type::MUC)
+        if (auto ch_it = account.channels.find(dest); ch_it != account.channels.end())
         {
-            for (const auto& [nick, m] : ch_it->second.members)
+            auto& [_, ch] = *ch_it;
+            if (ch.type == weechat::channel::chat_type::MUC)
             {
-                if (m.real_jid && !m.real_jid->empty())
+                for (const auto& [nick, m] : ch.members)
                 {
-                    const std::string &occ_jid = *m.real_jid;
-                    const auto dl = load_string(self, key_for_axolotl_devicelist(occ_jid));
-                    if (dl && !dl->empty())
+                    if (m.real_jid && !m.real_jid->empty())
                     {
-                        for (const auto &dev : split(*dl, ';'))
+                        const std::string &occ_jid = *m.real_jid;
+                        const auto dl = load_string(self, key_for_axolotl_devicelist(occ_jid));
+                        if (dl && !dl->empty())
                         {
-                            const auto did = parse_uint32(dev);
-                            if (did && is_valid_omemo_device_id(*did))
+                            for (const auto &dev : split(*dl, ';'))
                             {
-                                if (add_axolotl_key(occ_jid, *did))
-                                    any_keys = true;
+                                const auto did = parse_uint32(dev);
+                                if (did && is_valid_omemo_device_id(*did))
+                                {
+                                    if (add_axolotl_key(occ_jid, *did))
+                                        any_keys = true;
+                                }
                             }
                         }
                     }
@@ -585,10 +588,9 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
         && !bare_jid.empty()
         && has_session(bare_jid.c_str(), remote_device_id))
     {
-        auto ch_it = account->channels.find(bare_jid);
-        if (ch_it != account->channels.end())
+        if (auto ch_it = account->channels.find(bare_jid); ch_it != account->channels.end())
         {
-            auto &ch = ch_it->second;
+            auto& [_, ch] = *ch_it;
             if (ch.type == weechat::channel::chat_type::PM)
             {
                 if (!ch.omemo.enabled
@@ -620,9 +622,11 @@ void weechat::xmpp::omemo::process_postponed_key_transports(weechat::account &ac
     for (const auto &[bare_jid, device_id] : postponed_key_transports)
     {
         struct t_gui_buffer *buf = account.buffer;
-        auto ch_it = account.channels.find(bare_jid);
-        if (ch_it != account.channels.end())
-            buf = ch_it->second.buffer;
+        if (auto ch_it = account.channels.find(bare_jid); ch_it != account.channels.end())
+        {
+            auto& [_, ch] = *ch_it;
+            buf = ch.buffer;
+        }
 
         send_key_transport(*this, account, buf, bare_jid.c_str(), device_id);
     }

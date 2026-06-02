@@ -69,7 +69,7 @@ void signal_log_emit(int level, const char *message, std::size_t length, void *u
 }
 
 // Extract a legacy bundle from a pubsub <items> result.
-[[nodiscard]] auto extract_legacy_bundle_from_items(xmpp_stanza_t *items)
+[[maybe_unused]] [[nodiscard]] auto extract_legacy_bundle_from_items(xmpp_stanza_t *items)
     -> std::optional<bundle_metadata>
 {
     if (!items)

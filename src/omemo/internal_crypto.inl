@@ -277,7 +277,7 @@ struct axolotl_omemo_payload {
     std::vector<std::uint8_t> payload;       // AES-128-GCM ciphertext (auth tag stripped)
 };
 
-[[nodiscard]] auto axolotl_omemo_encrypt(std::string_view plaintext) -> std::expected<axolotl_omemo_payload, std::string>
+[[maybe_unused]] [[nodiscard]] auto axolotl_omemo_encrypt(std::string_view plaintext) -> std::expected<axolotl_omemo_payload, std::string>
 {
     if (plaintext.empty())
         return std::unexpected("empty plaintext");
@@ -318,7 +318,7 @@ struct axolotl_omemo_payload {
 }
 
 // Decrypt a legacy OMEMO payload.  The auth tag is checked internally by GCM.
-[[nodiscard]] auto axolotl_omemo_decrypt(const std::array<std::uint8_t, 16> &key,
+[[maybe_unused]] [[nodiscard]] auto axolotl_omemo_decrypt(const std::array<std::uint8_t, 16> &key,
                                         const std::array<std::uint8_t, 12> &iv,
                                         const std::array<std::uint8_t, 16> &authtag,
                                         const std::vector<std::uint8_t> &ciphertext)
@@ -411,7 +411,7 @@ struct axolotl_omemo_payload {
 // If the message was already decrypted (SG_ERR_DUPLICATE_MESSAGE), *out_is_duplicate
 // is set to true and nullopt is returned.  Callers should silently skip duplicates
 // rather than treating them as failures (matches Gajim DuplicateMessageException→NodeProcessed).
-[[nodiscard]] auto decrypt_axolotl_transport_key(omemo &self, std::string_view jid,
+[[maybe_unused]] [[nodiscard]] auto decrypt_axolotl_transport_key(omemo &self, std::string_view jid,
                                                 std::uint32_t remote_device_id,
                                                 const std::vector<std::uint8_t> &serialized,
                                                 bool is_prekey,
