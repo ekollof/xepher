@@ -1323,6 +1323,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // Store in pending_uploads keyed by read-end fd
                 account.pending_uploads[pipe_fds[0]] = ctx;
 
+                XDEBUG("Upload: launching worker thread for {} (read fd={})", filepath_copy, pipe_fds[0]);
+
                 // Capture everything needed for the thread by value
                 std::shared_ptr<weechat::account::upload_completion> ctx_copy = ctx;
                 std::vector<std::string> put_headers_copy = put_headers;
@@ -1335,7 +1337,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                                account.context),
                                            conn_ptr = &account.connection]()
                 {
-                    XDEBUG("Upload: thread started for {}", filepath_copy);
+                    // No XDEBUG here: this runs in the upload worker thread. XDEBUG
+                    // (and xmpp_debug_is_on) call WeeChat APIs which are not safe
+                    // from worker threads and can cause lockups/deadlocks (esp. with
+                    // Python hooks or when debug is enabled for upload tracing).
                     auto &c = *ctx_copy;
 
                     // Open file with RAII guard
@@ -1781,7 +1786,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // completion even when the event loop is stalled
                     // (Python deadlocks, etc.).
                     c.worker_done.store(true);
-                    XDEBUG("Upload: thread done, success={}", c.success);
+                    // No XDEBUG here (see comment at thread start): worker thread must
+                    // not call any weechat_* APIs.
                     ::write(c.pipe_write_fd, "x", 1);
                 });
             }

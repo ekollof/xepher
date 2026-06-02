@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
+#include <ranges>
 #include <libxml/xmlwriter.h>
 #include <libxml/xmlerror.h>
 #include <libxml/parser.h>
