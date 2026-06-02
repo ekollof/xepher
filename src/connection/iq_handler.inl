@@ -1234,20 +1234,17 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 weechat_printf(account.buffer, "%sUpload slot received, uploading file...",
                               weechat_prefix("network"));
                 
-                // Verify file exists and get file size
-                XDEBUG("Upload: opening file '{}'", req.filepath);
-                FILE *file = fopen(req.filepath.c_str(), "rb");
-                if (!file)
+                // Verify file exists (non-blocking, no FILE* needed)
+                if (access(req.filepath.c_str(), R_OK) != 0)
                 {
-                    XDEBUG("Upload: file not found: {}", req.filepath);
+                    XDEBUG("Upload: file not found/readable: {}", req.filepath);
                     weechat_printf(account.buffer, "%s%s: failed to open file for upload: %s",
                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
                                   req.filepath.c_str());
                     account.upload_requests.erase(req_it);
                     return 1;
                 }
-                fclose(file);
-                XDEBUG("Upload: file closed, filename='{}'", req.filename);
+                XDEBUG("Upload: file verified, filename='{}'", req.filename);
                 
                 // Get Content-Type from filename extension
                 std::string filename = req.filename;
