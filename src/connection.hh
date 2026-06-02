@@ -40,6 +40,7 @@ namespace weechat {
         }
 
         void send(xmpp_stanza_t *stanza);
+        void send_threadsafe(xmpp_stanza_t *stanza);
 
         inline auto context() {
             return m_conn.get_context();

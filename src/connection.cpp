@@ -73,6 +73,15 @@ void weechat::connection::send(xmpp_stanza_t *stanza)
     m_conn.send(stanza);
 }
 
+void weechat::connection::send_threadsafe(xmpp_stanza_t *stanza)
+{
+    // Bypass non-thread-safe SM counter and raw XML trace.
+    // xmpp_send() is mutex-protected in libstrophe, making it
+    // safe to call from upload worker threads while the main
+    // thread is blocked (e.g. Python hook deadlocks).
+    m_conn.send(stanza);
+}
+
 bool weechat::connection::version_handler(xmpp_stanza_t *stanza)
 {
     const char *weechat_name = "weechat";
