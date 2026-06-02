@@ -1247,6 +1247,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     return 1;
                 }
                 fclose(file);
+                XDEBUG("Upload: file closed, filename='{}'", req.filename);
+                
                 // Get Content-Type from filename extension
                 std::string filename = req.filename;
                 std::string content_type = "application/octet-stream";
@@ -1276,6 +1278,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 int pipe_fds[2];
                 if (pipe(pipe_fds) != 0)
                 {
+                    XDEBUG("Upload: pipe() failed");
                     weechat_printf(account.buffer, "%s%s: failed to create pipe for upload",
                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
                     account.upload_requests.erase(req_it);
