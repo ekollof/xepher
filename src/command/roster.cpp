@@ -14,6 +14,7 @@
 #include <optional>
 #include <memory>
 #include <array>
+#include <ranges>
 #include <fmt/core.h>
 #include <fmt/chrono.h>
 #include <weechat/weechat-plugin.h>

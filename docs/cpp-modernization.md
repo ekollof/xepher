@@ -1,6 +1,6 @@
 # C++23 Modernization Effort
 
-> **Status**: Complete (as of 2026-06-01)
+> **Status**: Views modernization extended (as of 2026-06-02); prior phases complete
 > This document captures the plan, progress, and remaining work for adopting modern C++23 features as recommended in the project's agent instructions.
 
 ## Background
@@ -17,9 +17,9 @@ specific "C++23 Memory Safety Features to Leverage" was only partial:
 - Almost no use of `std::ranges::`
 - Zero use of `std::expected`
 
-As of 2026-06-01, all of these gaps have been closed. The codebase now has zero remaining
-classical `std::algorithm` calls in `.cpp`/`.inl` files, and all recommended C++23 features
-are in active use.
+As of 2026-06-01, the initial gaps (span, ranges algos, expected, views) were closed, with zero remaining
+classical `std::algorithm` calls in `.cpp`/`.inl` files. Views adoption was further extended in subsequent
+work (see below). All recommended C++23 features are in active use.
 
 ## Goals
 
@@ -46,17 +46,30 @@ are in active use.
   `.error()` to read the message, `->` to access the value.
 - Includes added to `helpers.cpp` and `api.cpp`.
 
-### 2. `std::views` (Phase 2 ✅)
+### 2. `std::views` (Phase 2 ✅, extended 2026-06-02)
 
 - **`std::views::split`**: replaced manual comma-split parsing loop in
   `caps_cache_load` (lmdb_cache.inl) — 9 lines → 2 lines
+- **`std::views::split`**: modernized the central `split(std::string_view, char)` helper
+  in `omemo/internal_prelude.inl` (used extensively for OMEMO devicelist ";"-separated
+  strings and other parsing) from ~20-line manual char-by-char loop + current buffer
+  to a 6-line views pipeline. All existing call sites (in session_flow, codec, commands,
+  internal_crypto, etc.) benefit with no API change.
+- **`std::views::split`**: replaced manual tab-split parsing loop (9 lines) in
+  `og_cache_lookup` (lmdb_cache.inl) with views pipeline (matching caps style).
 - **`std::views::filter | transform`**: converted two device-list parsing
   functions in `omemo/commands.inl`:
   - `get_cached_device_ids`: split → transform(parse) → filter(valid) →
     transform(unwrap) → `std::ranges::to<std::vector>()`
   - `show_fingerprints` device collection: same pipeline with
     `std::ranges::copy` + `back_inserter`
+- **`std::views::take` + `std::ranges::for_each`**: replaced manual prefix hash loop
+  (first 64 bytes) in `avatar::render_unicode_blocks` (avatar.cpp).
+- **`std::ranges::for_each`** (on range): updated groups comma-listing in
+  `command/roster.inl` (roster picker) to use ranges for_each over the container.
 - **`std::ranges::to`** (C++23): confirmed working with GCC 16
+- Added `#include <ranges>` to `avatar.cpp` and `command/roster.cpp` (the .inl files
+  for roster and the omemo/lmdb wrappers already pulled it via their .cpp entry points).
 
 ### 3. `std::string_view` Campaign ✅
 
@@ -91,7 +104,9 @@ are in active use.
 
 - **Builds cleanly** with `make`
 - **All tests pass** (27/27 cases, 286/286 assertions)
-- All phases from the original plan are now complete.
+- Initial phases from the original plan are complete; `std::views` adoption is being
+  incrementally extended (more `split`, `take`, pipeline uses) as surgical opportunities
+  are identified in string/list processing.
 - Zero remaining classical `std::algorithm` calls in `.cpp`/`.inl` files.
 - `std::expected`, `std::views`, and `std::ranges::to` patterns are established and
   ready for wider adoption.
@@ -101,7 +116,7 @@ are in active use.
 | Feature | Before | After |
 |---------|--------|-------|
 | `std::expected` | 0 | 2 |
-| `std::views::` | 0 | 4 |
+| `std::views::` | 0 | 7+ (split x3, take, filter/transform pipelines, etc.) |
 | `std::ranges::to` | 0 | 1 |
 | `std::span` | 0 | 29 |
 | `std::ranges::` algorithms | ~40 (classical) | 37 (all modern) |
@@ -117,6 +132,10 @@ are in active use.
   where necessary; converting them would add indirection without benefit.
 - **`std::expected`** can be adopted further in error-returning functions — the
   pattern is established, adoption should be incremental.
+- **Further `std::views`** opportunities exist for other list comprehensions, string
+  tokenization, or filtering side-effect loops (e.g. device lists, MUC members, etc.).
+  Continue the surgical pattern: prefer views pipelines over manual loops or eager
+  intermediate vectors where the result is consumed once.
 
 ## Related Documents
 

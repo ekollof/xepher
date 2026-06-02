@@ -940,12 +940,9 @@ weechat::account::og_cache_lookup(const std::string& url)
         og_preview p;
         std::array<std::string*, 4> fields = {&p.title, &p.description, &p.url, &p.image};
         size_t field_idx = 0;
-        size_t start = 0;
-        for (size_t i = 0; i <= sv.size() && field_idx < 4; ++i) {
-            if (i == sv.size() || sv[i] == '\t') {
-                *fields[field_idx++] = std::string(sv.substr(start, i - start));
-                start = i + 1;
-            }
+        for (auto part : sv | std::views::split('\t')) {
+            if (field_idx >= 4) break;
+            *fields[field_idx++] = std::string(part.begin(), part.end());
         }
         return p;
     } catch (const lmdb::error&) {

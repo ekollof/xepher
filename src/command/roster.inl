@@ -276,10 +276,12 @@ int command__roster(const void *pointer, void *data,
             std::string sublabel = item.subscription;
             if (!item.groups.empty()) {
                 sublabel += "  [";
-                for (size_t i = 0; i < item.groups.size(); i++) {
-                    if (i > 0) sublabel += ", ";
-                    sublabel += item.groups[i];
-                }
+                bool first = true;
+                std::ranges::for_each(item.groups, [&](const auto &g) {
+                    if (!first) sublabel += ", ";
+                    first = false;
+                    sublabel += g;
+                });
                 sublabel += "]";
             }
             entries.push_back({ jid, label, sublabel, true });

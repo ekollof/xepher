@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <fstream>
 #include <span>
+#include <ranges>
 #include <string>
 #include <openssl/evp.h>
 #include <openssl/bio.h>
@@ -131,10 +132,10 @@ std::string weechat::avatar::render_unicode_blocks(
     
     // Calculate a hash value from the image data
     uint32_t hash = 0;
-    for (size_t i = 0; i < std::min(image_data.size(), size_t(64)); i++)
-    {
-        hash = ((hash << 5) + hash) + image_data[i];
-    }
+    auto view = image_data | std::views::take(std::min(image_data.size(), size_t(64)));
+    std::ranges::for_each(view, [&](auto b) {
+        hash = ((hash << 5) + hash) + b;
+    });
     
     // Unicode geometric shapes and symbols for avatars
     const char* avatar_chars[] = {

@@ -163,26 +163,12 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
 [[nodiscard]] auto split(std::string_view input, char separator) -> std::vector<std::string>
 {
     std::vector<std::string> parts;
-    std::string current;
-
-    for (const char ch : input)
+    for (auto r : input | std::views::split(separator))
     {
-        if (ch == separator)
-        {
-            if (!current.empty())
-            {
-                parts.push_back(current);
-                current.clear();
-            }
-            continue;
-        }
-
-        current.push_back(ch);
+        std::string s(r.begin(), r.end());
+        if (!s.empty())
+            parts.push_back(std::move(s));
     }
-
-    if (!current.empty())
-        parts.push_back(current);
-
     return parts;
 }
 
