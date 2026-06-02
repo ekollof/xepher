@@ -685,7 +685,7 @@ When updating documentation:
 # Build
 make
 
-# Clean build
+# Clean build (avoid; prefer ccache incremental: CXX="ccache c++" make )
 make clean && make
 
 # Check git status
