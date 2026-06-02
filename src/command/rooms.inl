@@ -370,17 +370,11 @@ int command__upload(const void *pointer, void *data,
         else if (ext == "tar") content_type = "application/x-tar";
     }
     
-    // Get file size
-    FILE* f = fopen(filename.c_str(), "rb");
-    if (!f)
-    {
-        weechat_printf(buffer, "%s%s: failed to open file: %s",
-                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, filename.c_str());
-        return WEECHAT_RC_ERROR;
-    }
-    fseek(f, 0, SEEK_END);
-    size_t file_size = ftell(f);
-    fclose(f);
+    // Use the size from the early probe (printed in "Requesting..." and used for max check).
+    // Snapshot happens immediately after this, so the snapshotted bytes (and thus uploaded
+    // content + advertised meta) match the size the user saw, with minimal window for
+    // external writers to mutate the source between probe and snapshot.
+    size_t file_size = static_cast<size_t>(filesize);
 
     // XEP-0448: when the channel has OMEMO active, the actual upload will be
     // AES-256-GCM ciphertext = plaintext + 16-byte auth tag.  Request the slot

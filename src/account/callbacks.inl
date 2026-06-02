@@ -362,13 +362,17 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         return WEECHAT_RC_OK;
     }
 
-    weechat_printf_date_tags(ptr_account->buffer, 0, "no_trigger,notify_none",
-                  "%sFile uploaded! Sharing link…",
-                  weechat_prefix("network"));
-
+    // Always surface a visible text link (in the originating channel buffer when
+    // still present). The rich SFS/SIMS send below (when channel found) provides
+    // preview metadata for clients; this printf is the fallback for MUC/closed
+    // channels or when the send hits service-unavailable (as seen in logs for
+    // some MUC uploads).
+    struct t_gui_buffer *status_buf = ptr_account->buffer;
     if (auto channel_it = ptr_account->channels.find(ctx->channel_id); channel_it != ptr_account->channels.end())
     {
         auto& [_, ch] = *channel_it;
+        status_buf = ch.buffer;
+
         weechat::channel::file_metadata meta;
         meta.filename     = ctx->filename;
         meta.content_type = ctx->content_type;
@@ -409,6 +413,10 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             std::optional<weechat::channel::file_metadata>(meta)
         );
     }
+
+    weechat_printf_date_tags(status_buf, 0, "no_trigger,notify_none",
+                  "%sFile uploaded! Sharing link… %s",
+                  weechat_prefix("network"), ctx->get_url.c_str());
 
     return WEECHAT_RC_OK;
 }
