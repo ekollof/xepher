@@ -1330,7 +1330,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                 ctx->worker = std::thread([ctx_copy, filepath_copy,
                                            put_url_copy, get_url_copy,
-                                           put_headers_copy, content_type_copy]()
+                                           put_headers_copy, content_type_copy,
+                                           ctx_ptr = static_cast<xmpp_ctx_t*>(
+                                               account.context),
+                                           conn_ptr = &account.connection]()
                 {
                     XDEBUG("Upload: thread started for {}", filepath_copy);
                     auto &c = *ctx_copy;
@@ -1741,6 +1744,35 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     else
                     {
                         c.success = true;
+                        // Queue the stanza from the worker thread via
+                        // xmpp_send() (thread-safe). The main thread
+                        // flushes it when xmpp_run_once() next runs.
+                        struct upload_msg : stanza::spec {
+                            upload_msg(xmpp_ctx_t *ctx,
+                                       std::string_view to,
+                                       std::string_view body,
+                                       std::string_view oob_url)
+                                : spec("message") {
+                                attr("type", "chat");
+                                attr("to", to);
+                                attr("id", stanza::uuid(ctx));
+                                struct body_s : stanza::spec {
+                                    body_s(std::string_view b) : spec("body") { text(b); }
+                                } bd(body);
+                                child(bd);
+                                struct oob_s : stanza::spec {
+                                    oob_s(std::string_view u) : spec("x") {
+                                        xmlns<jabber::x::oob>();
+                                        struct url_s : stanza::spec {
+                                            url_s(std::string_view v) : spec("url") { text(v); }
+                                        } ur(u);
+                                        child(ur);
+                                    }
+                                } oo(oob_url);
+                                child(oo);
+                            }
+                        } msg(ctx_ptr, c.channel_id, c.get_url, c.get_url);
+                        conn_ptr->send_threadsafe(msg.build(ctx_ptr).get());
                     }
 
                     // Signal the main thread via pipe and atomic flag.
