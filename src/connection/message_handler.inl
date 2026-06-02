@@ -1770,6 +1770,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         && weechat_strcasecmp(from_bare, account.jid().data()) == 0
         && weechat_strcasecmp(to_bare, account.jid().data()) != 0;
     id = xmpp_stanza_get_id(stanza);
+    bool was_omemo_cached = false;  // set when plaintext came from omemo_plaintext cache
     thread = xmpp_stanza_get_attribute(stanza, "thread");
     
     // XEP-0359: Unique and Stable Stanza IDs
@@ -2063,6 +2064,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             XDEBUG("omemo cache hit: body_len={}", cached->size());
             omemo_cleartext_storage = std::move(*cached);
             cleartext = omemo_cleartext_storage.data();
+            was_omemo_cached = true;
             goto message_handler_after_omemo;
         }
         else
@@ -3874,7 +3876,7 @@ message_handler_after_omemo:
         display_text = final_text.c_str();
     }
 
-    const char *encrypted_glyph = (encrypted || x) ? "🔒 " : "";
+    const char *encrypted_glyph = (encrypted || x || was_omemo_cached) ? "🔒 " : "";
 
     if (channel_id == from_bare && to == channel->id)
     {
