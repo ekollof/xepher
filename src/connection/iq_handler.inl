@@ -1235,9 +1235,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                               weechat_prefix("network"));
                 
                 // Verify file exists and get file size
+                XDEBUG("Upload: opening file '{}'", req.filepath);
                 FILE *file = fopen(req.filepath.c_str(), "rb");
                 if (!file)
                 {
+                    XDEBUG("Upload: file not found: {}", req.filepath);
                     weechat_printf(account.buffer, "%s%s: failed to open file for upload: %s",
                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
                                   req.filepath.c_str());
