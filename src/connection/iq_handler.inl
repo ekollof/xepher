@@ -1896,11 +1896,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             std::string svc_jid = account.pubsub_mam_disco_queries[id];
             account.pubsub_mam_disco_queries.erase(id);
 
-            auto def_it = account.pubsub_mam_deferred_feeds.find(svc_jid);
-            if (def_it != account.pubsub_mam_deferred_feeds.end())
+            if (auto def_it = account.pubsub_mam_deferred_feeds.find(svc_jid); def_it != account.pubsub_mam_deferred_feeds.end())
             {
+                auto& [_, deferred] = *def_it;
                 const int max_items = 20;
-                for (const auto &feed_key : def_it->second)
+                for (const auto &feed_key : deferred)
                 {
                     auto slash = feed_key.find('/');
                     if (slash == std::string::npos) continue;
@@ -3282,11 +3282,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     account.pubsub_mam_services.insert(svc_jid);
 
                 // Flush deferred feed restores for this service.
-                auto def_it = account.pubsub_mam_deferred_feeds.find(svc_jid);
-                if (def_it != account.pubsub_mam_deferred_feeds.end())
+                if (auto def_it = account.pubsub_mam_deferred_feeds.find(svc_jid); def_it != account.pubsub_mam_deferred_feeds.end())
                 {
+                    auto& [_, deferred] = *def_it;
                     const int max_items = 20;
-                    for (const auto &feed_key : def_it->second)
+                    for (const auto &feed_key : deferred)
                     {
                         auto slash = feed_key.find('/');
                         if (slash == std::string::npos) continue;

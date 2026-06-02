@@ -57,10 +57,12 @@ int command__enter(const void *pointer, void *data,
 
                 if (!ptr_account->channels.contains(jid))
                 {
-                    ptr_channel = &ptr_account->channels.emplace(
+                    auto [it_ch, _ins] = ptr_account->channels.emplace(
                         std::make_pair(jid, weechat::channel {
                                 *ptr_account, weechat::channel::chat_type::MUC, jid, jid
-                            })).first->second;
+                            }));
+                    auto& [_, ch] = *it_ch;
+                    ptr_channel = &ch;
                     ptr_account->load_pgp_keys();
                 }
                 if (!ptr_channel) {
@@ -74,10 +76,12 @@ int command__enter(const void *pointer, void *data,
             {
                 if (!ptr_account->channels.contains(jid))
                 {
-                    ptr_channel = &ptr_account->channels.emplace(
+                    auto [it_ch, _ins] = ptr_account->channels.emplace(
                         std::make_pair(jid, weechat::channel {
                                 *ptr_account, weechat::channel::chat_type::MUC, jid, jid
-                            })).first->second;
+                            }));
+                    auto& [_, ch] = *it_ch;
+                    ptr_channel = &ch;
                     ptr_account->load_pgp_keys();
                 }
                 if (!ptr_channel) {
@@ -111,10 +115,14 @@ int command__enter(const void *pointer, void *data,
         pres_jid = pres_jid_s.c_str();
 
         if (!ptr_account->channels.contains(buffer_jid))
-            ptr_channel = &ptr_account->channels.emplace(
+        {
+            auto [it_ch, _ins] = ptr_account->channels.emplace(
                 std::make_pair(buffer_jid, weechat::channel {
                         *ptr_account, weechat::channel::chat_type::MUC, buffer_jid.c_str(), buffer_jid.c_str()
-                    })).first->second;
+                    }));
+            auto& [_, ch] = *it_ch;
+            ptr_channel = &ch;
+        }
 
         send_muc_join_presence(ptr_account, pres_jid);
     }
@@ -187,10 +195,11 @@ int command__open(const void *pointer, void *data,
                 // (it might be -1 if previously closed)
                 ptr_account->mam_cache_set_last_timestamp(jid, 0);
                 
-                channel = ptr_account->channels.emplace(
+                auto [it_ch, _ins] = ptr_account->channels.emplace(
                     std::make_pair(std::string(jid), weechat::channel {
                             *ptr_account, weechat::channel::chat_type::PM, jid, jid
-                        })).first;
+                        }));
+                channel = it_ch;
 
                 // Proactively fetch OMEMO devicelist for this contact so that
                 // sessions can be established before sending the first message.

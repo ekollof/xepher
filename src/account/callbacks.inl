@@ -163,7 +163,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     if (it == ptr_account->pending_uploads.end())
         return WEECHAT_RC_ERROR;
 
-    auto ctx = it->second;
+    auto& [_, ctx] = *it;
 
     // Drain the pipe (1 byte signal)
     char sig[1];
@@ -194,7 +194,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             return WEECHAT_RC_OK;
         }
 
-        auto &post = post_it->second;
+        auto& [_, post] = *post_it;
         size_t idx = post.uploads_done;  // index of the just-completed embed
 
         if (!ctx->success)

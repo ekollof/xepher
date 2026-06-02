@@ -57,9 +57,13 @@ int command__notify(const void *pointer, void *data,
     // Show current setting if no level given
     if (level.empty())
     {
-        auto it = ptr_account->bookmarks.find(target_jid);
-        std::string setting = (it != ptr_account->bookmarks.end() && !it->second.notify_setting.empty())
-                              ? it->second.notify_setting : "(default)";
+        std::string setting = "(default)";
+        if (auto it = ptr_account->bookmarks.find(target_jid); it != ptr_account->bookmarks.end())
+        {
+            auto& [_, bm] = *it;
+            if (!bm.notify_setting.empty())
+                setting = bm.notify_setting;
+        }
         weechat_printf(ptr_account->buffer,
                        "%s%s: notification setting for %s: %s",
                        weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,

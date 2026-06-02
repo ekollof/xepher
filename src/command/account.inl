@@ -680,9 +680,11 @@ void command__add_account(const char *name, const char *jid, const char *passwor
     }
 
     ;
-    account = &weechat::accounts.emplace(
+    auto [it, _ins] = weechat::accounts.emplace(
         std::piecewise_construct, std::forward_as_tuple(name),
-        std::forward_as_tuple(weechat::config::instance->file, name)).first->second;
+        std::forward_as_tuple(weechat::config::instance->file, name));
+    auto& [_, acc] = *it;
+    account = &acc;
     if (!account)
     {
         weechat_printf(
