@@ -277,10 +277,10 @@ struct axolotl_omemo_payload {
     std::vector<std::uint8_t> payload;       // AES-128-GCM ciphertext (auth tag stripped)
 };
 
-[[nodiscard]] auto axolotl_omemo_encrypt(std::string_view plaintext) -> std::optional<axolotl_omemo_payload>
+[[nodiscard]] auto axolotl_omemo_encrypt(std::string_view plaintext) -> std::expected<axolotl_omemo_payload, std::string>
 {
     if (plaintext.empty())
-        return std::nullopt;
+        return std::unexpected("empty plaintext");
 
     axolotl_omemo_payload result;
     auto key_span = std::span(result.key);
@@ -291,13 +291,13 @@ struct axolotl_omemo_payload {
     gcry_cipher_hd_t cipher_raw = nullptr;
     // AES-128 = GCRY_CIPHER_AES (= GCRY_CIPHER_AES128)
     if (gcry_cipher_open(&cipher_raw, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_GCM, 0) != 0)
-        return std::nullopt;
+        return std::unexpected("cipher open failed");
     unique_gcry_cipher cipher {cipher_raw};
 
     if (gcry_cipher_setkey(cipher.get(), key_span.data(), key_span.size()) != 0
         || gcry_cipher_setiv(cipher.get(), iv_span.data(), iv_span.size()) != 0)
     {
-        return std::nullopt;
+        return std::unexpected("cipher key/iv failed");
     }
 
     std::vector<std::uint8_t> ciphertext(plaintext.size());
@@ -305,13 +305,13 @@ struct axolotl_omemo_payload {
     if (gcry_cipher_encrypt(cipher.get(), ct_span.data(), ct_span.size(),
                             plaintext.data(), plaintext.size()) != 0)
     {
-        return std::nullopt;
+        return std::unexpected("encrypt failed");
     }
 
     // Retrieve GCM authentication tag (16 bytes)
     auto authtag_span = std::span(result.authtag);
     if (gcry_cipher_gettag(cipher.get(), authtag_span.data(), authtag_span.size()) != 0)
-        return std::nullopt;
+        return std::unexpected("gettag failed");
 
     result.payload = std::move(ciphertext);  // (span not needed after this point)
     return result;
@@ -322,14 +322,14 @@ struct axolotl_omemo_payload {
                                         const std::array<std::uint8_t, 12> &iv,
                                         const std::array<std::uint8_t, 16> &authtag,
                                         const std::vector<std::uint8_t> &ciphertext)
-    -> std::optional<std::string>
+    -> std::expected<std::string, std::string>
 {
     if (ciphertext.empty())
-        return std::nullopt;
+        return std::unexpected("empty ciphertext");
 
     gcry_cipher_hd_t cipher_raw = nullptr;
     if (gcry_cipher_open(&cipher_raw, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_GCM, 0) != 0)
-        return std::nullopt;
+        return std::unexpected("cipher open failed");
     unique_gcry_cipher cipher {cipher_raw};
 
     auto key_span = std::span(key);
@@ -337,7 +337,7 @@ struct axolotl_omemo_payload {
     if (gcry_cipher_setkey(cipher.get(), key_span.data(), key_span.size()) != 0
         || gcry_cipher_setiv(cipher.get(), iv_span.data(), iv_span.size()) != 0)
     {
-        return std::nullopt;
+        return std::unexpected("cipher key/iv failed");
     }
 
     std::vector<std::uint8_t> plaintext(ciphertext.size());
@@ -345,7 +345,7 @@ struct axolotl_omemo_payload {
     if (gcry_cipher_decrypt(cipher.get(), pt_span.data(), pt_span.size(),
                             ciphertext.data(), ciphertext.size()) != 0)
     {
-        return std::nullopt;
+        return std::unexpected("decrypt failed");
     }
 
     // Verify the GCM authentication tag
@@ -354,7 +354,7 @@ struct axolotl_omemo_payload {
     {
         weechat_printf(nullptr, "%somemo: legacy OMEMO payload GCM authentication failed",
                        weechat_prefix("error"));
-        return std::nullopt;
+        return std::unexpected("auth tag failed");
     }
 
     return std::string(plaintext.begin(), plaintext.end());
