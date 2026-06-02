@@ -41,11 +41,11 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 ## Build System
 
-- **Build command**: `make`
-- **Clean command**: `make clean`
+- **Build command**: `make` (use ccache for fast incremental builds without `make clean`: `CXX="ccache c++" make`)
+- **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick)
 - **Output**: `xmpp.so` (WeeChat plugin)
 - **Dependencies**: Managed via git submodules in `deps/`
-- Always run `make` after code changes to verify compilation
+- Always run `make` after code changes to verify compilation (doctests run automatically at end)
 
 ## Coding Style & Practices
 
@@ -76,6 +76,54 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 - **`std::make_unique` / `std::make_shared`**: Always prefer over `new`
 - **Move semantics**: Use `std::move` to avoid unnecessary copies
 - **Structured bindings**: `auto [key, value] = map.find(...)` for cleaner code
+
+**Modernization Patterns** (established via surgical updates; future agents **must** prefer these for new code, refactors, and list/string/error handling in `.cpp`/`.inl` files. Follow "surgical/minimal" rule — only apply where it simplifies without touching C ABI boundaries like LMDB cursors, libstrophe child iteration, or WeeChat hooks. Match local style exactly by opening a nearby file first. Always `#include <ranges>` / `<expected>` / `<span>` in the thin `.cpp` wrapper before `#include`ing the `.inl`.)
+
+- **std::string_view for read-only params**: Replace `const std::string& s` (and `const char*`) with `std::string_view s`. Only `std::string(...)` cast when storing or returning ownership.
+- **std::span for byte buffers**: Use for owned data passed to C APIs, e.g.:
+  ```cpp
+  [[nodiscard]] auto base64_encode_raw(std::span<const std::uint8_t> data) -> std::string;
+  // ...
+  std::span<unsigned char> out_view{out};
+  int n = BIO_read(..., out_view.data(), ...);
+  ```
+  Create locals from `std::vector`/`std::array`: `std::span<T> view{vec};`.
+- **std::ranges + views pipelines** (replace manual loops / classical algos / eager temporaries):
+  - Tokenization: `for (auto r : input | std::views::split(separator)) { std::string s(r.begin(), r.end()); ... }` (see `split()` helper).
+  - Collect/filter/transform: 
+    ```cpp
+    std::ranges::copy(
+        split(*devlist, ';')
+        | std::views::transform(parse_uint32)
+        | std::views::filter([](auto p){ return p && is_valid(*p); })
+        | std::views::transform([](auto p){ return *p; }),
+        std::back_inserter(devices));
+    // or ` | std::ranges::to<std::vector<uint32_t>>() `
+    ```
+  - Side-effect iteration: `std::ranges::for_each(range, lambda)` (avoids index `for (size_t i=0; ...)` for joins).
+  - Joins: simple `vec | std::views::join_with(", ") | std::ranges::to<std::string>()`; complex (e.g. colored separators) fall back to `for_each` + flag.
+  - Other: `views::take(N)`, `views::filter` + `transform`, `enumerate` where index+value needed.
+  - Upgrade any remaining `std::transform` / `std::for_each` / manual `for` + `push_back` + `if` to the above.
+- **std::expected<T, std::string> for errors** (carry diagnostics instead of losing info in `optional`/`bool`/exceptions):
+  ```cpp
+  [[nodiscard]] auto parse_uint32(std::string_view value) -> std::expected<std::uint32_t, std::string>;
+  // ...
+  if (error != std::errc{} || ptr != end) return std::unexpected("invalid uint32");
+  return parsed;
+  ```
+  Usage: `if (auto e = foo(); e) { use(*e); } else { log(e.error()); }`, `.value_or(default)`, `e ? *e : fallback`. Call sites often need zero changes due to bool-conversion + `value_or`. Established in `esfs_b64_decode`, `pkcs7_unpad`, `parse_uint32`/`parse_int64`, `load_tofu_trust`.
+- **Modern container/string APIs**: `m.contains(k)` (not `m.find(k) != end()` or `m.count(k)>0`), `s.contains(substr)` (not `find != npos`).
+- **Structured bindings** (everywhere for maps, pairs, from_chars, if-init):
+  ```cpp
+  for (auto& [_, acc] : accounts) { use(acc); }
+  else if (auto it = m.find(k); it != m.end()) { auto& [key, val] = *it; ... }
+  const auto [ptr, ec] = std::from_chars(...);
+  ```
+- **General**: Prefer `std::ranges::sort` / `unique` / `for_each` / `copy_if` etc. over raw loops or `<algorithm>`. Zero classical `<algorithm>` calls remain in src (except commented). Update this section when adding new patterns (e.g. more `views`).
+
+**Build note**: Use ccache for speed during iterative modernization: `CXX="ccache c++" make` (see Build System). Run `make` (not clean) after every logical group of changes; verify doctests pass.
+
+(Concrete examples of these patterns are visible throughout `src/` — e.g. OMEMO helpers, account/channel map handling, connection data-form/OG parsing, and avatar/ base64 paths. Extend them surgically.)
 
 ### WeeChat Plugin Conventions
 
