@@ -1992,31 +1992,26 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         channel->set_transport(weechat::channel::transport::PGP, 0);
     }
     
+    // On MAM replay: check if we cached the plaintext from a prior
+    // live delivery or from the send path (self-sent messages stored
+    // at channel.cpp:1206/1372). This runs OUTSIDE the encrypted guard
+    // so self-device own copies — where encrypted is nullified at line
+    // 1934 — still reach the cache.
+    if (is_mam_replay && stable_id && channel_id && account.omemo)
+    {
+        auto cached = account.mam_cache_lookup_omemo_plaintext(
+            std::string(channel_id), std::string(stable_id));
+        if (cached.has_value())
+        {
+            omemo_cleartext_storage = std::move(*cached);
+            cleartext = omemo_cleartext_storage.data();
+            goto message_handler_after_omemo;
+        }
+    }
+
     if (encrypted && account.omemo)
     {
         bool omemo_is_duplicate = false;
-        // On MAM replay: check if we cached the plaintext from the live delivery.
-        // If found, use it directly and skip Signal decryption entirely — the ratchet
-        // key was consumed in the original session and decryption would fail with
-        // SG_ERR_DUPLICATE_MESSAGE.  This mirrors Gajim's SQLite archive approach.
-        //
-        // For MUC OMEMO: this cache path is especially important. We pass the
-        // sender's real bare JID (from the member table) to decode() only as a
-        // fallback. The primary safety is serving the cached cleartext so we
-        // never touch the ratchet on historical replay. channel_id is the room
-        // bare JID for MUC messages.
-        if (is_mam_replay && stable_id && channel_id)
-        {
-            auto cached = account.mam_cache_lookup_omemo_plaintext(
-                std::string(channel_id), std::string(stable_id));
-            if (cached.has_value())
-            {
-                omemo_cleartext_storage = std::move(*cached);
-                cleartext = omemo_cleartext_storage.data();
-                encrypted = nullptr;  // bypass after-omemo null-text guard
-                goto message_handler_after_omemo;
-            }
-        }
         // For MUC OMEMO (plan §4.1): the stanza 'from' is room@service/nick.
         // We must pass the *sender's real bare JID* (from the member table) to
         // decode() so that Signal sessions and trust are looked up correctly.
@@ -2062,8 +2057,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             // succeeds (ratchet not yet advanced).  This ensures the plaintext is
             // available on the next WeeChat restart even when the first successful
             // decryption happened during a MAM catchup rather than live delivery.
-            // Skip only self outbound carbon copies (no useful plaintext to cache).
-            if (!is_self_outbound_copy && channel_id)
+            // Cache decrypted plaintext for ALL messages including self
+            // outbound copies. Own messages sent from other devices on the
+            // account need their cleartext cached so future MAM replays can
+            // retrieve it even after ratchet state has advanced.
+            if (channel_id)
             {
                 // Store under all three IDs so the MAM replay lookup always hits.
                 // On live delivery the server injects <stanza-id> (server-assigned).
