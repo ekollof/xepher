@@ -208,3 +208,76 @@ std::string message__decode(weechat::account *account,
 
     return htmldec;
 }
+
+static const std::pair<std::string_view, std::string_view> k_emoticons[] = {
+    {":-)", "😊"}, {":)",  "😊"},
+    {":-(", "😢"}, {":(",  "😢"},
+    {";-)", "😉"}, {";)",  "😉"},
+    {":-D", "😀"}, {":D",  "😀"},
+    {":-P", "😛"}, {":P",  "😛"},
+    {":-O", "😮"}, {":O",  "😮"},
+    {":-/", "😕"}, {":/",  "😕"},
+    {":'(", "😢"},
+    {"xD",  "😆"}, {"XD",  "😆"},
+    {"^_^", "😊"},
+    {"<3",  "❤️"},
+    {":-*", "😘"}, {":*",  "😘"},
+    {"B)",  "😎"}, {"B-)", "😎"},
+    {":|",  "😐"}, {":-|", "😐"},
+    {"D:",  "😧"},
+    {">:(", "😠"}, {">:-(", "😠"},
+    {":-\\", "😕"},{":\\", "😕"},
+    {"o.O", "😕"}, {"O.o", "😕"},
+    {":3",  "😺"},
+    {":-3", "😺"},
+};
+
+std::string replace_emoticons(std::string_view text)
+{
+    // Sort longest-first so multi-char emoticons like ":-)" are matched before ")"
+    static const auto &sorted = [] -> decltype(auto) {
+        static auto s = std::vector(k_emoticons, k_emoticons + std::size(k_emoticons));
+        std::ranges::sort(s, [](auto &a, auto &b) { return a.first.size() > b.first.size(); });
+        return s;
+    }();
+
+    auto after_boundary = [](char c) -> bool {
+        return std::isspace(static_cast<unsigned char>(c))
+            || std::ispunct(static_cast<unsigned char>(c));
+    };
+    auto before_boundary = [](char c) -> bool {
+        return c == ':'
+            ? false  // "::)" is valid C++ scope, not an emoticon
+            : (std::isspace(static_cast<unsigned char>(c))
+               || std::ispunct(static_cast<unsigned char>(c)));
+    };
+
+    std::string result;
+    result.reserve(text.size());
+
+    size_t i = 0;
+    while (i < text.size())
+    {
+        bool at_boundary = (i == 0) || before_boundary(text[i - 1]);
+
+        if (at_boundary)
+        {
+            std::string_view tail = text.substr(i);
+            auto match = std::ranges::find_if(sorted, [&](const auto &e) {
+                return tail.starts_with(e.first)
+                    && (i + e.first.size() >= text.size()
+                        || after_boundary(text[i + e.first.size()]));
+            });
+            if (match != sorted.end())
+            {
+                result += match->second;
+                i += match->first.size();
+                continue;
+            }
+        }
+
+        result += text[i];
+        ++i;
+    }
+    return result;
+}

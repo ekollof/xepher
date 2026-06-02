@@ -216,6 +216,12 @@ weechat::config::config()
                 "(MUC buffers rely on WeeChat's native nick highlighting instead)",
                 nullptr, 0, 0,
                 "on", nullptr, false,
+                {}, {}, {}},
+            .emoticons{file, section_look, "emoticons", "boolean",
+                "replace text emoticons like :) ;) :D <3 with their Unicode emoji "
+                "equivalents (😊 😉 😀 ❤️) in incoming and outgoing messages",
+                nullptr, 0, 0,
+                "on", nullptr, false,
                 {}, {}, {}}}
 {
 }

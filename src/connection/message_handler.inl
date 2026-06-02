@@ -3780,6 +3780,16 @@ message_handler_after_omemo:
         display_text = styled_text.c_str();
     }
 
+    // Replace text emoticons with Unicode emoji (configurable).
+    std::string emoticon_text;
+    if (display_text
+        && weechat::config::instance
+        && weechat::config::instance->look.emoticons.boolean())
+    {
+        emoticon_text = replace_emoticons(display_text);
+        display_text = emoticon_text.c_str();
+    }
+
     std::string final_text; // used by spoiler / ephemeral / oob suffix blocks below
 
     // XEP-0461: emit reply context as a separate quote line above the message.

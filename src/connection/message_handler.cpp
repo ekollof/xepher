@@ -39,6 +39,7 @@
 #include "util.hh"
 #include "avatar.hh"
 #include "debug.hh"
+#include "message.hh"
 #include "connection/internal.hh"
 #include "xmpp/xhtml.hh"
 #include "xmpp/xep-0054.inl"

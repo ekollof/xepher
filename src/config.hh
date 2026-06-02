@@ -56,6 +56,7 @@ namespace weechat
             config_option mam_fetch_days;
             config_option mam_max_concurrent;
             config_option highlight_words;
+            config_option emoticons;
         } look;
 
     public:
