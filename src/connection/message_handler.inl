@@ -2076,12 +2076,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                channel_id ? channel_id : "(null)",
                account.omemo ? "ok" : "none");
     }
-        else
-        {
-            XDEBUG("omemo cache miss: channel_id={} stable_id={}",
-                   channel_id, stable_id);
-        }
-    }
 
     if (encrypted && account.omemo)
     {
