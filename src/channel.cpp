@@ -867,8 +867,8 @@ bool weechat::channel::all_occupants_have_real_jid() const
     if (members.empty())
         return false; // no occupants known yet → treat as unsafe for OMEMO
 
-    return std::ranges::all_of(members, [](const auto& pair) {
-        const auto& m = pair.second;
+    return std::ranges::all_of(members, [](const auto& p) {
+        const auto& [_, m] = p;
         return m.real_jid.has_value() && !m.real_jid->empty();
     });
 }
@@ -1308,10 +1308,13 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
             // real JIDs as recipients for multi-recipient OMEMO encoding.
             std::vector<std::string> recipients;
             auto has_real = [](const auto& p) {
-                const auto& m = p.second;
+                const auto& [_, m] = p;
                 return m.real_jid && !m.real_jid->empty();
             };
-            auto extract = [](const auto& p) { return *p.second.real_jid; };
+            auto extract = [](const auto& p) { 
+                const auto& [_, m] = p; 
+                return *m.real_jid; 
+            };
 
             std::ranges::copy(
                 members | std::views::filter(has_real) | std::views::transform(extract),

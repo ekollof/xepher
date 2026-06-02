@@ -924,17 +924,17 @@ void weechat::account::og_cache_store(const std::string& url,
     } catch (const lmdb::error&) {}
 }
 
-std::optional<weechat::account::og_preview>
+std::expected<weechat::account::og_preview, std::string>
 weechat::account::og_cache_lookup(const std::string& url)
 {
-    if (!mam_db_env || url.empty()) return std::nullopt;
+    if (!mam_db_env || url.empty()) return std::unexpected("no db or empty url");
     try {
         lmdb::txn parentTransaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
         MDB_val k = {url.size(), (void*)url.data()};
         MDB_val v{};
         if (mdb_get(txn.handle(), mam_dbi.og_previews.handle(), &k, &v) != 0)
-            return std::nullopt;
+            return std::unexpected("preview not found");
         std::string_view sv(static_cast<const char*>(v.mv_data), v.mv_size);
         // Split on \t into up to 4 fields: title, description, url, image
         og_preview p;
@@ -946,7 +946,7 @@ weechat::account::og_cache_lookup(const std::string& url)
         }
         return p;
     } catch (const lmdb::error&) {
-        return std::nullopt;
+        return std::unexpected("db error");
     }
 }
 

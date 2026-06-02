@@ -109,10 +109,10 @@ bool account_write_cb(weechat::config_section& section, const char *section_name
     if (!weechat_config_write_line(section.file, section_name, nullptr))
         return WEECHAT_CONFIG_WRITE_ERROR;
 
-    for (auto& account : weechat::accounts)
+    for (auto& [_, acc] : weechat::accounts)
     {
-        account.second.save_pgp_keys();
-        if (!account.second.write())
+        acc.save_pgp_keys();
+        if (!acc.write())
             return WEECHAT_CONFIG_WRITE_ERROR;
     }
 

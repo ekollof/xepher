@@ -27,23 +27,23 @@ void buffer__get_account_and_channel(struct t_gui_buffer *buffer,
     *channel = nullptr;
 
     /* look for a account or channel using this buffer */
-    for (auto& ptr_account : weechat::accounts)
+    for (auto& [_, acc] : weechat::accounts)
     {
-        if (ptr_account.second.buffer == buffer)
+        if (acc.buffer == buffer)
         {
             if (account)
-                *account = &ptr_account.second;
+                *account = &acc;
             return;
         }
 
-        for (auto& ptr_channel : ptr_account.second.channels)
+        for (auto& [_, ch] : acc.channels)
         {
-            if (ptr_channel.second.buffer == buffer)
+            if (ch.buffer == buffer)
             {
                 if (account)
-                    *account = &ptr_account.second;
+                    *account = &acc;
                 if (channel)
-                    *channel = &ptr_channel.second;
+                    *channel = &ch;
                 return;
             }
         }

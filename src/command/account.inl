@@ -208,9 +208,9 @@ void command__account_list(int argc, char **argv)
     else
     {
         one_account_found = 0;
-        for (auto& ptr_account2 : weechat::accounts)
+        for (auto& [_, acc2] : weechat::accounts)
         {
-            if (weechat_strcasestr(ptr_account2.second.name.data(), account_name))
+            if (weechat_strcasestr(acc2.name.data(), account_name))
             {
                 if (!one_account_found)
                 {
@@ -220,7 +220,7 @@ void command__account_list(int argc, char **argv)
                                    account_name);
                 }
                 one_account_found = 1;
-                command__display_account(&ptr_account2.second);
+                command__display_account(&acc2);
             }
         }
         if (!one_account_found)

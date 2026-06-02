@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <expected>
 #include <utility>
 #include <lmdb++.h>
 
@@ -518,7 +519,7 @@ namespace weechat
             std::string image;
         };
         void og_cache_store(const std::string& url, const og_preview& preview);
-        std::optional<og_preview> og_cache_lookup(const std::string& url);
+        std::expected<og_preview, std::string> og_cache_lookup(const std::string& url);
 
         struct t_gui_buffer* create_buffer();
 

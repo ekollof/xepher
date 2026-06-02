@@ -71,9 +71,9 @@ int completion__channel_nicks_cb(const void *pointer, void *data,
         {
         case weechat::channel::chat_type::MUC:
         case weechat::channel::chat_type::PM:
-            for (auto& ptr_member : ptr_channel->members)
+            for (auto& [_, member] : ptr_channel->members)
             {
-                ptr_user = weechat::user::search(ptr_account, ptr_member.second.id.c_str());
+                ptr_user = weechat::user::search(ptr_account, member.id.c_str());
                 if (ptr_user)
                     weechat_hook_completion_list_add(completion,
                                                      ptr_user->profile.display_name.c_str(),
@@ -114,9 +114,9 @@ int completion__accounts_cb(const void *pointer, void *data,
     (void) completion_item;
     (void) buffer;
 
-    for (auto& ptr_account : weechat::accounts)
+    for (auto& [_, acc] : weechat::accounts)
     {
-        weechat_hook_completion_list_add(completion, ptr_account.second.name.data(),
+        weechat_hook_completion_list_add(completion, acc.name.data(),
                                          0, WEECHAT_LIST_POS_SORT);
     }
 
