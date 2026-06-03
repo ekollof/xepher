@@ -790,27 +790,25 @@ file appears only once per message.
 
 #### Inline image display (weechat-icat)
 
-When the `weechat-icat` script is installed (https://github.com/trygveaa/weechat-icat),
-enabling `xmpp.look.icat` causes the plugin to automatically display received
-images inline using the Kitty graphics protocol:
+The `weechat-icat` script is **vendored** in `scripts/icat.py` (built from
+https://github.com/trygveaa/weechat-icat). Enabling `xmpp.look.icat` causes the
+plugin to automatically display received images inline using the Kitty graphics
+protocol:
 
 - **Outgoing uploads** — the local file is shown via `/icat` immediately after the
   upload completes and the sharing link is posted.
 - **Incoming SFS / SIMS / OOB** — unencrypted image URLs are passed to `/icat`
-  when the message is received (skipped during MAM replay to avoid flooding history).
+  when the message is received (including MAM replay).
 - **Incoming encrypted uploads (XEP-0448 ESFS)** — after the file is decrypted and
   saved to `~/Downloads/xmpp/<jid>/<date>/`, `/icat` is invoked on the local path.
 
 Only image MIME types (`image/*`) trigger icat. Other file types are announced
 normally without inline display.
 
-**Installation:**
+**Setup:**
 
 ```sh
-# Download the script into WeeChat's python autoload directory
-mkdir -p ~/.local/share/weechat/python/autoload
-curl -L -o ~/.local/share/weechat/python/autoload/icat.py \
-    https://raw.githubusercontent.com/trygveaa/weechat-icat/master/icat.py
+cp scripts/icat.py ~/.local/share/weechat/python/autoload/
 ```
 
 Inside WeeChat:
@@ -1010,6 +1008,16 @@ Inside WeeChat:
 ```
 
 See [`scripts/README.md`](scripts/README.md) for full configuration options.
+
+### icat.py — inline image display (vendored weechat-icat)
+
+Displays shared images inline using the Kitty graphics protocol. Vendored from
+https://github.com/trygveaa/weechat-icat (MIT license). Used automatically
+when `xmpp.look.icat` is enabled.
+
+```sh
+cp scripts/icat.py ~/.local/share/weechat/python/autoload/
+```
 
 ---
 
