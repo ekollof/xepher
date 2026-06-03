@@ -115,7 +115,7 @@ VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
 ## Remaining / Future Work
 
 - [ ] `README.org` — update feature list, trust model, command docs
-- [ ] Consider removing `omemo_atm` config option entirely (separate PR)
+- [x] Consider removing `omemo_atm` config option entirely (separate PR)
 - [ ] Consider adding BTBV fingerprint display to `/omemo devices` output
 
 ---

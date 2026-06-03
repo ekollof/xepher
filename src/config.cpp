@@ -184,13 +184,6 @@ weechat::config::config()
                 nullptr, 0, 10080,
                 "5", nullptr, false,
                 {}, {}, {}},
-            .omemo_atm{file, section_look, "omemo_atm", "boolean",
-                "enable XEP-0450 Automatic Trust Management for OMEMO keys: "
-                "automatically trust a key on first use (TOFU) and propagate trust decisions "
-                "to other own endpoints via unencrypted trust messages (urn:xmpp:tm:1)",
-                nullptr, 0, 0,
-                "on", nullptr, false,
-                {}, {}, {}},
             .share_os_info{file, section_look, "share_os_info", "boolean",
                 "include OS name and version in XEP-0092 software version responses "
                 "and XEP-0115 capability discovery; disable to protect privacy "

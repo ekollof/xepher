@@ -51,7 +51,6 @@ namespace weechat
             config_option send_chat_states;
             config_option smart_filter;
             config_option smart_filter_delay;
-            config_option omemo_atm;
             config_option share_os_info;
             config_option mam_fetch_days;
             config_option mam_max_concurrent;
