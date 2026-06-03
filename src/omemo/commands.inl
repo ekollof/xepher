@@ -137,6 +137,44 @@ void weechat::xmpp::omemo::distrust_fp(struct t_gui_buffer *buffer,
     }
 }
 
+void weechat::xmpp::omemo::trust_jid(struct t_gui_buffer *buffer,
+                                      weechat::account &,
+                                      const char *jid,
+                                      std::optional<std::uint32_t> device_id)
+{
+    if (!db_env || !jid)
+    {
+        print_error(buffer, "OMEMO is not initialized.");
+        return;
+    }
+
+    bool any_changed = false;
+    const auto devlist = load_string(*this, key_for_axolotl_devicelist(jid));
+    if (devlist && !devlist->empty())
+    {
+        for (const auto &dev : split(*devlist, ';'))
+        {
+            const auto dev_id = parse_uint32(dev);
+            if (!dev_id || !is_valid_omemo_device_id(*dev_id))
+                continue;
+            if (device_id && *dev_id != *device_id)
+                continue;
+            store_tofu_trust(*this, jid, *dev_id, omemo_trust::VERIFIED);
+            print_info(buffer, fmt::format("OMEMO: marked device {} for {} as VERIFIED.", *dev_id, jid));
+            any_changed = true;
+        }
+    }
+
+    if (!any_changed)
+    {
+        if (device_id)
+            print_error(buffer, fmt::format(
+                "OMEMO: no known device {} for {}.", *device_id, jid));
+        else
+            print_info(buffer, fmt::format("OMEMO: no known devices for {}.", jid));
+    }
+}
+
 void weechat::xmpp::omemo::distrust_jid(struct t_gui_buffer *buffer, const char *jid)
 {
     if (!db_env || !jid)
@@ -177,9 +215,26 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
         return;
     }
 
-    print_info(buffer, fmt::format("OMEMO devices for {}:", jid));
+    print_info(buffer, fmt::format("OMEMO devices for {} ({}):", jid, devices.size()));
     for (const auto device : devices)
-        print_info(buffer, fmt::format("  {}", device));
+    {
+        const auto t = load_tofu_trust(*this, std::string(jid), device);
+        std::string trust_str;
+        if (!t)
+            trust_str = "UNDECIDED";
+        else
+        {
+            switch (*t)
+            {
+                case omemo_trust::UNTRUSTED: trust_str = "UNTRUSTED"; break;
+                case omemo_trust::VERIFIED:  trust_str = "VERIFIED";  break;
+                case omemo_trust::UNDECIDED: trust_str = "UNDECIDED"; break;
+                case omemo_trust::BLIND:     trust_str = "BLIND";     break;
+                default: trust_str = "UNKNOWN"; break;
+            }
+        }
+        print_info(buffer, fmt::format("  {:10}  [{}]", device, trust_str));
+    }
 }
 
 std::vector<std::uint32_t> weechat::xmpp::omemo::get_cached_device_ids(std::string_view jid)

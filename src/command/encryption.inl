@@ -149,12 +149,26 @@ int command__omemo(const void *pointer, void *data,
             if (argc < 3)
             {
                 weechat_printf(buffer,
-                               _("%s%s: usage: /omemo trust <jid>"),
+                               _("%s%s: usage: /omemo trust <jid> [<device-id>]"),
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
                 return WEECHAT_RC_OK;
             }
-            // Remove stored identity keys → next message triggers TOFU re-store
-            ptr_account->omemo.distrust_jid(buffer, argv[2]);
+            std::optional<std::uint32_t> device_id;
+            if (argc > 3)
+            {
+                char *endp = nullptr;
+                unsigned long v = std::strtoul(argv[3], &endp, 10);
+                if (endp && *endp == '\0' && v > 0 && v <= 0x7fffffffU)
+                    device_id = static_cast<std::uint32_t>(v);
+                else
+                {
+                    weechat_printf(buffer,
+                                   _("%s%s: /omemo trust: device id must be a positive integer"),
+                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                    return WEECHAT_RC_OK;
+                }
+            }
+            ptr_account->omemo.trust_jid(buffer, *ptr_account, argv[2], device_id);
             return WEECHAT_RC_OK;
         }
 

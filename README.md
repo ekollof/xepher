@@ -728,6 +728,17 @@ Each nick in a MUC room displays a prefix indicating their role or affiliation
 
 **Note:** OMEMO for non-anonymous MUC rooms (XEP-0384 multi-recipient) is implemented but **experimental and untested**. Use at your own risk. See `docs/planning-muc-omemo.md` for the current status (complete-but-untested as of the latest commits). PM OMEMO remains the primary tested path.
 
+**Trust model:** This plugin uses **Blind Trust Before Verification (BTBV)** TOFU, matching Gajim's default behaviour. Trust levels are stored per `{jid, device_id}` in LMDB:
+
+| Level | Name | Meaning |
+|-------|------|---------|
+| `BLIND` | Auto-trusted | First device seen for this JID (default) |
+| `VERIFIED` | Manually verified | User ran `/omemo trust <jid> [device-id]` |
+| `UNTRUSTED` | Explicitly distrusted | User ran `/omemo distrust <jid> [device-id]`; device is excluded from encryption |
+| `UNDECIDED` | New device | A new device for a JID that already has `VERIFIED` or `UNTRUSTED` keys |
+
+Only `BLIND` and `VERIFIED` devices receive encrypted key material. `UNTRUSTED` devices are silently skipped. When you enable OMEMO in a MUC, all occupant devices default to `BLIND` trust — verify important contacts with `/omemo trust` if desired.
+
 | Command | Description |
 |---------|-------------|
 | `/omemo` | Enable OMEMO for the current buffer. Works for both PMs and non-anonymous MUCs (MUC OMEMO support is **experimental and untested** — see planning doc). |
@@ -737,9 +748,10 @@ Each nick in a MUC room displays a prefix indicating their role or affiliation
 | `/omemo reset-keys` | Reset key database (forces renegotiation) |
 | `/omemo fetch [jid] [device-id]` | Force devicelist/bundle refresh |
 | `/omemo kex [jid] [device-id]` | Force key transport now |
-| `/omemo fingerprint [jid]` | Show colon-hex fingerprint(s) with trust status (`[trusted]`/`[distrusted]`/`[undecided]`) |
-| `/omemo approve <jid> [fp]` | Mark key(s) trusted and broadcast XEP-0450 `<trust>` ATM message |
-| `/omemo distrust <jid> [fp]` | Mark key(s) distrusted and broadcast XEP-0450 `<distrust>` ATM message |
+| `/omemo fingerprint [jid]` | Show colon-hex fingerprint(s) with BTBV trust status (`[BLIND]`/`[VERIFIED]`/`[UNTRUSTED]`/`[UNDECIDED]`) |
+| `/omemo devices <jid>` | List known OMEMO devices for a JID |
+| `/omemo trust <jid> [device-id]` | Mark key(s) as **VERIFIED** (manual trust) |
+| `/omemo distrust <jid> [device-id]` | Mark key(s) as **UNTRUSTED** (blocks encryption to that device) |
 | `/pgp [keyid\|status\|reset]` | Manage PGP encryption |
 | `/plain` | Disable encryption (use plaintext) |
 
@@ -1035,7 +1047,7 @@ Please keep to the existing indentation style (C++23). clang-format is recommend
 - ✅ XEP-0372: References
 - ✅ XEP-0380: Explicit Message Encryption
 - ✅ XEP-0382: Spoiler Messages
-- ✅ XEP-0384: OMEMO Encryption (legacy axolotl namespace `eu.siacs.conversations.axolotl` only — OMEMO:2 / `urn:xmpp:omemo:2` is **not supported**; random pre-key selection; own-device encryption for carbon-copy and self-message decryption; pre-key ID continuity across signed pre-key rotation; stale-session recovery via MAM bundle re-fetch)
+- ✅ XEP-0384: OMEMO Encryption (legacy axolotl namespace `eu.siacs.conversations.axolotl` only — OMEMO:2 / `urn:xmpp:omemo:2` is **not supported**; BTBV trust model with per-device LMDB trust store; random pre-key selection; own-device encryption for carbon-copy and self-message decryption; pre-key ID continuity across signed pre-key rotation; stale-session recovery via MAM bundle re-fetch)
 - ✅ XEP-0385: Stateless Inline Media Sharing (SIMS `<reference uri>` extraction fixed for `urn:xmpp:reference:0` sources)
 - ✅ XEP-0392: Consistent Color Generation
 - ✅ XEP-0402: PEP Native Bookmarks
@@ -1054,7 +1066,6 @@ Please keep to the existing indentation style (C++23). clang-format is recommend
  - ⚡ XEP-0466: Ephemeral Messages (Experimental — send: `/ephemeral <seconds> <message>` attaches `<ephemeral timer='N'/>` + `<no-permanent-store/>` hint; receive: timer value displayed as `[⏱ Ns]` prefix, message automatically tombstoned after N seconds; `urn:xmpp:ephemeral:0` advertised in caps)
  - ⚡ XEP-0492: Chat Notification Settings (Experimental — per-chat notification preference (`always`/`on-mention`/`never`) stored in XEP-0402 bookmark `<extensions><notify>`; `/notify [<jid>] [always|on-mention|never]` gets or sets the preference and re-publishes the bookmark)
  - ⚡ XEP-0448: Encrypted File Sharing (Experimental — send: when `/upload`-ing a file to an OMEMO-enabled channel, the file is AES-256-GCM encrypted before HTTP PUT; the XMPP message carries `<file-sharing>` with `<encrypted xmlns='urn:xmpp:esfs:0' cipher='urn:xmpp:ciphers:aes-256-gcm-nopadding:0'>` containing the base64 key/IV/hash; receive: `<encrypted xmlns='urn:xmpp:esfs:0'>` detected inside SFS `<sources>`, cipher attribute validated against `urn:xmpp:ciphers:aes-256-gcm-nopadding:0` (other ciphers skipped per §4), ciphertext downloaded in a background thread, decrypted with AES-256-GCM, saved to `~/Downloads/<filename>`; `urn:xmpp:esfs:0` advertised in caps)
- - ⚡ XEP-0434 / XEP-0450: Trust Messages + Automatic Trust Management (Experimental — TOFU: on first OMEMO session establishment a SHA-256 fingerprint of the identity key is stored as `trusted` in LMDB; a `<trust-message xmlns='urn:xmpp:tm:1' usage='urn:xmpp:atm:1'>` is sent **encrypted via OMEMO+SCE** to own bare JID to propagate trust to other own endpoints; multiple key-owners are batched into a single message with one `<key-owner>` element per JID (XEP-0434 §4); incoming trust messages are authenticated (sender must already be trusted) and applied to the local trust store, overriding plain TOFU for subsequent `identity_is_trusted` checks; keys received from an unauthenticated sender are queued and re-evaluated once that sender is trusted; `/omemo fingerprint [jid]` shows colon-separated uppercase SHA-256 fingerprints with per-device trust status; `/omemo approve <jid> [fp]` marks key(s) trusted and broadcasts a `<trust>` ATM message; `/omemo distrust <jid> [fp]` marks key(s) distrusted and broadcasts a `<distrust>` ATM message; configurable via `xmpp.look.omemo_atm on/off`; `urn:xmpp:tm:1` advertised in caps)
  - ⚡ XEP-0472: Pubsub Social Feed (Experimental — publishes `pubsub#type=urn:xmpp:microblog:0`, advertises `urn:xmpp:pubsub-social-feed:1` in caps; `thr:in-reply-to@ref` uses real Atom entry IRI; feed-level `<feed>` metadata items rendered; XHTML/HTML Atom content properly rendered)
 - ⚡ XEP-0433: Extended Channel Search (Searcher role; Search Service role not implemented)
 
