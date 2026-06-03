@@ -100,6 +100,14 @@ namespace stanza {
             }
         };
 
+        // <configure node='...'/>  (XEP-0060 owner use)
+        struct configure : virtual public spec {
+            configure(std::string_view node_uri) : spec("configure") {
+                attr("node", node_uri);
+            }
+            configure& child_spec(spec& s) { child(s); return *this; }
+        };
+
         // <pubsub xmlns='http://jabber.org/protocol/pubsub'>
         struct pubsub : virtual public spec {
             pubsub() : spec("pubsub") {
@@ -117,6 +125,14 @@ namespace stanza {
             pubsub& rsm(xep0059::set s) { child(s); return *this; }
         };
 
+        // <pubsub xmlns='http://jabber.org/protocol/pubsub#owner'>
+        struct pubsub_owner : virtual public spec {
+            pubsub_owner() : spec("pubsub") {
+                xmlns<jabber_org::protocol::pubsub::owner>();
+            }
+            pubsub_owner& configure(xep0060::configure c) { child(c); return *this; }
+        };
+
         // Helper: stanza::iq mixin
         struct iq : virtual public spec {
             iq() : spec("iq") {}
@@ -124,6 +140,7 @@ namespace stanza {
             iq& xep0060() { return *this; }
 
             iq& pubsub(xep0060::pubsub p) { child(p); return *this; }
+            iq& pubsub_owner(xep0060::pubsub_owner p) { child(p); return *this; }
         };
     };
 

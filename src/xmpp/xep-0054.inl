@@ -23,17 +23,13 @@ namespace xmpp { namespace xep0054 {
             }
         };
 
+        vcard_spec vc;
         auto b = stanza::iq()
             .type("get")
             .id(stanza::uuid(context));
         if (to) b.to(to);
-
-        vcard_spec vc;
-        // stanza::iq doesn't have a vcard child method; add via pubsub-like
-        // workaround: build iq, then post-attach vCard.
+        b.child(vc);
         auto sp = b.build(context);
-        auto vc_sp = vc.build(context);
-        xmpp_stanza_add_child(sp.get(), vc_sp.get());
 
         xmpp_stanza_clone(sp.get());
         return sp.get();
@@ -100,17 +96,15 @@ namespace xmpp { namespace xep0054 {
             }
         };
 
+        vcard_spec vc(f);
         auto sp = stanza::iq()
             .type("set")
-            .id(stanza::uuid(context))
-            .build(context);
+            .id(stanza::uuid(context));
+        sp.child(vc);
+        auto built = sp.build(context);
 
-        vcard_spec vc(f);
-        auto vc_sp = vc.build(context);
-        xmpp_stanza_add_child(sp.get(), vc_sp.get());
-
-        xmpp_stanza_clone(sp.get());
-        return sp.get();
+        xmpp_stanza_clone(built.get());
+        return built.get();
     }
 
 } }

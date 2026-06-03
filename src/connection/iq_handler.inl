@@ -2673,52 +2673,52 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     next_info.form_requested = false;
                     account.channel_search_queries[submit_id] = next_info;
 
-                    // Build search submit based on XEP-0433 fields — RAII using spec builder.
+                    // Build search submit based on XEP-0433 fields using fluent builders.
                     xmpp_ctx_t *ctx = account.context;
-
-                    auto submit_iq = stanza::iq().type("get").id(submit_id).to(cs_info.service_jid).build(ctx);
 
                     struct search_spec : stanza::spec {
                         search_spec() : spec("search") {
-                            attr("xmlns", "urn:xmpp:channel-search:0:search");
+                            xmlns<urn::xmpp::channel_search::_0>();
                         }
-                    } ss;
-                    auto submit_search = ss.build(ctx);
-
-                    struct xform_spec : stanza::spec {
-                        xform_spec() : spec("x") {
-                            attr("xmlns", "jabber:x:data");
-                            attr("type", "submit");
-                        }
-                    } xfs;
-                    auto submit_form = xfs.build(ctx);
-
-                    auto add_field = [&](const char *var, const char *value,
-                                         const char *type_attr = nullptr) {
-                        xmpp_stanza_t *f = stanza_make_field(ctx, var, value, type_attr);
-                        xmpp_stanza_add_child(submit_form.get(), f);
-                        xmpp_stanza_release(f);
                     };
 
-                    add_field("FORM_TYPE", "urn:xmpp:channel-search:0:search-params", "hidden");
+                    auto submit_form = stanza::xep0004::form("submit")
+                        .add_hidden("FORM_TYPE", "urn:xmpp:channel-search:0:search-params");
                     if (!cs_info.keywords.empty())
                     {
-                        add_field("q", cs_info.keywords.c_str(), "text-single");
+                        stanza::xep0004::field q_field("q");
+                        q_field.type("text-single").value(cs_info.keywords);
+                        submit_form.add_field(q_field);
                         // Required by XEP-0433 if q is supported.
-                        add_field("sinname", "true", "boolean");
-                        add_field("sindescription", "true", "boolean");
-                        add_field("sinaddress", "true", "boolean");
+                        stanza::xep0004::field sn_field("sinname");
+                        sn_field.type("boolean").value("true");
+                        submit_form.add_field(sn_field);
+                        stanza::xep0004::field sd_field("sindescription");
+                        sd_field.type("boolean").value("true");
+                        submit_form.add_field(sd_field);
+                        stanza::xep0004::field sa_field("sinaddress");
+                        sa_field.type("boolean").value("true");
+                        submit_form.add_field(sa_field);
                     }
-
                     // Prefer stable sort by address for broad compatibility.
-                    add_field("key", "{urn:xmpp:channel-search:0:order}address", "list-single");
+                    stanza::xep0004::field key_field("key");
+                    key_field.type("list-single").value("{urn:xmpp:channel-search:0:order}address");
+                    submit_form.add_field(key_field);
                     // Restrict to MUC channels when service supports the field.
-                    add_field("types", "xep-0045", "list-multi");
+                    stanza::xep0004::field types_field("types");
+                    types_field.type("list-multi").value("xep-0045");
+                    submit_form.add_field(types_field);
 
-                    xmpp_stanza_add_child(submit_search.get(), submit_form.get());
-                    xmpp_stanza_add_child(submit_iq.get(), submit_search.get());
+                    search_spec ss;
+                    ss.child(submit_form);
 
-                    account.connection.send(submit_iq.get());
+                    auto submit_iq = stanza::iq()
+                        .type("get")
+                        .id(submit_id)
+                        .to(cs_info.service_jid);
+                    submit_iq.child(ss);
+
+                    account.connection.send(submit_iq.build(ctx).get());
 
                     account.channel_search_queries.erase(cs_id);
                     return true;
@@ -3741,60 +3741,26 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         "configuring node and retrying",
                         weechat_prefix("network"), target_node.c_str());
 
-                    // Build node configure IQ using spec builder.
-                    xmpp_ctx_t *ctx = account.context;
-
-                    auto mk_field = [&](const char *var, const char *val,
-                                        const char *type_attr = nullptr)
-                        -> std::shared_ptr<xmpp_stanza_t>
-                    {
-                        xmpp_stanza_t *f = stanza_make_field(ctx, var, val, type_attr);
-                        return { f, xmpp_stanza_release };
-                    };
-
-                    struct xform_cfg : stanza::spec {
-                        xform_cfg() : spec("x") {
-                            attr("xmlns", "jabber:x:data");
-                            attr("type", "submit");
-                        }
-                    } xcfg;
-                    auto x = xcfg.build(ctx);
-                    auto f1 = mk_field("FORM_TYPE",
-                        "http://jabber.org/protocol/pubsub#meta-data", "hidden");
-                    auto f2 = mk_field("pubsub#access_model", "open");
-                    auto f3 = mk_field("pubsub#persist_items", "true");
-                    auto f4 = mk_field("pubsub#max_items", "max");
-                    xmpp_stanza_add_child(x.get(), f1.get());
-                    xmpp_stanza_add_child(x.get(), f2.get());
-                    xmpp_stanza_add_child(x.get(), f3.get());
-                    xmpp_stanza_add_child(x.get(), f4.get());
-
-                    struct configure_spec : stanza::spec {
-                        configure_spec(std::string_view node_) : spec("configure") {
-                            attr("node", node_);
-                        }
-                    } cfgnode(target_node);
-                    auto configure = cfgnode.build(ctx);
-                    xmpp_stanza_add_child(configure.get(), x.get());
-
-                    struct pubsub_owner_spec : stanza::spec {
-                        pubsub_owner_spec() : spec("pubsub") {
-                            attr("xmlns", "http://jabber.org/protocol/pubsub#owner");
-                        }
-                    } pso;
-                    auto cfg_pubsub = pso.build(ctx);
-                    xmpp_stanza_add_child(cfg_pubsub.get(), configure.get());
-
+                    // Build node configure IQ using fluent builders.
                     const std::string cfg_uuid = stanza::uuid(account.context);
-
-                    auto cfg_iq = stanza::iq().type("set").id(cfg_uuid).to(account.jid()).build(ctx);
-                    xmpp_stanza_add_child(cfg_iq.get(), cfg_pubsub.get());
+                    auto cfg_iq = stanza::iq()
+                        .type("set")
+                        .id(cfg_uuid)
+                        .to(account.jid())
+                        .pubsub_owner(stanza::xep0060::pubsub_owner()
+                            .configure(stanza::xep0060::configure(target_node)
+                                .child_spec(stanza::xep0004::form("submit")
+                                    .add_hidden("FORM_TYPE",
+                                        "http://jabber.org/protocol/pubsub#meta-data")
+                                    .add_text("pubsub#access_model", "open")
+                                    .add_text("pubsub#persist_items", "true")
+                                    .add_text("pubsub#max_items",     "max"))));
 
                     // Remember which node to re-publish after the configure succeeds.
                     if (!cfg_uuid.empty())
                         account.omemo.pending_configure_retry[cfg_uuid] = target_node;
 
-                    account.connection.send(cfg_iq.get());
+                    account.connection.send(cfg_iq.build(account.context).get());
                 }
             }
         }

@@ -260,32 +260,38 @@ int command__adhoc(const void *pointer, void *data,
     info.session_id = session_id;
     ptr_account->adhoc_queries[submit_id] = info;
 
-    // Build IQ with command + x:data form using stanza builder helpers
+    // Build IQ with command + x:data form using fluent builders.
     {
         xmpp_ctx_t *ctx = ptr_account->context;
-        auto iq = stanza::iq().type("set").id(submit_id).to(target_jid).build(ctx);
-        auto command = stanza_node(ctx, "command",
-                                   "http://jabber.org/protocol/commands",
-                                   {{"node", node},
-                                    {"sessionid", session_id},
-                                    {"action", "execute"}});
-        auto x_form = stanza_node(ctx, "x", "jabber:x:data", {{"type", "submit"}});
+        auto form = stanza::xep0004::form("submit");
         for (int i = 4; i < argc; i++)
         {
             std::string_view arg_sv(argv[i]);
             auto eq_pos = arg_sv.find('=');
             if (eq_pos == std::string_view::npos) continue;
             std::string field_var(arg_sv.substr(0, eq_pos));
-            const char *field_val = argv[i] + eq_pos + 1;
-            auto field = stanza_node(ctx, "field", nullptr,
-                                     {{"var", field_var.c_str()}});
-            auto value = stanza_text_node(ctx, "value", field_val);
-            xmpp_stanza_add_child(field.get(), value.get());
-            xmpp_stanza_add_child(x_form.get(), field.get());
+            std::string field_val(argv[i] + eq_pos + 1);
+            stanza::xep0004::field f(field_var);
+            f.value(field_val);
+            form.add_field(f);
         }
-        xmpp_stanza_add_child(command.get(), x_form.get());
-        xmpp_stanza_add_child(iq.get(), command.get());
-        ptr_account->connection.send(iq.get());
+
+        struct command_spec : stanza::spec {
+            command_spec(std::string_view n, std::string_view sid) : spec("command") {
+                xmlns<jabber_org::protocol::commands>();
+                attr("node", n);
+                attr("sessionid", sid);
+                attr("action", "execute");
+            }
+        } cmd(node, session_id);
+        cmd.child(form);
+
+        auto iq = stanza::iq()
+            .type("set")
+            .id(submit_id)
+            .to(target_jid);
+        iq.child(cmd);
+        ptr_account->connection.send(iq.build(ctx).get());
     }
 
     weechat_printf(buffer, "%sxmpp: submitting form for command %s (session %s)…",
@@ -882,30 +888,19 @@ int command__feed(const void *pointer, void *data,
             xmpp_stanza_add_child(entry.get(), gen_el.get());
         }
 
-        // Publish the repeat entry via PubSub
+        // Publish the repeat entry via PubSub using fluent builders.
         std::string uid_r = stanza::uuid(ptr_account->context);
         ptr_account->pubsub_publish_ids[uid_r] = {rep_service, rep_node, item_uuid, buffer};
 
-        auto entry_item = stanza::xep0060::item().id(item_uuid);
-        // entry_item.payload() needs the built entry stanza — use raw approach for payload
-        auto repeat_iq_built = stanza::iq().type("set").id(uid_r)
-            .from(ptr_account->jid()).to(rep_service)
-            .xep0060().pubsub(stanza::xep0060::pubsub()
-                .publish(stanza::xep0060::publish(rep_node)))
-            .build(ptr_account->context);
-        // Attach the entry to the item inside the publish
-        {
-            xmpp_stanza_t *ps = xmpp_stanza_get_child_by_name(repeat_iq_built.get(), "pubsub");
-            xmpp_stanza_t *pub = ps ? xmpp_stanza_get_child_by_name(ps, "publish") : nullptr;
-            if (pub)
-            {
-                auto item_s = stanza_node(ptr_account->context, "item", nullptr,
-                                          {{"id", item_uuid.c_str()}});
-                xmpp_stanza_add_child(item_s.get(), entry.get());
-                xmpp_stanza_add_child(pub, item_s.get());
-            }
-        }
-        ptr_account->connection.send(repeat_iq_built.get());
+        auto repeat_iq = stanza::iq()
+            .type("set")
+            .id(uid_r)
+            .from(ptr_account->jid().c_str())
+            .to(rep_service)
+            .pubsub(stanza::xep0060::pubsub()
+                .publish(stanza::xep0060::publish(rep_node)
+                    .item(stanza::xep0060::item().id(item_uuid).payload(entry))));
+        ptr_account->connection.send(repeat_iq.build(ptr_account->context).get());
 
         weechat_printf(buffer, "%sRepeated %s/%s item %s (id: %s)",
                        weechat_prefix("network"),
