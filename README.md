@@ -804,6 +804,24 @@ images inline using the Kitty graphics protocol:
 Only image MIME types (`image/*`) trigger icat. Other file types are announced
 normally without inline display.
 
+**Installation:**
+
+```sh
+# Download the script into WeeChat's python autoload directory
+mkdir -p ~/.local/share/weechat/python/autoload
+curl -L -o ~/.local/share/weechat/python/autoload/icat.py \
+    https://raw.githubusercontent.com/trygveaa/weechat-icat/master/icat.py
+```
+
+Inside WeeChat:
+
+```
+/script load icat.py
+/set xmpp.look.icat on
+```
+
+Requires a terminal that supports the Kitty graphics protocol (e.g. Kitty, WezTerm, or foot).
+
 ### Archive & history
 
 ```
