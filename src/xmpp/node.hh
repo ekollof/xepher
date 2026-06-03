@@ -219,6 +219,7 @@ namespace stanza {
 #include "xep-0424.inl"
 #include "xep-0425.inl"
 #include "xep-0428.inl"
+#include "xep-0437.inl"
 #include "xep-0444.inl"
 #include "xep-0447.inl"
 #include "xep-0461.inl"
@@ -373,7 +374,8 @@ namespace stanza {
 
     struct presence : virtual public spec,
                       public xep0045::presence,
-                      public xep0421::presence {
+                      public xep0421::presence,
+                      public xep0437::presence {
         presence() : spec("presence") {}
 
         presence& id(std::string_view s) { attr("id", s); return *this; }
@@ -420,7 +422,8 @@ namespace stanza {
 namespace xml {
 
     class message : virtual public node,
-                    public xep0027 {
+                    public xep0027,
+                    public xep0437 {
     public:
         inline message(xmpp_ctx_t *context, xmpp_stanza_t *stanza) : node(context) {
             bind(context, stanza);

@@ -286,6 +286,7 @@ struct urn {
         struct privilege { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:privilege:1") {} }; };
         struct reach { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:reach:0") {} }; };
         struct reactions { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:reactions:0") {} }; };
+        struct rai { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:rai:0") {} }; };
         struct receipts : public xmlns { receipts() : xmlns("urn:xmpp:receipts") {} };
         struct reference { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:reference:0") {} }; };
         struct reply { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:reply:0") {} }; };

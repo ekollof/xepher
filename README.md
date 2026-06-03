@@ -1053,6 +1053,7 @@ Please keep to the existing indentation style (C++23). clang-format is recommend
 - ✅ XEP-0402: PEP Native Bookmarks
 - ✅ XEP-0422: Message Fastening
 - ✅ XEP-0428: Fallback Indication
+- ✅ XEP-0437: Room Activity Indicators (Deferred — subscribe via `<rai xmlns='urn:xmpp:rai:0'/>` presence to own bare JID on connect; incoming `<activity>` notifications displayed in account buffer)
 - ✅ XEP-0446: File Metadata Element (image dimensions sent with uploads)
 - ✅ XEP-0447: Stateless File Sharing (inline previews for Conversations/Dino/Gajim)
 - ✅ XEP-0490: Message Displayed Synchronization

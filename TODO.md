@@ -180,7 +180,7 @@ VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
 - [x] Invites: XEP-0249 Direct MUC Invitations already implemented (fluent builder + handler).
 - [x] Blocking: XEP-0191 Blocking Command already implemented (fluent builder + /block /unblock /blocklist commands + picker UI + server push handler).
 - [ ] XEP-0353 Jingle Message Initiation (voice/video calls) — not planned; requires full Jingle stack.
-- [ ] XEP-0437 Room Activity Indicators — Deferred status; not implemented.
+- [x] XEP-0437 Room Activity Indicators — subscribe via presence to own bare JID, display <activity> notifications in account buffer; deferred but implemented for convenience.
 - [ ] Full modern OMEMO SCE (Stable Consensus Encryption) — tracked on separate branch; not master.
 - Ongoing: any new XEP support or modify triggers full re-fetch/verify/commit spec + TODO update.
 

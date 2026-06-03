@@ -1751,6 +1751,34 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             }
         }
 
+        // XEP-0437: Room Activity Indicators — handle <rai> notifications
+        {
+            xmpp_stanza_t *rai = xmpp_stanza_get_child_by_name_and_ns(
+                stanza, "rai", "urn:xmpp:rai:0");
+            if (rai)
+            {
+                const char *rai_from = xmpp_stanza_get_from(stanza);
+                std::string rai_from_sv = rai_from ? rai_from : "";
+                for (xmpp_stanza_t *act = xmpp_stanza_get_child_by_name(rai, "activity");
+                     act; act = xmpp_stanza_get_next(act))
+                {
+                    const char *act_name = xmpp_stanza_get_name(act);
+                    if (!act_name || weechat_strcasecmp(act_name, "activity") != 0)
+                        continue;
+                    const char *jid = xmpp_stanza_get_text_ptr(act);
+                    if (!jid || !*jid)
+                        continue;
+                    weechat_printf(account.buffer,
+                                   _("%sRoom activity: %s%s%s"),
+                                   weechat_prefix("network"),
+                                   weechat_color("chat_nick_self"),
+                                   jid,
+                                   weechat_color("reset"));
+                }
+                return 1;
+            }
+        }
+
         return 1;
     }
     type = xmpp_stanza_get_type(stanza);
@@ -4070,8 +4098,9 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
         "urn:xmpp:receipts",
         "urn:xmpp:time",
         "urn:xmpp:attention:0",
-        "urn:xmpp:spoiler:0",
-        "urn:xmpp:fallback:0",
+         "urn:xmpp:spoiler:0",
+         "urn:xmpp:rai:0",
+         "urn:xmpp:fallback:0",
         "vcard-temp:x:update",
         "urn:xmpp:reference:0",
         "http://jabber.org/protocol/commands",

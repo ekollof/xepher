@@ -1,0 +1,142 @@
+<!DOCTYPE html SYSTEM "about:legacy-compat">
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><title>XEP-0437: Room Activity Indicators</title><style type="text/css">
+/* don't mind this hack */
+nav#toc h2:before {
+display: none;
+content: "XEP-0437";
+}
+        </style><link rel="stylesheet" type="text/css" href="xmpp.css"><link href="prettify.css" type="text/css" rel="stylesheet"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico"><script type="text/javascript" src="prettify.js"></script><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="title" content="XEP-0437: Room Activity Indicators"><meta name="description" content="This specification describes a lightweight mechanism for activity notifications in MUCs"><meta name="DC.Title" content="Room Activity Indicators"><meta name="DC.Creator" content="Matthew Wild"><meta name="DC.Description" content="This specification describes a lightweight mechanism for activity notifications in MUCs"><meta name="DC.Publisher" content="XMPP Standards Foundation"><meta name="DC.Contributor" content="XMPP Extensions Editor"><meta name="DC.Date" content="2020-05-05"><meta name="DC.Type" content="XMPP Extension Protocol"><meta name="DC.Format" content="XHTML"><meta name="DC.Identifier" content="XEP-0437"><meta name="DC.Language" content="en"><meta name="DC.Rights" content="This XMPP Extension Protocol is copyright © 1999 – 2024 by the XMPP Standards Foundation (XSF)."><meta property="og:type" content="website"><meta property="og:url" content="https://xmpp.org/extensions/xep-0437.html"><meta property="og:title" content="XEP-0437: Room Activity Indicators"><meta property="og:description" content="This specification describes a lightweight mechanism for activity notifications in MUCs"><meta property="og:image" content="https://xmpp.org/images/logos/xmpp-logo-text-banner.jpg"><meta property="og:image:alt" content="XMPP (Extensible Messaging and Presence Protocol) Logo"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary"><meta name="twitter:url" content="https://xmpp.org/extensions/xep-0437.html"><meta name="twitter:title" content="XEP-0437: Room Activity Indicators"><meta name="twitter:description" content="This specification describes a lightweight mechanism for activity notifications in MUCs"><meta name="twitter:image" content="https://xmpp.org/images/logos/xmpp-logo-text-banner.jpg"></head><body onload="prettyPrint()"><h1>XEP-0437: Room Activity Indicators</h1><div class="docmeta-wrap"><dl id="docmeta" class="compact"><dt>Abstract</dt><dd>This specification describes a lightweight mechanism for activity notifications in MUCs</dd><dt>Author</dt><dd>Matthew Wild</dd><dt>Copyright</dt><dd>© 2020 – 2020 XMPP Standards Foundation. <a href="#appendix-legal">SEE LEGAL NOTICES</a>.</dd><dt>Status</dt><dd><p>Deferred</p><div id="status-notice" class="deferred standards track">WARNING: This document has been automatically Deferred after 12 months of inactivity in its previous Experimental state. Implementation of the protocol described herein is not recommended for production systems. However, exploratory implementations are encouraged to resume the standards process.</div></dd><dt>Type</dt><dd>Standards Track</dd><dt>Version</dt><dd>0.2.0 (2020-05-05)</dd></dl><div class="timeline-wrap"><div class="timeline-head">Document Lifecycle</div><ol class="timeline"><li>Experimental</li><li class="current inserted">Deferred</li><li>Proposed</li><li>Stable</li><li>Final</li></ol></div></div><nav id="toc"><a href="#top"><h2>Table of Contents</h2></a><ol class="toc"><li><a href="#intro">Introduction</a></li><li><a href="#reqs">Requirements</a></li><li><a href="#usecases">Use Cases</a><ol><li><a href="#sect-idm45974393854992">Client subscribes to activity indicators</a></li><li><a href="#sect-idm45974393848960">Client unsubscribes from activity indicators</a></li></ol></li><li><a href="#rules">Business Rules</a></li><li><a href="#impl">Implementation Notes</a><ol><li><a href="#sect-idm45974393839984">Determining the list of rooms</a></li></ol></li><li><a href="#security">Security Considerations</a></li><li><a href="#iana">IANA Considerations</a></li><li><a href="#registrar">XMPP Registrar Considerations</a></li><li><a href="#schema">XML Schema</a></li></ol><h6><a href="#appendices">Appendices</a></h6><ol class="toc-appendices"><li><a href="#appendix-docinfo">Document Information</a></li><li><a href="#appendix-authorinfo">Author Information</a></li><li><a href="#appendix-legal">Legal Notices</a></li><li><a href="#appendix-xmpp">Relation to XMPP</a></li><li><a href="#appendix-discuss">Discussion Venue</a></li><li><a href="#appendix-conformance">Requirements Conformance</a></li><li><a href="#appendix-notes">Notes</a></li><li><a href="#appendix-revs">Revision History</a></li><li><a href="#appendix-biblatex">Bib(La)Tex Entry</a></li></ol></nav><h2 id="intro">1.
+       Introduction<a class="anchor-link" href="#intro"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">Sometimes it is desirable for a client to indicate to a user that
+activity has occurred in a MUC, without the overhead of immediately
+joining every MUC that the user has an interest in.</p>
+
+  <p class="" style="">A MUC may already send out-of-band notifications to users who are not
+currently joined if e.g. they are mentioned using <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0372.html">References (XEP-0372)</a></span>  [<a href="#nt-idm45974394939088">1</a>]. However a MUC
+typically won't forward other kinds of messages unless the user is joined.</p>
+
+  <p class="" style="">This protocol describes a lightweight mechanism for the client to display
+an indication to the user that there are new messages in a room since the
+last time the user was joined there. This can, for example, be used to provide
+a UI hint that a room the user is interested in has new unread activity.</p>
+<h2 id="reqs">2.
+       Requirements<a class="anchor-link" href="#reqs"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <ul class="" style="">
+    <li class="" style="">A client must be able to receive an indication that activity has occurred in a room without joining it</li>
+    <li class="" style="">The protocol must scale to a large number of rooms, while remaining simple to implement on the client and server</li>
+  </ul>
+
+  <p class="" style="">This protocol explicitly does not attempt to define:</p>
+
+  <ul class="" style="">
+    <li class="" style="">Usage with <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0369.html">Mediated Information eXchange (MIX) (XEP-0369)</a></span>  [<a href="#nt-idm45974393859344">2</a>] (MIX architecture is fundamentally different to MUC)</li>
+    <li class="" style="">A means for the client/server to agree on which rooms the client should be subscribed to (it is assumed the server can
+        determine a suitable strategy itself, and that this strategy may be deployment-specific).</li>
+  </ul>
+<h2 id="usecases">3.
+       Use Cases<a class="anchor-link" href="#usecases"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <div class="indent"><h3 id="sect-idm45974393854992">3.1 Client subscribes to activity indicators<a class="anchor-link" href="#sect-idm45974393854992"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">To inform the MUC service that you are interested in receiving
+       activity indicators, send a presence to the service including the
+       &lt;rai&gt; element:</p>
+
+      <figure class="code-example" id="example-1"><figcaption><strong>Example 1.</strong> Client subscribes to activity indicators<a class="anchor-link" href="#example-1"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;presence to="conference.example.com" id="dwZ3vL"&gt;
+  &lt;rai xmlns="urn:xmpp:rai:0"/&gt;
+&lt;/presence&gt;
+</pre></figure>
+
+    <p class="" style="">After sending this presence, the service may send you activity
+       indicator updates at any time, each one containing one or more
+       JIDs of MUC rooms that have new messages:</p>
+
+      <figure class="code-example" id="example-2"><figcaption><strong>Example 2.</strong> Server notifies client of room activity<a class="anchor-link" href="#example-2"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;message from="conference.example.com"&gt;
+  &lt;rai xmlns="urn:xmpp:rai:0"&gt;
+    &lt;activity&gt;room1@conference.example.com&lt;/activity&gt;
+    &lt;activity&gt;room3@conference.example.com&lt;/activity&gt;
+  &lt;/rai&gt;
+&lt;/message&gt;
+</pre></figure>
+
+    <p class="" style="">Note that the service will **only** send notifications for rooms
+       where the client's session is not currently joined. If the client
+       is joined to a room, it already receives live events from the room directly.</p>
+
+  </div>
+
+  <div class="indent"><h3 id="sect-idm45974393848960">3.2 Client unsubscribes from activity indicators<a class="anchor-link" href="#sect-idm45974393848960"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">A client may unsubscribe from activity indicators by sending an unavailable presence
+    to the MUC service. This will typically be sent by the user's server automatically when
+    they go offline.</p>
+  </div>
+<h2 id="rules">4.
+       Business Rules<a class="anchor-link" href="#rules"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">Upon receiving a presence stanza addressed to the service JID that includes
+     a &lt;rai xmlns="urn:xmpp:rai:0"&gt; element, the service should
+     build a list of rooms where activity has occurred since the client was
+     last in the room, and send them in a single notification.</p>
+
+  <p class="" style="">When activity happens in a room, a service should send an activity notification
+     to room members who have subscribed to notifications and who have not already
+     received a notification for that room in their current subscription's lifetime.</p>
+
+  <p class="" style="">A server SHOULD only send a single notification for each room where activity
+     has occured since the last time a given affiliated user was joined to a room.
+     Each room may only be notified once, even if many events occur while the client
+     is not present in the room. Therefore the client MUST NOT attempt to count activity
+     events. A single activity notification for a room means some unspecified number
+     of events have happened, receiving another activity notification for the same
+     room adds no further information.</p>
+  <p class="" style="">A server MUST NOT send activity notifications to a user from a room that the user
+     would not be allowed to join. This potentially includes hidden rooms where the user
+     has no affiliation.</p>
+<h2 id="impl">5.
+       Implementation Notes<a class="anchor-link" href="#impl"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <div class="indent"><h3 id="sect-idm45974393839984">5.1 Determining the list of rooms<a class="anchor-link" href="#sect-idm45974393839984"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">This specification does not dictate how a server determines which rooms a client
+       should receive notifications for. The list may be large and varying.</p>
+    <p class="" style="">For example, this information is available to the server through some other means,
+       or a server may simply subscribe a user to all rooms on the MUC service, or only to
+       rooms where a user has an affiliation.</p>
+  </div>
+<h2 id="security">6.
+       Security Considerations<a class="anchor-link" href="#security"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">This specification is not expected to introduce any security concerns.</p>
+  <p class="" style="">From a privacy perspective, a user's availability is exposed to the MUC service, but not
+     beyond what would be exposed if the user simply joined a room as normal.</p>
+  <p class="" style="">Servers may place restrictions on who may subscribe to room activity notifications, e.g.
+     by only serving local users, or only permitting a sensible number of active subscriptions.</p>
+  <p class="" style="">Servers must be careful not to leak room activity indicators to users who would not otherwise
+     have permission to view the content in the room.</p>
+<h2 id="iana">7.
+       IANA Considerations<a class="anchor-link" href="#iana"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">This document requires no interaction with the <span class="ref" style=""><a href="http://www.iana.org/">Internet Assigned Numbers Authority (IANA)</a></span>  [<a href="#nt-idm45974393827680">3</a>].</p>
+<h2 id="registrar">8.
+       XMPP Registrar Considerations<a class="anchor-link" href="#registrar"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">This document requires no interaction with <span class="ref" style=""><a href="https://xmpp.org/registrar/">XMPP Registrar</a></span>  [<a href="#nt-idm45974393821824">4</a>].</p>
+<h2 id="schema">9.
+       XML Schema<a class="anchor-link" href="#schema"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">REQUIRED for protocol specifications.</p>
+<hr><a name="appendices"></a><h2>Appendices</h2><h3 id="appendix-docinfo">Appendix A: Document Information<a class="anchor-link" href="#appendix-docinfo"><abbr title="Link to this point in the document">¶</abbr></a></h3><dl class="compact"><dt>Series</dt><dd><a href="https://xmpp.org/extensions/">XEP</a></dd><dt>Number</dt><dd>0437</dd><dt>Publisher</dt><dd><a href="/xsf/">XMPP Standards Foundation</a></dd><dt>Status</dt><dd><a href="https://xmpp.org/extensions/xep-0001.html#states-Deferred">Deferred</a></dd><dt>Type</dt><dd><a href="https://xmpp.org/extensions/xep-0001.html#types-Standards%20Track">Standards Track</a></dd><dt>Version</dt><dd>0.2.0</dd><dt>Last Updated</dt><dd>2020-05-05</dd><dt>Approving Body</dt><dd><a href="https://xmpp.org/council/">XMPP Council</a></dd><dt>Dependencies</dt><dd>XMPP Core</dd><dt>Supersedes</dt><dd>None</dd><dt>Superseded By</dt><dd>None</dd><dt>Short Name</dt><dd>NOT_YET_ASSIGNED</dd><dt>Source Control</dt><dd><a class="standardsButton" href="https://github.com/xsf/xeps/blob/master/xep-0437.xml">HTML</a></dd></dl><p>
+          This document in other formats:
+          <a class="standardsButton" href="https://xmpp.org/extensions/xep-0437.xml">XML</a> 
+          <a class="standardsButton" href="https://xmpp.org/extensions/xep-0437.pdf">PDF</a></p><h3 id="appendix-authorinfo">Appendix B: Author Information<a class="anchor-link" href="#appendix-authorinfo"><abbr title="Link to this point in the document">¶</abbr></a></h3><h5>Matthew Wild</h5><dl class="compact"><dt>Email</dt><dd><a href="mailto:mwild1@gmail.com">mwild1@gmail.com</a></dd><dt>JabberID</dt><dd><a href="xmpp:me@matthewwild.co.uk">me@matthewwild.co.uk</a></dd></dl><h3 id="appendix-legal">Appendix C: Legal Notices<a class="anchor-link" href="#appendix-legal"><abbr title="Link to this point in the document">¶</abbr></a></h3><div class="indent"><h4>Copyright</h4><p>This XMPP Extension Protocol is copyright © 1999 – 2024 by the <a href="https://xmpp.org/">XMPP Standards Foundation</a> (XSF).</p><h4>Permissions</h4><p>Permission is hereby granted, free of charge, to any person obtaining a copy of this specification (the "Specification"), to make use of the Specification without restriction, including without limitation the rights to implement the Specification in a software program, deploy the Specification in a network service, and copy, modify, merge, publish, translate, distribute, sublicense, or sell copies of the Specification, and to permit persons to whom the Specification is furnished to do so, subject to the condition that the foregoing copyright notice and this permission notice shall be included in all copies or substantial portions of the Specification. Unless separate permission is granted, modified works that are redistributed shall not contain misleading information regarding the authors, title, number, or publisher of the Specification, and shall not claim endorsement of the modified works by the authors, any organization or project to which the authors belong, or the XMPP Standards Foundation.</p><h4>Disclaimer of Warranty</h4><p class="box info">## NOTE WELL: This Specification is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. ##</p><h4>Limitation of Liability</h4><p>In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall the XMPP Standards Foundation or any author of this Specification be liable for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising from, out of, or in connection with the Specification or the implementation, deployment, or other use of the Specification (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if the XMPP Standards Foundation or such author has been advised of the possibility of such damages.</p><h4>IPR Conformance</h4><p>This XMPP Extension Protocol has been contributed in full conformance with the XSF's Intellectual Property Rights Policy (a copy of which can be found at &lt;<a href="https://xmpp.org/about/xsf/ipr-policy">https://xmpp.org/about/xsf/ipr-policy</a>&gt; or obtained by writing to XMPP Standards Foundation, P.O. Box 787, Parker, CO 80134 USA).</p><h4>Visual Presentation</h4><p>The HTML representation (you are looking at) is maintained by the XSF. It is based on the <a href="http://yaml.de">YAML CSS Framework</a>, which is licensed under the terms of the <a href="https://creativecommons.org/licenses/by/2.0/">CC-BY-SA 2.0</a> license.</p></div><h3 id="appendix-xmpp">Appendix D: Relation to XMPP<a class="anchor-link" href="#appendix-xmpp"><abbr title="Link to this point in the document">¶</abbr></a></h3><p class="indent">The Extensible Messaging and Presence Protocol (XMPP) is defined in the XMPP Core (RFC 6120) and XMPP IM (RFC 6121) specifications contributed by the XMPP Standards Foundation to the Internet Standards Process, which is managed by the Internet Engineering Task Force in accordance with RFC 2026. Any protocol defined in this document has been developed outside the Internet Standards Process and is to be understood as an extension to XMPP rather than as an evolution, development, or modification of XMPP itself.</p><h3 id="appendix-discuss">Appendix E: Discussion Venue<a class="anchor-link" href="#appendix-discuss"><abbr title="Link to this point in the document">¶</abbr></a></h3><p class="indent">The primary venue for discussion of XMPP Extension Protocols is the &lt;<a href="https://mail.jabber.org/mailman/listinfo/standards">standards@xmpp.org</a>&gt; discussion list.</p><p class="indent">Discussion on other xmpp.org discussion lists might also be appropriate; see &lt;<a href="https://xmpp.org/community/">https://xmpp.org/community/</a>&gt; for a complete list.</p><p class="indent">Errata can be sent to &lt;<a href="mailto:editor@xmpp.org">editor@xmpp.org</a>&gt;.</p><h3 id="appendix-conformance">Appendix F: Requirements Conformance<a class="anchor-link" href="#appendix-conformance"><abbr title="Link to this point in the document">¶</abbr></a></h3><p class="indent">
+          The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+          "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED",
+          "MAY", and "OPTIONAL" in this document are to be interpreted as
+          described in <a href="https://tools.ietf.org/rfc/bcp/bcp14.txt">BCP 14</a>
+          [<a href="https://www.ietf.org/rfc/rfc2119.txt">RFC2119</a>]
+          [<a href="https://tools.ietf.org/rfc/rfc8174.txt">RFC8174</a>] when,
+          and only when, they appear in all capitals, as shown here.
+        </p><h3 id="appendix-notes">Appendix G: Notes<a class="anchor-link" href="#appendix-notes"><abbr title="Link to this point in the document">¶</abbr></a></h3><div class="indent"><p><a name="nt-idm45974394939088">1</a>. XEP-0372: References &lt;<a href="https://xmpp.org/extensions/xep-0372.html">https://xmpp.org/extensions/xep-0372.html</a>&gt;.</p><p><a name="nt-idm45974393859344">2</a>. XEP-0369: Mediated Information eXchange (MIX) &lt;<a href="https://xmpp.org/extensions/xep-0369.html">https://xmpp.org/extensions/xep-0369.html</a>&gt;.</p><p><a name="nt-idm45974393827680">3</a>. The Internet Assigned Numbers Authority (IANA) is the central coordinator for the assignment of unique parameter values for Internet protocols, such as port numbers and URI schemes. For further information, see &lt;<a href="http://www.iana.org/">http://www.iana.org/</a>&gt;.</p><p><a name="nt-idm45974393821824">4</a>. The XMPP Registrar maintains a list of reserved protocol namespaces as well as registries of parameters used in the context of XMPP extension protocols approved by the XMPP Standards Foundation. For further information, see &lt;<a href="https://xmpp.org/registrar/">https://xmpp.org/registrar/</a>&gt;.</p></div><h3 id="appendix-revs">Appendix H: Revision History<a class="anchor-link" href="#appendix-revs"><abbr title="Link to this point in the document">¶</abbr></a></h3><p>Note: Older versions of this specification might be available at <a href="https://xmpp.org/extensions/attic/">https://xmpp.org/extensions/attic/</a></p><ol class="revision-history"><li id="revision-history-v0.2.0"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0437-0.2.0.html">0.2.0</a> (2020-05-05)<a class="anchor-link" href="#revision-history-v0.2.0"><abbr title="Link to this point in the document">¶</abbr></a></div>Assign urn:xmpp namespace instead of xmpp:prosody.im namespace (this was missed during acceptance)<div class="revision-author">XEP Editor (jsc)</div></li><li id="revision-history-v0.1.0"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0437-0.1.0.html">0.1.0</a> (2020-05-05)<a class="anchor-link" href="#revision-history-v0.1.0"><abbr title="Link to this point in the document">¶</abbr></a></div>Accepted by vote of Council on 2020-04-15.<div class="revision-author">XEP Editor (jsc)</div></li><li id="revision-history-v0.0.1"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0437-0.0.1.html">0.0.1</a> (2020-04-13)<a class="anchor-link" href="#revision-history-v0.0.1"><abbr title="Link to this point in the document">¶</abbr></a></div><p class="" style="">First draft.</p><div class="revision-author">mw</div></li></ol><h3 id="appendix-biblatex">Appendix I: Bib(La)TeX Entry</h3><pre>
+@report{wild2020xep0437,
+  title = {Room Activity Indicators},
+  author = {Wild, Matthew},
+  type = {XEP},
+  number = {0437},
+  version = {0.2.0},
+  institution = {XMPP Standards Foundation},
+  url = {https://xmpp.org/extensions/xep-0437.html},
+  date = {2020-04-13/2020-05-05},
+}</pre><p>END</p></body></html>

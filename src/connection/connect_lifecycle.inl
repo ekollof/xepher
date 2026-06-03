@@ -214,6 +214,15 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             }
         }
 
+        // XEP-0437: subscribe to Room Activity Indicators by sending a presence
+        // stanza to our own bare JID with an empty <rai> element.
+        {
+            stanza::presence rai_pres;
+            rai_pres.to(account.jid());
+            rai_pres.rai_indicator();
+            this->send(rai_pres.build(account.context).get());
+        }
+
         // XEP-0172: publish own nickname via PEP so contacts see a display name.
         // Only publish when the nick has changed since the last publish in this
         // process; unconditional publishing every reconnect sends a PEP push
