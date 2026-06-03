@@ -451,5 +451,15 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
                   "%sFile uploaded! Sharing link… %s",
                   weechat_prefix("network"), visible_link.c_str());
 
+    // Inline image display via weechat-icat (Kitty graphics protocol)
+    if (weechat::config::instance &&
+        weechat_config_boolean(weechat::config::instance->look.icat) &&
+        is_image_mime_type(ctx->content_type) &&
+        !ctx->filename.empty())
+    {
+        std::string icat_cmd = fmt::format("/icat {}", ctx->filename);
+        weechat_command(status_buf, icat_cmd.c_str());
+    }
+
     return WEECHAT_RC_OK;
 }

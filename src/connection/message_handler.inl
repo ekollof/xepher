@@ -3399,6 +3399,10 @@ message_handler_after_omemo:
         }
     }
     
+    // Inline image display candidates (weechat-icat / Kitty graphics protocol)
+    std::string incoming_image_url;
+    std::string incoming_image_mime;
+
     // XEP-0066: Out of Band Data - extract URL from <x xmlns='jabber:x:oob'>
     xmpp_stanza_t *oob_x = xmpp_stanza_get_child_by_name_and_ns(stanza, "x", "jabber:x:oob");
     std::string oob_suffix;
@@ -3411,6 +3415,15 @@ message_handler_after_omemo:
             const char *url_text = url_text_g.ptr;
             if (url_text)
             {
+                // Candidate for weechat-icat (no MIME in OOB — check extension)
+                std::string_view url_sv(url_text);
+                if (url_sv.ends_with(".jpg") || url_sv.ends_with(".jpeg")
+                    || url_sv.ends_with(".png") || url_sv.ends_with(".gif")
+                    || url_sv.ends_with(".webp"))
+                {
+                    incoming_image_url = url_text;
+                }
+
                 // Optionally get description
                 xmpp_stanza_t *desc_elem = xmpp_stanza_get_child_by_name(oob_x, "desc");
                 xmpp_string_guard desc_text_g(account.context,
@@ -3500,6 +3513,13 @@ message_handler_after_omemo:
 
         if (!sims_url.empty())
         {
+            // Candidate for weechat-icat (SIMS provides MIME type)
+            if (is_image_mime_type(sims_mime))
+            {
+                incoming_image_url = sims_url;
+                incoming_image_mime = sims_mime;
+            }
+
             // Build display line: [File: name (mime, size) URL]
             sims_suffix += std::string("\n") + weechat_color("cyan") + "[File: ";
             if (!sims_name.empty())
@@ -3684,6 +3704,13 @@ message_handler_after_omemo:
 
         if (!sfs_url.empty())
         {
+            // Candidate for weechat-icat (SFS provides MIME type; skip encrypted — handled in esfs_download_cb)
+            if (!sfs_encrypted && is_image_mime_type(sfs_mime))
+            {
+                incoming_image_url = sfs_url;
+                incoming_image_mime = sfs_mime;
+            }
+
             if (sfs_encrypted)
             {
                 // XEP-0448: show that we're downloading the encrypted file in the background.
@@ -3936,6 +3963,15 @@ message_handler_after_omemo:
                                       edit, encrypted_glyph,
                                       display_text ? display_text : "");
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s", msg.c_str());
+    }
+
+    // weechat-icat: display inline image for incoming SFS/SIMS/OOB image URLs
+    if (!is_mam_replay && weechat::config::instance &&
+        weechat_config_boolean(weechat::config::instance->look.icat) &&
+        !incoming_image_url.empty())
+    {
+        std::string icat_cmd = fmt::format("/icat {}", incoming_image_url);
+        weechat_command(channel->buffer, icat_cmd.c_str());
     }
 
     // XEP-0511: print each collected OG preview as a separate buffer line.

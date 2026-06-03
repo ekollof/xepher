@@ -25,3 +25,6 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_te
 // Converts a barebones subset of Markdown to WeeChat colour/attribute codes.
 // Applied to <content type='text'> (or no type) Atom entries.
 std::string apply_markdown_to_weechat(std::string_view text);
+
+// Returns true if `mime` is an image type (starts with "image/").
+XMPP_TEST_EXPORT bool is_image_mime_type(std::string_view mime);

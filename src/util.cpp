@@ -674,3 +674,8 @@ std::string apply_markdown_to_weechat(std::string_view text)
 
     return result;
 }
+
+XMPP_TEST_EXPORT bool is_image_mime_type(std::string_view mime)
+{
+    return mime.starts_with("image/");
+}

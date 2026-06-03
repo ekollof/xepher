@@ -788,6 +788,22 @@ Incoming XEP-0447 file-sharing stanzas sent by other clients are also parsed and
 displayed, deduplicated against any SIMS or OOB element for the same URL so the
 file appears only once per message.
 
+#### Inline image display (weechat-icat)
+
+When the `weechat-icat` script is installed (https://github.com/trygveaa/weechat-icat),
+enabling `xmpp.look.icat` causes the plugin to automatically display received
+images inline using the Kitty graphics protocol:
+
+- **Outgoing uploads** — the local file is shown via `/icat` immediately after the
+  upload completes and the sharing link is posted.
+- **Incoming SFS / SIMS / OOB** — unencrypted image URLs are passed to `/icat`
+  when the message is received (skipped during MAM replay to avoid flooding history).
+- **Incoming encrypted uploads (XEP-0448 ESFS)** — after the file is decrypted and
+  saved to `~/Downloads/xmpp/<jid>/<date>/`, `/icat` is invoked on the local path.
+
+Only image MIME types (`image/*`) trigger icat. Other file types are announced
+normally without inline display.
+
 ### Archive & history
 
 ```

@@ -215,6 +215,12 @@ weechat::config::config()
                 "equivalents (😊 😉 😀 ❤️) in incoming and outgoing messages",
                 nullptr, 0, 0,
                 "on", nullptr, false,
+                {}, {}, {}},
+            .icat{file, section_look, "icat", "boolean",
+                "display shared images inline using weechat-icat (Kitty graphics protocol); "
+                "requires the icat.py script to be loaded in WeeChat",
+                nullptr, 0, 0,
+                "off", nullptr, false,
                 {}, {}, {}}}
 {
 }

@@ -30,6 +30,7 @@
 #include "user.hh"
 #include "channel.hh"
 #include "buffer.hh"
+#include "util.hh"
 #include "debug.hh"
 
 #include "account/callbacks.inl"

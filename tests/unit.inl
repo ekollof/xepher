@@ -1390,4 +1390,21 @@ TEST_CASE("replace_emoticons does not match partial emoticons")
     CHECK(replace_emoticons("a:-)b") == "a:-)b");
 }
 
+TEST_CASE("is_image_mime_type accepts image MIME types")
+{
+    CHECK(is_image_mime_type("image/png") == true);
+    CHECK(is_image_mime_type("image/jpeg") == true);
+    CHECK(is_image_mime_type("image/gif") == true);
+    CHECK(is_image_mime_type("image/webp") == true);
+}
+
+TEST_CASE("is_image_mime_type rejects non-image MIME types")
+{
+    CHECK(is_image_mime_type("application/pdf") == false);
+    CHECK(is_image_mime_type("text/plain") == false);
+    CHECK(is_image_mime_type("video/mp4") == false);
+    CHECK(is_image_mime_type("audio/ogg") == false);
+    CHECK(is_image_mime_type("image") == false);
+    CHECK(is_image_mime_type("") == false);
+}
 
