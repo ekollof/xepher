@@ -1757,8 +1757,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 stanza, "rai", "urn:xmpp:rai:0");
             if (rai)
             {
-                const char *rai_from = xmpp_stanza_get_from(stanza);
-                std::string rai_from_sv = rai_from ? rai_from : "";
                 for (xmpp_stanza_t *act = xmpp_stanza_get_child_by_name(rai, "activity");
                      act; act = xmpp_stanza_get_next(act))
                 {
@@ -1768,12 +1766,36 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     const char *jid = xmpp_stanza_get_text_ptr(act);
                     if (!jid || !*jid)
                         continue;
-                    weechat_printf(account.buffer,
-                                   _("%sRoom activity: %s%s%s"),
-                                   weechat_prefix("network"),
-                                   weechat_color("chat_nick_self"),
-                                   jid,
-                                   weechat_color("reset"));
+
+                    // Look up the room buffer; if it exists, bump hotlist and
+                    // print the notification in-context.  Otherwise fall back
+                    // to the account buffer.
+                    weechat::channel *rai_ch = nullptr;
+                    if (auto rai_it = account.channels.find(jid);
+                        rai_it != account.channels.end())
+                    {
+                        auto& [_, rch] = *rai_it;
+                        rai_ch = &rch;
+                    }
+
+                    if (rai_ch && rai_ch->buffer)
+                    {
+                        weechat_buffer_set(rai_ch->buffer, "hotlist",
+                                           WEECHAT_HOTLIST_MESSAGE);
+                        weechat_printf_date_tags(rai_ch->buffer, 0,
+                                                   "xmpp_rai,notify_message",
+                                                   _("%sRoom activity detected"),
+                                                   weechat_prefix("network"));
+                    }
+                    else
+                    {
+                        weechat_printf(account.buffer,
+                                       _("%sRoom activity: %s%s%s"),
+                                       weechat_prefix("network"),
+                                       weechat_color("chat_nick_self"),
+                                       jid,
+                                       weechat_color("reset"));
+                    }
                 }
                 return 1;
             }
