@@ -41,6 +41,7 @@ namespace weechat
             std::vector<std::pair<std::string, std::string>> hashes;
             size_t width  = 0;        // Image width  in pixels (0 = unknown/non-image)
             size_t height = 0;        // Image height in pixels (0 = unknown/non-image)
+            std::string file_date;    // XEP-0446 <date> (UTC ISO-8601)
 
             // XEP-0448: Encrypted File Sharing — set when the upload was AES-256-GCM encrypted.
             // When present, the <sources> element will contain an <encrypted xmlns='urn:xmpp:esfs:0'>

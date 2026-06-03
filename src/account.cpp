@@ -977,6 +977,8 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
             file_spec.width(emb.width);
         if (emb.height > 0)
             file_spec.height(emb.height);
+        if (!emb.file_date.empty())
+            file_spec.date(emb.file_date);
 
         auto sources_spec = stanza::xep0447::sources()
             .add(stanza::xep0447::url_data(emb.get_url));

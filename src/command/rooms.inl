@@ -457,7 +457,7 @@ int command__upload(const void *pointer, void *data,
         (ptr_channel->type == weechat::channel::chat_type::MUC)
     };
     
-    // Build upload slot request (XEP-0363 v0.3.0+)
+    // Build upload slot request (XEP-0363 v1.2.0+)
     struct upload_request_iq : stanza::spec {
         upload_request_iq(std::string_view to_, std::string_view id_,
                           std::string_view filename_, std::string_view size_,
@@ -473,7 +473,16 @@ int command__upload(const void *pointer, void *data,
                     if (!ct.empty())
                         attr("content-type", ct);
                 }
+                // XEP-0363 §5: purpose child (message/profile/ephemeral/permanent)
+                req& purpose_message() {
+                    struct p : stanza::spec {
+                        p() : spec("message") { xmlns<urn::xmpp::http::upload_purpose::_0>(); }
+                    };
+                    child(p());
+                    return *this;
+                }
             } r(filename_, size_, content_type_);
+            r.purpose_message();  // all current uploads are message attachments
             child(r);
         }
     };

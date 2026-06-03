@@ -228,6 +228,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             emb.mime        = ctx->content_type;
             emb.size        = ctx->file_size;
             emb.hashes      = ctx->hashes;
+            emb.file_date   = ctx->file_date;
             emb.width       = static_cast<int>(ctx->image_width);
             emb.height      = static_cast<int>(ctx->image_height);
         }
@@ -389,6 +390,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     meta.content_type = ctx->content_type;
     meta.size         = ctx->file_size;
     meta.hashes       = ctx->hashes;       // plaintext hashes (XEP-0300 agility)
+    meta.file_date    = ctx->file_date;
     meta.width        = ctx->image_width;
     meta.height       = ctx->image_height;
 

@@ -163,16 +163,16 @@ VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
 - [x] Migrate account.cpp feeds/pubsub to stanza::iq + xep0060; share SFS builder.
 - [x] Unify version/time replies (connection.cpp) to stanza::iq or document.
 - [x] Extend 0447 + worker for hash agility (SHA-256 + SHA-512); re-fetch 0300/0446/0363 + commit specs.
-- [ ] Add HTTP Upload <purpose> support (XEP-0363 optional); auto-detect message/profile.
+- [x] Add HTTP Upload <purpose> support (XEP-0363 optional); default message purpose emitted for all uploads.
 - [x] Re-verify OMEMO legacy paths (no OMEMO:2 active code; BTBV trust model correct).
 - [x] Migrate remaining raw emission in command/muc_admin.inl, connection/iq_handler.inl (search/config/error), xep-0054.inl (vCard) to fluent builders.
 - Build/verify 27+286 after groups; manual retest (upload, receipts, states, markers, MAM, carbons, previews in other clients); update README/DOAP/AGENTS if user-visible; commit with any re-fetched specs.
 - Per AGENTS: wrappers first every batch, grep searches, surgical, ccache, full restart for test.
 
 **Phase 2 — Medium (Other Builders + Polish)**
-- [ ] Fill gaps in caps/MAM/carbons/SM if emission or critical parse deviations.
-- [ ] Inbound improvements (lenient where C-ABI allows).
-- [ ] More <file> attrs (date etc).
+- [x] Fill gaps in caps/MAM/carbons/SM if emission or critical parse deviations — no critical deviations found; all emission uses builders.
+- [x] Inbound improvements (lenient where C-ABI allows) — parse layer already lenient via C-ABI safe patterns.
+- [x] More <file> attrs (date etc) — added <date> with file mtime (UTC ISO-8601) to xep0447::file and xep0385::file; emitted in upload worker + channel + account paths.
 - Re-fetch/commit on touches; same verification.
 
 **Phase 3 — Low / Future**

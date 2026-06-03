@@ -44,6 +44,7 @@ struct embed_tag
     // XEP-0300 hash agility: one or more (algo, base64) pairs.
     // Computed during upload (SHA-256 + SHA-512 for interop).
     std::vector<std::pair<std::string, std::string>> hashes;
+    std::string file_date;  // XEP-0446 <date> (UTC ISO-8601)
 
     bool uploaded() const { return !get_url.empty(); }
 

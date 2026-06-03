@@ -212,6 +212,7 @@ struct urn {
         struct hints : public xmlns { hints() : xmlns("urn:xmpp:hints") {} };
         struct http : public xmlns { http() : xmlns("urn:xmpp:http") {}
             struct upload { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:http:upload:0") {} }; };
+            struct upload_purpose { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:http:upload:purpose:0") {} }; };
         };
         struct idle { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:idle:1") {} }; };
         struct incident { struct _2 : public xmlns { _2() : xmlns("urn:xmpp:incident:2") {} }; };

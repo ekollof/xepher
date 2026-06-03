@@ -10,6 +10,7 @@
 #include <array>
 #include <ranges>
 #include <time.h>
+#include <sys/stat.h>
 #include <stdint.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>

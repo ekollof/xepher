@@ -1376,6 +1376,22 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     }
                     c.file_size = static_cast<size_t>(file_size);
 
+                    // XEP-0446 <date>: capture file modification time (UTC ISO-8601).
+                    {
+                        struct stat st;
+                        if (stat(filepath_copy.c_str(), &st) == 0)
+                        {
+                            struct tm *gmt = gmtime(&st.st_mtime);
+                            if (gmt)
+                            {
+                                char date_buf[32];
+                                if (strftime(date_buf, sizeof(date_buf),
+                                             "%Y-%m-%dT%H:%M:%SZ", gmt))
+                                    c.file_date = std::string(date_buf);
+                            }
+                        }
+                    }
+
                     // Rewind so subsequent operations (hash, dims, upload read) use
                     // the exact same open file descriptor/content as the size we just
                     // measured. This guarantees the SHA-256 we advertise matches the

@@ -52,6 +52,10 @@ namespace stanza {
                 child(h_el); return *this;
             }
             file& height(size_t n) { return height(std::to_string(n)); }
+            file& date(std::string_view v) {
+                struct d : virtual public spec { d(std::string_view vv) : spec("date") { text(vv); } } d_el(v);
+                child(d_el); return *this;
+            }
             file& add_hash(const xep0385::hash& h) { child(const_cast<xep0385::hash&>(h)); return *this; }
             file& hash_sha256(std::string_view b64val) {
                 return add_hash(xep0385::hash("sha-256", b64val));

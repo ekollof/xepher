@@ -117,6 +117,7 @@ namespace weechat
             std::vector<std::pair<std::string, std::string>> hashes;
             size_t image_width  = 0;    // Image width  in pixels (0 = unknown/non-image)
             size_t image_height = 0;    // Image height in pixels (0 = unknown/non-image)
+            std::string file_date;      // XEP-0446 <date> (UTC ISO-8601, e.g. 2026-06-03T09:28:00Z)
             long http_code = 0;
             std::string curl_error;
             int pipe_write_fd = -1;     // write end (closed by thread after writing)
