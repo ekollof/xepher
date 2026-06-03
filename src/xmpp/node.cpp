@@ -9,7 +9,7 @@
 #include "ns.hh"
 #pragma GCC visibility pop
 
-std::string stanza::uuid(xmpp_ctx_t *context) {
+XMPP_TEST_EXPORT std::string stanza::uuid(xmpp_ctx_t *context) {
     std::shared_ptr<char> uuid {
         xmpp_uuid_gen(context),
         [=](auto x) { xmpp_free(context, x); }
@@ -44,7 +44,7 @@ XMPP_TEST_EXPORT std::string get_text(xmpp_stanza_t *stanza) {
         return {};
 }
 
-std::chrono::system_clock::time_point get_time(const std::string& text) {
+XMPP_TEST_EXPORT std::chrono::system_clock::time_point get_time(const std::string& text) {
     std::tm tm = {};
     if (strptime(text.data(), "%FT%T%z", &tm)) {
         throw std::invalid_argument("Bad time format");

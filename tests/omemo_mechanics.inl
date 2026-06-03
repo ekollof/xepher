@@ -158,6 +158,12 @@ static int stub_config_boolean(struct t_config_option * /*option*/)
     return 0;  // ATM disabled — safest default for unit tests
 }
 
+// stub: weechat_color — returns a fixed WeeChat colour escape sequence
+static const char *stub_color(const char * /*color_name*/)
+{
+    return "\x01\x30";  // WeeChat colour reset code (sufficient for tests)
+}
+
 // Build the minimal t_weechat_plugin stub.
 // All fields not needed are zero-initialised — will crash loudly if
 // accidentally called, making it obvious which stub is missing.
@@ -171,6 +177,7 @@ static t_weechat_plugin make_plugin_stub()
     p.string_base_encode     = stub_string_base_encode;
     p.string_base_decode     = stub_string_base_decode;
     p.config_boolean         = stub_config_boolean;
+    p.color                  = stub_color;
     return p;
 }
 
@@ -780,4 +787,67 @@ TEST_CASE("handle_axolotl_bundle consumes pending_key_transport regardless of ma
     // postponed_key_transports must be empty (the guard at line 1298 requires
     // account && buffer which were nullptr).
     CHECK(env.omemo->postponed_key_transports.empty());
+}
+
+// =============================================================================
+// TEST CASES – OMEMO lifecycle coverage
+// =============================================================================
+
+TEST_CASE("omemo::needs_bundle_publish returns true after init")
+{
+    omemo_test_env env;
+    // After init(), the bundle has never been published, so it should need publish
+    CHECK(env.omemo->needs_bundle_publish(env.ctx));
+}
+
+TEST_CASE("omemo::needs_bundle_publish returns false after second call")
+{
+    omemo_test_env env;
+    // First call: true (prekeys generated, needs publish)
+    CHECK(env.omemo->needs_bundle_publish(env.ctx));
+    // Second call: false (state not changed since last call)
+    CHECK_FALSE(env.omemo->needs_bundle_publish(env.ctx));
+}
+
+// =============================================================================
+// TEST CASES – weechat_color-dependent pure functions (via plugin stub)
+// =============================================================================
+
+TEST_CASE("xmpp_color returns non-empty string via plugin stub")
+{
+    omemo_test_env env;  // sets up plugin stub with stub_color
+    std::string c = weechat::xmpp_color("reset");
+    CHECK(!c.empty());
+}
+
+TEST_CASE("apply_xep393_styling converts *bold* markup")
+{
+    omemo_test_env env;
+    std::string out = apply_xep393_styling("Hello *bold* text");
+    // The stub color code should appear twice (open + close)
+    CHECK(out.find("bold") != std::string::npos);
+    CHECK(out != "Hello *bold* text");  // was transformed
+}
+
+TEST_CASE("apply_xep393_styling converts _italic_ markup")
+{
+    omemo_test_env env;
+    std::string out = apply_xep393_styling("Hello _italic_ text");
+    CHECK(out.find("italic") != std::string::npos);
+    CHECK(out != "Hello _italic_ text");
+}
+
+TEST_CASE("apply_xep393_styling converts `monospace` markup")
+{
+    omemo_test_env env;
+    std::string out = apply_xep393_styling("Hello `code` text");
+    CHECK(out.find("code") != std::string::npos);
+    CHECK(out != "Hello `code` text");
+}
+
+TEST_CASE("apply_xep393_styling passes through plain text")
+{
+    omemo_test_env env;
+    std::string out = apply_xep393_styling("plain text without markup");
+    CHECK(out == "plain text without markup");
 }

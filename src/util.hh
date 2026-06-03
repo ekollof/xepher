@@ -13,7 +13,7 @@ XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2);
 XMPP_TEST_EXPORT std::string unescape(const std::string& str);
 
 // XEP-0393: Message Styling
-std::string apply_xep393_styling(std::string_view text);
+XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text);
 
 // XEP-0394: Message Markup (receive-only)
 // Returns a WeeChat-colour-coded string derived from `plain_text` using the

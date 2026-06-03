@@ -232,7 +232,7 @@ static const std::pair<std::string_view, std::string_view> k_emoticons[] = {
     {":-3", "😺"},
 };
 
-std::string replace_emoticons(std::string_view text)
+XMPP_TEST_EXPORT std::string replace_emoticons(std::string_view text)
 {
     // Sort longest-first so multi-char emoticons like ":-)" are matched before ")"
     static const auto &sorted = [] -> decltype(auto) {

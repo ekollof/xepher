@@ -119,7 +119,9 @@ namespace stanza {
     };
     template<class... Ts> overloaded(Ts&&...) -> overloaded<std::decay_t<Ts>...>;
 
-    extern std::string uuid(xmpp_ctx_t *context);
+    XMPP_TEST_EXPORT extern std::string uuid(xmpp_ctx_t *context);
+
+    XMPP_TEST_EXPORT std::chrono::system_clock::time_point get_time(const std::string& text);
 
     class spec {
     protected:

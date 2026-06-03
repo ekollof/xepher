@@ -48,7 +48,7 @@ XMPP_TEST_EXPORT std::string unescape(const std::string& str)
 
 // XEP-0393: Message Styling
 // Converts XEP-0393 markup to WeeChat color codes
-std::string apply_xep393_styling(std::string_view text)
+XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
 {
     if (text.empty()) return std::string(text);
     
