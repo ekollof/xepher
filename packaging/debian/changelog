@@ -1,3 +1,15 @@
+xepher (0.7.0-1) unstable; urgency=medium
+
+  * Update to v0.7.0
+  * Fix(upload): replace unsafe OpenSSL BIO base64 with weechat_string_base_encode
+  * Fix(upload): use gmtime_r for thread safety; fix dangling shared_ptr in upload callback
+  * Feat(omemo): implement BTBV trust_jid(); fix /omemo trust calling distrust bug
+  * Feat(omemo): add optional [device-id] to /omemo trust; show trust levels in devices
+  * Refactor(omemo): remove stale omemo_atm config option and XEP-0450/XEP-0434 entries
+  * Feat(xep0437): implement Room Activity Indicators (subscribe + display)
+
+ -- Emiel Kollof <emiel@kollof.nl>  Wed, 03 Jun 2026 14:00:00 +0000
+
 xepher (0.6.1-1) unstable; urgency=medium
 
   * Update to v0.6.1

@@ -819,6 +819,16 @@
 
     <release>
       <Version>
+        <revision>0.7.0</revision>
+        <created>2026-06-03</created>
+        <xmpp:note
+                    xml:lang='en'
+                >Fix upload-disconnect bug (unsafe OpenSSL BIO base64 replaced with weechat_string_base_encode, gmtime_r for thread safety, dangling shared_ptr fix); BTBV trust commands (/omemo trust, /omemo distrust with optional device-id, trust levels in /omemo devices); remove stale ATM/XEP-0450 code; XEP-0437 Room Activity Indicators (subscribe on connect, display activity notifications)</xmpp:note>
+      </Version>
+    </release>
+
+    <release>
+      <Version>
         <revision>0.6.0</revision>
         <created>2026-03-31</created>
         <xmpp:note

@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        0.6.1
+Version:        0.7.0
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -70,6 +70,15 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Wed Jun 03 2026 Emiel Kollof <emiel@kollof.nl> - 0.7.0-1
+- Update to v0.7.0
+- Fix(upload): replace unsafe OpenSSL BIO base64 with weechat_string_base_encode to prevent corrupted hash values and connection drops
+- Fix(upload): use gmtime_r for thread safety; fix dangling shared_ptr in upload completion callback
+- Feat(omemo): implement BTBV trust_jid(); fix /omemo trust accidentally calling distrust
+- Feat(omemo): add optional [device-id] to /omemo trust; display trust levels in /omemo devices
+- Refactor(omemo): remove stale omemo_atm config option and XEP-0450/XEP-0434 DOAP entries
+- Feat(xep0437): implement Room Activity Indicators — subscribe on connect, display notifications
+
 * Wed Apr 08 2026 Emiel Kollof <emiel@kollof.nl> - 0.6.1-1
 - Update to v0.6.1
 - Fix(omemo): cache OMEMO plaintext under all three message IDs to fix MAM replay cache miss
