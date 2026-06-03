@@ -14,9 +14,11 @@ This is a WeeChat plugin for XMPP/Jabber written in C++. It uses libstrophe for 
 
 Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.txt` (fetched directly from `https://xmpp.org/extensions/xep-NNNN.html`).
 
+**The XEP specifications must be *religiously* followed at all times to ensure compatibility.** This is non-negotiable. It guarantees correct interoperability with other clients (e.g. rich file previews via SFS/ESFS metadata in Conversations and similar, proper element nesting, size/hash reporting for plain vs. encrypted uploads, namespaces, and full protocol flows). Even small deviations "for convenience", legacy fallbacks, or perceived simplicity have caused real-world failures such as missing previews, corrupt metadata, service-unavailable errors in MUC, or incorrect links.
+
 **When implementing or modifying support for any XEP:**
 1. Fetch the canonical spec: `curl -s https://xmpp.org/extensions/xep-NNNN.html -o docs/specs/xep-NNNN.txt`
-2. Verify stanza structure, namespaces, and protocol behavior against that spec before finalizing code.
+2. Verify stanza structure, namespaces, and protocol behavior against that spec before finalizing code. Cross-check all examples, MUST/RECOMMENDED/SHOULD requirements, and related XEPs (e.g. XEP-0446 file metadata, XEP-0300 hashes).
 3. Commit the spec file alongside the implementation.
 
 **Do not** modify the canonical spec files to match the code — the spec is authoritative.
