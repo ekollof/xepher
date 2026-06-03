@@ -1,0 +1,51 @@
+# Maintainer: Emiel Kollof <emiel@kollof.nl>
+pkgname=xepher-git
+pkgver=0.7.0.r0.g573cdae
+pkgrel=1
+pkgdesc="Xepher — WeeChat plugin for XMPP/Jabber protocol (git master)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ekollof/xepher"
+license=('MPL-2.0')
+depends=(
+    'weechat'
+    'libstrophe'
+    'libxml2'
+    'lmdb'
+    'libsignal-protocol-c'
+    'libomemo-c'
+    'gpgme'
+    'fmt'
+    'curl'
+    'openssl'
+)
+makedepends=(
+    'git'
+    'bison'
+    'flex'
+)
+provides=('xepher')
+conflicts=('xepher')
+source=("git+https://github.com/ekollof/xepher.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$srcdir/xepher"
+    git describe --long --tags | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+prepare() {
+    cd "$srcdir/xepher"
+    git submodule update --init --recursive
+}
+
+build() {
+    cd "$srcdir/xepher"
+    make
+}
+
+package() {
+    cd "$srcdir/xepher"
+    install -Dm755 xmpp.so "$pkgdir/usr/lib/weechat/plugins/xmpp.so"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
