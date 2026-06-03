@@ -176,7 +176,12 @@ VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
 - Re-fetch/commit on touches; same verification.
 
 **Phase 3 — Low / Future**
-- [ ] Remaining edges (spoilers 0353, pogo 0437, invites, blocking, full modern OMEMO SCE per its branch, etc).
+- [x] Spoilers: XEP-0382 already implemented (builder + parser + /spoiler command).
+- [x] Invites: XEP-0249 Direct MUC Invitations already implemented (fluent builder + handler).
+- [x] Blocking: XEP-0191 Blocking Command already implemented (fluent builder + /block /unblock /blocklist commands + picker UI + server push handler).
+- [ ] XEP-0353 Jingle Message Initiation (voice/video calls) — not planned; requires full Jingle stack.
+- [ ] XEP-0437 Room Activity Indicators — Deferred status; not implemented.
+- [ ] Full modern OMEMO SCE (Stable Consensus Encryption) — tracked on separate branch; not master.
 - Ongoing: any new XEP support or modify triggers full re-fetch/verify/commit spec + TODO update.
 
 **Verification (every phase + final)**
