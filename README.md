@@ -819,6 +819,7 @@ Inside WeeChat:
 ```
 
 Requires a terminal that supports the Kitty graphics protocol (e.g. Kitty, WezTerm, or foot).
+Also requires Python `PIL`/`Pillow` (`pip install Pillow` or `python-pillow` package).
 
 ### Archive & history
 
@@ -1014,6 +1015,8 @@ See [`scripts/README.md`](scripts/README.md) for full configuration options.
 Displays shared images inline using the Kitty graphics protocol. Vendored from
 https://github.com/trygveaa/weechat-icat (MIT license). Used automatically
 when `xmpp.look.icat` is enabled.
+
+Requires Python `PIL`/`Pillow` (`pip install Pillow` or `python-pillow` package).
 
 ```sh
 cp scripts/icat.py ~/.local/share/weechat/python/autoload/
