@@ -111,6 +111,7 @@ namespace weechat
             std::string channel_id;
             bool is_muc = false;          // remember for fallback rich send when local channel gone
             std::string filename;
+            std::string local_path;       // original file path on disk (for /icat preview)
             std::string content_type;
             size_t file_size = 0;
             // XEP-0300 hash agility: (algo, base64) pairs.

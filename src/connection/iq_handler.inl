@@ -1288,6 +1288,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 ctx->channel_id    = req.channel_id;
                 ctx->is_muc        = req.is_muc;
                 ctx->filename      = req.filename;
+                ctx->local_path    = req.filepath;
                 ctx->content_type  = content_type;
                 ctx->pipe_write_fd = pipe_fds[1];
 

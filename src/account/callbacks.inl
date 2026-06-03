@@ -455,9 +455,9 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     if (weechat::config::instance &&
         weechat_config_boolean(weechat::config::instance->look.icat) &&
         is_image_mime_type(ctx->content_type) &&
-        !ctx->filename.empty())
+        !ctx->local_path.empty())
     {
-        std::string icat_cmd = fmt::format("/icat {}", ctx->filename);
+        std::string icat_cmd = fmt::format("/icat {}", ctx->local_path);
         weechat_command(status_buf, icat_cmd.c_str());
     }
 

@@ -3660,6 +3660,15 @@ message_handler_after_omemo:
                                     + " — already saved: " + *prev + "]"
                                     + std::string(weechat_color("resetcolor"));
                                 already_downloaded = true;
+
+                                // weechat-icat: display already-cached decrypted image inline
+                                if (weechat::config::instance &&
+                                    weechat_config_boolean(weechat::config::instance->look.icat) &&
+                                    is_image_mime_type(sfs_mime))
+                                {
+                                    std::string icat_cmd = fmt::format("/icat {}", *prev);
+                                    weechat_command(channel->buffer, icat_cmd.c_str());
+                                }
                             }
                         }
 
