@@ -187,6 +187,7 @@ struct urn {
         struct domain_based_name { struct _1 : public xmlns { _1() : xmlns("urn:xmpp:domain-based-name:1") {} }; };
         struct dox { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:dox:0") {} }; };
         struct ephemeral { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:ephemeral:0") {} }; };
+        struct eme { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:eme:0") {} }; };
         struct esfs { struct _0 : public xmlns { _0() : xmlns("urn:xmpp:esfs:0") {} }; };
         struct file {
             struct metadata : public xmlns { metadata() : xmlns("urn:xmpp:file:metadata:0") {} };

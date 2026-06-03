@@ -436,11 +436,12 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         // bundles not ready. Body uses visible (aesgcm#key for ESFS).
         std::string rich_id = stanza::uuid(ptr_account->context);
         const char *mtype = ctx->is_muc ? "groupchat" : "chat";
-        if (auto rich = weechat::channel::make_file_share_stanza(
-                ptr_account->context, ctx->channel_id, mtype, rich_id,
-                visible_link, data_url, meta))
         {
-            ptr_account->connection.send(rich.get());
+            auto rich = weechat::channel::make_file_share_stanza(
+                ptr_account->context, ctx->channel_id, mtype, rich_id,
+                visible_link, data_url, meta);
+            rich.body(visible_link);
+            ptr_account->connection.send(rich.build(ptr_account->context).get());
         }
     }
 

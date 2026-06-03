@@ -46,3 +46,26 @@ namespace xml {
     };
 
 }
+
+namespace stanza {
+
+    /* Current Jabber OpenPGP Usage (XEP-0027) — stanza builder side */
+    struct xep0027 {
+
+        // <x xmlns='jabber:x:encrypted'>ciphertext</x>
+        struct encrypted : virtual public spec {
+            encrypted(std::string_view ciphertext) : spec("x") {
+                xmlns<jabber::x::encrypted>();
+                text(ciphertext);
+            }
+        };
+
+        // stanza::message mixin
+        struct message : virtual public spec {
+            message() : spec("message") {}
+
+            message& pgp_encrypted(xep0027::encrypted e) { child(e); return *this; }
+        };
+    };
+
+}

@@ -15,6 +15,10 @@
 
 #define CHANNEL_MEMBERS_SPEAKING_LIMIT 128
 
+namespace stanza {
+    struct message;
+}
+
 namespace weechat
 {
     class account;
@@ -236,9 +240,10 @@ namespace weechat
 
         // Build a file share message stanza (SFS + SIMS + OOB + fallbacks) for a target.
         // Used by channel::send_message(file) and by upload fd_cb fallback (when local
-        // channel entry is gone after /close or race). Returns message (no OMEMO yet).
+        // channel entry is gone after /close or race). Returns unbuilt message (no body
+        // or OMEMO yet) so the caller can set body and optionally wrap before building.
         // The caller provides the pre-generated saved_id (for origin-id + later cache).
-        static std::shared_ptr<xmpp_stanza_t> make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
+        static stanza::message make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
             std::string_view to, const char *msg_type /*"chat" or "groupchat"*/,
             const std::string& saved_id,
             const std::string& body, const std::string& oob_url,

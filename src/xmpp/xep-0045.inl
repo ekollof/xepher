@@ -388,6 +388,13 @@ namespace stanza {
             }
         };
 
+        // <x xmlns='http://jabber.org/protocol/muc#user'/>
+        struct muc_user_x : virtual public spec {
+            muc_user_x() : spec("x") {
+                xmlns<jabber_org::protocol::muc::user>();
+            }
+        };
+
         // stanza::presence mixin — adds a <x xmlns='...muc'><history maxstanzas='0'/></x>
         // child for room joining (XEP-0045 §7.1).
         struct presence : virtual public spec {
@@ -398,6 +405,13 @@ namespace stanza {
                 child(x);
                 return *this;
             }
+        };
+
+        // stanza::message mixin
+        struct message : virtual public spec {
+            message() : spec("message") {}
+
+            message& muc_user(xep0045::muc_user_x x) { child(x); return *this; }
         };
     };
 

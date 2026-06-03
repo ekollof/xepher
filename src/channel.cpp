@@ -910,48 +910,21 @@ std::string weechat::channel::omemo_status() const
 // channel entry exists at completion time, e.g. after /close or race). Builds the
 // <message> with body + file-sharing (incl. esfs if present) + sims + oob + hints.
 // Omemo wrapping (if any) and local printf are caller responsibility.
-std::shared_ptr<xmpp_stanza_t> weechat::channel::make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
+stanza::message weechat::channel::make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
     std::string_view to, const char *msg_type /*"chat" or "groupchat"*/,
     const std::string& saved_id,
     const std::string& body, const std::string& oob_url,
     const file_metadata& meta)
 {
-    std::shared_ptr<xmpp_stanza_t> message {
-        xmpp_message_new(xmpp_ctx, msg_type, std::string(to).c_str(), nullptr),
-        xmpp_stanza_release };
+    (void)xmpp_ctx;
+    stanza::message msg;
+    msg.type(msg_type ? msg_type : "chat")
+       .to(std::string(to))
+       .id(saved_id)
+       .origin_id(saved_id);
 
-    xmpp_stanza_set_id(message.get(), saved_id.c_str());
-
-    // XEP-0359: Add origin-id for stable message identification
+    // XEP-0385: SIMS + XEP-0066 OOB (legacy) + XEP-0447/0448 SFS/ESFS.
     {
-        auto origin_id = stanza_node(xmpp_ctx, "origin-id", "urn:xmpp:sid:0",
-                                     {{"id", saved_id.c_str()}});
-        xmpp_stanza_add_child(message.get(), origin_id.get());
-    }
-
-    xmpp_message_set_body(message.get(), body.data());
-
-    // Helper: make a new stanza child (optionally add to parent)
-    auto make_child = [&](xmpp_stanza_t *parent,
-                          const char *name, const char *ns = nullptr)
-        -> std::shared_ptr<xmpp_stanza_t>
-    {
-        auto s = stanza_node(xmpp_ctx, name, ns);
-        if (parent) xmpp_stanza_add_child(parent, s.get());
-        return s;
-    };
-
-    // Helper: make a text-node child and add it to parent
-    auto add_text_child = [&](xmpp_stanza_t *parent, const char *name,
-                               const char *ns, const char *text_content)
-    {
-        auto el = stanza_text_node(xmpp_ctx, name, text_content, ns);
-        xmpp_stanza_add_child(parent, el.get());
-    };
-
-    // XEP-0385: SIMS + XEP-0066 OOB (legacy) + XEP-0447/0448 SFS/ESFS (now via fluent builder for spec fidelity + AGENTS compliance).
-    {
-        // Build the SFS file-sharing tree using the typed builders (exact structure from specs).
         stanza::xep0447::file sfs_f;
         sfs_f.media_type(meta.content_type).name(meta.filename).size(meta.size);
         if (meta.width > 0 && meta.height > 0) sfs_f.width(meta.width).height(meta.height);
@@ -976,81 +949,50 @@ std::shared_ptr<xmpp_stanza_t> weechat::channel::make_file_share_stanza(xmpp_ctx
         }
         fs.sources(os);
 
-        // Attach the built <file-sharing> (this replaces the previous manual low-level construction for the modern path).
-        auto fs_sp = fs.build(xmpp_ctx);
-        xmpp_stanza_add_child(message.get(), fs_sp.get());
+        msg.file_sharing(std::move(fs));
 
-        // Fallback indication (kept manual for this step; xep0428 builder available).
-        {
-            auto fallback = make_child(nullptr, "fallback", "urn:xmpp:fallback:0");
-            xmpp_stanza_set_attribute(fallback.get(), "for", "urn:xmpp:sfs:0");
-            auto fb_body = make_child(nullptr, "body");
-            xmpp_stanza_add_child(fallback.get(), fb_body.get());
-            xmpp_stanza_add_child(message.get(), fallback.get());
-        }
+        // Fallback indication (XEP-0428)
+        msg.fallback(stanza::xep0428::fallback("urn:xmpp:sfs:0", 0));
 
-        // SIMS + OOB legacy (unchanged for identical output in this surgical step).
-        auto reference = make_child(nullptr, "reference", "urn:xmpp:reference:0");
-        xmpp_stanza_set_attribute(reference.get(), "type", "data");
-        xmpp_stanza_set_attribute(reference.get(), "begin", "0");
-        xmpp_stanza_set_attribute(reference.get(), "end", std::to_string(body.size()).c_str());
+        // SIMS legacy (XEP-0385)
+        stanza::xep0385::file sims_file;
+        sims_file.media_type(meta.content_type)
+                  .name(meta.filename)
+                  .size(meta.size);
+        if (meta.width > 0 && meta.height > 0)
+            sims_file.width(meta.width).height(meta.height);
+        if (!meta.sha256_hash.empty())
+            sims_file.hash_sha256(meta.sha256_hash);
 
-        auto media_sharing = make_child(nullptr, "media-sharing", "urn:xmpp:sims:1");
-        auto file_elem = make_child(nullptr, "file", "urn:xmpp:jingle:apps:file-transfer:5");
-        add_text_child(file_elem.get(), "media-type", nullptr, meta.content_type.c_str());
-        add_text_child(file_elem.get(), "name",       nullptr, meta.filename.c_str());
-        add_text_child(file_elem.get(), "size",       nullptr, std::to_string(meta.size).c_str());
-        if (!meta.sha256_hash.empty()) {
-            auto hash_elem = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
-            xmpp_stanza_set_attribute(hash_elem.get(), "algo", "sha-256");
-            xmpp_stanza_set_text(hash_elem.get(), meta.sha256_hash.c_str());
-            xmpp_stanza_add_child(file_elem.get(), hash_elem.get());
-        }
-        if (meta.width > 0 && meta.height > 0) {
-            add_text_child(file_elem.get(), "width",  nullptr, std::to_string(meta.width).c_str());
-            add_text_child(file_elem.get(), "height", nullptr, std::to_string(meta.height).c_str());
-        }
-        xmpp_stanza_add_child(media_sharing.get(), file_elem.get());
+        stanza::xep0385::sources sims_sources;
+        sims_sources.add_source(oob_url);
 
-        auto sources = make_child(nullptr, "sources");
-        auto source_ref = make_child(nullptr, "reference", "urn:xmpp:reference:0");
-        xmpp_stanza_set_attribute(source_ref.get(), "type", "data");
-        xmpp_stanza_set_attribute(source_ref.get(), "uri", oob_url.c_str());
-        xmpp_stanza_add_child(sources.get(), source_ref.get());
-        xmpp_stanza_add_child(media_sharing.get(), sources.get());
-        xmpp_stanza_add_child(reference.get(), media_sharing.get());
-        xmpp_stanza_add_child(message.get(), reference.get());
+        stanza::xep0385::media_sharing ms;
+        ms.file(std::move(sims_file))
+          .sources(std::move(sims_sources));
 
-        auto oob_x = make_child(nullptr, "x", "jabber:x:oob");
-        add_text_child(oob_x.get(), "url", nullptr, oob_url.c_str());
-        xmpp_stanza_add_child(message.get(), oob_x.get());
+        stanza::xep0385::reference ref("0", std::to_string(body.size()));
+        ref.media_sharing(std::move(ms));
+        msg.sims_reference(std::move(ref));
+
+        // OOB legacy (XEP-0066)
+        msg.oob(stanza::xep0066::oob(oob_url));
     }
 
-    {
-        auto active = make_child(nullptr, "active",
-            "http://jabber.org/protocol/chatstates");
-        xmpp_stanza_add_child(message.get(), active.get());
-    }
+    msg.chatstate("active");
 
     // XEP-0184 §5.4: MUST NOT include <request/> in groupchat messages.
     // XEP-0333 §4.1: MUST NOT include <markable/> in groupchat messages.
     if (std::string(msg_type ? msg_type : "") != "groupchat")
     {
-        auto req = make_child(nullptr, "request", "urn:xmpp:receipts");
-        xmpp_stanza_add_child(message.get(), req.get());
-
-        auto markable = make_child(nullptr, "markable", "urn:xmpp:chat-markers:0");
-        xmpp_stanza_add_child(message.get(), markable.get());
+        msg.receipt_request().chat_marker_markable();
     }
 
-    {
-        auto store = make_child(nullptr, "store", "urn:xmpp:hints");
-        xmpp_stanza_add_child(message.get(), store.get());
-    }
+    msg.store();
 
     // (mention references omitted in helper; added by caller if members available)
 
-    return message;
+    return msg;
 }
 
 int weechat::channel::send_message(std::string to, std::string body,
@@ -1064,9 +1006,9 @@ int weechat::channel::send_message(std::string to, std::string body,
 
     std::string saved_id = stanza::uuid(account.context);
     const char *mtype = (type == weechat::channel::chat_type::MUC ? "groupchat" : "chat");
-    auto message = make_file_share_stanza(account.context, to, mtype, saved_id, body,
-                                          oob ? *oob : std::string{},
-                                          file_meta ? *file_meta : file_metadata{});
+    auto msg = make_file_share_stanza(account.context, to, mtype, saved_id, body,
+                                      oob ? *oob : std::string{},
+                                      file_meta ? *file_meta : file_metadata{});
 
     // (mention references are omitted from the helper to keep it ch-independent;
     // they are non-critical for file-share bodies which are URLs)
@@ -1134,13 +1076,9 @@ int weechat::channel::send_message(std::string to, std::string body,
 
         if (encrypted)
         {
-            xmpp_stanza_add_child(message.get(), encrypted.get());
-
-            auto enc_elem = stanza_node(account.context, "encryption", "urn:xmpp:eme:0",
-                                        {{"namespace", eme_namespace}});
-            xmpp_stanza_add_child(message.get(), enc_elem.get());
-
-            xmpp_message_set_body(message.get(), OMEMO_ADVICE);
+            msg.child(encrypted);
+            msg.eme(stanza::xep0380::eme(eme_namespace));
+            msg.body(OMEMO_ADVICE);
             set_transport(weechat::channel::transport::OMEMO, 0);
 
             // Cache the plaintext (URL) so MAM replay can display it later.
@@ -1149,12 +1087,21 @@ int weechat::channel::send_message(std::string to, std::string body,
                 peer_bare.resize(s);
             account.mam_cache_store_omemo_plaintext(peer_bare, saved_id, body);
         }
-        // If encode fails (keys not yet fetched), send plaintext as fallback.
-        // The upload has already happened; we can't retry it. The user will
-        // need to re-send after OMEMO device/bundle exchange completes.
+        else
+        {
+            // If encode fails (keys not yet fetched), send plaintext as fallback.
+            // The upload has already happened; we can't retry it. The user will
+            // need to re-send after OMEMO device/bundle exchange completes.
+            msg.body(body);
+        }
+    }
+    else
+    {
+        msg.body(body);
     }
 
-    account.connection.send(message.get());
+    auto msg_sp = msg.build(account.context);
+    account.connection.send(msg_sp.get());
     if (type != weechat::channel::chat_type::MUC)
     {
         auto *self_user = user::search(&account, account.jid().data());
@@ -1185,35 +1132,24 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     std::string to_str(to);
     std::string body_str(body);
 
-    std::shared_ptr<xmpp_stanza_t> message {
-        xmpp_message_new(account.context,
-                         type == weechat::channel::chat_type::MUC
-                         ? "groupchat" : "chat",
-                         to_str.c_str(), nullptr),
-        xmpp_stanza_release };
-
     std::string saved_id = stanza::uuid(account.context);
-    xmpp_stanza_set_id(message.get(), saved_id.c_str());
 
-    // XEP-0359: Add origin-id for stable message identification
-    {
-        auto origin_id_elem = stanza_node(account.context, "origin-id", "urn:xmpp:sid:0",
-                                          {{"id", saved_id.c_str()}});
-        xmpp_stanza_add_child(message.get(), origin_id_elem.get());
-    }
+    stanza::message msg;
+    msg.type(type == weechat::channel::chat_type::MUC
+             ? "groupchat" : "chat")
+       .to(to_str)
+       .id(saved_id)
+       .origin_id(saved_id);
 
     // XEP-0045 §7.5: for MUC private messages (chat to an occupant JID
     // room@service/nick), add <x xmlns='…muc#user'/> so that XEP-0280
     // Message Carbons can correctly synchronise the message to other clients.
-    // Detection: type is PM, to has a resource, and peer_bare is a known MUC.
     if (type == weechat::channel::chat_type::PM
         && to_str.contains('/')
         && account.channels.contains(peer_bare)
         && account.channels.at(peer_bare).type == weechat::channel::chat_type::MUC)
     {
-        auto muc_x = stanza_node(account.context, "x",
-                                 "http://jabber.org/protocol/muc#user");
-        xmpp_stanza_add_child(message.get(), muc_x.get());
+        msg.muc_user(stanza::xep0045::muc_user_x());
     }
 
     // OMEMO for MUCs requires visible real JIDs for all occupants (non-anonymous room)
@@ -1243,8 +1179,6 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         std::shared_ptr<xmpp_stanza_t> encrypted;
         constexpr const char *eme_namespace = "eu.siacs.conversations.axolotl";
 
-        // Use a null-safe helper: xmpp_stanza_release(nullptr) segfaults, so
-        // only install the deleter when the raw pointer is non-null.
         auto make_encrypted = [](xmpp_stanza_t *raw) -> std::shared_ptr<xmpp_stanza_t> {
             if (!raw) return {};
             return { raw, xmpp_stanza_release };
@@ -1252,8 +1186,6 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
 
         if (type == weechat::channel::chat_type::MUC)
         {
-            // docs/planning-muc-omemo.md §3.1: Collect all occupants with visible
-            // real JIDs as recipients for multi-recipient OMEMO encoding.
             std::vector<std::string> recipients;
             auto has_real = [](const auto& p) {
                 const auto& [_, m] = p;
@@ -1268,7 +1200,6 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                 members | std::views::filter(has_real) | std::views::transform(extract),
                 std::back_inserter(recipients)
             );
-            // Always include our own devices so other clients (and carbons) can decrypt.
             const std::string own_bare = ::jid(nullptr, account.jid()).bare;
             if (!own_bare.empty())
                 recipients.push_back(own_bare);
@@ -1305,35 +1236,22 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                                      "Message not sent; OMEMO stays enabled for this channel");
             return WEECHAT_RC_ERROR;
         }
-        xmpp_stanza_add_child(message.get(), encrypted.get());
-
-        {
-            auto enc_elem = stanza_node(account.context, "encryption", "urn:xmpp:eme:0",
-                                        {{"namespace", eme_namespace}});
-            xmpp_stanza_add_child(message.get(), enc_elem.get());
-        }
-
-        xmpp_message_set_body(message.get(), OMEMO_ADVICE);
+        msg.child(encrypted);
+        msg.eme(stanza::xep0380::eme(eme_namespace));
+        msg.body(OMEMO_ADVICE);
         set_transport(weechat::channel::transport::OMEMO, 0);
 
-        // Cache the plaintext so MAM replay can display it later.
-        // Self-sent OMEMO messages cannot be decrypted on replay (Signal does
-        // not support self-decryption), so without this cache the user would
-        // see only the OMEMO_ADVICE placeholder on every restart.
         XDEBUG("omemo cache store: peer_bare={} saved_id={} body_len={}",
                peer_bare, saved_id, body_str.size());
         account.mam_cache_store_omemo_plaintext(peer_bare, saved_id, body_str);
     }
     else if (pgp.enabled && !pgp.ids.empty())
     {
-        auto pgp_x = stanza_node(account.context, "x", "jabber:x:encrypted");
-
         auto ciphertext = account.pgp.encrypt(buffer, account.pgp_keyid().data(),
             std::vector(pgp.ids.begin(), pgp.ids.end()), body_str.c_str());
         if (ciphertext)
         {
-            auto pgp_text = stanza_text_node(account.context, "", ciphertext->c_str());
-            xmpp_stanza_add_child(pgp_x.get(), pgp_text.get());
+            msg.pgp_encrypted(stanza::xep0027::encrypted(ciphertext->c_str()));
         }
         else
         {
@@ -1343,20 +1261,13 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
             return WEECHAT_RC_ERROR;
         }
 
-        xmpp_stanza_add_child(message.get(), pgp_x.get());
-
-        {
-            auto enc_elem = stanza_node(account.context, "encryption", "urn:xmpp:eme:0",
-                                         {{"namespace", "jabber:x:encrypted"}});
-            xmpp_stanza_add_child(message.get(), enc_elem.get());
-        }
-
-        xmpp_message_set_body(message.get(), weechat::xmpp::PGP_ADVICE);
+        msg.eme(stanza::xep0380::eme("jabber:x:encrypted"));
+        msg.body(weechat::xmpp::PGP_ADVICE);
         set_transport(weechat::channel::transport::PGP, 0);
     }
     else
     {
-        xmpp_message_set_body(message.get(), body_str.c_str());
+        msg.body(body_str);
         set_transport(weechat::channel::transport::PLAIN, 0);
     }
 
@@ -1398,7 +1309,6 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                     return WEECHAT_RC_OK;
                 }
 
-                // Terminal call — take ownership for automatic cleanup
                 auto task = std::unique_ptr<message_task>(task_raw);
 
                 if (out && *out)
@@ -1426,7 +1336,6 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                     }
                     else
                     {
-                        // Non-media URL: send plain message, skip the OOB probe
                         task->channel.send_message(
                                 std::string_view(task->to), std::string_view(task->body),
                                 /*skip_probe=*/true);
@@ -1434,7 +1343,6 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                 }
                 else
                 {
-                    // curl failed: send plain message, skip the OOB probe
                     task->channel.send_message(
                             std::string_view(task->to), std::string_view(task->body),
                             /*skip_probe=*/true);
@@ -1454,33 +1362,17 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         } while(0);
     }
 
-    {
-        auto active = stanza_node(account.context, "active",
-                                  "http://jabber.org/protocol/chatstates");
-        xmpp_stanza_add_child(message.get(), active.get());
-    }
+    msg.chatstate("active");
 
-    // XEP-0184 §5.4: MUST NOT include <request/> in groupchat messages.
-    // XEP-0333 §4.1: MUST NOT include <markable/> in groupchat messages.
     if (type != weechat::channel::chat_type::MUC)
     {
-        {
-            auto req = stanza_node(account.context, "request", "urn:xmpp:receipts");
-            xmpp_stanza_add_child(message.get(), req.get());
-        }
-        {
-            auto markable = stanza_node(account.context, "markable",
-                                        "urn:xmpp:chat-markers:0");
-            xmpp_stanza_add_child(message.get(), markable.get());
-        }
+        msg.receipt_request().chat_marker_markable();
     }
 
-    {
-        auto store = stanza_node(account.context, "store", "urn:xmpp:hints");
-        xmpp_stanza_add_child(message.get(), store.get());
-    }
+    msg.store();
 
-    account.connection.send(message.get());
+    auto msg_sp = msg.build(account.context);
+    account.connection.send(msg_sp.get());
 
     // XEP-0511: Send outgoing link previews for URLs in the message body
     if (transport == weechat::channel::transport::PLAIN
@@ -1686,19 +1578,16 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
 
             // Build follow-up <message> stanza with <rdf:Description> (XEP-0511)
             xmpp_ctx_t *ctx = task->channel.account.context;
-            std::shared_ptr<xmpp_stanza_t> msg {
-                xmpp_message_new(ctx,
-                    task->channel.type == weechat::channel::chat_type::MUC
-                    ? "groupchat" : "chat",
-                    task->to.data(), nullptr),
-                xmpp_stanza_release };
-
             std::string preview_id = stanza::uuid(ctx);
-            xmpp_stanza_set_id(msg.get(), preview_id.c_str());
 
-            // XEP-0511 §4.2: include an empty <body/> so clients that don't
-            // understand XEP-0511 don't display an empty message bubble.
-            xmpp_message_set_body(msg.get(), "");
+            stanza::message msg;
+            msg.type(task->channel.type == weechat::channel::chat_type::MUC
+                     ? "groupchat" : "chat")
+               .to(task->to.data())
+               .id(preview_id)
+               .body("")
+               .no_store()
+               .no_copy();
 
             // <rdf:Description xmlns:rdf="..." xmlns:og="..." rdf:about="URL">
             // NOTE: xmpp_stanza_set_ns() sets the *default* namespace (xmlns=""),
@@ -1721,19 +1610,10 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
             add_og_child("og:url",         og_url);
             add_og_child("og:image",       og_image);
 
-            xmpp_stanza_add_child(msg.get(), rdf.get());
+            msg.child(rdf);
 
-            // XEP-0334: no-store + no-copy — metadata-only stanza, don't archive
-            {
-                auto no_store = stanza_node(ctx, "no-store", "urn:xmpp:hints");
-                xmpp_stanza_add_child(msg.get(), no_store.get());
-            }
-            {
-                auto no_copy = stanza_node(ctx, "no-copy", "urn:xmpp:hints");
-                xmpp_stanza_add_child(msg.get(), no_copy.get());
-            }
-
-            task->channel.account.connection.send(msg.get());
+            auto msg_sp = msg.build(ctx);
+            task->channel.account.connection.send(msg_sp.get());
         }
 
         return WEECHAT_RC_OK;

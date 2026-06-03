@@ -28,10 +28,24 @@ namespace stanza {
             }
         };
 
+        // <no-copy xmlns='urn:xmpp:hints'/>
+        struct no_copy : virtual public spec {
+            no_copy() : spec("no-copy") {
+                xmlns<urn::xmpp::hints>();
+            }
+        };
+
         // <no-permanent-store xmlns='urn:xmpp:hints'/>
         struct no_permanent_store : virtual public spec {
             no_permanent_store() : spec("no-permanent-store") {
                 xmlns<urn::xmpp::hints>();
+            }
+        };
+
+        // <markable xmlns='urn:xmpp:chat-markers:0'/>
+        struct markers_markable : virtual public spec {
+            markers_markable() : spec("markable") {
+                xmlns<urn::xmpp::chat_markers::_0>();
             }
         };
 
@@ -49,7 +63,13 @@ namespace stanza {
 
             message& store() { xep0333::store s; child(s); return *this; }
             message& no_store() { xep0333::no_store ns; child(ns); return *this; }
+            message& no_copy() { xep0333::no_copy nc; child(nc); return *this; }
             message& no_permanent_store() { xep0333::no_permanent_store nps; child(nps); return *this; }
+            message& chat_marker_markable() {
+                xep0333::markers_markable m;
+                child(m);
+                return *this;
+            }
             message& chat_marker_displayed(std::string_view msg_id) {
                 xep0333::markers_displayed d;
                 d.id(msg_id);

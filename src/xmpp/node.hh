@@ -125,10 +125,6 @@ namespace stanza {
     protected:
         explicit spec(std::string_view tag): tag(tag) {}
 
-        void child(spec& ch) {
-            children.push_back(ch);
-        }
-
         void attr(std::string k, std::string_view v) {
             attributes[k] = v;
         }
@@ -142,10 +138,19 @@ namespace stanza {
             attr("xmlns", X().ns());
         }
 
+    public:
+        void child(spec& ch) {
+            children.push_back(ch);
+        }
+
+        void child(std::shared_ptr<xmpp_stanza_t> raw) {
+            children.push_back(raw);
+        }
+
     private:
         const std::string tag;
         std::map<std::string, std::string> attributes;
-        std::vector<std::variant<spec, std::string>> children;
+        std::vector<std::variant<spec, std::string, std::shared_ptr<xmpp_stanza_t>>> children;
 
     public:
         std::shared_ptr<xmpp_stanza_t> build(xmpp_ctx_t *context) {
@@ -164,6 +169,9 @@ namespace stanza {
                         xmpp_stanza_set_text(child, s.data());
                         xmpp_stanza_add_child(stanza, child);
                         xmpp_stanza_release(child);
+                    },
+                    [&](std::shared_ptr<xmpp_stanza_t>& raw) {
+                        xmpp_stanza_add_child(stanza, raw.get());
                     }
                 }, ch);
             }
@@ -173,6 +181,7 @@ namespace stanza {
 };
 
 #include "xep-0027.inl"
+#include "xep-0066.inl"
 #include "xep-0085.inl"
 #include "xep-0030.inl"
 #include "xep-0045.inl"
@@ -194,8 +203,10 @@ namespace stanza {
 #include "xep-0333.inl"
 #include "xep-0352.inl"
 #include "xep-0359.inl"
+#include "xep-0380.inl"
 #include "xep-0382.inl"
 #include "xep-0384.inl"
+#include "xep-0385.inl"
 #include "xep-0421.inl"
 #include "xep-0422.inl"
 #include "xep-0424.inl"
@@ -230,6 +241,8 @@ namespace stanza {
     };
 
     struct message : virtual public spec,
+                     public xep0027::message,
+                     public xep0066::message,
                      public xep0085::message,
                      public xep0184::message,
                      public xep0224::message,
@@ -237,7 +250,9 @@ namespace stanza {
                      public xep0308::message,
                      public xep0333::message,
                      public xep0359::message,
+                     public xep0380::message,
                      public xep0382::message,
+                     public xep0385::message,
                      public xep0421::message,
                      public xep0422::message,
                      public xep0424::message,
@@ -269,6 +284,84 @@ namespace stanza {
         message& omemo_axolotl_encrypted(xep0384::axolotl_encrypted e) { child(e); return *this; }
         // XEP-0334 store hint
         message& omemo_store_hint(xep0384::store_hint h) { child(h); return *this; }
+
+        // Fluent wrappers for cross-mixin chaining (return stanza::message&)
+        message& chatstate(std::string_view state) {
+            xep0085::message::chatstate(state);
+            return *this;
+        }
+        message& receipt_request() {
+            xep0184::message::receipt_request();
+            return *this;
+        }
+        message& receipt_received(std::string_view msg_id) {
+            xep0184::message::receipt_received(msg_id);
+            return *this;
+        }
+        message& store() {
+            xep0333::message::store();
+            return *this;
+        }
+        message& no_store() {
+            xep0333::message::no_store();
+            return *this;
+        }
+        message& no_copy() {
+            xep0333::message::no_copy();
+            return *this;
+        }
+        message& no_permanent_store() {
+            xep0333::message::no_permanent_store();
+            return *this;
+        }
+        message& chat_marker_markable() {
+            xep0333::message::chat_marker_markable();
+            return *this;
+        }
+        message& chat_marker_displayed(std::string_view msg_id) {
+            xep0333::message::chat_marker_displayed(msg_id);
+            return *this;
+        }
+        message& origin_id(xep0359::origin_id o) {
+            xep0359::message::origin_id(std::move(o));
+            return *this;
+        }
+        message& origin_id(std::string_view id_val) {
+            xep0359::message::origin_id(xep0359::origin_id(id_val));
+            return *this;
+        }
+        message& stanza_id(xep0359::stanza_id s) {
+            xep0359::message::stanza_id(std::move(s));
+            return *this;
+        }
+        message& fallback(xep0428::fallback f) {
+            xep0428::message::fallback(std::move(f));
+            return *this;
+        }
+        message& file_sharing(xep0447::file_sharing fs) {
+            xep0447::message::file_sharing(std::move(fs));
+            return *this;
+        }
+        message& oob(xep0066::oob o) {
+            xep0066::message::oob(std::move(o));
+            return *this;
+        }
+        message& eme(xep0380::eme e) {
+            xep0380::message::eme(std::move(e));
+            return *this;
+        }
+        message& sims_reference(xep0385::reference r) {
+            xep0385::message::sims_reference(std::move(r));
+            return *this;
+        }
+        message& pgp_encrypted(xep0027::encrypted e) {
+            xep0027::message::pgp_encrypted(std::move(e));
+            return *this;
+        }
+        message& muc_user(xep0045::muc_user_x x) {
+            child(x);
+            return *this;
+        }
     };
 
     struct presence : virtual public spec,

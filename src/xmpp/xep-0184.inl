@@ -22,6 +22,13 @@ namespace stanza {
             received& id(std::string_view s) { attr("id", s); return *this; }
         };
 
+        // <request xmlns='urn:xmpp:receipts'/>
+        struct request : virtual public spec {
+            request() : spec("request") {
+                xmlns<urn::xmpp::receipts>();
+            }
+        };
+
         // stanza::message mixin
         struct message : virtual public spec {
             message() : spec("message") {}
@@ -29,6 +36,12 @@ namespace stanza {
             message& receipt_received(std::string_view msg_id) {
                 xep0184::received r;
                 r.id(msg_id);
+                child(r);
+                return *this;
+            }
+
+            message& receipt_request() {
+                xep0184::request r;
                 child(r);
                 return *this;
             }
