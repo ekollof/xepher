@@ -88,6 +88,7 @@ namespace weechat
             std::string content_type;     // MIME type
             size_t file_size = 0;         // Size in bytes
             std::string sha256_hash;      // SHA-256 hash for SIMS
+            bool is_muc = false;          // for correct message type (groupchat vs chat) in fallback sends
         };
 
     public:
@@ -107,6 +108,7 @@ namespace weechat
             bool success = false;
             std::string get_url;        // Download URL to share in the message
             std::string channel_id;
+            bool is_muc = false;          // remember for fallback rich send when local channel gone
             std::string filename;
             std::string content_type;
             size_t file_size = 0;

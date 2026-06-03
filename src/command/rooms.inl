@@ -453,7 +453,8 @@ int command__upload(const void *pointer, void *data,
         ptr_channel->id,
         content_type,
         file_size,
-        ""  // sha256_hash will be calculated during upload
+        "",  // sha256_hash will be calculated during upload
+        (ptr_channel->type == weechat::channel::chat_type::MUC)
     };
     
     // Build upload slot request (XEP-0363 v0.3.0+)

@@ -301,7 +301,8 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
                 "",   // channel_id unused for feed posts
                 ct,
                 fsz,
-                ""
+                "",
+                false  // not a MUC for feed posts
             };
 
             // Move the pending post under the new IQ id key
@@ -382,36 +383,38 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         visible_link += ctx->esfs_aesgcm_fragment;
     }
 
+    // Build meta once (used for ch.send or fallback rich stanza).
+    weechat::channel::file_metadata meta;
+    meta.filename     = ctx->filename;
+    meta.content_type = ctx->content_type;
+    meta.size         = ctx->file_size;
+    meta.sha256_hash  = ctx->sha256_hash;  // plaintext hash (always computed)
+    meta.width        = ctx->image_width;
+    meta.height       = ctx->image_height;
+
+    // XEP-0448: attach encrypted file sharing info when available.
+    if (ctx->encrypted)
+    {
+        meta.esfs = weechat::channel::file_metadata::esfs_info{
+            ctx->esfs_key_b64,
+            ctx->esfs_iv_b64,
+            ctx->esfs_cipher_hash_b64,
+        };
+        // For encrypted uploads, use the original plaintext size in the <file> element.
+        meta.size = ctx->original_file_size;
+    }
+
     // Always surface a visible text link (in the originating channel buffer when
     // still present). The rich SFS/SIMS send below (when channel found) provides
     // preview metadata for clients; this printf is the fallback for MUC/closed
     // channels or when the send hits service-unavailable (as seen in logs for
     // some MUC uploads).
     struct t_gui_buffer *status_buf = ptr_account->buffer;
+    bool sent_rich = false;
     if (auto channel_it = ptr_account->channels.find(ctx->channel_id); channel_it != ptr_account->channels.end())
     {
         auto& [_, ch] = *channel_it;
         status_buf = ch.buffer;
-
-        weechat::channel::file_metadata meta;
-        meta.filename     = ctx->filename;
-        meta.content_type = ctx->content_type;
-        meta.size         = ctx->file_size;
-        meta.sha256_hash  = ctx->sha256_hash;  // plaintext hash (always computed)
-        meta.width        = ctx->image_width;
-        meta.height       = ctx->image_height;
-
-        // XEP-0448: attach encrypted file sharing info when available.
-        if (ctx->encrypted)
-        {
-            meta.esfs = weechat::channel::file_metadata::esfs_info{
-                ctx->esfs_key_b64,
-                ctx->esfs_iv_b64,
-                ctx->esfs_cipher_hash_b64,
-            };
-            // For encrypted uploads, use the original plaintext size in the <file> element.
-            meta.size = ctx->original_file_size;
-        }
 
         ch.send_message(
             ch.id,
@@ -419,6 +422,26 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             std::optional<std::string>(data_url),  // oob/meta sources: always the https bytes location
             std::optional<weechat::channel::file_metadata>(meta)
         );
+        sent_rich = true;
+    }
+
+    if (!sent_rich)
+    {
+        // Fallback: always emit the rich SFS/SIMS (with esfs block if OMEMO/ESFS)
+        // even if local channel entry is gone (self PM, /close race, MUC churn).
+        // The stanza carries the preview metadata (size/hash/dims/media-type +
+        // sources + encrypted for aesgcm clients). Echo will recreate display
+        // via message_handler if the buffer is (re)opened. Use plaintext rich
+        // (no OMEMO) when no ch state available — same fallback as ch path when
+        // bundles not ready. Body uses visible (aesgcm#key for ESFS).
+        std::string rich_id = stanza::uuid(ptr_account->context);
+        const char *mtype = ctx->is_muc ? "groupchat" : "chat";
+        if (auto rich = weechat::channel::make_file_share_stanza(
+                ptr_account->context, ctx->channel_id, mtype, rich_id,
+                visible_link, data_url, meta))
+        {
+            ptr_account->connection.send(rich.get());
+        }
     }
 
     weechat_printf_date_tags(status_buf, 0, "no_trigger,notify_none",

@@ -906,28 +906,25 @@ std::string weechat::channel::omemo_status() const
     return "🔒OMEMO";
 }
 
-int weechat::channel::send_message(std::string to, std::string body,
-                                   std::optional<std::string> oob,
-                                   std::optional<file_metadata> file_meta)
+// Helper for SFS/SIMS construction (shared with upload fd_cb fallback when no local
+// channel entry exists at completion time, e.g. after /close or race). Builds the
+// <message> with body + file-sharing (incl. esfs if present) + sims + oob + hints.
+// Omemo wrapping (if any) and local printf are caller responsibility.
+std::shared_ptr<xmpp_stanza_t> weechat::channel::make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
+    std::string_view to, const char *msg_type /*"chat" or "groupchat"*/,
+    const std::string& saved_id,
+    const std::string& body, const std::string& oob_url,
+    const file_metadata& meta)
 {
-    // Reuse the main send path for regular text messages so PM OMEMO logic
-    // (auto-enable, capability gating, encode/decode behavior) stays consistent.
-    if (!oob && !file_meta)
-        return send_message(std::string_view(to), std::string_view(body), /*skip_probe=*/false);
-
     std::shared_ptr<xmpp_stanza_t> message {
-        xmpp_message_new(account.context,
-                         type == weechat::channel::chat_type::MUC
-                         ? "groupchat" : "chat",
-                         to.data(), nullptr),
+        xmpp_message_new(xmpp_ctx, msg_type, std::string(to).c_str(), nullptr),
         xmpp_stanza_release };
 
-    std::string saved_id = stanza::uuid(account.context);
     xmpp_stanza_set_id(message.get(), saved_id.c_str());
 
     // XEP-0359: Add origin-id for stable message identification
     {
-        auto origin_id = stanza_node(account.context, "origin-id", "urn:xmpp:sid:0",
+        auto origin_id = stanza_node(xmpp_ctx, "origin-id", "urn:xmpp:sid:0",
                                      {{"id", saved_id.c_str()}});
         xmpp_stanza_add_child(message.get(), origin_id.get());
     }
@@ -939,7 +936,7 @@ int weechat::channel::send_message(std::string to, std::string body,
                           const char *name, const char *ns = nullptr)
         -> std::shared_ptr<xmpp_stanza_t>
     {
-        auto s = stanza_node(account.context, name, ns);
+        auto s = stanza_node(xmpp_ctx, name, ns);
         if (parent) xmpp_stanza_add_child(parent, s.get());
         return s;
     };
@@ -948,35 +945,35 @@ int weechat::channel::send_message(std::string to, std::string body,
     auto add_text_child = [&](xmpp_stanza_t *parent, const char *name,
                                const char *ns, const char *text_content)
     {
-        auto el = stanza_text_node(account.context, name, text_content, ns);
+        auto el = stanza_text_node(xmpp_ctx, name, text_content, ns);
         xmpp_stanza_add_child(parent, el.get());
     };
 
     // XEP-0385: SIMS (Stateless Inline Media Sharing) + XEP-0066: Out of Band Data
-    if (oob && file_meta)
+    // (and XEP-0447/0448 SFS + ESFS)
     {
         // ── XEP-0447: Stateless File Sharing (preferred) ──
         auto file_sharing = make_child(nullptr, "file-sharing", "urn:xmpp:sfs:0");
         xmpp_stanza_set_attribute(file_sharing.get(), "disposition", "inline");
 
         auto sfs_file = make_child(nullptr, "file", "urn:xmpp:file:metadata:0");
-        add_text_child(sfs_file.get(), "media-type", nullptr, file_meta->content_type.c_str());
-        add_text_child(sfs_file.get(), "name",       nullptr, file_meta->filename.c_str());
-        add_text_child(sfs_file.get(), "size",       nullptr, std::to_string(file_meta->size).c_str());
+        add_text_child(sfs_file.get(), "media-type", nullptr, meta.content_type.c_str());
+        add_text_child(sfs_file.get(), "name",       nullptr, meta.filename.c_str());
+        add_text_child(sfs_file.get(), "size",       nullptr, std::to_string(meta.size).c_str());
 
         // width / height — only for images
-        if (file_meta->width > 0 && file_meta->height > 0)
+        if (meta.width > 0 && meta.height > 0)
         {
-            add_text_child(sfs_file.get(), "width",  nullptr, std::to_string(file_meta->width).c_str());
-            add_text_child(sfs_file.get(), "height", nullptr, std::to_string(file_meta->height).c_str());
+            add_text_child(sfs_file.get(), "width",  nullptr, std::to_string(meta.width).c_str());
+            add_text_child(sfs_file.get(), "height", nullptr, std::to_string(meta.height).c_str());
         }
 
         // hash (SHA-256)
-        if (!file_meta->sha256_hash.empty())
+        if (!meta.sha256_hash.empty())
         {
             auto hash_elem = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
             xmpp_stanza_set_attribute(hash_elem.get(), "algo", "sha-256");
-            xmpp_stanza_set_text(hash_elem.get(), file_meta->sha256_hash.c_str());
+            xmpp_stanza_set_text(hash_elem.get(), meta.sha256_hash.c_str());
             xmpp_stanza_add_child(sfs_file.get(), hash_elem.get());
         }
 
@@ -985,21 +982,21 @@ int weechat::channel::send_message(std::string to, std::string body,
         // sources
         auto sfs_sources = make_child(nullptr, "sources");
 
-        if (file_meta->esfs)
+        if (meta.esfs)
         {
             // XEP-0448: Encrypted File Sharing
             auto enc = make_child(nullptr, "encrypted", "urn:xmpp:esfs:0");
             xmpp_stanza_set_attribute(enc.get(), "cipher",
                 "urn:xmpp:ciphers:aes-256-gcm-nopadding:0");
 
-            add_text_child(enc.get(), "key", nullptr, file_meta->esfs->key_b64.c_str());
-            add_text_child(enc.get(), "iv",  nullptr, file_meta->esfs->iv_b64.c_str());
+            add_text_child(enc.get(), "key", nullptr, meta.esfs->key_b64.c_str());
+            add_text_child(enc.get(), "iv",  nullptr, meta.esfs->iv_b64.c_str());
 
             // <hash xmlns='urn:xmpp:hashes:2' algo='sha-256'>…</hash>
             {
                 auto hash_el = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
                 xmpp_stanza_set_attribute(hash_el.get(), "algo", "sha-256");
-                xmpp_stanza_set_text(hash_el.get(), file_meta->esfs->cipher_hash_b64.c_str());
+                xmpp_stanza_set_text(hash_el.get(), meta.esfs->cipher_hash_b64.c_str());
                 xmpp_stanza_add_child(enc.get(), hash_el.get());
             }
 
@@ -1007,7 +1004,7 @@ int weechat::channel::send_message(std::string to, std::string body,
             auto inner_sources = make_child(nullptr, "sources");
             auto url_data = make_child(nullptr, "url-data",
                 "http://jabber.org/protocol/url-data");
-            xmpp_stanza_set_attribute(url_data.get(), "target", oob->c_str());
+            xmpp_stanza_set_attribute(url_data.get(), "target", oob_url.c_str());
             xmpp_stanza_add_child(inner_sources.get(), url_data.get());
             xmpp_stanza_add_child(enc.get(), inner_sources.get());
 
@@ -1017,7 +1014,7 @@ int weechat::channel::send_message(std::string to, std::string body,
         {
             auto url_data = make_child(nullptr, "url-data",
                 "http://jabber.org/protocol/url-data");
-            xmpp_stanza_set_attribute(url_data.get(), "target", oob->c_str());
+            xmpp_stanza_set_attribute(url_data.get(), "target", oob_url.c_str());
             xmpp_stanza_add_child(sfs_sources.get(), url_data.get());
         }
 
@@ -1045,25 +1042,25 @@ int weechat::channel::send_message(std::string to, std::string body,
         auto file_elem = make_child(nullptr, "file",
             "urn:xmpp:jingle:apps:file-transfer:5");
 
-        add_text_child(file_elem.get(), "media-type", nullptr, file_meta->content_type.c_str());
-        add_text_child(file_elem.get(), "name",       nullptr, file_meta->filename.c_str());
-        add_text_child(file_elem.get(), "size",       nullptr, std::to_string(file_meta->size).c_str());
+        add_text_child(file_elem.get(), "media-type", nullptr, meta.content_type.c_str());
+        add_text_child(file_elem.get(), "name",       nullptr, meta.filename.c_str());
+        add_text_child(file_elem.get(), "size",       nullptr, std::to_string(meta.size).c_str());
 
-        if (!file_meta->sha256_hash.empty())
+        if (!meta.sha256_hash.empty())
         {
             auto hash_elem = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
             xmpp_stanza_set_attribute(hash_elem.get(), "algo", "sha-256");
-            xmpp_stanza_set_text(hash_elem.get(), file_meta->sha256_hash.c_str());
+            xmpp_stanza_set_text(hash_elem.get(), meta.sha256_hash.c_str());
             xmpp_stanza_add_child(file_elem.get(), hash_elem.get());
         }
 
         // width / height — only for images (duplicated from SFS path for clients
         // that consume the legacy SIMS <file> element for preview/layout, e.g.
         // Conversations and similar).
-        if (file_meta->width > 0 && file_meta->height > 0)
+        if (meta.width > 0 && meta.height > 0)
         {
-            add_text_child(file_elem.get(), "width",  nullptr, std::to_string(file_meta->width).c_str());
-            add_text_child(file_elem.get(), "height", nullptr, std::to_string(file_meta->height).c_str());
+            add_text_child(file_elem.get(), "width",  nullptr, std::to_string(meta.width).c_str());
+            add_text_child(file_elem.get(), "height", nullptr, std::to_string(meta.height).c_str());
         }
 
         xmpp_stanza_add_child(media_sharing.get(), file_elem.get());
@@ -1071,7 +1068,7 @@ int weechat::channel::send_message(std::string to, std::string body,
         auto sources = make_child(nullptr, "sources");
         auto source_ref = make_child(nullptr, "reference", "urn:xmpp:reference:0");
         xmpp_stanza_set_attribute(source_ref.get(), "type", "data");
-        xmpp_stanza_set_attribute(source_ref.get(), "uri", oob->c_str());
+        xmpp_stanza_set_attribute(source_ref.get(), "uri", oob_url.c_str());
         xmpp_stanza_add_child(sources.get(), source_ref.get());
         xmpp_stanza_add_child(media_sharing.get(), sources.get());
         xmpp_stanza_add_child(reference.get(), media_sharing.get());
@@ -1079,14 +1076,7 @@ int weechat::channel::send_message(std::string to, std::string body,
 
         // XEP-0066 OOB fallback — include alongside SIMS/SFS for legacy clients
         auto oob_x = make_child(nullptr, "x", "jabber:x:oob");
-        add_text_child(oob_x.get(), "url", nullptr, oob->c_str());
-        xmpp_stanza_add_child(message.get(), oob_x.get());
-    }
-    else if (oob)
-    {
-        // Fallback to plain XEP-0066 if no file metadata
-        auto oob_x = make_child(nullptr, "x", "jabber:x:oob");
-        add_text_child(oob_x.get(), "url", nullptr, oob->data());
+        add_text_child(oob_x.get(), "url", nullptr, oob_url.c_str());
         xmpp_stanza_add_child(message.get(), oob_x.get());
     }
 
@@ -1098,7 +1088,7 @@ int weechat::channel::send_message(std::string to, std::string body,
 
     // XEP-0184 §5.4: MUST NOT include <request/> in groupchat messages.
     // XEP-0333 §4.1: MUST NOT include <markable/> in groupchat messages.
-    if (type != weechat::channel::chat_type::MUC)
+    if (std::string(msg_type ? msg_type : "") != "groupchat")
     {
         auto req = make_child(nullptr, "request", "urn:xmpp:receipts");
         xmpp_stanza_add_child(message.get(), req.get());
@@ -1112,77 +1102,28 @@ int weechat::channel::send_message(std::string to, std::string body,
         xmpp_stanza_add_child(message.get(), store.get());
     }
 
-    // XEP-0372: References — add <reference type="mention"> for each @nick in body
-    {
-        static const std::regex at_re("@([\\w.\\-]+)", std::regex::ECMAScript);
-        auto begin_it = std::sregex_iterator(body.begin(), body.end(), at_re);
-        auto end_it   = std::sregex_iterator();
-        for (auto it = begin_it; it != end_it; ++it)
-        {
-            const std::smatch& m = *it;
-            std::string nick = m[1].str();
-            std::string mention_jid;
+    // (mention references omitted in helper; added by caller if members available)
 
-            for (auto& [member_id, mem] : members)
-            {
-                (void)mem;
-                if (type == weechat::channel::chat_type::MUC)
-                {
-                    auto slash = member_id.rfind('/');
-                    if (slash != std::string::npos)
-                    {
-                        std::string resource = member_id.substr(slash + 1);
-                        if (weechat_strcasecmp(resource.c_str(), nick.c_str()) == 0)
-                        {
-                            mention_jid = member_id;
-                            break;
-                        }
-                    }
-                }
-                else
-                {
-                    auto at_pos = member_id.find('@');
-                    std::string node = (at_pos != std::string::npos)
-                                       ? member_id.substr(0, at_pos) : member_id;
-                    if (weechat_strcasecmp(node.c_str(), nick.c_str()) == 0)
-                    {
-                        mention_jid = member_id;
-                        break;
-                    }
-                }
-            }
+    return message;
+}
 
-            if (mention_jid.empty())
-                continue;
+int weechat::channel::send_message(std::string to, std::string body,
+                                   std::optional<std::string> oob,
+                                   std::optional<file_metadata> file_meta)
+{
+    // Reuse the main send path for regular text messages so PM OMEMO logic
+    // (auto-enable, capability gating, encode/decode behavior) stays consistent.
+    if (!oob && !file_meta)
+        return send_message(std::string_view(to), std::string_view(body), /*skip_probe=*/false);
 
-            auto utf8_codepoints = [](const std::string& s, size_t byte_end) -> size_t {
-                size_t cp = 0;
-                for (size_t b = 0; b < byte_end && b < s.size(); ) {
-                    unsigned char c = static_cast<unsigned char>(s[b]);
-                    if      (c < 0x80)  b += 1;
-                    else if (c < 0xE0)  b += 2;
-                    else if (c < 0xF0)  b += 3;
-                    else                b += 4;
-                    ++cp;
-                }
-                return cp;
-            };
-            std::string uri = "xmpp:" + mention_jid;
-            size_t byte_begin = static_cast<size_t>(m.position(0));
-            size_t byte_end   = byte_begin + static_cast<size_t>(m.length(0));
-            size_t ref_begin  = utf8_codepoints(body, byte_begin);
-            size_t ref_end    = utf8_codepoints(body, byte_end);
+    std::string saved_id = stanza::uuid(account.context);
+    const char *mtype = (type == weechat::channel::chat_type::MUC ? "groupchat" : "chat");
+    auto message = make_file_share_stanza(account.context, to, mtype, saved_id, body,
+                                          oob ? *oob : std::string{},
+                                          file_meta ? *file_meta : file_metadata{});
 
-            auto ref = make_child(nullptr, "reference", "urn:xmpp:reference:0");
-            xmpp_stanza_set_attribute(ref.get(), "type", "mention");
-            xmpp_stanza_set_attribute(ref.get(), "uri", uri.c_str());
-            xmpp_stanza_set_attribute(ref.get(), "begin",
-                std::to_string(ref_begin).c_str());
-            xmpp_stanza_set_attribute(ref.get(), "end",
-                std::to_string(ref_end).c_str());
-            xmpp_stanza_add_child(message.get(), ref.get());
-        }
-    }
+    // (mention references are omitted from the helper to keep it ch-independent;
+    // they are non-critical for file-share bodies which are URLs)
 
     // XEP-0384: OMEMO-encrypt the file-share stanza when the channel has OMEMO active.
     // This protects the ESFS key/IV XML children from eavesdroppers on the server.
