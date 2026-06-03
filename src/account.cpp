@@ -965,54 +965,29 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     {
         if (!emb.uploaded()) continue;
 
-        auto fs = make_sp("file-sharing", "urn:xmpp:sfs:0",
-                          {{"disposition", emb.disposition()}});
-
-        // <file>
-        auto file_el = make_sp("file");
-        {
-            auto name_el = make_text_el("name", emb.filename);
-            xmpp_stanza_add_child(file_el.get(), name_el.get());
-        }
+        auto file_spec = stanza::xep0447::file()
+            .name(emb.filename);
         if (!emb.mime.empty())
-        {
-            auto mt_el = make_text_el("media-type", emb.mime);
-            xmpp_stanza_add_child(file_el.get(), mt_el.get());
-        }
+            file_spec.media_type(emb.mime);
         if (emb.size > 0)
-        {
-            auto sz_el = make_text_el("size", fmt::format("{}", emb.size));
-            xmpp_stanza_add_child(file_el.get(), sz_el.get());
-        }
+            file_spec.size(emb.size);
         if (!emb.sha256_b64.empty())
-        {
-            auto hash_el = make_sp("hash", "urn:xmpp:hashes:2", {{"algo", "sha-256"}});
-            auto ht = make_text_el("", emb.sha256_b64);
-            xmpp_stanza_add_child(hash_el.get(), ht.get());
-            xmpp_stanza_add_child(file_el.get(), hash_el.get());
-        }
+            file_spec.hash_sha256(emb.sha256_b64);
         if (emb.width > 0)
-        {
-            auto w_el = make_text_el("width", fmt::format("{}", emb.width));
-            xmpp_stanza_add_child(file_el.get(), w_el.get());
-        }
+            file_spec.width(emb.width);
         if (emb.height > 0)
-        {
-            auto h_el = make_text_el("height", fmt::format("{}", emb.height));
-            xmpp_stanza_add_child(file_el.get(), h_el.get());
-        }
-        xmpp_stanza_add_child(fs.get(), file_el.get());
+            file_spec.height(emb.height);
 
-        // <sources><url-data target='…'/></sources>
-        auto sources_el = make_sp("sources");
-        {
-            auto ud = make_sp("url-data", "http://jabber.org/protocol/url-data",
-                              {{"target", emb.get_url.c_str()}});
-            xmpp_stanza_add_child(sources_el.get(), ud.get());
-        }
-        xmpp_stanza_add_child(fs.get(), sources_el.get());
+        auto sources_spec = stanza::xep0447::sources()
+            .add(stanza::xep0447::url_data(emb.get_url));
 
-        xmpp_stanza_add_child(entry.get(), fs.get());
+        auto fs_spec = stanza::xep0447::file_sharing()
+            .disposition(emb.disposition())
+            .file(file_spec)
+            .sources(sources_spec);
+
+        auto fs_built = fs_spec.build(context);
+        xmpp_stanza_add_child(entry.get(), fs_built.get());
     }
 
     // <thr:in-reply-to> for replies
@@ -1068,55 +1043,37 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     }
 
     // Wrap in <item id='uuid'><entry/></item> → <publish> → <pubsub> → <iq>
-    // All built with shared_ptr RAII since entry is already a live stanza_t
-
-    // <item id='uuid'> wrapping the entry
-    auto item_el = make_sp("item", nullptr, {{"id", item_uuid.c_str()}});
-    xmpp_stanza_add_child(item_el.get(), entry.get());
-
-    // <publish node='...'>
-    auto publish_el = make_sp("publish", nullptr, {{"node", target_node.c_str()}});
-    xmpp_stanza_add_child(publish_el.get(), item_el.get());
-
-    // <pubsub xmlns='http://jabber.org/protocol/pubsub'>
-    auto pubsub_el = make_sp("pubsub", "http://jabber.org/protocol/pubsub");
-    xmpp_stanza_add_child(pubsub_el.get(), publish_el.get());
+    // using fluent stanza::spec builders for the wrapper (Atom entry stays raw).
+    auto pubsub_el = stanza::xep0060::pubsub()
+        .publish(stanza::xep0060::publish(target_node)
+            .item(stanza::xep0060::item().id(item_uuid).payload(entry)));
 
     // publish-options (only when access_open)
     if (access_open)
     {
-        auto x = make_sp("x", "jabber:x:data", {{"type", "submit"}});
+        auto form = stanza::xep0004::form("submit")
+            .add_hidden("FORM_TYPE",
+                        "http://jabber.org/protocol/pubsub#publish-options")
+            .add_text("pubsub#access_model", "open")
+            // XEP-0472 §5.1.1 Base profile MUST requirements for social feed nodes
+            .add_text("pubsub#type",          "urn:xmpp:microblog:0")
+            .add_text("pubsub#persist_items", "true")
+            .add_text("pubsub#max_items",     "max")
+            .add_text("pubsub#notify_retract","true");
 
-        auto add_field = [&](std::string_view var, std::string_view val) {
-            auto f = make_sp("field", nullptr, {{"var", std::string(var).c_str()}});
-            auto v = make_text_el("value", val);
-            xmpp_stanza_add_child(f.get(), v.get());
-            xmpp_stanza_add_child(x.get(), f.get());
-        };
-        add_field("FORM_TYPE", "http://jabber.org/protocol/pubsub#publish-options");
-        add_field("pubsub#access_model", "open");
-        // XEP-0472 §5.1.1 Base profile MUST requirements for social feed nodes
-        add_field("pubsub#type",          "urn:xmpp:microblog:0");
-        add_field("pubsub#persist_items", "true");
-        add_field("pubsub#max_items",     "max");
-        add_field("pubsub#notify_retract","true");
-
-        auto pub_opts = make_sp("publish-options");
-        xmpp_stanza_add_child(pub_opts.get(), x.get());
-        xmpp_stanza_add_child(pubsub_el.get(), pub_opts.get());
+        pubsub_el.publish_options(stanza::xep0060::publish_options()
+            .child_spec(form));
     }
 
-    // <iq type='set' id='...' from='...' to='...'>
     const std::string uid = stanza::uuid(context);
-    auto iq_el = make_sp("iq");
-    xmpp_stanza_set_name(iq_el.get(), "iq");
-    xmpp_stanza_set_attribute(iq_el.get(), "type", "set");
-    xmpp_stanza_set_attribute(iq_el.get(), "id",   uid.c_str());
-    xmpp_stanza_set_attribute(iq_el.get(), "from", jid().c_str());
-    xmpp_stanza_set_attribute(iq_el.get(), "to",   target_service.c_str());
-    xmpp_stanza_add_child(iq_el.get(), pubsub_el.get());
+    auto iq_s = stanza::iq()
+        .type("set")
+        .id(uid)
+        .from(this->jid().c_str())
+        .to(target_service)
+        .pubsub(pubsub_el);
 
-    connection.send(iq_el.get());
+    connection.send(iq_s.build(context).get());
 
     pubsub_publish_ids[uid] = {target_service, target_node, item_uuid, post.buffer};
 

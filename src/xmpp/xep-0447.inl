@@ -79,6 +79,8 @@ namespace stanza {
         struct sources : virtual public spec {
             sources() : spec("sources") {}
             sources& add(spec& ch) { child(ch); return *this; }
+            sources& add(spec&& ch) { child(std::move(ch)); return *this; }
+            sources& add(std::shared_ptr<xmpp_stanza_t> raw) { child(raw); return *this; }
         };
 
         // <encrypted xmlns='urn:xmpp:esfs:0' cipher='...'> for XEP-0448 ESFS
@@ -114,6 +116,11 @@ namespace stanza {
             file_sharing() : spec("file-sharing") {
                 xmlns<urn::xmpp::sfs::_0>();
                 attr("disposition", "inline");
+            }
+
+            file_sharing& disposition(std::string_view d) {
+                attr("disposition", d);
+                return *this;
             }
 
             file_sharing& file(xep0447::file f) { child(f); return *this; }

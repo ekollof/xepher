@@ -26,6 +26,7 @@ namespace stanza {
             item& id(std::string_view s) { attr("id", s); return *this; }
 
             item& payload(spec& s) { child(s); return *this; }
+            item& payload(std::shared_ptr<xmpp_stanza_t> raw) { child(raw); return *this; }
         };
 
         // <items node='...'/>

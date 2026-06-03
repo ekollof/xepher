@@ -89,27 +89,16 @@ bool weechat::connection::version_handler(xmpp_stanza_t *stanza)
 
     XDEBUG("Received version request from {}", xmpp_stanza_get_from(stanza));
 
-    auto reply = libstrophe::stanza::reply(stanza)
-        .set_type("result");
+    auto reply = stanza::iq()
+        .type("result")
+        .to(xmpp_stanza_get_from(stanza))
+        .from(account.jid().data())
+        .id(xmpp_stanza_get_id(stanza))
+        .version_query(stanza::xep0092::query()
+            .name(weechat_name)
+            .version(weechat_version.get()));
 
-    auto query = libstrophe::stanza(account.context)
-        .set_name("query");
-    if (const char *ns = xmpp_stanza_get_ns(xmpp_stanza_get_children(stanza)); ns) {
-        query.set_ns(ns);
-    }
-
-    query.add_child(libstrophe::stanza(account.context)
-                    .set_name("name")
-                    .add_child(libstrophe::stanza(account.context)
-                               .set_text(weechat_name)));
-    query.add_child(libstrophe::stanza(account.context)
-                    .set_name("version")
-                    .add_child(libstrophe::stanza(account.context)
-                               .set_text(weechat_version.get())));
-
-    reply.add_child(std::move(query));
-
-    account.connection.send(reply);
+    account.connection.send(reply.build(account.context).get());
 
     return true;
 }
@@ -118,41 +107,26 @@ bool weechat::connection::time_handler(xmpp_stanza_t *stanza)
 {
     XDEBUG("Received time request from {}", xmpp_stanza_get_from(stanza));
 
-    auto reply = libstrophe::stanza::reply(stanza)
-        .set_type("result");
-
-    auto query = libstrophe::stanza(account.context)
-        .set_name("time");
-    if (const char *ns = xmpp_stanza_get_ns(xmpp_stanza_get_children(stanza)); ns) {
-        query.set_ns(ns);
-    }
-
-    // Get current time
     time_t now = time(nullptr);
     struct tm *tm_utc = gmtime(&now);
     struct tm *tm_local = localtime(&now);
 
-    // Format UTC time as ISO 8601: YYYY-MM-DDTHH:MM:SSZ
     std::string utc_str = fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", *tm_utc);
-    
-    // Calculate timezone offset
-    long tz_offset = tm_local->tm_gmtoff;  // Offset in seconds
+    long tz_offset = tm_local->tm_gmtoff;
     int tz_hours = tz_offset / 3600;
     int tz_mins = abs((tz_offset % 3600) / 60);
     std::string tzo_str = fmt::format("{:+03d}:{:02d}", tz_hours, tz_mins);
 
-    query.add_child(libstrophe::stanza(account.context)
-                    .set_name("utc")
-                    .add_child(libstrophe::stanza(account.context)
-                               .set_text(utc_str.c_str())));
-    query.add_child(libstrophe::stanza(account.context)
-                    .set_name("tzo")
-                    .add_child(libstrophe::stanza(account.context)
-                               .set_text(tzo_str.c_str())));
+    auto reply = stanza::iq()
+        .type("result")
+        .to(xmpp_stanza_get_from(stanza))
+        .from(account.jid().data())
+        .id(xmpp_stanza_get_id(stanza))
+        .time_element(stanza::xep0202::time()
+            .utc(utc_str)
+            .tzo(tzo_str));
 
-    reply.add_child(std::move(query));
-
-    account.connection.send(reply);
+    account.connection.send(reply.build(account.context).get());
 
     return true;
 }

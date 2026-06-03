@@ -143,6 +143,10 @@ namespace stanza {
             children.push_back(ch);
         }
 
+        void child(spec&& ch) {
+            children.push_back(std::move(ch));
+        }
+
         void child(std::shared_ptr<xmpp_stanza_t> raw) {
             children.push_back(raw);
         }
@@ -180,6 +184,7 @@ namespace stanza {
     };
 };
 
+#include "xep-0004.inl"
 #include "xep-0027.inl"
 #include "xep-0066.inl"
 #include "xep-0085.inl"
@@ -189,11 +194,13 @@ namespace stanza {
 #include "xep-0049.inl"
 #include "xep-0059.inl"
 #include "xep-0060.inl"
+#include "xep-0092.inl"
 #include "xep-0115.inl"
 #include "xep-0184.inl"
 #include "xep-0191.inl"
 #include "xep-0198.inl"
 #include "xep-0199.inl"
+#include "xep-0202.inl"
 #include "xep-0224.inl"
 #include "xep-0249.inl"
 #include "xep-0280.inl"
@@ -381,8 +388,10 @@ namespace stanza {
                 public xep0045admin::iq,
                 public xep0049::iq,
                 public xep0060::iq,
+                public xep0092::iq,
                 public xep0191::iq,
                 public xep0199::iq,
+                public xep0202::iq,
                 public xep0280::iq,
                 public xep0313::iq,
                 public rfc6121::iq {
@@ -392,6 +401,15 @@ namespace stanza {
         iq& from(std::string_view s) { attr("from", s); return *this; }
         iq& to(std::string_view s) { attr("to", s); return *this; }
         iq& type(std::string_view s) { attr("type", s); return *this; }
+
+        iq& version_query(xep0092::query q) {
+            xep0092::iq::version_query(std::move(q));
+            return *this;
+        }
+        iq& time_element(xep0202::time t) {
+            xep0202::iq::time_element(std::move(t));
+            return *this;
+        }
     };
 
     struct error : virtual public spec {
