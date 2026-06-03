@@ -949,80 +949,38 @@ std::shared_ptr<xmpp_stanza_t> weechat::channel::make_file_share_stanza(xmpp_ctx
         xmpp_stanza_add_child(parent, el.get());
     };
 
-    // XEP-0385: SIMS (Stateless Inline Media Sharing) + XEP-0066: Out of Band Data
-    // (and XEP-0447/0448 SFS + ESFS)
+    // XEP-0385: SIMS + XEP-0066 OOB (legacy) + XEP-0447/0448 SFS/ESFS (now via fluent builder for spec fidelity + AGENTS compliance).
     {
-        // ── XEP-0447: Stateless File Sharing (preferred) ──
-        auto file_sharing = make_child(nullptr, "file-sharing", "urn:xmpp:sfs:0");
-        xmpp_stanza_set_attribute(file_sharing.get(), "disposition", "inline");
+        // Build the SFS file-sharing tree using the typed builders (exact structure from specs).
+        stanza::xep0447::file sfs_f;
+        sfs_f.media_type(meta.content_type).name(meta.filename).size(meta.size);
+        if (meta.width > 0 && meta.height > 0) sfs_f.width(meta.width).height(meta.height);
+        if (!meta.sha256_hash.empty()) sfs_f.hash_sha256(meta.sha256_hash);
 
-        auto sfs_file = make_child(nullptr, "file", "urn:xmpp:file:metadata:0");
-        add_text_child(sfs_file.get(), "media-type", nullptr, meta.content_type.c_str());
-        add_text_child(sfs_file.get(), "name",       nullptr, meta.filename.c_str());
-        add_text_child(sfs_file.get(), "size",       nullptr, std::to_string(meta.size).c_str());
+        stanza::xep0447::file_sharing fs;
+        fs.file(std::move(sfs_f));
 
-        // width / height — only for images
-        if (meta.width > 0 && meta.height > 0)
-        {
-            add_text_child(sfs_file.get(), "width",  nullptr, std::to_string(meta.width).c_str());
-            add_text_child(sfs_file.get(), "height", nullptr, std::to_string(meta.height).c_str());
+        stanza::xep0447::sources os;
+        if (meta.esfs) {
+            stanza::xep0447::encrypted e;
+            e.key(meta.esfs->key_b64).iv(meta.esfs->iv_b64);
+            if (!meta.esfs->cipher_hash_b64.empty()) e.cipher_hash_sha256(meta.esfs->cipher_hash_b64);
+            stanza::xep0447::sources isr;
+            stanza::xep0447::url_data ud(oob_url);
+            isr.add(ud);
+            e.sources(isr);
+            os.add(e);
+        } else {
+            stanza::xep0447::url_data ud(oob_url);
+            os.add(ud);
         }
+        fs.sources(os);
 
-        // hash (SHA-256)
-        if (!meta.sha256_hash.empty())
-        {
-            auto hash_elem = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
-            xmpp_stanza_set_attribute(hash_elem.get(), "algo", "sha-256");
-            xmpp_stanza_set_text(hash_elem.get(), meta.sha256_hash.c_str());
-            xmpp_stanza_add_child(sfs_file.get(), hash_elem.get());
-        }
+        // Attach the built <file-sharing> (this replaces the previous manual low-level construction for the modern path).
+        auto fs_sp = fs.build(xmpp_ctx);
+        xmpp_stanza_add_child(message.get(), fs_sp.get());
 
-        xmpp_stanza_add_child(file_sharing.get(), sfs_file.get());
-
-        // sources
-        auto sfs_sources = make_child(nullptr, "sources");
-
-        if (meta.esfs)
-        {
-            // XEP-0448: Encrypted File Sharing
-            auto enc = make_child(nullptr, "encrypted", "urn:xmpp:esfs:0");
-            xmpp_stanza_set_attribute(enc.get(), "cipher",
-                "urn:xmpp:ciphers:aes-256-gcm-nopadding:0");
-
-            add_text_child(enc.get(), "key", nullptr, meta.esfs->key_b64.c_str());
-            add_text_child(enc.get(), "iv",  nullptr, meta.esfs->iv_b64.c_str());
-
-            // <hash xmlns='urn:xmpp:hashes:2' algo='sha-256'>…</hash>
-            {
-                auto hash_el = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
-                xmpp_stanza_set_attribute(hash_el.get(), "algo", "sha-256");
-                xmpp_stanza_set_text(hash_el.get(), meta.esfs->cipher_hash_b64.c_str());
-                xmpp_stanza_add_child(enc.get(), hash_el.get());
-            }
-
-            // Inner <sources><url-data .../></sources>
-            auto inner_sources = make_child(nullptr, "sources");
-            auto url_data = make_child(nullptr, "url-data",
-                "http://jabber.org/protocol/url-data");
-            xmpp_stanza_set_attribute(url_data.get(), "target", oob_url.c_str());
-            xmpp_stanza_add_child(inner_sources.get(), url_data.get());
-            xmpp_stanza_add_child(enc.get(), inner_sources.get());
-
-            xmpp_stanza_add_child(sfs_sources.get(), enc.get());
-        }
-        else
-        {
-            auto url_data = make_child(nullptr, "url-data",
-                "http://jabber.org/protocol/url-data");
-            xmpp_stanza_set_attribute(url_data.get(), "target", oob_url.c_str());
-            xmpp_stanza_add_child(sfs_sources.get(), url_data.get());
-        }
-
-        xmpp_stanza_add_child(file_sharing.get(), sfs_sources.get());
-        xmpp_stanza_add_child(message.get(), file_sharing.get());
-
-        // XEP-0428: Fallback Indication — MUST be present when body contains
-        // a fallback URL for clients that don't support XEP-0447/0448.
+        // Fallback indication (kept manual for this step; xep0428 builder available).
         {
             auto fallback = make_child(nullptr, "fallback", "urn:xmpp:fallback:0");
             xmpp_stanza_set_attribute(fallback.get(), "for", "urn:xmpp:sfs:0");
@@ -1031,38 +989,27 @@ std::shared_ptr<xmpp_stanza_t> weechat::channel::make_file_share_stanza(xmpp_ctx
             xmpp_stanza_add_child(message.get(), fallback.get());
         }
 
-        // ── XEP-0385: SIMS — kept for backward compat ──
+        // SIMS + OOB legacy (unchanged for identical output in this surgical step).
         auto reference = make_child(nullptr, "reference", "urn:xmpp:reference:0");
         xmpp_stanza_set_attribute(reference.get(), "type", "data");
         xmpp_stanza_set_attribute(reference.get(), "begin", "0");
-        xmpp_stanza_set_attribute(reference.get(), "end",
-            std::to_string(body.size()).c_str()); // body char offset per XEP-0385 §4
+        xmpp_stanza_set_attribute(reference.get(), "end", std::to_string(body.size()).c_str());
 
         auto media_sharing = make_child(nullptr, "media-sharing", "urn:xmpp:sims:1");
-        auto file_elem = make_child(nullptr, "file",
-            "urn:xmpp:jingle:apps:file-transfer:5");
-
+        auto file_elem = make_child(nullptr, "file", "urn:xmpp:jingle:apps:file-transfer:5");
         add_text_child(file_elem.get(), "media-type", nullptr, meta.content_type.c_str());
         add_text_child(file_elem.get(), "name",       nullptr, meta.filename.c_str());
         add_text_child(file_elem.get(), "size",       nullptr, std::to_string(meta.size).c_str());
-
-        if (!meta.sha256_hash.empty())
-        {
+        if (!meta.sha256_hash.empty()) {
             auto hash_elem = make_child(nullptr, "hash", "urn:xmpp:hashes:2");
             xmpp_stanza_set_attribute(hash_elem.get(), "algo", "sha-256");
             xmpp_stanza_set_text(hash_elem.get(), meta.sha256_hash.c_str());
             xmpp_stanza_add_child(file_elem.get(), hash_elem.get());
         }
-
-        // width / height — only for images (duplicated from SFS path for clients
-        // that consume the legacy SIMS <file> element for preview/layout, e.g.
-        // Conversations and similar).
-        if (meta.width > 0 && meta.height > 0)
-        {
+        if (meta.width > 0 && meta.height > 0) {
             add_text_child(file_elem.get(), "width",  nullptr, std::to_string(meta.width).c_str());
             add_text_child(file_elem.get(), "height", nullptr, std::to_string(meta.height).c_str());
         }
-
         xmpp_stanza_add_child(media_sharing.get(), file_elem.get());
 
         auto sources = make_child(nullptr, "sources");
@@ -1074,7 +1021,6 @@ std::shared_ptr<xmpp_stanza_t> weechat::channel::make_file_share_stanza(xmpp_ctx
         xmpp_stanza_add_child(reference.get(), media_sharing.get());
         xmpp_stanza_add_child(message.get(), reference.get());
 
-        // XEP-0066 OOB fallback — include alongside SIMS/SFS for legacy clients
         auto oob_x = make_child(nullptr, "x", "jabber:x:oob");
         add_text_child(oob_x.get(), "url", nullptr, oob_url.c_str());
         xmpp_stanza_add_child(message.get(), oob_x.get());

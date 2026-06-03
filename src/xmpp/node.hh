@@ -202,6 +202,7 @@ namespace stanza {
 #include "xep-0425.inl"
 #include "xep-0428.inl"
 #include "xep-0444.inl"
+#include "xep-0447.inl"
 #include "xep-0461.inl"
 #include "xep-0466.inl"
 #include "rfc-6121.inl"
@@ -243,6 +244,7 @@ namespace stanza {
                      public xep0425::message,
                      public xep0428::message,
                      public xep0444::message,
+                     public xep0447::message,
                      public xep0461::message,
                      public xep0466::message {
         message() : spec("message") {}

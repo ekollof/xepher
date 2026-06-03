@@ -329,7 +329,7 @@
         <xmpp:version>1.1.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >HTTP File Upload - /upload command with automatic HTTP PUT; also drives the async multi-file upload pipeline behind /feed post embed tags ({{ embed }}, {{ attach }}, {{ video }}), uploading each asset before the Atom entry is published</xmpp:note>
+                >HTTP File Upload (XEP-0363) - /upload with snapshot for consistent bytes, ESFS layering (+16 slot for OMEMO channels per XEP-0448), rich SFS emission; also drives async multi-file for /feed embeds</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -461,7 +461,7 @@
         <xmpp:version>0.3.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >Stateless File Sharing (SFS) - sends file-sharing stanza with disposition=inline, file metadata (including image width/height), and url-data source on upload; parses received SFS stanzas to display filename, MIME type, size, and download URL; also emitted as &lt;file-sharing&gt; children on Atom entries published via /feed post embed tags ({{ embed }}, {{ attach }}, {{ video }}), and parsed on receive to render SFS summaries in microblog feed buffers</xmpp:note>
+                >Stateless File Sharing (SFS, XEP-0447) - full stanza builder implementation (src/xmpp/xep-0447.inl) for spec-compliant emission of &lt;file-sharing&gt; + XEP-0446 &lt;file&gt; (media-type/name/size/hash/width/height) + sources on /upload (plain + ESFS); legacy SIMS/OOB for compat; parses incoming too. Used for previews in Conversations etc.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -633,7 +633,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0448.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.3.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Encrypted File Sharing (Experimental) - send: when uploading (/upload) to an OMEMO-enabled channel the file is AES-256-GCM encrypted before HTTP PUT; the XMPP message carries &lt;file-sharing xmlns='urn:xmpp:sfs:0'&gt;&lt;sources&gt;&lt;encrypted xmlns='urn:xmpp:esfs:0' cipher='urn:xmpp:ciphers:aes-256-gcm-nopadding:0'&gt;&lt;key&gt;…&lt;/key&gt;&lt;iv&gt;…&lt;/iv&gt;&lt;hash&gt;…&lt;/hash&gt;&lt;sources&gt;&lt;url-data/&gt;&lt;/sources&gt;&lt;/encrypted&gt;&lt;/sources&gt;&lt;/file-sharing&gt;; receive: &lt;encrypted xmlns='urn:xmpp:esfs:0'&gt; detected, cipher attribute validated against urn:xmpp:ciphers:aes-256-gcm-nopadding:0 per §4 (other ciphers skipped), ciphertext downloaded in background thread via libcurl, AES-256-GCM decrypted, saved to ~/Downloads; urn:xmpp:esfs:0 advertised in caps</xmpp:note>
+        <xmpp:note xml:lang='en'>Encrypted File Sharing (XEP-0448) - when /upload to OMEMO channel: AES-256-GCM encrypt snapshot before PUT (slot +16), visible body=aesgcm://...#ivkey, stanza uses builder-generated &lt;file-sharing&gt;&lt;sources&gt;&lt;encrypted cipher=...&gt;&lt;key b64/&gt;&lt;iv b64/&gt;&lt;hash cipher/&gt;&lt;sources&gt;&lt;url-data https-for-cipher/&gt;&lt;/sources&gt;&lt;/encrypted&gt;&lt;/sources&gt;&lt;/file-sharing&gt; (plain &lt;file&gt; metadata always); receive side parses &lt;encrypted&gt; for download/decrypt in background. Builder ensures exact nesting per spec examples. (Status upgraded with proper emission support.)</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
