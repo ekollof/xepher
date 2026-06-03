@@ -971,8 +971,8 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
             file_spec.media_type(emb.mime);
         if (emb.size > 0)
             file_spec.size(emb.size);
-        if (!emb.sha256_b64.empty())
-            file_spec.hash_sha256(emb.sha256_b64);
+        for (const auto& [algo, b64] : emb.hashes)
+            file_spec.add_hash(stanza::xep0447::hash(algo, b64));
         if (emb.width > 0)
             file_spec.width(emb.width);
         if (emb.height > 0)

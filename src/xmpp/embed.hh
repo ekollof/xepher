@@ -41,7 +41,9 @@ struct embed_tag
     uint64_t    size    = 0;
     int         width   = 0;
     int         height  = 0;
-    std::string sha256_b64;
+    // XEP-0300 hash agility: one or more (algo, base64) pairs.
+    // Computed during upload (SHA-256 + SHA-512 for interop).
+    std::vector<std::pair<std::string, std::string>> hashes;
 
     bool uploaded() const { return !get_url.empty(); }
 

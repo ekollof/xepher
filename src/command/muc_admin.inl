@@ -1629,7 +1629,7 @@ int command__feed(const void *pointer, void *data,
                 "",   // channel_id unused for feed posts
                 ct,
                 static_cast<size_t>(fsz),
-                ""    // sha256 filled during upload
+                {}    // hashes will be calculated during upload
             };
 
             // Store pending post (keyed by same slot_id)

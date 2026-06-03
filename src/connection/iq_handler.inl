@@ -1390,40 +1390,61 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         return;
                     }
 
-                    // Calculate SHA-256 hash for SIMS — use the already-open handle
-                    // (rewound above) so the hashed bytes are exactly the ones that
-                    // will be uploaded.
+                    // XEP-0300 §4: compute multiple hashes in one pass for agility.
+                    // SHA-256 + SHA-512 are universally supported (OpenSSL and LibreSSL).
                     unsigned char hash[EVP_MAX_MD_SIZE];
                     unsigned int  hash_len = 0;
                     {
                         std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>
                             sha256_ctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+                        std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>
+                            sha512_ctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
                         EVP_DigestInit_ex(sha256_ctx.get(), EVP_sha256(), nullptr);
+                        EVP_DigestInit_ex(sha512_ctx.get(), EVP_sha512(), nullptr);
                         unsigned char buf[8192];
                         size_t bytes_read;
                         do {
                             bytes_read = fread(buf, 1, sizeof(buf), upload_file);
-                            if (bytes_read > 0)
+                            if (bytes_read > 0) {
                                 EVP_DigestUpdate(sha256_ctx.get(), buf, bytes_read);
+                                EVP_DigestUpdate(sha512_ctx.get(), buf, bytes_read);
+                            }
                         } while (!feof(upload_file) && !ferror(upload_file));
+
+                        // SHA-256
                         EVP_DigestFinal_ex(sha256_ctx.get(), hash, &hash_len);
-                    } // sha256_ctx freed here
+                        {
+                            std::unique_ptr<BIO, decltype(&BIO_free_all)>
+                                bio(BIO_push(BIO_new(BIO_f_base64()),
+                                             BIO_new(BIO_s_mem())),
+                                    BIO_free_all);
+                            BIO_set_flags(bio.get(), BIO_FLAGS_BASE64_NO_NL);
+                            BIO_write(bio.get(), hash, static_cast<int>(hash_len));
+                            BIO_flush(bio.get());
+                            BUF_MEM *bptr;
+                            BIO_get_mem_ptr(bio.get(), &bptr);
+                            c.hashes.push_back({"sha-256",
+                                std::string(bptr->data, bptr->length)});
+                        }
+
+                        // SHA-512
+                        EVP_DigestFinal_ex(sha512_ctx.get(), hash, &hash_len);
+                        {
+                            std::unique_ptr<BIO, decltype(&BIO_free_all)>
+                                bio(BIO_push(BIO_new(BIO_f_base64()),
+                                             BIO_new(BIO_s_mem())),
+                                    BIO_free_all);
+                            BIO_set_flags(bio.get(), BIO_FLAGS_BASE64_NO_NL);
+                            BIO_write(bio.get(), hash, static_cast<int>(hash_len));
+                            BIO_flush(bio.get());
+                            BUF_MEM *bptr;
+                            BIO_get_mem_ptr(bio.get(), &bptr);
+                            c.hashes.push_back({"sha-512",
+                                std::string(bptr->data, bptr->length)});
+                        }
+                    } // contexts freed here
                     // Note: upload_file is now at EOF; we will rewind before giving
                     // it to curl (plain case) or using it for encrypt pt read.
-
-                    // Base64-encode the hash (RAII BIO chain)
-                    {
-                        std::unique_ptr<BIO, decltype(&BIO_free_all)>
-                            bio_chain(BIO_push(BIO_new(BIO_f_base64()),
-                                               BIO_new(BIO_s_mem())),
-                                      BIO_free_all);
-                        BIO_set_flags(bio_chain.get(), BIO_FLAGS_BASE64_NO_NL);
-                        BIO_write(bio_chain.get(), hash, static_cast<int>(hash_len));
-                        BIO_flush(bio_chain.get());
-                        BUF_MEM *bptr;
-                        BIO_get_mem_ptr(bio_chain.get(), &bptr);
-                        c.sha256_hash = std::string(bptr->data, bptr->length);
-                    } // bio_chain freed here
 
                     // Parse image dimensions from file header (JPEG / PNG).
                     // We only need the first few hundred bytes — open a short read.

@@ -37,7 +37,8 @@ namespace weechat
             std::string filename;
             std::string content_type;
             size_t size;
-            std::string sha256_hash;  // Base64-encoded SHA-256 of plaintext
+            // XEP-0300 hash agility: (algo, base64) pairs for <file> <hash/> elements.
+            std::vector<std::pair<std::string, std::string>> hashes;
             size_t width  = 0;        // Image width  in pixels (0 = unknown/non-image)
             size_t height = 0;        // Image height in pixels (0 = unknown/non-image)
 

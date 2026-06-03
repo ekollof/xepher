@@ -87,7 +87,8 @@ namespace weechat
             std::string channel_id;
             std::string content_type;     // MIME type
             size_t file_size = 0;         // Size in bytes
-            std::string sha256_hash;      // SHA-256 hash for SIMS
+            // XEP-0300 hash agility: (algo, base64) pairs.
+            std::vector<std::pair<std::string, std::string>> hashes;
             bool is_muc = false;          // for correct message type (groupchat vs chat) in fallback sends
         };
 
@@ -112,7 +113,8 @@ namespace weechat
             std::string filename;
             std::string content_type;
             size_t file_size = 0;
-            std::string sha256_hash;
+            // XEP-0300 hash agility: (algo, base64) pairs.
+            std::vector<std::pair<std::string, std::string>> hashes;
             size_t image_width  = 0;    // Image width  in pixels (0 = unknown/non-image)
             size_t image_height = 0;    // Image height in pixels (0 = unknown/non-image)
             long http_code = 0;

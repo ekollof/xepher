@@ -227,7 +227,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             emb.get_url     = ctx->get_url;
             emb.mime        = ctx->content_type;
             emb.size        = ctx->file_size;
-            emb.sha256_b64  = ctx->sha256_hash;
+            emb.hashes      = ctx->hashes;
             emb.width       = static_cast<int>(ctx->image_width);
             emb.height      = static_cast<int>(ctx->image_height);
         }
@@ -301,7 +301,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
                 "",   // channel_id unused for feed posts
                 ct,
                 fsz,
-                "",
+                {},     // hashes will be calculated during upload
                 false  // not a MUC for feed posts
             };
 
@@ -388,7 +388,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     meta.filename     = ctx->filename;
     meta.content_type = ctx->content_type;
     meta.size         = ctx->file_size;
-    meta.sha256_hash  = ctx->sha256_hash;  // plaintext hash (always computed)
+    meta.hashes       = ctx->hashes;       // plaintext hashes (XEP-0300 agility)
     meta.width        = ctx->image_width;
     meta.height       = ctx->image_height;
 

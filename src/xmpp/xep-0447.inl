@@ -61,7 +61,7 @@ namespace stanza {
             }
             file& height(size_t n) { return height(std::to_string(n)); }
 
-            file& add_hash(const hash& h) { child(const_cast<hash&>(h)); return *this; }
+            file& add_hash(const xep0447::hash& h) { child(const_cast<xep0447::hash&>(h)); return *this; }
             file& hash_sha256(std::string_view b64val) {
                 return add_hash( xep0447::hash("sha-256", b64val) );
             }

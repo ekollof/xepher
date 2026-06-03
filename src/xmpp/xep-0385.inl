@@ -52,10 +52,9 @@ namespace stanza {
                 child(h_el); return *this;
             }
             file& height(size_t n) { return height(std::to_string(n)); }
+            file& add_hash(const xep0385::hash& h) { child(const_cast<xep0385::hash&>(h)); return *this; }
             file& hash_sha256(std::string_view b64val) {
-                xep0385::hash h("sha-256", b64val);
-                child(h);
-                return *this;
+                return add_hash(xep0385::hash("sha-256", b64val));
             }
         };
 

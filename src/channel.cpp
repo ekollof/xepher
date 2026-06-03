@@ -928,7 +928,8 @@ stanza::message weechat::channel::make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
         stanza::xep0447::file sfs_f;
         sfs_f.media_type(meta.content_type).name(meta.filename).size(meta.size);
         if (meta.width > 0 && meta.height > 0) sfs_f.width(meta.width).height(meta.height);
-        if (!meta.sha256_hash.empty()) sfs_f.hash_sha256(meta.sha256_hash);
+        for (const auto& [algo, b64] : meta.hashes)
+            sfs_f.add_hash(stanza::xep0447::hash(algo, b64));
 
         stanza::xep0447::file_sharing fs;
         fs.file(std::move(sfs_f));
@@ -961,8 +962,8 @@ stanza::message weechat::channel::make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
                   .size(meta.size);
         if (meta.width > 0 && meta.height > 0)
             sims_file.width(meta.width).height(meta.height);
-        if (!meta.sha256_hash.empty())
-            sims_file.hash_sha256(meta.sha256_hash);
+        for (const auto& [algo, b64] : meta.hashes)
+            sims_file.add_hash(stanza::xep0385::hash(algo, b64));
 
         stanza::xep0385::sources sims_sources;
         sims_sources.add_source(oob_url);
