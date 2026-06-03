@@ -340,7 +340,7 @@
         <xmpp:version>0.9.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >OMEMO Encryption using the legacy axolotl namespace (`eu.siacs.conversations.axolotl`) only. OMEMO:2 (`urn:xmpp:omemo:2`) is not published or supported. Includes auto-detection, per-device bundle/bootstrap, key-transport based session recovery; Signal-spec compliant random pre-key selection; own-device encryption for carbon-copy and self-message decryption; pre-key ID continuity; stale-session recovery via MAM; XEP-0450 ATM with TOFU fallback (MUC support experimental/untested)</xmpp:note>
+                >OMEMO Encryption using the legacy axolotl namespace (`eu.siacs.conversations.axolotl`) only (per AGENTS.md; see root TODO.md OMEMO section for full BTBV refactor status). OMEMO:2 (`urn:xmpp:omemo:2`) is not published or supported. BTBV (Blind Trust Before Verification) TOFU trust model (UNTRUSTED=0/VERIFIED=1/UNDECIDED=2/BLIND=3 in LMDB `trust:{jid}:{dev}`); only VERIFIED+BLIND receive keys at encode time. Includes auto-detection, per-device bundle/bootstrap, key-transport, MUC support (encode_muc + real-JID readiness checks), MAM plaintext cache for self-decrypt, etc. XEP-0450 ATM removed.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
