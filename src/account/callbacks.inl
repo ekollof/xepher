@@ -166,7 +166,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         return WEECHAT_RC_ERROR;
     }
 
-    auto& [_, ctx] = *it;
+    auto ctx = it->second;  // copy shared_ptr before erasing
     XDEBUG("Upload: fd_cb processing upload, success={}", ctx->success);
 
     // Drain the pipe if worker_done is still set (not already

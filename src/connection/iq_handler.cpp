@@ -12,8 +12,6 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <stdint.h>
-#include <openssl/bio.h>
-#include <openssl/buffer.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>

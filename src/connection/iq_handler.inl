@@ -1345,6 +1345,26 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // Python hooks or when debug is enabled for upload tracing).
                     auto &c = *ctx_copy;
 
+                    // Helper: base64-encode a byte buffer without raw BIO pointers.
+                    auto base64_encode_bytes = [](const unsigned char *data,
+                                                  size_t len) -> std::string {
+                        if (len == 0) return {};
+                        const int encoded_size =
+                            4 * static_cast<int>((len + 2) / 3) + 1;
+                        std::string encoded(
+                            static_cast<std::size_t>(encoded_size), '\0');
+                        const int written = weechat_string_base_encode(
+                            "64",
+                            reinterpret_cast<const char *>(data),
+                            static_cast<int>(len),
+                            encoded.data());
+                        if (written <= 0)
+                            return {};
+                        encoded.resize(
+                            static_cast<std::size_t>(written));
+                        return encoded;
+                    };
+
                     // Open file with RAII guard
                     auto file_deleter = [](FILE *f) { if (f) fclose(f); };
                     std::unique_ptr<FILE, decltype(file_deleter)>
@@ -1381,12 +1401,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         struct stat st;
                         if (stat(filepath_copy.c_str(), &st) == 0)
                         {
-                            struct tm *gmt = gmtime(&st.st_mtime);
-                            if (gmt)
+                            struct tm gmt;
+                            if (gmtime_r(&st.st_mtime, &gmt))
                             {
                                 char date_buf[32];
                                 if (strftime(date_buf, sizeof(date_buf),
-                                             "%Y-%m-%dT%H:%M:%SZ", gmt))
+                                             "%Y-%m-%dT%H:%M:%SZ", &gmt))
                                     c.file_date = std::string(date_buf);
                             }
                         }
@@ -1429,35 +1449,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                         // SHA-256
                         EVP_DigestFinal_ex(sha256_ctx.get(), hash, &hash_len);
-                        {
-                            std::unique_ptr<BIO, decltype(&BIO_free_all)>
-                                bio(BIO_push(BIO_new(BIO_f_base64()),
-                                             BIO_new(BIO_s_mem())),
-                                    BIO_free_all);
-                            BIO_set_flags(bio.get(), BIO_FLAGS_BASE64_NO_NL);
-                            BIO_write(bio.get(), hash, static_cast<int>(hash_len));
-                            BIO_flush(bio.get());
-                            BUF_MEM *bptr;
-                            BIO_get_mem_ptr(bio.get(), &bptr);
-                            c.hashes.push_back({"sha-256",
-                                std::string(bptr->data, bptr->length)});
-                        }
+                        c.hashes.push_back(
+                            {"sha-256",
+                             base64_encode_bytes(hash, hash_len)});
 
                         // SHA-512
                         EVP_DigestFinal_ex(sha512_ctx.get(), hash, &hash_len);
-                        {
-                            std::unique_ptr<BIO, decltype(&BIO_free_all)>
-                                bio(BIO_push(BIO_new(BIO_f_base64()),
-                                             BIO_new(BIO_s_mem())),
-                                    BIO_free_all);
-                            BIO_set_flags(bio.get(), BIO_FLAGS_BASE64_NO_NL);
-                            BIO_write(bio.get(), hash, static_cast<int>(hash_len));
-                            BIO_flush(bio.get());
-                            BUF_MEM *bptr;
-                            BIO_get_mem_ptr(bio.get(), &bptr);
-                            c.hashes.push_back({"sha-512",
-                                std::string(bptr->data, bptr->length)});
-                        }
+                        c.hashes.push_back(
+                            {"sha-512",
+                             base64_encode_bytes(hash, hash_len)});
                     } // contexts freed here
                     // Note: upload_file is now at EOF; we will rewind before giving
                     // it to curl (plain case) or using it for encrypt pt read.
@@ -1544,21 +1544,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             return;
                         }
 
-                        // Base64-encode key and IV using OpenSSL BIO chain (RAII).
-                        auto b64_encode = [](const unsigned char *data, int len) -> std::string
-                        {
-                            std::unique_ptr<BIO, decltype(&BIO_free_all)>
-                                b(BIO_push(BIO_new(BIO_f_base64()),
-                                           BIO_new(BIO_s_mem())), BIO_free_all);
-                            BIO_set_flags(b.get(), BIO_FLAGS_BASE64_NO_NL);
-                            BIO_write(b.get(), data, len);
-                            BIO_flush(b.get());
-                            BUF_MEM *bptr;
-                            BIO_get_mem_ptr(b.get(), &bptr);
-                            return std::string(bptr->data, bptr->length);
-                        };
-                        c.esfs_key_b64 = b64_encode(aes_key, sizeof(aes_key));
-                        c.esfs_iv_b64  = b64_encode(aes_iv, sizeof(aes_iv));
+                        // Base64-encode key and IV (reuses worker-thread helper).
+                        c.esfs_key_b64 = base64_encode_bytes(
+                            aes_key, sizeof(aes_key));
+                        c.esfs_iv_b64  = base64_encode_bytes(
+                            aes_iv, sizeof(aes_iv));
 
                         // Build hex(iv_bytes) + hex(key_bytes) for aesgcm:// URL fragment.
                         // Format: 24 hex chars (12-byte IV) + 64 hex chars (32-byte key).
@@ -1691,7 +1681,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         unsigned char ct_hash[EVP_MAX_MD_SIZE];
                         unsigned int  ct_hash_len = 0;
                         EVP_DigestFinal_ex(ct_sha_ctx.get(), ct_hash, &ct_hash_len);
-                        c.esfs_cipher_hash_b64 = b64_encode(ct_hash, static_cast<int>(ct_hash_len));
+                        c.esfs_cipher_hash_b64 = base64_encode_bytes(
+                            ct_hash, ct_hash_len);
 
                         // Flush + close tmp write handle; fopen again for reading.
                         ct_guard.reset(); // closes fdopen'd FILE* (which closes tmp_fd)
