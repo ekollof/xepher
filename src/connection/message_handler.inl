@@ -2083,31 +2083,15 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // 1934 — still reach the cache.
     if (is_mam_replay && stable_id && channel_id && account.omemo)
     {
-        XDEBUG("omemo cache lookup: channel_id={} stable_id={}",
-               channel_id, stable_id);
         auto cached = account.mam_cache_lookup_omemo_plaintext(
             std::string(channel_id), std::string(stable_id));
         if (cached)
         {
-            XDEBUG("omemo cache hit: body_len={}", cached->size());
             omemo_cleartext_storage = std::move(*cached);
             cleartext = omemo_cleartext_storage.data();
             was_omemo_cached = true;
             goto message_handler_after_omemo;
         }
-        else
-        {
-            XDEBUG("omemo cache miss: channel_id={} stable_id={}",
-                   channel_id, stable_id);
-        }
-    }
-    else if (is_mam_replay)
-    {
-        XDEBUG("omemo cache skipped: replay={} stable={} ch={} omemo={}",
-               (int)is_mam_replay,
-               stable_id ? stable_id : "(null)",
-               channel_id ? channel_id : "(null)",
-               account.omemo ? "ok" : "none");
     }
 
     if (encrypted && account.omemo)
