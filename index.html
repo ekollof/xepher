@@ -269,8 +269,12 @@
       <p>XEP-0466 — send messages that auto-delete after N seconds. Tombstoned locally on both ends.</p>
     </div>
     <div class="feature">
-      <h3>Automatic Trust Management</h3>
-      <p>XEP-0450 + XEP-0434 — TOFU + manual trust via <code>/omemo approve</code> / <code>/omemo distrust</code>; trust messages encrypted via OMEMO+SCE, batched per XEP-0434 §4, with sender authentication and deferred trust queues.</p>
+      <h3>BTBV Trust Model</h3>
+      <p>Blind Trust Before Verification TOFU — new devices auto-trusted for first JID, subsequent devices marked UNDECIDED. Manual trust via <code>/omemo trust</code> / <code>/omemo distrust</code> with per-device granularity.</p>
+    </div>
+    <div class="feature">
+      <h3>Room Activity Indicators</h3>
+      <p>XEP-0437 — subscribe to MUC activity notifications on connect, display room activity in account buffer when away.</p>
     </div>
     <div class="feature">
       <h3>Encrypted File Sharing</h3>
