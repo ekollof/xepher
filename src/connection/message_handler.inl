@@ -3966,7 +3966,7 @@ message_handler_after_omemo:
     }
 
     // weechat-icat: display inline image for incoming SFS/SIMS/OOB image URLs
-    if (!is_mam_replay && weechat::config::instance &&
+    if (weechat::config::instance &&
         weechat_config_boolean(weechat::config::instance->look.icat) &&
         !incoming_image_url.empty())
     {
