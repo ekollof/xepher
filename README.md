@@ -805,9 +805,9 @@ protocol:
 Only image MIME types (`image/*`) trigger icat. Other file types are announced
 normally without inline display.
 
-**Note:** Remote images are downloaded asynchronously; the preview appears when
-ready, which may not be directly under the message if the buffer has scrolled.
-Local file previews (outgoing uploads and cached decrypted files) appear immediately.
+**Note:** The plugin passes `-print_immediately` to icat so placeholder lines are
+printed synchronously, directly under the message that shared the image. Kitty
+terminals correctly scroll these image cells together with the buffer text.
 
 **Setup:**
 

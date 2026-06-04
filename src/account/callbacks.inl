@@ -452,12 +452,15 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
                   weechat_prefix("network"), visible_link.c_str());
 
     // Inline image display via weechat-icat (Kitty graphics protocol).
+    // -print_immediately prints placeholder lines synchronously so the preview
+    // appears directly under the message, before any later messages arrive.
     if (weechat::config::instance &&
         weechat_config_boolean(weechat::config::instance->look.icat) &&
         is_image_mime_type(ctx->content_type) &&
         !ctx->local_path.empty())
     {
-        std::string icat_cmd = fmt::format("/icat {}", ctx->local_path);
+        std::string icat_cmd = fmt::format(
+            "/icat -print_immediately -columns 40 -rows 15 {}", ctx->local_path);
         weechat_command(status_buf, icat_cmd.c_str());
     }
 
