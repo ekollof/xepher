@@ -729,17 +729,23 @@ XMPP_TEST_EXPORT std::pair<size_t, size_t> read_image_dimensions(const char *pat
 
 std::string icat_dimension_args(size_t pixel_width, size_t pixel_height)
 {
-    if (pixel_width == 0 || pixel_height == 0)
-        return "";
-
     constexpr size_t default_columns = 40;
     constexpr size_t max_rows = 20;
 
-    size_t rows = std::max(size_t(1),
-        static_cast<size_t>(std::round(
-            static_cast<double>(default_columns) * pixel_height / pixel_width)));
-    if (rows > max_rows)
-        rows = max_rows;
+    size_t rows;
+    if (pixel_width == 0 || pixel_height == 0)
+    {
+        // No dimensions known — use a sensible default so -print_immediately works
+        rows = 10;
+    }
+    else
+    {
+        rows = std::max(size_t(1),
+            static_cast<size_t>(std::round(
+                static_cast<double>(default_columns) * pixel_height / pixel_width)));
+        if (rows > max_rows)
+            rows = max_rows;
+    }
 
     return fmt::format(" -columns {} -rows {}", default_columns, rows);
 }
