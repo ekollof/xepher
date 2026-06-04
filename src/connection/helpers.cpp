@@ -264,7 +264,10 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
             if (fname.ends_with(".jpg") || fname.ends_with(".jpeg") || fname.ends_with(".png")
                 || fname.ends_with(".gif") || fname.ends_with(".webp"))
             {
-                std::string icat_cmd = fmt::format("/icat -print_immediately {}", ctx.saved_path);
+                auto [w, h] = read_image_dimensions(ctx.saved_path.c_str());
+                std::string dim_args = icat_dimension_args(w, h);
+                std::string icat_cmd = fmt::format("/icat -print_immediately{} {}",
+                                                   dim_args, ctx.saved_path);
                 weechat_command(ctx.buffer, icat_cmd.c_str());
             }
         }

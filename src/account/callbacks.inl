@@ -459,7 +459,9 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         is_image_mime_type(ctx->content_type) &&
         !ctx->local_path.empty())
     {
-        std::string icat_cmd = fmt::format("/icat -print_immediately {}", ctx->local_path);
+        std::string dim_args = icat_dimension_args(ctx->image_width, ctx->image_height);
+        std::string icat_cmd = fmt::format("/icat -print_immediately{} {}",
+                                           dim_args, ctx->local_path);
         weechat_command(status_buf, icat_cmd.c_str());
     }
 

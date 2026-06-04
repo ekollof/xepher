@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -678,4 +679,67 @@ std::string apply_markdown_to_weechat(std::string_view text)
 XMPP_TEST_EXPORT bool is_image_mime_type(std::string_view mime)
 {
     return mime.starts_with("image/");
+}
+
+XMPP_TEST_EXPORT std::pair<size_t, size_t> read_image_dimensions(const char *path)
+{
+    auto deleter = [](FILE *f) { if (f) fclose(f); };
+    std::unique_ptr<FILE, decltype(deleter)> file(fopen(path, "rb"), deleter);
+    if (!file)
+        return {0, 0};
+
+    unsigned char hdr[24] = {};
+    size_t hdr_read = fread(hdr, 1, sizeof(hdr), file.get());
+
+    // PNG: IHDR chunk starts at byte 8
+    if (hdr_read >= 24
+        && hdr[0] == 0x89 && hdr[1] == 'P' && hdr[2] == 'N' && hdr[3] == 'G'
+        && hdr[4] == 0x0D && hdr[5] == 0x0A && hdr[6] == 0x1A && hdr[7] == 0x0A)
+    {
+        size_t w = (static_cast<size_t>(hdr[16]) << 24)
+                 | (static_cast<size_t>(hdr[17]) << 16)
+                 | (static_cast<size_t>(hdr[18]) <<  8)
+                 |  static_cast<size_t>(hdr[19]);
+        size_t h = (static_cast<size_t>(hdr[20]) << 24)
+                 | (static_cast<size_t>(hdr[21]) << 16)
+                 | (static_cast<size_t>(hdr[22]) <<  8)
+                 |  static_cast<size_t>(hdr[23]);
+        return {w, h};
+    }
+
+    // JPEG: scan for SOF0/SOF1/SOF2 markers (0xFF 0xC0-0xC2)
+    if (hdr_read >= 3 && hdr[0] == 0xFF && hdr[1] == 0xD8 && hdr[2] == 0xFF)
+    {
+        unsigned char buf[65536];
+        fseek(file.get(), 2, SEEK_SET);
+        size_t total = fread(buf, 1, sizeof(buf), file.get());
+        for (size_t i = 0; i + 8 < total; ++i)
+        {
+            if (buf[i] == 0xFF && (buf[i+1] == 0xC0 || buf[i+1] == 0xC1 || buf[i+1] == 0xC2))
+            {
+                size_t h = (static_cast<size_t>(buf[i+5]) << 8) | static_cast<size_t>(buf[i+6]);
+                size_t w = (static_cast<size_t>(buf[i+7]) << 8) | static_cast<size_t>(buf[i+8]);
+                return {w, h};
+            }
+        }
+    }
+
+    return {0, 0};
+}
+
+std::string icat_dimension_args(size_t pixel_width, size_t pixel_height)
+{
+    if (pixel_width == 0 || pixel_height == 0)
+        return "";
+
+    constexpr size_t default_columns = 40;
+    constexpr size_t max_rows = 20;
+
+    size_t rows = std::max(size_t(1),
+        static_cast<size_t>(std::round(
+            static_cast<double>(default_columns) * pixel_height / pixel_width)));
+    if (rows > max_rows)
+        rows = max_rows;
+
+    return fmt::format(" -columns {} -rows {}", default_columns, rows);
 }

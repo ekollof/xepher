@@ -3402,6 +3402,7 @@ message_handler_after_omemo:
     // Inline image display candidates (weechat-icat / Kitty graphics protocol)
     std::string incoming_image_url;
     std::string incoming_image_mime;
+    size_t incoming_image_width = 0, incoming_image_height = 0;
 
     // XEP-0066: Out of Band Data - extract URL from <x xmlns='jabber:x:oob'>
     xmpp_stanza_t *oob_x = xmpp_stanza_get_child_by_name_and_ns(stanza, "x", "jabber:x:oob");
@@ -3473,15 +3474,20 @@ message_handler_after_omemo:
             ms, "file", "urn:xmpp:jingle:apps:file-transfer:5");
 
         std::string sims_name, sims_mime, sims_size_str;
+        size_t sims_width = 0, sims_height = 0;
         if (file_elem)
         {
             xmpp_stanza_t *name_e = xmpp_stanza_get_child_by_name(file_elem, "name");
             xmpp_stanza_t *mime_e = xmpp_stanza_get_child_by_name(file_elem, "media-type");
             xmpp_stanza_t *size_e = xmpp_stanza_get_child_by_name(file_elem, "size");
+            xmpp_stanza_t *w_e    = xmpp_stanza_get_child_by_name(file_elem, "width");
+            xmpp_stanza_t *h_e    = xmpp_stanza_get_child_by_name(file_elem, "height");
 
             if (name_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(name_e)); if (t_g.ptr) sims_name = t_g.ptr; }
             if (mime_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(mime_e)); if (t_g.ptr) sims_mime = t_g.ptr; }
             if (size_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(size_e)); if (t_g.ptr) sims_size_str = t_g.ptr; }
+            if (w_e)    { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(w_e));    if (t_g.ptr) sims_width = std::strtoul(t_g.ptr, nullptr, 10); }
+            if (h_e)    { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(h_e));    if (t_g.ptr) sims_height = std::strtoul(t_g.ptr, nullptr, 10); }
         }
 
         // Extract first source URL from <sources>
@@ -3518,6 +3524,8 @@ message_handler_after_omemo:
             {
                 incoming_image_url = sims_url;
                 incoming_image_mime = sims_mime;
+                incoming_image_width = sims_width;
+                incoming_image_height = sims_height;
             }
 
             // Build display line: [File: name (mime, size) URL]
@@ -3573,15 +3581,20 @@ message_handler_after_omemo:
             fs, "file", "urn:xmpp:file:metadata:0");
 
         std::string sfs_name, sfs_mime, sfs_size_str;
+        size_t sfs_width = 0, sfs_height = 0;
         if (file_elem)
         {
             xmpp_stanza_t *name_e = xmpp_stanza_get_child_by_name(file_elem, "name");
             xmpp_stanza_t *mime_e = xmpp_stanza_get_child_by_name(file_elem, "media-type");
             xmpp_stanza_t *size_e = xmpp_stanza_get_child_by_name(file_elem, "size");
+            xmpp_stanza_t *w_e    = xmpp_stanza_get_child_by_name(file_elem, "width");
+            xmpp_stanza_t *h_e    = xmpp_stanza_get_child_by_name(file_elem, "height");
 
             if (name_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(name_e)); if (t_g.ptr) sfs_name = t_g.ptr; }
             if (mime_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(mime_e)); if (t_g.ptr) sfs_mime = t_g.ptr; }
             if (size_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(size_e)); if (t_g.ptr) sfs_size_str = t_g.ptr; }
+            if (w_e)    { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(w_e));    if (t_g.ptr) sfs_width = std::strtoul(t_g.ptr, nullptr, 10); }
+            if (h_e)    { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(h_e));    if (t_g.ptr) sfs_height = std::strtoul(t_g.ptr, nullptr, 10); }
         }
 
         // <sources><url-data xmlns='http://jabber.org/protocol/url-data' target='https://...'/>
@@ -3666,7 +3679,10 @@ message_handler_after_omemo:
                                     weechat_config_boolean(weechat::config::instance->look.icat) &&
                                     is_image_mime_type(sfs_mime))
                                 {
-                                    std::string icat_cmd = fmt::format("/icat {}", *prev);
+                                    auto [w, h] = read_image_dimensions(prev->c_str());
+                                    std::string dim_args = icat_dimension_args(w, h);
+                                    std::string icat_cmd = fmt::format(
+                                        "/icat -print_immediately{} {}", dim_args, *prev);
                                     weechat_command(channel->buffer, icat_cmd.c_str());
                                 }
                             }
@@ -3718,6 +3734,8 @@ message_handler_after_omemo:
             {
                 incoming_image_url = sfs_url;
                 incoming_image_mime = sfs_mime;
+                incoming_image_width = sfs_width;
+                incoming_image_height = sfs_height;
             }
 
             if (sfs_encrypted)
@@ -3981,7 +3999,9 @@ message_handler_after_omemo:
         weechat_config_boolean(weechat::config::instance->look.icat) &&
         !incoming_image_url.empty())
     {
-        std::string icat_cmd = fmt::format("/icat -print_immediately {}", incoming_image_url);
+        std::string dim_args = icat_dimension_args(incoming_image_width, incoming_image_height);
+        std::string icat_cmd = fmt::format("/icat -print_immediately{} {}",
+                                           dim_args, incoming_image_url);
         weechat_command(channel->buffer, icat_cmd.c_str());
     }
 

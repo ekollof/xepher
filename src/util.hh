@@ -28,3 +28,12 @@ std::string apply_markdown_to_weechat(std::string_view text);
 
 // Returns true if `mime` is an image type (starts with "image/").
 XMPP_TEST_EXPORT bool is_image_mime_type(std::string_view mime);
+
+// Read image pixel dimensions from PNG/JPEG file headers.
+// Returns {width, height} or {0, 0} if unsupported or unreadable.
+XMPP_TEST_EXPORT std::pair<size_t, size_t> read_image_dimensions(const char *path);
+
+// Compute icat -columns/-rows from pixel dimensions.
+// Uses default columns=40 and maintains aspect ratio.
+// Returns " -columns C -rows R" string (with leading space) or empty if no dims.
+std::string icat_dimension_args(size_t pixel_width, size_t pixel_height);
