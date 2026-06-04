@@ -264,8 +264,7 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
             if (fname.ends_with(".jpg") || fname.ends_with(".jpeg") || fname.ends_with(".png")
                 || fname.ends_with(".gif") || fname.ends_with(".webp"))
             {
-                std::string icat_cmd = fmt::format(
-                    "/icat -print_immediately -columns 40 -rows 15 {}", ctx.saved_path);
+                std::string icat_cmd = fmt::format("/icat -print_immediately {}", ctx.saved_path);
                 weechat_command(ctx.buffer, icat_cmd.c_str());
             }
         }

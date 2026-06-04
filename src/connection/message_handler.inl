@@ -3981,8 +3981,7 @@ message_handler_after_omemo:
         weechat_config_boolean(weechat::config::instance->look.icat) &&
         !incoming_image_url.empty())
     {
-        std::string icat_cmd = fmt::format(
-            "/icat -print_immediately -columns 40 -rows 15 {}", incoming_image_url);
+        std::string icat_cmd = fmt::format("/icat -print_immediately {}", incoming_image_url);
         weechat_command(channel->buffer, icat_cmd.c_str());
     }
 
