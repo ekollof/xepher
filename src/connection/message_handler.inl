@@ -3156,19 +3156,9 @@ message_handler_after_omemo:
 
     const char *edit = replace ? "📝 " : "";
     if (x && text == cleartext && channel->transport != weechat::channel::transport::PGP)
-    {
         channel->transport = weechat::channel::transport::PGP;
-        weechat_printf_date_tags(channel->buffer, date, nullptr, "%s%sTransport: %s",
-                                 weechat_prefix("network"), weechat_color("gray"),
-                                 channel::transport_name(channel->transport));
-    }
     else if (!x && !encrypted && text == intext && channel->transport != weechat::channel::transport::PLAIN)
-    {
         channel->transport = weechat::channel::transport::PLAIN;
-        weechat_printf_date_tags(channel->buffer, date, nullptr, "%s%sTransport: %s",
-                                 weechat_prefix("network"), weechat_color("gray"),
-                                 channel::transport_name(channel->transport));
-    }
     // For groupchat messages, display_from is the full occupant JID (room/nick).
     // Look up the user by full JID to get their avatar/color, but always format
     // the prefix using nick (the resource) to avoid showing the full JID.

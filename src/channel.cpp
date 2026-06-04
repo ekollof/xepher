@@ -104,9 +104,6 @@ void weechat::channel::set_transport(enum weechat::channel::transport transport,
     if (this->transport != transport)
     {
         this->transport = transport;
-        weechat_printf_date_tags(buffer, 0, nullptr, "%s%sTransport: %s",
-                                 weechat_prefix("network"), weechat::xmpp_color("gray").c_str(),
-                                 weechat::channel::transport_name(this->transport));
     }
 }
 
