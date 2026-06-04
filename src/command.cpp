@@ -682,6 +682,22 @@ void command__init()
         weechat_printf(nullptr, "Failed to setup command /nick");
 
     hook = weechat_hook_command(
+        "modes",
+        N_("display the current MUC room modes and metadata (XEP-0045)"),
+        N_(""),
+        N_("Prints all room mode flags (moderated, members-only, password, "
+           "hidden, persistent, anonymity) and muc#roominfo x-data fields "
+           "(description, language, occupants, etc.) to the current buffer.\n\n"
+           "The mode flags alone are also shown in the status bar in the "
+           "buffer's \"modes\" property (IRC-style: e.g. +miP for a moderated, "
+           "members-only, persistent room).\n\n"
+           "Examples:\n"
+           "  /modes"),
+        nullptr, &command__modes, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /modes");
+
+    hook = weechat_hook_command(
         "feed",
         N_("fetch and interact with PubSub feeds (XEP-0060 / XEP-0472 microblogging)"),
          N_("[<service-jid> [--all | <node>] [--limit N] [--before <id>] [--latest]]\n"

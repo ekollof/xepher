@@ -125,6 +125,28 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 case 103: // : [message | Configuration change]: Inform occupants that room now does not show unavailable members
                     break;
                 case 104: // : [message | Configuration change]: Inform occupants that a non-privacy-related room configuration change has occurred
+                    // Re-fetch disco#info so the buffer's "modes" string reflects
+                    // the new configuration. Drop the idempotency marker so the
+                    // query actually goes out (the in-flight map is keyed by IQ id,
+                    // not room JID, so concurrent queries for the same room are
+                    // already de-duplicated there).
+                    if (channel && channel->type == weechat::channel::chat_type::MUC)
+                    {
+                        account.muc_modes_fetched.erase(channel->id);
+                        std::string modes_id = stanza::uuid(account.context);
+                        account.muc_modes_queries[modes_id] = channel->id;
+                        account.muc_modes_fetched.insert(channel->id);
+                        account.connection.send(
+                            stanza::iq()
+                                .type("get")
+                                .to(channel->id)
+                                .id(modes_id)
+                                .xep0030()
+                                .query()
+                                .build(account.context)
+                                .get()
+                        );
+                    }
                     break;
                 case 110: // Self-Presence: [presence | Any room presence]: Inform user that presence refers to one of its own room occupants
                     // Status 110 is sent last in the initial presence flood — clear joining flag.
@@ -233,6 +255,29 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                 {
                                     account.omemo.request_axolotl_devicelist(account, *member.real_jid);
                                 }
+                            }
+
+                            // XEP-0045 §6.4 / §6.5: discover the room's mode flags
+                            // (muc_moderated, muc_membersonly, …) and muc#roominfo
+                            // metadata so we can render the buffer's "modes" property
+                            // IRC-style. Idempotent: only one in-flight query per room
+                            // at a time. Mark the room as "fetched" once we have sent
+                            // the request so subsequent joins don't re-query.
+                            if (!account.muc_modes_fetched.contains(channel->id))
+                            {
+                                std::string modes_id = stanza::uuid(account.context);
+                                account.muc_modes_queries[modes_id] = channel->id;
+                                account.muc_modes_fetched.insert(channel->id);
+                                account.connection.send(
+                                    stanza::iq()
+                                        .type("get")
+                                        .to(channel->id)
+                                        .id(modes_id)
+                                        .xep0030()
+                                        .query()
+                                        .build(account.context)
+                                        .get()
+                                );
                             }
                         }
                     }

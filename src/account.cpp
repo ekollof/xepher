@@ -541,6 +541,11 @@ void weechat::account::disconnect(int reconnect)
     mam_deferred_pages.clear();
     mam_inflight = 0;
     mam_jitter_next_initial = false;
+
+    // XEP-0045 room mode disco#info: drop in-flight queries and the
+    // "already fetched" cache so a fresh /enter re-fetches on reconnect.
+    muc_modes_queries.clear();
+    muc_modes_fetched.clear();
     
     // libstrophe's built-in SM is disabled via XMPP_CONN_FLAG_DISABLE_SM
     // (set in connect()), so xmpp_conn_get_sm_state() will always return

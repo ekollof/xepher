@@ -1795,3 +1795,95 @@ int command__feed(const void *pointer, void *data,
 
     return WEECHAT_RC_OK;
 }
+
+// XEP-0045 §6.4 / §6.5: print the full MUC room metadata (mode flags +
+// muc#roominfo x-data fields) to the current buffer. The mode flags alone
+// are also rendered in the buffer's "modes" property by update_modes().
+int command__modes(const void *pointer, void *data,
+                   struct t_gui_buffer *buffer, int argc,
+                   char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    (void) pointer;
+    (void) data;
+    (void) argc;
+    (void) argv;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "modes");
+        return WEECHAT_RC_OK;
+    }
+
+    const auto &info = ptr_channel->get_muc_info();
+    const char *prefix = weechat_prefix("network");
+    const char *key_clr = weechat_color("chat_nick");
+    const char *val_clr = weechat_color("chat_value");
+    const char *sep     = weechat_color("chat_delimiters");
+    const char *rst     = weechat_color("reset");
+
+    weechat_printf(buffer, "");
+    weechat_printf(buffer, "%s%sRoom modes for %s%s%s:",
+                   prefix, key_clr, val_clr, ptr_channel->id.data(), rst);
+
+    auto row = [&](const char *label, std::string value) {
+        weechat_printf(buffer, "  %s%-20s%s %s%s%s",
+                       key_clr, label, rst, val_clr, value.c_str(), rst);
+    };
+    auto yesno = [](bool b) -> std::string { return b ? "yes" : "no"; };
+
+    // Mode flags (XEP-0045 §16.3).
+    row("moderated",       yesno(info.moderated));
+    row("members-only",    yesno(info.members_only));
+    row("password",        yesno(info.password));
+    row("hidden",          yesno(info.hidden));
+    row("persistent",      yesno(info.persistent));
+
+    std::string anon;
+    switch (info.anon)
+    {
+        case weechat::channel::muc_info::anonymity::nonanonymous:  anon = "non-anonymous";  break;
+        case weechat::channel::muc_info::anonymity::semianonymous: anon = "semi-anonymous"; break;
+        case weechat::channel::muc_info::anonymity::anonymous:     anon = "anonymous";      break;
+        case weechat::channel::muc_info::anonymity::unknown:
+        default:                                                    anon = "unknown";        break;
+    }
+    row("anonymity",       anon);
+
+    // muc#roominfo_* x-data fields.
+    row("description",     info.description ? *info.description : std::string("unknown"));
+    row("language",        info.language    ? *info.language    : std::string("unknown"));
+    row("subject",         info.subject     ? *info.subject     : std::string(""));
+    row("logs-url",        info.logs_url    ? *info.logs_url    : std::string(""));
+    row("occupants",       info.occupants   ? std::to_string(*info.occupants)   : std::string("unknown"));
+    row("max-users",       info.max_users   ? std::to_string(*info.max_users)   : std::string("none"));
+    row("subject modifiable", yesno(info.subject_modifiable));
+
+    // Build the IRC-style mode string for reference.
+    std::string modes = "+";
+    if (info.moderated)    modes += 'm';
+    if (info.members_only) modes += 'i';
+    if (info.password)     modes += 'k';
+    if (info.hidden)       modes += 'p';
+    if (info.persistent)   modes += 'P';
+    if (info.anon == weechat::channel::muc_info::anonymity::nonanonymous)  modes += 'N';
+    else if (info.anon == weechat::channel::muc_info::anonymity::semianonymous) modes += 'S';
+    if (modes == "+") modes = "(none)";
+
+    weechat_printf(buffer, "  %s%-20s%s %s%s%s", key_clr, "modes", rst, val_clr, modes.c_str(), rst);
+    weechat_printf(buffer, "  %s(legend: m=moderated, i=members-only, k=password, "
+                          "p=hidden, P=persistent, N=non-anon, S=semi-anon)%s",
+                   sep, rst);
+
+    return WEECHAT_RC_OK;
+}

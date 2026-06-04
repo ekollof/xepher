@@ -224,6 +224,15 @@ namespace weechat
         };
         std::unordered_map<std::string, channel_search_disco_query_info> channel_search_disco_queries;  // iq_id -> info
 
+        // MUC channel mode discovery: disco#info queries sent on join and on
+        // status 104 (room configuration changed). Keyed by IQ id. The result
+        // handler in iq_handler.inl extracts the muc_* features and the
+        // muc#roominfo x-data form into channel::apply_muc_info().
+        std::unordered_map<std::string, std::string> muc_modes_queries;  // iq_id -> room_jid
+        // Idempotency: room JIDs for which a modes disco#info is already in
+        // flight or has been answered. Cleared on disconnect.
+        std::unordered_set<std::string> muc_modes_fetched;
+
         // XEP-0054 / XEP-0292 vCard query tracking
         struct whois_query_info {
             struct t_gui_buffer *buffer;  // buffer to print vCard results into

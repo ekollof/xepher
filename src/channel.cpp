@@ -662,6 +662,56 @@ void weechat::channel::update_name(const char* name)
         weechat_buffer_set(buffer, "short_name", "");
 }
 
+void weechat::channel::apply_muc_info(const muc_info &incoming)
+{
+    // Disco#info may arrive multiple times (cached/refreshed). For booleans
+    // we OR the new flag in (so a partial response that omits one var still
+    // keeps the previously-seen value). For optional fields and anonymity we
+    // overwrite — the server's most recent answer is authoritative.
+    muc_info_.moderated    = muc_info_.moderated    || incoming.moderated;
+    muc_info_.members_only = muc_info_.members_only || incoming.members_only;
+    muc_info_.persistent   = muc_info_.persistent   || incoming.persistent;
+    muc_info_.password     = muc_info_.password     || incoming.password;
+    muc_info_.hidden       = muc_info_.hidden       || incoming.hidden;
+
+    if (incoming.anon != muc_info::anonymity::unknown)
+        muc_info_.anon = incoming.anon;
+
+    if (incoming.description)       muc_info_.description       = incoming.description;
+    if (incoming.language)          muc_info_.language          = incoming.language;
+    if (incoming.subject)           muc_info_.subject           = incoming.subject;
+    if (incoming.logs_url)          muc_info_.logs_url          = incoming.logs_url;
+    if (incoming.occupants)         muc_info_.occupants         = incoming.occupants;
+    if (incoming.max_users)         muc_info_.max_users         = incoming.max_users;
+    if (!incoming.subject_modifiable)
+        muc_info_.subject_modifiable = false;
+
+    update_modes();
+}
+
+void weechat::channel::update_modes()
+{
+    if (type != chat_type::MUC || !buffer)
+        return;
+
+    // XEP-0045 §16.3 feature vars mapped to IRC-style mode letters. Negative
+    // variants (muc_unmoderated, muc_open, muc_public, muc_temporary,
+    // muc_unsecured) are defaults and never displayed.
+    std::string s = "+";
+    if (muc_info_.moderated)    s += 'm';
+    if (muc_info_.members_only) s += 'i';
+    if (muc_info_.password)     s += 'k';
+    if (muc_info_.hidden)       s += 'p';
+    if (muc_info_.persistent)   s += 'P';
+    if (muc_info_.anon == muc_info::anonymity::nonanonymous)  s += 'N';
+    else if (muc_info_.anon == muc_info::anonymity::semianonymous) s += 'S';
+
+    if (s == "+")
+        s.clear();
+
+    weechat_buffer_set(buffer, "modes", s.c_str());
+}
+
 std::optional<weechat::channel::member*> weechat::channel::add_member(const char *id, const char *client,
                                                                        std::optional<std::string_view> real_jid,
                                                                        weechat::user *known_user)

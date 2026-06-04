@@ -95,6 +95,31 @@ namespace weechat
             time_t last_set = 0;
         };
 
+        // XEP-0045 §6.4 + §6.5: room metadata discovered via disco#info.
+        // Populated by the disco#info handler; rendered to the buffer's "modes"
+        // property (IRC-style) by update_modes(). Full metadata is printed
+        // on demand by /modes.
+        struct muc_info
+        {
+            // Mode flags (XEP-0045 §16.3 feature registry, muc_* vars).
+            bool moderated       = false; // muc_moderated
+            bool members_only    = false; // muc_membersonly
+            bool persistent      = false; // muc_persistent
+            bool password        = false; // muc_passwordprotected
+            bool hidden          = false; // muc_hidden
+            enum class anonymity { unknown, nonanonymous, semianonymous, anonymous };
+            anonymity anon       = anonymity::unknown;
+            // muc#roominfo_* x-data form fields (only populated when the server
+            // returns the FORM_TYPE in disco#info).
+            std::optional<std::string> description;
+            std::optional<std::string> language;
+            std::optional<std::string> subject;
+            std::optional<std::string> logs_url;
+            std::optional<int>         occupants;
+            std::optional<int>         max_users;
+            bool subject_modifiable = true; // muc#roominfo_subjectmod
+        };
+
         struct unread
         {
             std::string id;
@@ -107,6 +132,11 @@ namespace weechat
 
     private:
         topic topic;
+
+        // XEP-0045 room metadata. Populated by the disco#info handler in
+        // src/connection/iq_handler.inl. Rendered by update_modes() and the
+        // /modes command (command/muc_admin.inl).
+        muc_info muc_info_;
 
         /* mpim */
         std::optional<std::string> creator;
@@ -205,6 +235,17 @@ namespace weechat
         void update_topic(const char* title, const char* creator, int last_set);
         void update_name(const char* name);
         void update_purpose(const char* purpose, const char* creator, int last_set);
+
+        // XEP-0045: read accessors for room metadata.
+        const muc_info& get_muc_info() const { return muc_info_; }
+        // Apply parsed disco#info features/form fields to muc_info_.
+        // Called by the disco#info handler in iq_handler.inl when the from-JID
+        // matches this MUC channel.
+        void apply_muc_info(const muc_info &incoming);
+
+        // Render muc_info_ to the buffer's "modes" property (IRC-style).
+        // No-op for non-MUC channels.
+        void update_modes();
 
         std::optional<member*> add_member(const char *id, const char *client,
                                            std::optional<std::string_view> real_jid = std::nullopt,

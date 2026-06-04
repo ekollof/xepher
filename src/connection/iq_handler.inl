@@ -3093,7 +3093,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         {
             bool user_initiated = stanza_id && account.user_disco_queries.contains(stanza_id);
             bool caps_query = stanza_id && account.caps_disco_queries.contains(stanza_id);
-            
+
             // Extract features for capability caching
             std::vector<std::string> features;
             xmpp_stanza_t *feature = xmpp_stanza_get_child_by_name(query, "feature");
@@ -3108,6 +3108,79 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (from && !features.empty())
             {
                 account.peer_features_update(from, features);
+            }
+
+            // XEP-0045 §6.4 / §6.5: if this result is a modes disco#info for
+            // a MUC channel, extract muc_* features + muc#roominfo x-data form
+            // and apply them to the channel.
+            if (from && stanza_id && account.muc_modes_queries.contains(stanza_id))
+            {
+                std::string room_jid = account.muc_modes_queries[stanza_id];
+                account.muc_modes_queries.erase(stanza_id);
+
+                if (auto ch_it = account.channels.find(room_jid);
+                    ch_it != account.channels.end() &&
+                    ch_it->second.type == weechat::channel::chat_type::MUC)
+                {
+                    weechat::channel::muc_info info;
+
+                    for (const auto &var : features)
+                    {
+                        if (var == "muc_moderated")         info.moderated    = true;
+                        else if (var == "muc_membersonly")  info.members_only = true;
+                        else if (var == "muc_persistent")   info.persistent   = true;
+                        else if (var == "muc_passwordprotected") info.password = true;
+                        else if (var == "muc_hidden")       info.hidden       = true;
+                        else if (var == "muc_nonanonymous") info.anon =
+                            weechat::channel::muc_info::anonymity::nonanonymous;
+                        else if (var == "muc_semianonymous") info.anon =
+                            weechat::channel::muc_info::anonymity::semianonymous;
+                    }
+
+                    // XEP-0045 §6.5: muc#roominfo FORM_TYPE (jabber:x:data)
+                    xmpp_stanza_t *xdata = xmpp_stanza_get_child_by_name_and_ns(
+                        query, "x", "jabber:x:data");
+                    if (xdata)
+                    {
+                        for (xmpp_stanza_t *field = xmpp_stanza_get_child_by_name(xdata, "field");
+                             field;
+                             field = xmpp_stanza_get_next(field))
+                        {
+                            const char *var = xmpp_stanza_get_attribute(field, "var");
+                            xmpp_stanza_t *val = xmpp_stanza_get_child_by_name(field, "value");
+                            const char *txt = val ? xmpp_stanza_get_text_ptr(val) : nullptr;
+                            if (!var || !txt || !txt[0])
+                                continue;
+                            std::string_view v(var);
+                            if      (v == "muc#roominfo_description") info.description = txt;
+                            else if (v == "muc#roominfo_lang")        info.language    = txt;
+                            else if (v == "muc#roominfo_subject")     info.subject     = txt;
+                            else if (v == "muc#roominfo_logs")        info.logs_url    = txt;
+                            else if (v == "muc#roominfo_occupants")
+                            {
+                                try { info.occupants = std::stoi(txt); }
+                                catch (...) {}
+                            }
+                            else if (v == "muc#roomconfig_maxusers")
+                            {
+                                // XEP-0045 §16.5.3: value is "none" or a number.
+                                if (std::string_view(txt) != "none")
+                                {
+                                    try { info.max_users = std::stoi(txt); }
+                                    catch (...) {}
+                                }
+                            }
+                            else if (v == "muc#roominfo_subjectmod")
+                            {
+                                info.subject_modifiable =
+                                    !(std::string_view(txt) == "0" ||
+                                      std::string_view(txt) == "false");
+                            }
+                        }
+                    }
+
+                    ch_it->second.apply_muc_info(info);
+                }
             }
 
             if (caps_query)
