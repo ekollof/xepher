@@ -805,6 +805,10 @@ protocol:
 Only image MIME types (`image/*`) trigger icat. Other file types are announced
 normally without inline display.
 
+The plugin passes `-print_immediately` to icat so placeholder lines are printed
+synchronously, directly under the message that shared the image — even when the
+image is still being downloaded or decrypted in the background.
+
 **Setup:**
 
 ```sh

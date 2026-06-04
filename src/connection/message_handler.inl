@@ -3974,12 +3974,16 @@ message_handler_after_omemo:
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s", msg.c_str());
     }
 
-    // weechat-icat: display inline image for incoming SFS/SIMS/OOB image URLs
+    // weechat-icat: display inline image for incoming SFS/SIMS/OOB image URLs.
+    // -print_immediately ensures placeholder lines are printed synchronously
+    // so the preview appears directly under the message, before any later
+    // messages arrive.
     if (weechat::config::instance &&
         weechat_config_boolean(weechat::config::instance->look.icat) &&
         !incoming_image_url.empty())
     {
-        std::string icat_cmd = fmt::format("/icat {}", incoming_image_url);
+        std::string icat_cmd = fmt::format(
+            "/icat -print_immediately -columns 40 -rows 15 {}", incoming_image_url);
         weechat_command(channel->buffer, icat_cmd.c_str());
     }
 
