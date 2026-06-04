@@ -254,22 +254,18 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
             ctx.account_ptr->mam_cache_store_esfs_download(
                 ctx.channel_jid, ctx.stable_id, ctx.saved_path);
 
-                                // weechat-icat: display decrypted image inline via Kitty graphics protocol.
-                                // -print_immediately ensures placeholder lines are printed synchronously
-                                // so the preview appears directly under the message, before any later
-                                // messages arrive.
-                                if (ctx.account_ptr && weechat::config::instance &&
-                                    weechat_config_boolean(weechat::config::instance->look.icat))
-                                {
-                                    std::string_view fname = ctx.filename;
-                                    if (fname.ends_with(".jpg") || fname.ends_with(".jpeg") || fname.ends_with(".png")
-                                        || fname.ends_with(".gif") || fname.ends_with(".webp"))
-                                    {
-                                        std::string icat_cmd = fmt::format(
-                                            "/icat -print_immediately -columns 40 -rows 15 {}", ctx.saved_path);
-                                        weechat_command(ctx.buffer, icat_cmd.c_str());
-                                    }
-                                }
+        // weechat-icat: display decrypted image inline via Kitty graphics protocol.
+        if (ctx.account_ptr && weechat::config::instance &&
+            weechat_config_boolean(weechat::config::instance->look.icat))
+        {
+            std::string_view fname = ctx.filename;
+            if (fname.ends_with(".jpg") || fname.ends_with(".jpeg") || fname.ends_with(".png")
+                || fname.ends_with(".gif") || fname.ends_with(".webp"))
+            {
+                std::string icat_cmd = fmt::format("/icat {}", ctx.saved_path);
+                weechat_command(ctx.buffer, icat_cmd.c_str());
+            }
+        }
     }
     else
         weechat_printf(ctx.buffer, "%s[ESFS] Download/decrypt failed: %s",
