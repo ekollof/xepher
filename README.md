@@ -1036,6 +1036,26 @@ Please keep to the existing indentation style (C++23). clang-format is recommend
 
 ---
 
+## Community
+
+The official Xepher MUC is the place to ask questions, report usage issues
+that don't belong in the GitHub issue tracker, share tips, and follow
+announcements:
+
+- **JID:** `xepher@conference.hackerheaven.org`
+- **Web link:** [xmpp:xepher@conference.hackerheaven.org?join](xmpp:xepher@conference.hackerheaven.org?join)
+
+You can join with the plugin itself once any account is connected:
+
+```sh
+/xmpp enter xepher@conference.hackerheaven.org
+```
+
+Or from any other XMPP client (Conversations, Gajim, Dino, Monal, etc.) using
+the JID above.
+
+---
+
 ## XMPP Compliance (XEP-0459: CCS2022)
 
 ### Core IM
