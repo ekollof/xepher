@@ -483,38 +483,72 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
 
         if (is_new_room && channel)
         {
-            // Status 201: new room was created — send empty config submit to unlock it
+            // Status 201: new room was created.
             std::string room_jid = jid(nullptr, binding->from->full).bare;
 
-            struct x_data_submit : stanza::spec {
-                x_data_submit() : spec("x") {
-                    xmlns<jabber::x::data>();
-                    attr("type", "submit");
-                }
-            };
+            // XEP-0045 §10.1 reserved room flow: /create --reserved suppresses
+            // the auto-empty submit so the room stays locked. The user is
+            // expected to run /setmodes (or /affiliation, /destroy) to
+            // configure it before anyone else joins.
+            if (account.muc_reserved_pending.contains(room_jid))
+            {
+                account.muc_reserved_pending.erase(room_jid);
+                // Trigger a form fetch so /setmodes --confirm has something
+                // to mutate immediately on the first invocation.
+                std::string get_id = stanza::uuid(account.context);
+                weechat::account::muc_owner_query_info info{
+                    room_jid,
+                    channel->buffer,
+                    weechat::account::muc_owner_kind::config_get
+                };
+                account.muc_owner_queries[get_id] = info;
+                stanza::xep0004::form f("");
+                stanza::xep0045::xep0045owner::query q;
+                q.form(f);
+                auto get_iq = stanza::iq().type("get").to(room_jid).id(get_id);
+                get_iq.muc_owner(q);
+                account.connection.send(get_iq.build(account.context).get());
+                weechat_printf_date_tags(channel->buffer, 0,
+                    "xmpp_presence,notify_none,no_trigger",
+                    "%s%s[Room] reserved room created (locked) — use /setmodes, "
+                    "/affiliation, or /destroy to configure",
+                    weechat_prefix("network"),
+                    weechat::xmpp_color("yellow").c_str());
+            }
+            else
+            {
+                // Instant room: send empty config submit to unlock it with
+                // server defaults.
+                struct x_data_submit : stanza::spec {
+                    x_data_submit() : spec("x") {
+                        xmlns<jabber::x::data>();
+                        attr("type", "submit");
+                    }
+                };
 
-            struct muc_owner_query : stanza::spec {
-                muc_owner_query(x_data_submit &x) : spec("query") {
-                    xmlns<jabber_org::protocol::muc::owner>();
-                    child(x);
-                }
-            };
+                struct muc_owner_query : stanza::spec {
+                    muc_owner_query(x_data_submit &x) : spec("query") {
+                        xmlns<jabber_org::protocol::muc::owner>();
+                        child(x);
+                    }
+                };
 
-            struct room_unlock_iq : stanza::spec {
-                room_unlock_iq(std::string_view to_, std::string_view id_,
-                               muc_owner_query &q) : spec("iq") {
-                    attr("type", "set");
-                    attr("to", to_);
-                    attr("id", id_);
-                    child(q);
-                }
-            };
+                struct room_unlock_iq : stanza::spec {
+                    room_unlock_iq(std::string_view to_, std::string_view id_,
+                                   muc_owner_query &q) : spec("iq") {
+                        attr("type", "set");
+                        attr("to", to_);
+                        attr("id", id_);
+                        child(q);
+                    }
+                };
 
-            x_data_submit xd;
-            muc_owner_query owner_q(xd);
-            std::string unlock_id = stanza::uuid(account.context);
-            room_unlock_iq unlock_iq(room_jid, unlock_id, owner_q);
-            account.connection.send(unlock_iq.build(account.context).get());
+                x_data_submit xd;
+                muc_owner_query owner_q(xd);
+                std::string unlock_id = stanza::uuid(account.context);
+                room_unlock_iq unlock_iq(room_jid, unlock_id, owner_q);
+                account.connection.send(unlock_iq.build(account.context).get());
+            }
         }
     }
     else

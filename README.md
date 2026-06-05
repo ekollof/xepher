@@ -695,6 +695,9 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 
 | Command | Description |
 |---------|-------------|
+| `/enter <jid>` | Join a MUC room (creates it if it doesn't exist on the server) |
+| `/join <jid>` | Alias for `/enter` |
+| `/create <room@server> [nick] [--reserved]` | Create a new MUC room (XEP-0045 §10.1). With `--reserved` the room is created locked so the owner can configure it via `/setmodes` / `/affiliation` / `/destroy` before letting anyone in. Without `--reserved` the room is unlocked with server defaults (instant room) as soon as the server signals status 201 |
 | `/kick <nick> [reason]` | Kick a user from the MUC (requires moderator role) |
 | `/ban <jid> [reason]` | Ban a user by JID (requires admin/owner role) |
 | `/topic [text]` | Set or clear the room topic |

@@ -392,6 +392,7 @@ namespace stanza {
 
     struct iq : virtual public spec,
                 public xep0030::iq,
+                public xep0045::xep0045owner::iq,
                 public xep0045admin::iq,
                 public xep0049::iq,
                 public xep0060::iq,

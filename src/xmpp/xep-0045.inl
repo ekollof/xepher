@@ -413,6 +413,53 @@ namespace stanza {
 
             message& muc_user(xep0045::muc_user_x x) { child(x); return *this; }
         };
+
+        // XEP-0045 §10.2/§10.7: room owner actions via the muc#owner namespace.
+        // The query wrapper is the IQ payload for both reading the config form
+        // (get) and submitting modified values back (set). The destroy payload
+        // is used to destroy a room entirely (XEP-0045 §10.7).
+        struct xep0045owner {
+            // Forward declaration; defined below.
+            struct destroy_payload;
+
+            // <query xmlns='http://jabber.org/protocol/muc#owner'>...</query>
+            struct query : virtual public spec {
+                query() : spec("query") {
+                    xmlns<jabber_org::protocol::muc::owner>();
+                }
+                // Wrap a jabber:x:data form (<x>) as the query child.
+                query& form(xep0004::form& f) { child(f); return *this; }
+                // Wrap a <destroy/> payload for room destruction.
+                query& destroy(destroy_payload& d) { child(d); return *this; }
+            };
+
+            // <destroy jid='alt@service'><reason>...</reason><password>...</password></destroy>
+            struct destroy_payload : virtual public spec {
+                destroy_payload() : spec("destroy") {}
+                destroy_payload& jid(std::string_view j) { attr("jid", j); return *this; }
+                destroy_payload& reason(std::string_view r) {
+                    struct r_el : virtual public spec {
+                        r_el(std::string_view t) : spec("reason") { text(t); }
+                    } re(r);
+                    child(re);
+                    return *this;
+                }
+                destroy_payload& password(std::string_view p) {
+                    struct p_el : virtual public spec {
+                        p_el(std::string_view t) : spec("password") { text(t); }
+                    } pe(p);
+                    child(pe);
+                    return *this;
+                }
+            };
+
+            // stanza::iq mixin
+            struct iq : virtual public spec {
+                iq() : spec("iq") {}
+
+                iq& muc_owner(query& q) { child(q); return *this; }
+            };
+        };
     };
 
 }

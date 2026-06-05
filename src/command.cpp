@@ -102,6 +102,24 @@ void command__init()
         weechat_printf(nullptr, "Failed to setup command /join");
 
     hook = weechat_hook_command(
+        "create",
+        N_("create a new MUC room (XEP-0045 §10.1)"),
+        N_("<room@server> [<nick>] [--reserved]"),
+        N_("room@server: bare JID of the room to create (the service host is the MUC component)\n"
+           "nick: optional nickname to join with (default: account nickname)\n"
+           "--reserved: create as a 'reserved' room (locked) so the owner can configure\n"
+           "            it via /setmodes / /affiliation / /destroy before anyone joins.\n"
+           "            Without --reserved the room is unlocked with server defaults\n"
+           "            (instant room) as soon as the server signals status 201.\n\n"
+           "Examples:\n"
+           "  /create newroom@conference.example.org\n"
+           "  /create newroom@conference.example.org mynick\n"
+           "  /create newroom@conference.example.org --reserved"),
+        nullptr, &command__create, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /create");
+
+    hook = weechat_hook_command(
         "open",
         N_("open a direct xmpp chat"),
         N_("<jid>"),

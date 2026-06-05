@@ -233,6 +233,26 @@ namespace weechat
         // flight or has been answered. Cleared on disconnect.
         std::unordered_set<std::string> muc_modes_fetched;
 
+        // XEP-0045 §10.2/§10.5/§10.7: muc#owner and muc#admin IQ tracking.
+        // The "kind" field tells the result handler how to interpret the
+        // response (parse a form on "config_get"/"config_set"; print outcome
+        // on "aff_set"/"destroy"). "room_jid" is the destination (bare JID).
+        // "buffer" is where to print outcome messages.
+        enum class muc_owner_kind { config_get, config_set, destroy, aff_set };
+        struct muc_owner_query_info {
+            std::string room_jid;
+            struct t_gui_buffer *buffer;
+            muc_owner_kind kind;
+        };
+        std::unordered_map<std::string, muc_owner_query_info> muc_owner_queries;  // iq_id -> info
+
+        // XEP-0045 §10.1: rooms created via /create --reserved. When a
+        // status 201 self-presence arrives for one of these, the presence
+        // handler skips the auto-empty config submit (instant-room unlock)
+        // and leaves the room locked so the user can configure it via
+        // /setmodes / /affiliation / /destroy. Cleared on disconnect.
+        std::unordered_set<std::string> muc_reserved_pending;
+
         // XEP-0054 / XEP-0292 vCard query tracking
         struct whois_query_info {
             struct t_gui_buffer *buffer;  // buffer to print vCard results into

@@ -36,6 +36,7 @@ int command__mam(COMMAND_ARGS);
 int command__me(COMMAND_ARGS);
 int command__moderate(COMMAND_ARGS);
 int command__modes(COMMAND_ARGS);
+int command__create(COMMAND_ARGS);
 int command__mood(COMMAND_ARGS);
 int command__msg(COMMAND_ARGS);
 int command__muc_nick(COMMAND_ARGS);

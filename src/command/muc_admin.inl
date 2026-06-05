@@ -1887,3 +1887,141 @@ int command__modes(const void *pointer, void *data,
 
     return WEECHAT_RC_OK;
 }
+
+// XEP-0045 §10.1: create a new MUC room.
+//
+// Usage: /create <room@server> [nick] [--reserved]
+//
+// Sends the same MUC join presence as /enter. If the room does not exist the
+// server creates it and signals status 201; the plugin's existing presence
+// handler then auto-submits an empty muc#roomconfig to "unlock" the room as
+// an instant room (default behaviour).
+//
+// With --reserved the empty submit is suppressed: the plugin instead fetches
+// the room config form via muc#owner, caches it on the channel, and tells the
+// user to use /setmodes (or /affiliation / /destroy) to configure the room
+// before letting anyone else in. This is the XEP-0045 §10.1 "reserved room"
+// flow.
+int command__create(const void *pointer, void *data,
+                    struct t_gui_buffer *buffer, int argc,
+                    char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    (void) pointer;
+    (void) data;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, _("%s%s: you are not connected to server"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2)
+    {
+        weechat_printf(buffer,
+            _("%s%s: usage: /create <room@server> [nick] [--reserved]"),
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    // Parse the room JID. Accept "room@server" or "room@server/nick".
+    ::jid jid_parsed(nullptr, argv[1]);
+    std::string room_bare = jid_parsed.bare;
+    if (room_bare.empty() || jid_parsed.domain.empty())
+    {
+        weechat_printf(buffer,
+            _("%s%s: invalid room JID '%s' (expected: room@server)"),
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[1]);
+        return WEECHAT_RC_OK;
+    }
+
+    // Optional nick from the JID's resource or argv[2].
+    std::string nick = jid_parsed.resource;
+    if (nick.empty() && argc > 2 && argv[2][0] != '-')
+        nick = argv[2];
+
+    // Optional --reserved flag (must be a separate argv).
+    bool reserved = false;
+    for (int i = 2; i < argc; ++i)
+    {
+        if (std::string_view(argv[i]) == "--reserved")
+        {
+            reserved = true;
+            break;
+        }
+    }
+
+    if (nick.empty())
+    {
+        std::string_view acct_nick = ptr_account->nickname();
+        if (!acct_nick.empty()) nick = acct_nick;
+        else                    nick = ::jid(nullptr, ptr_account->jid()).local;
+    }
+
+    std::string pres_jid = fmt::format("{}/{}", room_bare, nick);
+
+    // Track reservation intent on the channel so the presence handler knows
+    // whether to auto-submit the empty config (instant room) or skip and let
+    // the user configure via /setmodes (reserved room). We use a channel-
+    // scoped flag (we repurpose muc_modes_fetched? no — too implicit; use a
+    // local map on the account). The presence handler will not auto-unlock
+    // the room when this set contains the room JID; the /create caller is
+    // expected to call /setmodes (which will fetch+submit) or accept default
+    // by simply waiting for the user to type /enter (which still does the
+    // instant-room unlock).
+    //
+    // We add a small reservation-pending set on the account; cleared by the
+    // presence handler when status 201 arrives (it leaves the room locked
+    // instead of auto-submitting) and by /create on disconnect.
+    if (reserved)
+        ptr_account->muc_reserved_pending.insert(room_bare);
+    else
+        ptr_account->muc_reserved_pending.erase(room_bare);
+
+    // Create the channel and send the join presence.
+    if (!ptr_account->channels.contains(room_bare))
+    {
+        auto [it_ch, _ins] = ptr_account->channels.emplace(
+            std::make_pair(room_bare, weechat::channel {
+                    *ptr_account, weechat::channel::chat_type::MUC, room_bare, room_bare
+                }));
+        auto& [_, ch] = *it_ch;
+        ptr_channel = &ch;
+        ptr_account->load_pgp_keys();
+    }
+
+    // Reuse the same join presence as /enter.
+    auto join_pres = stanza::presence().to(pres_jid).from(ptr_account->jid());
+    static_cast<stanza::xep0045::presence&>(join_pres).muc_join();
+    ptr_account->connection.send(join_pres.build(ptr_account->context).get());
+
+    if (reserved)
+    {
+        weechat_printf(buffer, "%sCreating reserved room %s as %s…",
+                       weechat_prefix("network"), room_bare.c_str(), nick.c_str());
+        weechat_printf(buffer, "%s%s: the room will be created and locked. "
+                              "Use /setmodes, /affiliation, /destroy to "
+                              "configure it before anyone joins.",
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+    }
+    else
+    {
+        weechat_printf(buffer, "%sCreating instant room %s as %s…",
+                       weechat_prefix("network"), room_bare.c_str(), nick.c_str());
+    }
+
+    int num = weechat_buffer_get_integer(ptr_channel->buffer, "number");
+    auto buf = fmt::format("/buffer {}", num);
+    weechat_command(ptr_account->buffer, buf.c_str());
+
+    return WEECHAT_RC_OK;
+}
