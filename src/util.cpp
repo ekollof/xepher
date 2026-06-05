@@ -543,9 +543,8 @@ std::string apply_markdown_to_weechat(std::string_view text)
 
     bool in_code_block = false;
 
-    for (size_t li = 0; li < lines.size(); ++li)
+    for (const auto &ln : lines)
     {
-        const std::string &ln = lines[li];
 
         // --- Fenced code block delimiter (``` at start of line) ---
         if (ln.size() >= 3 && ln[0] == '`' && ln[1] == '`' && ln[2] == '`')

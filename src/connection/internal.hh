@@ -12,6 +12,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <list>
 #include <thread>
 #include <vector>
@@ -25,8 +26,8 @@ namespace weechat { class account; }
 
 // ── parse_omemo_device_id ─────────────────────────────────────────────────────
 // Parse a decimal string into a valid OMEMO device-ID (1 … 0x7FFFFFFF).
-// Returns nullopt on any parse error, overflow, or zero value.
-[[nodiscard]] std::optional<std::uint32_t> parse_omemo_device_id(const char *value);
+// Returns unexpected on any parse error, overflow, or zero value.
+[[nodiscard]] std::expected<std::uint32_t, std::string> parse_omemo_device_id(std::string_view value);
 
 // ── raw XML trace helpers ─────────────────────────────────────────────────────
 // Compute the log-file path for the given account.

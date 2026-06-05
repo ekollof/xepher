@@ -4,6 +4,7 @@
 #include <exception>
 
 #include "driver.hh"
+#include "xmpp/node.hh"
 
 sexp::driver::~driver()
 {
@@ -64,8 +65,7 @@ bool sexp::driver::parse_helper(std::istream &stream, std::ostream *debug)
 
 void sexp::driver::start_tag(const std::string &name)
 {
-    auto *stanza = xmpp_stanza_new(context);
-    xmpp_stanza_set_name(stanza, name.data());
+    auto *stanza = stanza_new_named(context, name.data());
     stack.push_back(stanza);
 }
 
@@ -81,8 +81,7 @@ void sexp::driver::end_tag()
 
 void sexp::driver::add_text(const std::string &text)
 {
-    auto *stanza = xmpp_stanza_new(context);
-    xmpp_stanza_set_text(stanza, text.substr(1,text.length()-2).data());
+    auto *stanza = stanza_new_text(context, text.substr(1,text.length()-2).data());
     xmpp_stanza_add_child_ex(stack.back(), stanza, false);
 }
 

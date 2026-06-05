@@ -14,7 +14,10 @@
 #include <optional>
 #include <memory>
 #include <array>
+#include <algorithm>
 #include <ranges>
+#include <span>
+#include <expected>
 #include <fmt/core.h>
 #include <fmt/chrono.h>
 #include <weechat/weechat-plugin.h>

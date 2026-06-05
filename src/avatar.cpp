@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fstream>
+#include <algorithm>
 #include <span>
 #include <ranges>
 #include <expected>

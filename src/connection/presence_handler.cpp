@@ -5,6 +5,10 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <algorithm>
+#include <ranges>
+#include <span>
+#include <expected>
 #include <time.h>
 #include <stdint.h>
 #include <fmt/core.h>

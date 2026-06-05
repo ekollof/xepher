@@ -11,6 +11,9 @@
 #include <fmt/core.h>
 #include <optional>
 #include <ranges>
+#include <algorithm>
+#include <span>
+#include <expected>
 #include <iterator>
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>

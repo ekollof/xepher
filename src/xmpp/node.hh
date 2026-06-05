@@ -5,17 +5,20 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
+#include <expected>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <regex>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <vector>
-#include <chrono>
 #include <variant>
-#include <optional>
+#include <vector>
 #include <strophe.h>
 
 #include "../test_export.hh"
@@ -558,4 +561,34 @@ inline xmpp_stanza_t *stanza_make_field(xmpp_ctx_t *ctx,
     auto sp = fs.build(ctx);
     xmpp_stanza_clone(sp.get());
     return sp.get();
+}
+
+// Parse a raw XML string into a stanza tree. Intended for the /xml debug command
+// (arbitrary user-supplied stanzas) and similar. Uses libstrophe's parser.
+// The raw call is encapsulated here (in the builder impl header) so that .inl/.cpp
+// files remain free of direct xmpp_stanza_new* calls per AGENTS.md.
+inline std::shared_ptr<xmpp_stanza_t> stanza_from_string(xmpp_ctx_t *ctx, const char *xml)
+{
+    if (!ctx || !xml || !*xml)
+        return nullptr;
+    xmpp_stanza_t *s = xmpp_stanza_new_from_string(ctx, xml);
+    if (!s)
+        return nullptr;
+    return {s, xmpp_stanza_release};
+}
+
+// Low-level helpers that encapsulate xmpp_stanza_new (allowed only here).
+// Used by the SXML parser (sexp/driver.cpp) for the /xml command's structured input.
+inline xmpp_stanza_t *stanza_new_named(xmpp_ctx_t *ctx, const char *name)
+{
+    auto *s = xmpp_stanza_new(ctx);
+    if (s && name) xmpp_stanza_set_name(s, name);
+    return s;
+}
+
+inline xmpp_stanza_t *stanza_new_text(xmpp_ctx_t *ctx, const char *text)
+{
+    auto *s = xmpp_stanza_new(ctx);
+    if (s && text) xmpp_stanza_set_text(s, text);
+    return s;
 }

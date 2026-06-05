@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdexcept>
 #include <string_view>
+#include <algorithm>
 #include <ranges>
 #include <vector>
 #include <strophe.h>

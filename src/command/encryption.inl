@@ -533,9 +533,7 @@ int command__xml(const void *pointer, void *data,
         }
         else
         {
-            std::shared_ptr<xmpp_stanza_t> stanza(
-                xmpp_stanza_new_from_string(ptr_account->context, argv_eol[1]),
-                xmpp_stanza_release);
+            auto stanza = stanza_from_string(ptr_account->context, argv_eol[1]);
             if (!stanza)
             {
                 weechat_printf(nullptr, _("%s%s: Bad XML"),

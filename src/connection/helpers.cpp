@@ -39,17 +39,17 @@
 
 // ── parse_omemo_device_id ─────────────────────────────────────────────────────
 
-[[nodiscard]] std::optional<std::uint32_t> parse_omemo_device_id(const char *value)
+[[nodiscard]] std::expected<std::uint32_t, std::string> parse_omemo_device_id(std::string_view value)
 {
-    if (!value || !*value)
-        return std::nullopt;
+    if (value.empty())
+        return std::unexpected("empty");
 
     std::uint32_t parsed = 0;
-    const auto *begin = value;
-    const auto *end = value + std::string_view(value).size();
+    const auto *begin = value.data();
+    const auto *end = value.data() + value.size();
     const auto [ptr, error] = std::from_chars(begin, end, parsed);
     if (error != std::errc {} || ptr != end || parsed == 0 || parsed > 0x7fffffffU)
-        return std::nullopt;
+        return std::unexpected("invalid device id");
 
     return parsed;
 }

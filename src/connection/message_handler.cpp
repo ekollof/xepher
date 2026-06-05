@@ -10,7 +10,10 @@
 #include <vector>
 #include <list>
 #include <array>
+#include <algorithm>
 #include <ranges>
+#include <span>
+#include <expected>
 #include <sstream>
 #include <iomanip>
 #include <time.h>

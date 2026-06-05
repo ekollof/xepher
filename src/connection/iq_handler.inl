@@ -4141,7 +4141,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 if (pos != std::string_view::npos && pos + 1 < node.size())
                 {
                     const auto parsed_node_device_id =
-                        parse_omemo_device_id(std::string(node.substr(pos + 1)).c_str());
+                        parse_omemo_device_id(node.substr(pos + 1));
                     if (parsed_node_device_id)
                         bundle_device_id = *parsed_node_device_id;
                 }

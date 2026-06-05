@@ -8,7 +8,10 @@
 #include <vector>
 #include <list>
 #include <array>
+#include <algorithm>
 #include <ranges>
+#include <span>
+#include <expected>
 #include <time.h>
 #include <sys/stat.h>
 #include <stdint.h>

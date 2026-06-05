@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <regex.h>
 #include <string>
+#include <algorithm>
+#include <ranges>
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
