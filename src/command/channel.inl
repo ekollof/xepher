@@ -1,22 +1,23 @@
 // Send a MUC join presence stanza to `to_jid` (room@domain/nick) from the account.
-static void send_muc_join_presence(weechat::account *account, const char *to_jid)
+// Pass an empty `room_password` for non-protected rooms; otherwise include a
+// <password> child in the <x xmlns='http://jabber.org/protocol/muc'/> payload
+// per XEP-0045 §7.1.4.
+static void send_muc_join_presence(weechat::account *account, const char *to_jid,
+                                  std::string_view room_password = {})
 {
     auto join_pres = stanza::presence().to(to_jid).from(account->jid());
-    static_cast<stanza::xep0045::presence&>(join_pres).muc_join();
+    static_cast<stanza::xep0045::presence&>(join_pres).muc_join(room_password);
     account->connection.send(join_pres.build(account->context).get());
 }
 
-int command__enter(const void *pointer, void *data,
+int command__enter([[maybe_unused]] const void *pointer,
+                   [[maybe_unused]] void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
 {
     weechat::account *ptr_account = nullptr;
     weechat::channel *ptr_channel = nullptr;
     const char *jid, *pres_jid, *text;
-
-    (void) pointer;
-    (void) data;
-    (void) argv;
 
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 
@@ -29,6 +30,32 @@ int command__enter(const void *pointer, void *data,
                         _("%s%s: you are not connected to server"),
                         weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
         return WEECHAT_RC_OK;
+    }
+
+    // Parse --password <secret> / -k <secret> from the trailing args. Used to
+    // join password-protected MUCs (XEP-0045 §7.1.4). The password is sent
+    // as a <password> child of the <x xmlns='...muc'/> join presence.
+    std::string room_password;
+    int pos_arg_offset = -1;  // argv index of the first non-flag positional
+    for (int i = 2; i < argc; ++i)
+    {
+        std::string_view a = argv[i];
+        if ((a == "--password" || a == "-k") && i + 1 < argc)
+        {
+            room_password = argv[++i];
+        }
+        else if (a.starts_with("--password="))
+        {
+            room_password = std::string(a.substr(std::strlen("--password=")));
+        }
+        else if (a.starts_with("-k="))
+        {
+            room_password = std::string(a.substr(3));
+        }
+        else if (pos_arg_offset < 0)
+        {
+            pos_arg_offset = i;
+        }
     }
 
     if (argc > 1)
@@ -70,7 +97,7 @@ int command__enter(const void *pointer, void *data,
                     return WEECHAT_RC_ERROR;
                 }
 
-                send_muc_join_presence(ptr_account, pres_jid);
+                send_muc_join_presence(ptr_account, pres_jid, room_password);
             }
             else
             {
@@ -89,13 +116,14 @@ int command__enter(const void *pointer, void *data,
                     return WEECHAT_RC_ERROR;
                 }
 
-                send_muc_join_presence(ptr_account, pres_jid);
+                send_muc_join_presence(ptr_account, pres_jid, room_password);
             }
 
-            if (argc > 2)
+            // The optional trailing positional arg is the first message to
+            // send upon entering the room.
+            if (pos_arg_offset > 0)
             {
-                text = argv_eol[2];
-
+                text = argv_eol[pos_arg_offset];
                 ptr_channel->send_message(jid, text);
             }
 
@@ -124,23 +152,20 @@ int command__enter(const void *pointer, void *data,
             ptr_channel = &ch;
         }
 
-        send_muc_join_presence(ptr_account, pres_jid);
+        send_muc_join_presence(ptr_account, pres_jid, room_password);
     }
 
     return WEECHAT_RC_OK;
 }
 
-int command__open(const void *pointer, void *data,
+int command__open([[maybe_unused]] const void *pointer,
+                  [[maybe_unused]] void *data,
                   struct t_gui_buffer *buffer, int argc,
                   char **argv, char **argv_eol)
 {
     weechat::account *ptr_account = nullptr;
     weechat::channel *ptr_channel = nullptr;
     char *jid, *text;
-
-    (void) pointer;
-    (void) data;
-    (void) argv;
 
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 

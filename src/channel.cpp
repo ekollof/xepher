@@ -715,6 +715,12 @@ void weechat::channel::update_modes()
     weechat_buffer_set(buffer, "modes", s.c_str());
 }
 
+void weechat::channel::store_config_form(room_config_form form)
+{
+    form.fetched_at = ::time(nullptr);
+    last_config_form = std::move(form);
+}
+
 std::optional<weechat::channel::member*> weechat::channel::add_member(const char *id, const char *client,
                                                                        std::optional<std::string_view> real_jid,
                                                                        weechat::user *known_user)

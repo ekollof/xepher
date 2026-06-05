@@ -720,6 +720,61 @@ void command__init()
         weechat_printf(nullptr, "Failed to setup command /modes");
 
     hook = weechat_hook_command(
+        "setmodes",
+        N_("set MUC room mode flags (XEP-0045 §10.2, owner-only)"),
+        N_("[+|-][m][i][k][p][P][N][S] [<secret>] [--confirm]"),
+        N_("flags: m=moderated i=members-only k=password p=public "
+           "P=persistent N=non-anonymous S=semi-anonymous\n"
+           "Add '+' before letters to set, '-' to clear (e.g. '+m -i +k'). "
+           "Pass --confirm to actually apply the changes; without it the "
+           "command prints the planned diff and exits.\n\n"
+           "If +k is set, a password must be supplied as the next argument. "
+           "Note: the password is passed as a CLI argument and may be visible "
+           "in shell history.\n\n"
+           "The room config form is auto-fetched on first use. If the form is "
+           "not yet cached, run the command once to fetch, then again with the "
+           "same flag spec to apply.\n\n"
+           "Examples:\n"
+           "  /setmodes +m\n"
+           "  /setmodes +m -i +k hunter2\n"
+           "  /setmodes -k\n"
+           "  /setmodes +m -i +k hunter2 --confirm"),
+        nullptr, &command__setmodes, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /setmodes");
+
+    hook = weechat_hook_command(
+        "destroy",
+        N_("destroy the current MUC room (XEP-0045 §10.7, owner-only)"),
+        N_("[<reason> [<alt-jid> [<alt-password>]]] [--confirm]"),
+        N_("Destroys the current room, optionally providing a reason and an "
+           "alternate venue for occupants to migrate to. Without --confirm the "
+           "command prints the planned action and exits. "
+           "This action is IRREVERSIBLE — all occupants are kicked and the room "
+           "configuration is lost.\n\n"
+           "Examples:\n"
+           "  /destroy \"moving to alt room\"\n"
+           "  /destroy \"\" altroom@conference.example secret --confirm"),
+        nullptr, &command__destroy, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /destroy");
+
+    hook = weechat_hook_command(
+        "affiliation",
+        N_("change a user's MUC affiliation (XEP-0045 §10.5, owner-only)"),
+        N_("set <jid> <owner|admin|member|none|outcast> [<reason>] [--confirm]"),
+        N_("Grants, revokes, or modifies a user's affiliation in the current "
+           "room. Without --confirm the command prints the planned action and "
+           "exits. Use 'none' or 'outcast' to revoke membership or ban a JID.\n\n"
+           "Examples:\n"
+           "  /affiliation set alice@example.com admin\n"
+           "  /affiliation set bob@example.com admin \"promotion\" --confirm\n"
+           "  /affiliation set troll@example.com outcast \"spam\" --confirm"),
+        nullptr, &command__affiliation, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /affiliation");
+
+    hook = weechat_hook_command(
         "feed",
         N_("fetch and interact with PubSub feeds (XEP-0060 / XEP-0472 microblogging)"),
          N_("[<service-jid> [--all | <node>] [--limit N] [--before <id>] [--latest]]\n"

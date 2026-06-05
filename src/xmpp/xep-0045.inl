@@ -372,6 +372,10 @@ namespace stanza {
 
         // <x xmlns='http://jabber.org/protocol/muc'>
         //   <history maxstanzas='0'/>  — suppress server history (MAM handles catch-up)
+        //   <password>...</password>     — optional, sent when the room is
+        //     password-protected (XEP-0045 §7.1.4). The plugin receives a
+        //     <not-authorized/> error and a 401 status code in muc#user if
+        //     the password is wrong or missing.
         // </x>
         struct join_x : virtual public spec {
             join_x() : spec("x") {
@@ -386,6 +390,15 @@ namespace stanza {
                 history_elem h;
                 child(h);
             }
+            // XEP-0045 §7.1.4: optional room password for protected rooms.
+            // Builder chain: .password("hunter2") before .child / .build.
+            join_x& password(std::string_view p) {
+                struct p_el : virtual public spec {
+                    p_el(std::string_view s) : spec("password") { text(s); }
+                } pe(p);
+                child(pe);
+                return *this;
+            }
         };
 
         // <x xmlns='http://jabber.org/protocol/muc#user'/>
@@ -396,12 +409,20 @@ namespace stanza {
         };
 
         // stanza::presence mixin — adds a <x xmlns='...muc'><history maxstanzas='0'/></x>
-        // child for room joining (XEP-0045 §7.1).
+        // child for room joining (XEP-0045 §7.1). Pass an optional password
+        // (XEP-0045 §7.1.4) for protected rooms.
         struct presence : virtual public spec {
             presence() : spec("presence") {}
 
             presence& muc_join() {
                 xep0045::join_x x;
+                child(x);
+                return *this;
+            }
+            presence& muc_join(std::string_view room_password) {
+                xep0045::join_x x;
+                if (!room_password.empty())
+                    x.password(room_password);
                 child(x);
                 return *this;
             }

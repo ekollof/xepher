@@ -130,6 +130,27 @@ namespace weechat
             std::optional<std::string> stanza_id_by;
         };
 
+        // XEP-0045 §10.2: a single <field> in the muc#roomconfig form.
+        // Public so the IQ result handler (in a different TU) can construct
+        // values. Preserves the server's original ordering and any
+        // server-added read-only fields (e.g. muc#roomconfig_roomadmins) so
+        // submit round-trips cleanly.
+        struct room_config_field {
+            std::string var;
+            std::string type;            // "boolean", "text-single", etc. — empty if absent
+            std::vector<std::string> values;  // first entry is the "default" for fixed lists
+            std::string label;           // for display only (returned by form, ignored on submit)
+        };
+        struct room_config_form {
+            std::vector<room_config_field> fields;
+            // sessionid attribute on the <x/> element (XEP-0045 §10.2). Empty
+            // string when not present (some servers omit it).
+            std::string sessionid;
+            // Last refresh time — used to invalidate on a stale form (e.g. if
+            // a status 104 fires between get and submit).
+            time_t fetched_at = 0;
+        };
+
     private:
         topic topic;
 
@@ -137,6 +158,11 @@ namespace weechat
         // src/connection/iq_handler.inl. Rendered by update_modes() and the
         // /modes command (command/muc_admin.inl).
         muc_info muc_info_;
+
+        // XEP-0045 §10.2: last muc#roomconfig form received from the room.
+        // Populated by the muc#owner IQ result handler; consumed by /setmodes
+        // to compute diffs and re-submit.
+        std::optional<room_config_form> last_config_form;
 
         /* mpim */
         std::optional<std::string> creator;
@@ -235,6 +261,20 @@ namespace weechat
         void update_topic(const char* title, const char* creator, int last_set);
         void update_name(const char* name);
         void update_purpose(const char* purpose, const char* creator, int last_set);
+
+        // XEP-0045 §10.2: store the last muc#roomconfig form received from
+        // the room. Called by the muc#owner IQ result handler. Drops the
+        // previous form (caller is responsible for re-fetching if needed).
+        void store_config_form(room_config_form form);
+
+        // XEP-0045 §10.2: access the cached muc#roomconfig form (or nullopt
+        // if /setmodes has not yet fetched one this session).
+        std::optional<room_config_form> get_config_form() const { return last_config_form; }
+
+        // XEP-0045 §10.2: drop the cached form. Used after a successful
+        // /setmodes submit (form is now stale — next op re-fetches) and by
+        // disconnect cleanup.
+        void clear_config_form() { last_config_form.reset(); }
 
         // XEP-0045: read accessors for room metadata.
         const muc_info& get_muc_info() const { return muc_info_; }

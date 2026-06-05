@@ -1890,7 +1890,7 @@ int command__modes(const void *pointer, void *data,
 
 // XEP-0045 §10.1: create a new MUC room.
 //
-// Usage: /create <room@server> [nick] [--reserved]
+// Usage: /create <room@server> [nick] [--reserved] [--password <secret>] [-k <secret>]
 //
 // Sends the same MUC join presence as /enter. If the room does not exist the
 // server creates it and signals status 201; the plugin's existing presence
@@ -1902,16 +1902,18 @@ int command__modes(const void *pointer, void *data,
 // user to use /setmodes (or /affiliation / /destroy) to configure the room
 // before letting anyone else in. This is the XEP-0045 §10.1 "reserved room"
 // flow.
-int command__create(const void *pointer, void *data,
+//
+// --password / -k <secret> is sent as a <password> child of the join
+// presence (XEP-0045 §7.1.4). Useful for joining a pre-existing
+// password-protected room — though typically /enter --password is the right
+// command for that.
+int command__create([[maybe_unused]] const void *pointer,
+                    [[maybe_unused]] void *data,
                     struct t_gui_buffer *buffer, int argc,
-                    char **argv, char **argv_eol)
+                    char **argv, [[maybe_unused]] char **argv_eol)
 {
     weechat::account *ptr_account = nullptr;
     weechat::channel *ptr_channel = nullptr;
-
-    (void) pointer;
-    (void) data;
-    (void) argv_eol;
 
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 
@@ -1928,7 +1930,8 @@ int command__create(const void *pointer, void *data,
     if (argc < 2)
     {
         weechat_printf(buffer,
-            _("%s%s: usage: /create <room@server> [nick] [--reserved]"),
+            _("%s%s: usage: /create <room@server> [nick] [--reserved] "
+              "[--password <secret> | -k <secret>]"),
             weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
         return WEECHAT_RC_OK;
     }
@@ -1944,19 +1947,34 @@ int command__create(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    // Optional nick from the JID's resource or argv[2].
+    // Parse flags. argv[1] is the room JID; remaining args may be nick,
+    // --reserved, --password <secret>, -k <secret>.
     std::string nick = jid_parsed.resource;
-    if (nick.empty() && argc > 2 && argv[2][0] != '-')
-        nick = argv[2];
-
-    // Optional --reserved flag (must be a separate argv).
     bool reserved = false;
+    std::string room_password;
     for (int i = 2; i < argc; ++i)
     {
-        if (std::string_view(argv[i]) == "--reserved")
+        std::string_view a = argv[i];
+        if (a == "--reserved")
         {
             reserved = true;
-            break;
+        }
+        else if ((a == "--password" || a == "-k") && i + 1 < argc)
+        {
+            room_password = argv[++i];
+        }
+        else if (a.starts_with("--password="))
+        {
+            room_password = std::string(a.substr(std::strlen("--password=")));
+        }
+        else if (a.starts_with("-k="))
+        {
+            room_password = std::string(a.substr(3));
+        }
+        else if (nick.empty())
+        {
+            // First non-flag positional becomes the nick.
+            nick = argv[i];
         }
     }
 
@@ -1969,19 +1987,6 @@ int command__create(const void *pointer, void *data,
 
     std::string pres_jid = fmt::format("{}/{}", room_bare, nick);
 
-    // Track reservation intent on the channel so the presence handler knows
-    // whether to auto-submit the empty config (instant room) or skip and let
-    // the user configure via /setmodes (reserved room). We use a channel-
-    // scoped flag (we repurpose muc_modes_fetched? no — too implicit; use a
-    // local map on the account). The presence handler will not auto-unlock
-    // the room when this set contains the room JID; the /create caller is
-    // expected to call /setmodes (which will fetch+submit) or accept default
-    // by simply waiting for the user to type /enter (which still does the
-    // instant-room unlock).
-    //
-    // We add a small reservation-pending set on the account; cleared by the
-    // presence handler when status 201 arrives (it leaves the room locked
-    // instead of auto-submitting) and by /create on disconnect.
     if (reserved)
         ptr_account->muc_reserved_pending.insert(room_bare);
     else
@@ -1999,9 +2004,9 @@ int command__create(const void *pointer, void *data,
         ptr_account->load_pgp_keys();
     }
 
-    // Reuse the same join presence as /enter.
+    // Reuse the same join presence as /enter, including password support.
     auto join_pres = stanza::presence().to(pres_jid).from(ptr_account->jid());
-    static_cast<stanza::xep0045::presence&>(join_pres).muc_join();
+    static_cast<stanza::xep0045::presence&>(join_pres).muc_join(room_password);
     ptr_account->connection.send(join_pres.build(ptr_account->context).get());
 
     if (reserved)
@@ -2023,5 +2028,513 @@ int command__create(const void *pointer, void *data,
     auto buf = fmt::format("/buffer {}", num);
     weechat_command(ptr_account->buffer, buf.c_str());
 
+    return WEECHAT_RC_OK;
+}
+
+// ---------------------------------------------------------------------------
+// XEP-0045 §10.2/§10.5/§10.7: room owner actions
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// XEP-0045 §10.2: fetch the muc#roomconfig form. The result handler in
+// iq_handler.inl will store the parsed form on the channel (overwriting any
+// previous one). Use --confirm to actually send the IQ; without it, just
+// prints the request that would be made.
+void send_config_form_get(weechat::account *ptr_account, weechat::channel *ptr_channel)
+{
+    std::string id = stanza::uuid(ptr_account->context);
+    weechat::account::muc_owner_query_info info{
+        ptr_channel->id,
+        ptr_channel->buffer,
+        weechat::account::muc_owner_kind::config_get
+    };
+    ptr_account->muc_owner_queries[id] = info;
+
+    stanza::xep0004::form form("");
+    stanza::xep0045::xep0045owner::query q;
+    q.form(form);
+    auto iq = stanza::iq().type("get").to(ptr_channel->id).id(id);
+    iq.muc_owner(q);
+    ptr_account->connection.send(iq.build(ptr_account->context).get());
+}
+
+// Set a field value in the cached room config form, mutating the form in place.
+// Used by /setmodes to compute the diff before submitting. No-op if the field
+// is not in the form (e.g. a server doesn't advertise a particular config var).
+void set_form_field_value(weechat::channel::room_config_form &form,
+                          std::string_view var, std::string_view value)
+{
+    for (auto &f : form.fields)
+    {
+        if (f.var == var)
+        {
+            f.values = { std::string(value) };
+            return;
+        }
+    }
+}
+
+} // namespace
+
+// XEP-0045 §10.2: set or clear the supported room mode flags atomically.
+//
+// Usage: /setmodes [+/-][m][i][k][p][P][N][S] [secret] [--confirm]
+//   m = muc_moderated       (muc#roomconfig_moderatedroom)
+//   i = muc_membersonly      (muc#roomconfig_membersonly)
+//   k = muc_passwordprotected (also requires a room secret; +k must be
+//       followed by the password as argv_eol[1] OR omitted to clear the
+//       existing password)
+//   p = muc_public (inverted: +p sets publicroom=1, -p sets publicroom=0
+//       which maps to muc_hidden)
+//   P = muc_persistent
+//   N = muc_nonanonymous     (muc#roomconfig_whois=anyone)
+//   S = muc_semianonymous    (muc#roomconfig_whois=moderators)
+//
+// Without --confirm the command prints the planned diff and exits.
+// With --confirm it sends an IQ get to fetch the form, mutates it, and
+// submits the new form via muc#owner set.
+//
+// Note: the password is provided as a CLI argument and may be visible in
+// shell history. Secure storage integration is not in scope.
+int command__setmodes([[maybe_unused]] const void *pointer,
+                      [[maybe_unused]] void *data,
+                      struct t_gui_buffer *buffer, int argc,
+                      char **argv, [[maybe_unused]] char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "setmodes");
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, _("%s%s: you are not connected to server"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2)
+    {
+        weechat_printf(buffer,
+            _("%s%s: usage: /setmodes [+/-][m][i][k][p][P][N][S] [secret] [--confirm]"),
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    // Parse the flag spec like "+m -i +k".
+    std::string spec = argv[1];
+    bool want_set[7]   = {false, false, false, false, false, false, false}; // m, i, k, p, P, N, S
+    bool want_clear[7] = {false, false, false, false, false, false, false};
+    bool any = false;
+    bool pending_plus = false, pending_minus = false;
+    for (char c : spec)
+    {
+        if (c == '+') { pending_plus = true;  pending_minus = false; continue; }
+        if (c == '-') { pending_minus = true; pending_plus = false; continue; }
+        int idx = -1;
+        switch (c) {
+            case 'm': idx = 0; break;
+            case 'i': idx = 1; break;
+            case 'k': idx = 2; break;
+            case 'p': idx = 3; break;
+            case 'P': idx = 4; break;
+            case 'N': idx = 5; break;
+            case 'S': idx = 6; break;
+            default:
+                weechat_printf(buffer,
+                    _("%s%s: unknown mode letter '%c' in '%s' (valid: m i k p P N S)"),
+                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                    c, spec.c_str());
+                return WEECHAT_RC_OK;
+        }
+        if (pending_plus)  { want_set[idx]   = true; any = true; pending_plus = false; }
+        if (pending_minus) { want_clear[idx] = true; any = true; pending_minus = false; }
+    }
+    if (!any)
+    {
+        weechat_printf(buffer,
+            _("%s%s: no mode letters in '%s'"),
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, spec.c_str());
+        return WEECHAT_RC_OK;
+    }
+
+    // Validate k semantics: +k needs a password; -k leaves any existing secret
+    // (we don't know it so we just clear passwordprotected).
+    std::string password;
+    if (want_set[2] /* +k */)
+    {
+        if (argc < 3 || argv[2][0] == '-')
+        {
+            weechat_printf(buffer,
+                _("%s%s: +k requires a password: /setmodes +k <password>"),
+                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            return WEECHAT_RC_OK;
+        }
+        password = argv[2];
+    }
+
+    // Find --confirm in the remaining args.
+    bool confirm = false;
+    for (int i = (want_set[2] ? 3 : 2); i < argc; ++i)
+    {
+        if (std::string_view(argv[i]) == "--confirm") { confirm = true; break; }
+    }
+
+    weechat_printf(buffer, "");
+    weechat_printf(buffer, "%sPlanned changes to %s%s%s:",
+                   weechat_prefix("network"), weechat_color("chat_server"),
+                   ptr_channel->id.data(), weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-16s%s %s%s%s",
+                   weechat_color("chat_nick"), "moderated", weechat_color("reset"),
+                   weechat_color("chat_value"),
+                   (want_set[0]   ? "on" : (want_clear[0] ? "off" : "(unchanged)")),
+                   weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-16s%s %s%s%s",
+                   weechat_color("chat_nick"), "members-only", weechat_color("reset"),
+                   weechat_color("chat_value"),
+                   (want_set[1]   ? "on" : (want_clear[1] ? "off" : "(unchanged)")),
+                   weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-16s%s %s%s%s%s",
+                   weechat_color("chat_nick"), "password", weechat_color("reset"),
+                   weechat_color("chat_value"),
+                   (want_set[2]   ? "on" : (want_clear[2] ? "off" : "(unchanged)")),
+                   want_set[2] ? fmt::format(" (secret set to {} chars)", password.size()).c_str() : "",
+                   weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-16s%s %s%s%s",
+                   weechat_color("chat_nick"), "public", weechat_color("reset"),
+                   weechat_color("chat_value"),
+                   (want_set[3]   ? "on" : (want_clear[3] ? "off" : "(unchanged)")),
+                   weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-16s%s %s%s%s",
+                   weechat_color("chat_nick"), "persistent", weechat_color("reset"),
+                   weechat_color("chat_value"),
+                   (want_set[4]   ? "on" : (want_clear[4] ? "off" : "(unchanged)")),
+                   weechat_color("reset"));
+    {
+        const char *anon = "(unchanged)";
+        if (want_set[5])   anon = "non-anonymous (anyone sees real JIDs)";
+        if (want_set[6])   anon = "semi-anonymous (mods see real JIDs)";
+        if (want_clear[5] || want_clear[6]) anon = "default (server-defined)";
+        weechat_printf(buffer, "  %s%-16s%s %s%s%s",
+                       weechat_color("chat_nick"), "anonymity", weechat_color("reset"),
+                       weechat_color("chat_value"), anon, weechat_color("reset"));
+    }
+
+    if (!confirm)
+    {
+        weechat_printf(buffer, "");
+        weechat_printf(buffer, "%s%s: re-run with %s--confirm%s to apply.",
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                       weechat_color("bold"), weechat_color("reset"));
+        return WEECHAT_RC_OK;
+    }
+
+    if (auto f = ptr_channel->get_config_form(); f.has_value())
+    {
+        weechat::channel::room_config_form form = std::move(*f);
+
+        if (want_set[0] || want_clear[0])
+            set_form_field_value(form, "muc#roomconfig_moderatedroom",
+                                 want_set[0] ? "1" : "0");
+        if (want_set[1] || want_clear[1])
+            set_form_field_value(form, "muc#roomconfig_membersonly",
+                                 want_set[1] ? "1" : "0");
+        if (want_set[2] || want_clear[2])
+        {
+            set_form_field_value(form, "muc#roomconfig_passwordprotectedroom",
+                                 want_set[2] ? "1" : "0");
+            if (want_set[2])
+                set_form_field_value(form, "muc#roomconfig_roomsecret", password);
+        }
+        if (want_set[3] || want_clear[3])
+            set_form_field_value(form, "muc#roomconfig_publicroom",
+                                 want_set[3] ? "1" : "0");
+        if (want_set[4] || want_clear[4])
+            set_form_field_value(form, "muc#roomconfig_persistentroom",
+                                 want_set[4] ? "1" : "0");
+        if (want_set[5])
+            set_form_field_value(form, "muc#roomconfig_whois", "anyone");
+        else if (want_set[6])
+            set_form_field_value(form, "muc#roomconfig_whois", "moderators");
+        else if (want_clear[5] || want_clear[6])
+            set_form_field_value(form, "muc#roomconfig_whois", "moderators");
+
+        std::string id = stanza::uuid(ptr_account->context);
+        weechat::account::muc_owner_query_info info{
+            ptr_channel->id,
+            ptr_channel->buffer,
+            weechat::account::muc_owner_kind::config_set
+        };
+        ptr_account->muc_owner_queries[id] = info;
+
+        stanza::xep0004::form submit("submit");
+        submit.add_hidden("FORM_TYPE", "http://jabber.org/protocol/muc#roomconfig");
+        for (const auto &f : form.fields)
+        {
+            stanza::xep0004::field fd(f.var);
+            if (!f.type.empty()) fd.type(f.type);
+            for (const auto &v : f.values)
+                fd.value(v);
+            submit.add_field(fd);
+        }
+
+        stanza::xep0045::xep0045owner::query q;
+        q.form(submit);
+        auto iq = stanza::iq().type("set").to(ptr_channel->id).id(id);
+        iq.muc_owner(q);
+        ptr_account->connection.send(iq.build(ptr_account->context).get());
+
+        weechat_printf(buffer, "%sSubmitting room config…", weechat_prefix("network"));
+    }
+    else
+    {
+        weechat_printf(buffer, "%s%s: no cached config form — fetching…",
+                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        send_config_form_get(ptr_account, ptr_channel);
+        weechat_printf(buffer, "%s%s: form will arrive in a moment; "
+                              "re-run the same command to apply",
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+    }
+
+    return WEECHAT_RC_OK;
+}
+
+// XEP-0045 §10.7: destroy the current MUC room. Owner-only.
+//
+// Usage: /destroy [reason] [alt-jid] [alt-password] [--confirm]
+//
+// Without --confirm the command prints the planned action and exits.
+int command__destroy([[maybe_unused]] const void *pointer,
+                     [[maybe_unused]] void *data,
+                     struct t_gui_buffer *buffer, int argc,
+                     char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "destroy");
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, _("%s%s: you are not connected to server"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    std::string reason, alt_jid, alt_password;
+    if (argc > 1)
+    {
+        std::string_view s = argv_eol[1];
+        std::vector<std::string> tokens;
+        size_t pos = 0;
+        while (pos < s.size())
+        {
+            while (pos < s.size() && std::isspace(static_cast<unsigned char>(s[pos]))) ++pos;
+            size_t start = pos;
+            while (pos < s.size() && !std::isspace(static_cast<unsigned char>(s[pos]))) ++pos;
+            if (start < pos) tokens.push_back(std::string(s.substr(start, pos - start)));
+        }
+        if (!tokens.empty()) reason = tokens[0];
+        if (tokens.size() > 1) alt_jid = tokens[1];
+        if (tokens.size() > 2) alt_password = tokens[2];
+    }
+    bool confirm = false;
+    for (int i = 1; i < argc; ++i)
+        if (std::string_view(argv[i]) == "--confirm") { confirm = true; break; }
+
+    weechat_printf(buffer, "");
+    weechat_printf(buffer, "%s%sAbout to destroy room %s%s%s:",
+                   weechat_prefix("error"),
+                   weechat_color("bold"),
+                   weechat_color("chat_server"),
+                   ptr_channel->id.data(),
+                   weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-18s%s %s%s%s",
+                   weechat_color("chat_nick"), "reason", weechat_color("reset"),
+                   weechat_color("chat_value"),
+                   reason.empty() ? "(none)" : reason.c_str(),
+                   weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-18s%s %s%s%s",
+                   weechat_color("chat_nick"), "alt room jid", weechat_color("reset"),
+                   weechat_color("chat_value"),
+                   alt_jid.empty() ? "(none)" : alt_jid.c_str(),
+                   weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-18s%s %s%s%s",
+                   weechat_color("chat_nick"), "alt room password", weechat_color("reset"),
+                   weechat_color("chat_value"),
+                   alt_password.empty() ? "(none)" : "(set)",
+                   weechat_color("reset"));
+    weechat_printf(buffer, "");
+    weechat_printf(buffer, "%s%sThis will kick all occupants and the room "
+                          "cannot be recovered.%s",
+                   weechat_color("bold"), weechat_color("red"),
+                   weechat_color("reset"));
+
+    if (!confirm)
+    {
+        weechat_printf(buffer, "%s%s: re-run with %s--confirm%s to destroy the room.",
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                       weechat_color("bold"), weechat_color("reset"));
+        return WEECHAT_RC_OK;
+    }
+
+    std::string id = stanza::uuid(ptr_account->context);
+    weechat::account::muc_owner_query_info info{
+        ptr_channel->id,
+        ptr_channel->buffer,
+        weechat::account::muc_owner_kind::destroy
+    };
+    ptr_account->muc_owner_queries[id] = info;
+
+    stanza::xep0045::xep0045owner::destroy_payload destroy;
+    if (!reason.empty())      destroy.reason(reason);
+    if (!alt_jid.empty())     destroy.jid(alt_jid);
+    if (!alt_password.empty()) destroy.password(alt_password);
+
+    stanza::xep0045::xep0045owner::query q;
+    q.destroy(destroy);
+    auto iq = stanza::iq().type("set").to(ptr_channel->id).id(id);
+    iq.muc_owner(q);
+    ptr_account->connection.send(iq.build(ptr_account->context).get());
+
+    weechat_printf(buffer, "%sDestroying room %s…",
+                   weechat_prefix("network"), ptr_channel->id.data());
+    return WEECHAT_RC_OK;
+}
+
+// XEP-0045 §10.5: change a user's affiliation in the current MUC. Owner-only.
+//
+// Usage: /affiliation set <jid> <owner|admin|member|none|outcast> [reason] [--confirm]
+//
+// Without --confirm the command prints the planned action and exits.
+int command__affiliation([[maybe_unused]] const void *pointer,
+                        [[maybe_unused]] void *data,
+                        struct t_gui_buffer *buffer, int argc,
+                        char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "affiliation");
+        return WEECHAT_RC_OK;
+    }
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, _("%s%s: you are not connected to server"),
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    if (argc < 2 || std::string_view(argv[1]) != "set")
+    {
+        weechat_printf(buffer,
+            _("%s%s: usage: /affiliation set <jid> <owner|admin|member|none|outcast> [reason] [--confirm]"),
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+    if (argc < 4)
+    {
+        weechat_printf(buffer,
+            _("%s%s: missing argument: /affiliation set <jid> <affiliation> [reason]"),
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    std::string_view target_jid = argv[2];
+    std::string_view aff = argv[3];
+
+    std::string aff_str{aff};
+    if (aff_str != "owner" && aff_str != "admin" && aff_str != "member" &&
+        aff_str != "none" && aff_str != "outcast")
+    {
+        weechat_printf(buffer,
+            _("%s%s: invalid affiliation '%s' (valid: owner admin member none outcast)"),
+            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, aff_str.c_str());
+        return WEECHAT_RC_OK;
+    }
+
+    std::string reason = argc > 4 ? argv_eol[4] : "";
+    bool confirm = false;
+    for (int i = 1; i < argc; ++i)
+        if (std::string_view(argv[i]) == "--confirm") { confirm = true; break; }
+
+    weechat_printf(buffer, "");
+    weechat_printf(buffer, "%sPlanned affiliation change in %s%s%s:",
+                   weechat_prefix("network"), weechat_color("chat_server"),
+                   ptr_channel->id.data(), weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-12s%s %s%s%s",
+                   weechat_color("chat_nick"), "target", weechat_color("reset"),
+                   weechat_color("chat_value"), std::string(target_jid).c_str(),
+                   weechat_color("reset"));
+    weechat_printf(buffer, "  %s%-12s%s %s%s%s",
+                   weechat_color("chat_nick"), "affiliation", weechat_color("reset"),
+                   weechat_color("chat_value"), aff_str.c_str(), weechat_color("reset"));
+    if (!reason.empty())
+        weechat_printf(buffer, "  %s%-12s%s %s%s%s",
+                       weechat_color("chat_nick"), "reason", weechat_color("reset"),
+                       weechat_color("chat_value"), reason.c_str(), weechat_color("reset"));
+
+    if (!confirm)
+    {
+        weechat_printf(buffer, "%s%s: re-run with %s--confirm%s to apply.",
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                       weechat_color("bold"), weechat_color("reset"));
+        return WEECHAT_RC_OK;
+    }
+
+    std::string id = stanza::uuid(ptr_account->context);
+    weechat::account::muc_owner_query_info info{
+        ptr_channel->id,
+        ptr_channel->buffer,
+        weechat::account::muc_owner_kind::aff_set
+    };
+    ptr_account->muc_owner_queries[id] = info;
+
+    stanza::xep0045admin::item_by_jid item(target_jid, aff_str);
+    if (!reason.empty())
+        item.reason(reason);
+    stanza::xep0045admin::query q;
+    q.item(item);
+
+    auto iq = stanza::iq().type("set").to(ptr_channel->id).id(id);
+    iq.muc_admin(q);
+    ptr_account->connection.send(iq.build(ptr_account->context).get());
+
+    weechat_printf(buffer, "%sSetting affiliation of %s to %s…",
+                   weechat_prefix("network"),
+                   std::string(target_jid).c_str(), aff_str.c_str());
     return WEECHAT_RC_OK;
 }
