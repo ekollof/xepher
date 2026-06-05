@@ -160,6 +160,33 @@
       margin-top: 0.8rem;
     }
 
+    /* ── community block ── */
+    .community {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.4rem 1.6rem;
+      margin-bottom: 2.5rem;
+    }
+    .community h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.6rem;
+    }
+    .community p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-bottom: 0.6rem;
+    }
+    .community p:last-child { margin-bottom: 0; }
+    .community code {
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+
     /* ── xep table ── */
     .xep-section h2 {
       font-size: 1.1rem;
@@ -223,6 +250,7 @@
 
   <div class="cta">
     <a class="btn btn-primary" href="https://github.com/ekollof/xepher">View on GitHub</a>
+    <a class="btn btn-secondary" href="xmpp:xepher@conference.hackerheaven.org?join">Join MUC</a>
     <a class="btn btn-secondary" href="https://github.com/ekollof/xepher/wiki">Documentation</a>
     <a class="btn btn-secondary" href="https://github.com/ekollof/xepher/wiki/Installation">Installation</a>
   </div>
@@ -358,6 +386,13 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
         <tr><td>XEP-0511</td><td>OpenGraph Link Previews</td><td></td></tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="community">
+    <h2>Community</h2>
+    <p>The official Xepher MUC is the place to ask questions, share tips, and follow announcements.</p>
+    <p><strong>JID:</strong> <code>xepher@conference.hackerheaven.org</code> &middot; <a href="xmpp:xepher@conference.hackerheaven.org?join">Click to join</a></p>
+    <p>From the plugin, once any account is connected: <code>/xmpp enter xepher@conference.hackerheaven.org</code></p>
   </div>
 
 </main>
