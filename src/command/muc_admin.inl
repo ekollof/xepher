@@ -2264,6 +2264,8 @@ int command__setmodes([[maybe_unused]] const void *pointer,
                                  want_set[2] ? "1" : "0");
             if (want_set[2])
                 set_form_field_value(form, "muc#roomconfig_roomsecret", password);
+            else
+                set_form_field_value(form, "muc#roomconfig_roomsecret", "");
         }
         if (want_set[3] || want_clear[3])
             set_form_field_value(form, "muc#roomconfig_publicroom",
@@ -2282,6 +2284,7 @@ int command__setmodes([[maybe_unused]] const void *pointer,
         submit.add_hidden("FORM_TYPE", "http://jabber.org/protocol/muc#roomconfig");
         for (const auto &ff : form.fields)
         {
+            if (ff.var == "FORM_TYPE") continue;
             stanza::xep0004::field fd(ff.var);
             if (!ff.type.empty()) fd.type(ff.type);
             for (const auto &v : ff.values)

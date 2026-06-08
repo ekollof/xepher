@@ -2346,12 +2346,18 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     f.type = typ;
                                 if (const char *lbl = xmpp_stanza_get_attribute(field, "label"))
                                     f.label = lbl;
-                                xmpp_stanza_t *v = xmpp_stanza_get_child_by_name(field, "value");
-                                while (v)
+                                // xmpp_stanza_get_text_ptr only works on raw text
+                                // nodes; <value> elements need get_text (see caps
+                                // hash builder ~L3486).
+                                for (xmpp_stanza_t *v = xmpp_stanza_get_children(field);
+                                     v; v = xmpp_stanza_get_next(v))
                                 {
-                                    if (const char *t = xmpp_stanza_get_text_ptr(v))
-                                        f.values.push_back(t);
-                                    v = xmpp_stanza_get_next(v);
+                                    const char *vname = xmpp_stanza_get_name(v);
+                                    if (!vname || weechat_strcasecmp(vname, "value") != 0)
+                                        continue;
+                                    std::unique_ptr<char, decltype(&free)> t(
+                                        xmpp_stanza_get_text(v), free);
+                                    f.values.push_back(t ? t.get() : "");
                                 }
                                 if (!f.var.empty())
                                     form.fields.push_back(std::move(f));
@@ -2396,14 +2402,17 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     }
                                 }
                             }
-                            // +k also sets muc#roomconfig_roomsecret
-                            if (pending->want_set[2])
+                            // +k sets roomsecret; -k clears it (Prosody and
+                            // others use roomsecret, not passwordprotectedroom).
+                            if (pending->want_set[2] || pending->want_clear[2])
                             {
                                 for (auto &fld : form.fields)
                                 {
                                     if (fld.var == "muc#roomconfig_roomsecret")
                                     {
-                                        fld.values = { pending->password };
+                                        fld.values = { pending->want_set[2]
+                                                           ? pending->password
+                                                           : std::string{} };
                                         break;
                                     }
                                 }
@@ -2417,6 +2426,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 "http://jabber.org/protocol/muc#roomconfig");
                             for (const auto &fld : form.fields)
                             {
+                                if (fld.var == "FORM_TYPE") continue;
                                 stanza::xep0004::field fd(fld.var);
                                 if (!fld.type.empty()) fd.type(fld.type);
                                 for (const auto &v : fld.values)
