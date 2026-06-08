@@ -17,4 +17,7 @@ if ! grep -q '^%wheel ALL=(ALL) NOPASSWD: ALL' /etc/sudoers 2>/dev/null; then
     echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 fi
 
+mkdir -p "${OUTPUT_DIR}"
+chown builder:wheel "${OUTPUT_DIR}"
+
 su builder -c "sh /project/packaging/scripts/build-arch-inside.sh ${VERSION} ${OUTPUT_DIR}"
