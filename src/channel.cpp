@@ -667,15 +667,14 @@ void weechat::channel::update_name(const char* name)
 
 void weechat::channel::apply_muc_info(const muc_info &incoming)
 {
-    // Disco#info may arrive multiple times (cached/refreshed). For booleans
-    // we OR the new flag in (so a partial response that omits one var still
-    // keeps the previously-seen value). For optional fields and anonymity we
-    // overwrite — the server's most recent answer is authoritative.
-    muc_info_.moderated    = muc_info_.moderated    || incoming.moderated;
-    muc_info_.members_only = muc_info_.members_only || incoming.members_only;
-    muc_info_.persistent   = muc_info_.persistent   || incoming.persistent;
-    muc_info_.password     = muc_info_.password     || incoming.password;
-    muc_info_.hidden       = muc_info_.hidden       || incoming.hidden;
+    // Disco#info refresh is authoritative for mode flags (XEP-0045 §6.4 lists
+    // both positive and negative muc_* feature vars). Optional metadata and
+    // anonymity are overwritten when the server supplies them.
+    muc_info_.moderated    = incoming.moderated;
+    muc_info_.members_only = incoming.members_only;
+    muc_info_.persistent   = incoming.persistent;
+    muc_info_.password     = incoming.password;
+    muc_info_.hidden       = incoming.hidden;
 
     if (incoming.anon != muc_info::anonymity::unknown)
         muc_info_.anon = incoming.anon;
@@ -719,6 +718,23 @@ void weechat::channel::store_config_form(room_config_form form)
 {
     form.fetched_at = ::time(nullptr);
     last_config_form = std::move(form);
+}
+
+void weechat::channel::prepare_room_config_submit(room_config_form &form)
+{
+    for (auto &f : form.fields)
+    {
+        if (f.type == "boolean" && f.values.empty())
+            f.values = { "0" };
+    }
+}
+
+bool weechat::channel::include_room_config_field_in_submit(
+    const room_config_field &f)
+{
+    if (f.var.empty() || f.var == "FORM_TYPE" || f.type == "fixed")
+        return false;
+    return !f.values.empty();
 }
 
 std::optional<weechat::channel::member*> weechat::channel::add_member(const char *id, const char *client,

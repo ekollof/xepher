@@ -1825,6 +1825,25 @@ int command__modes(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
+    // XEP-0045 §6.4/§6.5: refresh disco#info so mode flags and muc#roominfo
+    // fields reflect the server's current state (also picks up /setmodes changes).
+    if (ptr_account->connected())
+    {
+        ptr_account->muc_modes_fetched.erase(ptr_channel->id);
+        std::string modes_id = stanza::uuid(ptr_account->context);
+        ptr_account->muc_modes_queries[modes_id] = ptr_channel->id;
+        ptr_account->muc_modes_fetched.insert(ptr_channel->id);
+        ptr_account->connection.send(
+            stanza::iq()
+                .type("get")
+                .to(ptr_channel->id)
+                .id(modes_id)
+                .xep0030()
+                .query()
+                .build(ptr_account->context)
+                .get());
+    }
+
     const auto &info = ptr_channel->get_muc_info();
     const char *prefix = weechat_prefix("network");
     const char *key_clr = weechat_color("chat_nick");
@@ -2280,11 +2299,14 @@ int command__setmodes([[maybe_unused]] const void *pointer,
         else if (want_clear[5] || want_clear[6])
             set_form_field_value(form, "muc#roomconfig_whois", "moderators");
 
+        weechat::channel::prepare_room_config_submit(form);
+
         stanza::xep0004::form submit("submit");
         submit.add_hidden("FORM_TYPE", "http://jabber.org/protocol/muc#roomconfig");
         for (const auto &ff : form.fields)
         {
-            if (ff.var == "FORM_TYPE") continue;
+            if (!weechat::channel::include_room_config_field_in_submit(ff))
+                continue;
             stanza::xep0004::field fd(ff.var);
             if (!ff.type.empty()) fd.type(ff.type);
             for (const auto &v : ff.values)

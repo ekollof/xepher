@@ -2420,13 +2420,16 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                             ch.store_config_form(form);  // cache the mutated form
 
+                            weechat::channel::prepare_room_config_submit(form);
+
                             // Build the submit.
                             stanza::xep0004::form submit("submit");
                             submit.add_hidden("FORM_TYPE",
                                 "http://jabber.org/protocol/muc#roomconfig");
                             for (const auto &fld : form.fields)
                             {
-                                if (fld.var == "FORM_TYPE") continue;
+                                if (!weechat::channel::include_room_config_field_in_submit(fld))
+                                    continue;
                                 stanza::xep0004::field fd(fld.var);
                                 if (!fld.type.empty()) fd.type(fld.type);
                                 for (const auto &v : fld.values)
@@ -3222,9 +3225,24 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     while (field)
                     {
                         const char *var = xmpp_stanza_get_attribute(field, "var");
-                        xmpp_stanza_t *val = xmpp_stanza_get_child_by_name(field, "value");
-                        const char *txt = val ? xmpp_stanza_get_text_ptr(val) : nullptr;
-                        if (var && txt && txt[0])
+                        if (!var)
+                        {
+                            field = xmpp_stanza_get_next(field);
+                            continue;
+                        }
+                        std::string txt;
+                        for (xmpp_stanza_t *vnode = xmpp_stanza_get_children(field);
+                             vnode; vnode = xmpp_stanza_get_next(vnode))
+                        {
+                            const char *vname = xmpp_stanza_get_name(vnode);
+                            if (!vname || weechat_strcasecmp(vname, "value") != 0)
+                                continue;
+                            std::unique_ptr<char, decltype(&free)> vtext(
+                                xmpp_stanza_get_text(vnode), free);
+                            txt = vtext ? vtext.get() : "";
+                            break;
+                        }
+                        if (!txt.empty())
                         {
                             if (std::string_view(var) == "muc#roominfo_description")
                                 desc_s = txt;
@@ -3372,18 +3390,25 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 {
                     weechat::channel::muc_info info;
 
-                    for (const auto &var : features)
-                    {
-                        if (var == "muc_moderated")         info.moderated    = true;
-                        else if (var == "muc_membersonly")  info.members_only = true;
-                        else if (var == "muc_persistent")   info.persistent   = true;
-                        else if (var == "muc_passwordprotected") info.password = true;
-                        else if (var == "muc_hidden")       info.hidden       = true;
-                        else if (var == "muc_nonanonymous") info.anon =
-                            weechat::channel::muc_info::anonymity::nonanonymous;
-                        else if (var == "muc_semianonymous") info.anon =
-                            weechat::channel::muc_info::anonymity::semianonymous;
-                    }
+                    // XEP-0045 §6.4: rooms advertise positive or negative
+                    // muc_* feature vars; the refresh is authoritative.
+                    auto has_feat = [&](std::string_view f) {
+                        return std::ranges::find(features, f) != features.end();
+                    };
+                    info.moderated    = has_feat("muc_moderated");
+                    info.members_only = has_feat("muc_membersonly");
+                    info.persistent   = has_feat("muc_persistent");
+                    info.password     = has_feat("muc_passwordprotected");
+                    info.hidden       = has_feat("muc_hidden");
+                    if (has_feat("muc_unmoderated"))    info.moderated    = false;
+                    if (has_feat("muc_open"))           info.members_only = false;
+                    if (has_feat("muc_temporary"))      info.persistent   = false;
+                    if (has_feat("muc_unsecured"))      info.password     = false;
+                    if (has_feat("muc_public"))         info.hidden       = false;
+                    if (has_feat("muc_nonanonymous"))   info.anon =
+                        weechat::channel::muc_info::anonymity::nonanonymous;
+                    else if (has_feat("muc_semianonymous")) info.anon =
+                        weechat::channel::muc_info::anonymity::semianonymous;
 
                     // XEP-0045 §6.5: muc#roominfo FORM_TYPE (jabber:x:data)
                     xmpp_stanza_t *xdata = xmpp_stanza_get_child_by_name_and_ns(
@@ -3395,9 +3420,21 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                              field = xmpp_stanza_get_next(field))
                         {
                             const char *var = xmpp_stanza_get_attribute(field, "var");
-                            xmpp_stanza_t *val = xmpp_stanza_get_child_by_name(field, "value");
-                            const char *txt = val ? xmpp_stanza_get_text_ptr(val) : nullptr;
-                            if (!var || !txt || !txt[0])
+                            if (!var)
+                                continue;
+                            std::string txt;
+                            for (xmpp_stanza_t *vnode = xmpp_stanza_get_children(field);
+                                 vnode; vnode = xmpp_stanza_get_next(vnode))
+                            {
+                                const char *vname = xmpp_stanza_get_name(vnode);
+                                if (!vname || weechat_strcasecmp(vname, "value") != 0)
+                                    continue;
+                                std::unique_ptr<char, decltype(&free)> vtext(
+                                    xmpp_stanza_get_text(vnode), free);
+                                txt = vtext ? vtext.get() : "";
+                                break;
+                            }
+                            if (txt.empty())
                                 continue;
                             std::string_view v(var);
                             if      (v == "muc#roominfo_description") info.description = txt;
@@ -3412,7 +3449,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             else if (v == "muc#roomconfig_maxusers")
                             {
                                 // XEP-0045 §16.5.3: value is "none" or a number.
-                                if (std::string_view(txt) != "none")
+                                if (txt != "none")
                                 {
                                     try { info.max_users = std::stoi(txt); }
                                     catch (...) {}
@@ -3421,8 +3458,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             else if (v == "muc#roominfo_subjectmod")
                             {
                                 info.subject_modifiable =
-                                    !(std::string_view(txt) == "0" ||
-                                      std::string_view(txt) == "false");
+                                    !(txt == "0" || txt == "false");
                             }
                         }
                     }

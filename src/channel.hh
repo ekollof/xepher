@@ -320,6 +320,13 @@ namespace weechat
         // matches this MUC channel.
         void apply_muc_info(const muc_info &incoming);
 
+        // XEP-0004 §3.4/§3.5: prepare a muc#roomconfig form for submit.
+        // Boolean fields without a parsed value default to "0".
+        static void prepare_room_config_submit(room_config_form &form);
+        // Omit fields with no values so partial submits preserve server state.
+        [[nodiscard]] static bool include_room_config_field_in_submit(
+            const room_config_field &f);
+
         // Render muc_info_ to the buffer's "modes" property (IRC-style).
         // No-op for non-MUC channels.
         void update_modes();
