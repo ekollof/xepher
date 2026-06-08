@@ -32,6 +32,8 @@
 #include "xmpp/iq_omemo_pubsub.hh"
 #include "xmpp/iq_upload.hh"
 #include "xmpp/iq_mam.hh"
+#include "xmpp/iq_disco.hh"
+#include "xmpp/iq_caps.hh"
 #include "xmpp/chat_state.hh"
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_body.hh"
@@ -1223,6 +1225,51 @@ TEST_CASE("message_reactions and reply helpers")
     xmpp_stanza_release(rxn);
     xmpp_stanza_release(rxn_clear);
     xmpp_stanza_release(reply);
+}
+
+TEST_CASE("iq_disco and iq_caps helpers")
+{
+    CHECK(xmpp::is_adhoc_commands_disco_node("http://jabber.org/protocol/commands"));
+    CHECK_FALSE(xmpp::is_adhoc_commands_disco_node("other"));
+
+    CHECK(xmpp::is_channel_search_item_open("true"));
+    CHECK(xmpp::is_channel_search_item_open(""));
+    CHECK_FALSE(xmpp::is_channel_search_item_open("false"));
+
+    CHECK(xmpp::normalize_channel_search_service_type("xep-0045") == "muc");
+    CHECK(xmpp::normalize_channel_search_service_type("xep-0369") == "mix");
+    CHECK(xmpp::normalize_channel_search_service_type("custom") == "custom");
+
+    CHECK(xmpp::join_bracketed_meta({"3 users", "open"}) == "[3 users, open]");
+    CHECK(xmpp::join_bracketed_meta({}).empty());
+
+    CHECK(xmpp::caps_requested_node_ok("", "hash"));
+    CHECK(xmpp::caps_requested_node_ok("http://weechat.org", "hash"));
+    CHECK(xmpp::caps_requested_node_ok("http://weechat.org#abc", "abc"));
+    CHECK_FALSE(xmpp::caps_requested_node_ok("http://weechat.org#abc", "def"));
+
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *query = xmpp_stanza_new_from_string(env.ctx,
+        "<query xmlns='http://jabber.org/protocol/disco#info'>"
+        "<identity category='client' type='pc'/>"
+        "<feature var='feature1'/>"
+        "<feature var='feature2'/>"
+        "</query>");
+    REQUIRE(query != nullptr);
+
+    const auto features = xmpp::disco_feature_vars(xmpp::StanzaView(query));
+    REQUIRE(features.size() == 2);
+    CHECK(features[0] == "feature1");
+    CHECK(features[1] == "feature2");
+
+    const std::string s = xmpp::build_caps_verification_string(
+        xmpp::StanzaView(query), features);
+    CHECK(s == "client/pc//<feature1<feature2<");
+    CHECK_FALSE(xmpp::caps_sha1_base64(s).empty());
+
+    xmpp_stanza_release(query);
 }
 
 TEST_CASE("iq_mam helpers")

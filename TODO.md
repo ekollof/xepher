@@ -249,7 +249,7 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] Pubsub / PEP (avatars, microblog, OMEMO bundles) — `iq_avatar_handler`, `iq_pubsub_feed_handler`, `iq_omemo_pubsub_handler`; `avatar::apply_pep_data_b64`
 - [x] HTTP upload slot responses — `iq_upload`, `iq_upload_handler` (slot result + error paths)
 - [x] MAM fin / RSM — `iq_mam`, `iq_mam_handler` (fin + error paths)
-- [ ] Search / disco / caps
+- [x] Search / disco / caps — `iq_disco`, `iq_caps`, `iq_disco_handler`
 - [ ] vCard / bookmarks
 
 **Shared infrastructure for Wave 2:**

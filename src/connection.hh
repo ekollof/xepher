@@ -80,6 +80,11 @@ namespace weechat {
         bool handle_upload_slot_iq_error(xmpp_stanza_t *stanza);
         void handle_mam_query_iq_error(xmpp_stanza_t *stanza);
         bool handle_mam_fin_iq_event(xmpp_stanza_t *stanza);
+        void handle_pubsub_mam_disco_iq_error(xmpp_stanza_t *stanza);
+        bool handle_disco_items_iq_event(xmpp_stanza_t *stanza);
+        void handle_adhoc_command_iq_event(xmpp_stanza_t *stanza);
+        bool handle_channel_search_iq_event(xmpp_stanza_t *stanza);
+        bool handle_disco_info_iq_event(xmpp_stanza_t *stanza);
         bool iq_handler(xmpp_stanza_t *stanza, bool top_level = true);
         bool sm_handler(xmpp_stanza_t *stanza);
 
