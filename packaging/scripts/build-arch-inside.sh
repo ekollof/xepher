@@ -7,6 +7,8 @@
 
 set -e
 
+. /project/packaging/scripts/prepare-source-tree.sh
+
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
 
@@ -21,7 +23,7 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 
 # Copy source (submodules already present) into a versioned directory and
 # create a local tarball for makepkg to use as the source.
-cp -a /project/. "${BUILD_DIR}/xepher-${VERSION}"
+prepare_source_tree "${BUILD_DIR}/xepher-${VERSION}"
 
 # Remove .git dirs to avoid makepkg VCS-source confusion
 find "${BUILD_DIR}/xepher-${VERSION}" -name '.git' -exec rm -rf {} + 2>/dev/null || true
@@ -62,6 +64,7 @@ sha256sums=('SKIP')
 
 build() {
     cd "\${srcdir}/xepher-\${pkgver}"
+    make clean
     make weechat-xmpp
 }
 

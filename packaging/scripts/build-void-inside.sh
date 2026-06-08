@@ -7,6 +7,8 @@
 
 set -e
 
+. /project/packaging/scripts/prepare-source-tree.sh
+
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
 
@@ -35,8 +37,8 @@ xbps-install -y \
 BUILD_DIR=$(mktemp -d)
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
-# Copy source (submodules already present in /project)
-cp -a /project/. "${BUILD_DIR}/src"
+# Copy source and strip host build artifacts before compiling in-container.
+prepare_source_tree "${BUILD_DIR}/src"
 
 # Build xmpp.so
 cd "${BUILD_DIR}/src"

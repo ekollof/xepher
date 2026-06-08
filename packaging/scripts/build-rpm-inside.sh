@@ -6,6 +6,8 @@
 
 set -e
 
+. /project/packaging/scripts/prepare-source-tree.sh
+
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
 
@@ -36,7 +38,7 @@ rpmdev-setuptree
 BUILD_DIR=$(mktemp -d)
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
-cp -a /project/. "${BUILD_DIR}/xepher-${VERSION}"
+prepare_source_tree "${BUILD_DIR}/xepher-${VERSION}"
 
 # Create source tarball from the copy (exclude .git to keep it clean)
 cd "${BUILD_DIR}"

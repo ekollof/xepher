@@ -7,6 +7,8 @@
 
 set -e
 
+. /project/packaging/scripts/prepare-source-tree.sh
+
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
 
@@ -35,7 +37,7 @@ BUILD_DIR=$(mktemp -d)
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
 SRC_DIR="${BUILD_DIR}/xepher-${VERSION}"
-cp -a /project/. "${SRC_DIR}"
+prepare_source_tree "${SRC_DIR}"
 
 # Place the debian/ packaging dir at the source root (from /project, read-only mount)
 cp -r /project/packaging/debian "${SRC_DIR}/debian"

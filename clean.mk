@@ -7,7 +7,7 @@ tidy:
 
 .PHONY: clean
 clean: tidy
-	$(RM) -f $(OBJS) $(COVS) \
+	$(RM) -f xmpp.so $(OBJS) $(COVS) \
 		sexp/parser.tab.cc sexp/parser.tab.hh \
 		sexp/location.hh sexp/position.hh \
 		sexp/stack.hh sexp/parser.output sexp/parser.o \

@@ -7,6 +7,8 @@
 
 set -e
 
+. /project/packaging/scripts/prepare-source-tree.sh
+
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
 
@@ -47,11 +49,9 @@ cp /home/builder/.abuild/*.pub /etc/apk/keys/
 BUILD_DIR=$(mktemp -d)
 chown builder:abuild "${BUILD_DIR}"
 
-# Copy source into a versioned directory; remove pre-built artifacts so the
-# container compiles from scratch (host xmpp.so links glibc, not musl).
-cp -a /project/. "${BUILD_DIR}/xepher-${VERSION}"
+# Copy source and strip host build artifacts (host xmpp.so is glibc, not musl).
+prepare_source_tree "${BUILD_DIR}/xepher-${VERSION}"
 find "${BUILD_DIR}/xepher-${VERSION}" -name '.git' -exec rm -rf {} + 2>/dev/null || true
-rm -f "${BUILD_DIR}/xepher-${VERSION}/xmpp.so" "${BUILD_DIR}/xepher-${VERSION}"/*.o
 chown -R builder:abuild "${BUILD_DIR}"
 
 # Create local source tarball
@@ -113,6 +113,7 @@ sha256sums="${SHA256}  xepher-${VERSION}.tar.gz"
 
 build() {
     cd "\${srcdir}/xepher-\${pkgver}"
+    make clean
     make weechat-xmpp
 }
 
