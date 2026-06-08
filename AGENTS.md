@@ -265,6 +265,24 @@ which sets up all necessary includes and then `#include`s the `.inl`.**
 - **src/omemo/api.cpp** — Full OMEMO implementation (replaces the old `src/omemo.cpp`)
 - **src/pgp.cpp** — PGP encryption support
 
+### Port abstraction (Strophe + WeeChat)
+
+Thin ports isolate inbound libstrophe reads and WeeChat output from domain logic.
+**New code must use these; migrate old code only when touching that area.**
+
+| Port | Header | Role |
+|------|--------|------|
+| `xmpp::StanzaView` | `src/xmpp/stanza_view.hh` | Non-owning read-only inbound stanza facade (`from()`, `child()`, `text()`, child range) |
+| `xmpp::handle_*_iq` | `src/xmpp/iq_handlers.hh` | Pure IQ reply builders (version/time proof); pattern for future handler extraction |
+| `weechat::UiPort` | `src/weechat/ui_port.hh` | Abstract buffer output (`printf_error`, `printf_network`, …); `UiPort::for_buffer()` |
+| `weechat::RuntimePort` | `src/weechat/runtime_port.hh` | Host queries (`version_string`, `color`); `RuntimePort::default_runtime()` in production |
+
+**C-ABI boundaries (do not try to eliminate):** WeeChat hook/callback signatures; libstrophe
+`xmpp_handler` registration. Adapters at the edge wrap raw pointers into ports.
+
+**Tests:** `tests/weechat_stub.hh` provides `CapturingUiPort` and `StubRuntimePort`.
+Handler-split migration tracker: `TODO.md` § Port Abstraction → Wave 2.
+
 ### Channel Types
 
 Two channel types affect behavior throughout:

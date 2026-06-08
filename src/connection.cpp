@@ -38,6 +38,9 @@
 #include "user.hh"
 #include "channel.hh"
 #include "connection.hh"
+#include "xmpp/stanza_view.hh"
+#include "xmpp/iq_handlers.hh"
+#include "weechat/runtime_port.hh"
 #include "omemo.hh"
 #include "pgp.hh"
 #include "util.hh"
@@ -84,20 +87,11 @@ void weechat::connection::send_threadsafe(xmpp_stanza_t *stanza)
 
 bool weechat::connection::version_handler(xmpp_stanza_t *stanza)
 {
-    const char *weechat_name = "weechat";
-    std::unique_ptr<char, decltype(&free)> weechat_version(weechat_info_get("version", nullptr), free);
+    const ::xmpp::StanzaView view(stanza);
+    XDEBUG("Received version request from {}", view.from().value_or(""));
 
-    XDEBUG("Received version request from {}", xmpp_stanza_get_from(stanza));
-
-    auto reply = stanza::iq()
-        .type("result")
-        .to(xmpp_stanza_get_from(stanza))
-        .from(account.jid().data())
-        .id(xmpp_stanza_get_id(stanza))
-        .version_query(stanza::xep0092::query()
-            .name(weechat_name)
-            .version(weechat_version.get()));
-
+    auto reply = ::xmpp::handle_version_iq(
+        view, weechat::RuntimePort::default_runtime(), account.jid().data());
     account.connection.send(reply.build(account.context).get());
 
     return true;
@@ -105,29 +99,10 @@ bool weechat::connection::version_handler(xmpp_stanza_t *stanza)
 
 bool weechat::connection::time_handler(xmpp_stanza_t *stanza)
 {
-    XDEBUG("Received time request from {}", xmpp_stanza_get_from(stanza));
+    const ::xmpp::StanzaView view(stanza);
+    XDEBUG("Received time request from {}", view.from().value_or(""));
 
-    time_t now = time(nullptr);
-    struct tm tm_utc {};
-    struct tm tm_local {};
-    gmtime_r(&now, &tm_utc);
-    localtime_r(&now, &tm_local);
-
-    std::string utc_str = fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", tm_utc);
-    long tz_offset = tm_local.tm_gmtoff;
-    int tz_hours = tz_offset / 3600;
-    int tz_mins = abs((tz_offset % 3600) / 60);
-    std::string tzo_str = fmt::format("{:+03d}:{:02d}", tz_hours, tz_mins);
-
-    auto reply = stanza::iq()
-        .type("result")
-        .to(xmpp_stanza_get_from(stanza))
-        .from(account.jid().data())
-        .id(xmpp_stanza_get_id(stanza))
-        .time_element(stanza::xep0202::time()
-            .utc(utc_str)
-            .tzo(tzo_str));
-
+    auto reply = ::xmpp::handle_time_iq(view, account.jid().data());
     account.connection.send(reply.build(account.context).get());
 
     return true;

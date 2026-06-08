@@ -24,6 +24,10 @@
 #include "../src/color.hh"
 #include "../src/strophe.hh"
 #include "../src/xmpp/node.hh"
+#include "../src/xmpp/stanza_view.hh"
+#include "../src/xmpp/iq_handlers.hh"
+#include "../src/weechat/runtime_port.hh"
+#include "weechat_stub.hh"
 
 // ── stdlib ────────────────────────────────────────────────────────────────────
 #include <cstring>
@@ -191,6 +195,32 @@ TEST_CASE("stanza_element_text reads element body")
     CHECK(stanza_element_text(el) == "hello world");
     CHECK(stanza_element_text(nullptr).empty());
     xmpp_stanza_release(el);
+}
+
+TEST_CASE("StanzaView reads inbound attributes and children")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *root = xmpp_stanza_new_from_string(
+        env.ctx,
+        "<iq type='get' id='q1' from='bob@example.org'><query xmlns='jabber:iq:version'/></iq>");
+    REQUIRE(root != nullptr);
+
+    const xmpp::StanzaView view(root);
+    CHECK(view.name() == "iq");
+    REQUIRE(view.type().has_value());
+    CHECK(*view.type() == "get");
+    REQUIRE(view.id().has_value());
+    CHECK(*view.id() == "q1");
+    REQUIRE(view.from().has_value());
+    CHECK(*view.from() == "bob@example.org");
+
+    const xmpp::StanzaView query = view.child("query", "jabber:iq:version");
+    CHECK(query.valid());
+    CHECK(query.name() == "query");
+
+    xmpp_stanza_release(root);
 }
 
 TEST_CASE("message__htmldecode")
@@ -422,6 +452,51 @@ static std::string stanza_to_xml(xmpp_ctx_t *ctx, xmpp_stanza_t *raw)
     std::string result(buf ? buf : "");
     if (buf) xmpp_free(ctx, buf);
     return result;
+}
+
+TEST_CASE("handle_version_iq builds XEP-0092 result")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *req = xmpp_stanza_new_from_string(
+        env.ctx, "<iq type='get' id='v1' from='bob@example.org'/>");
+    REQUIRE(req != nullptr);
+
+    test_weechat::StubRuntimePort runtime("4.9.0-test");
+    auto reply = xmpp::handle_version_iq(
+        xmpp::StanzaView(req), runtime, "alice@example.org");
+    auto built = reply.build(env.ctx);
+    const std::string xml = stanza_to_xml(env.ctx, built.get());
+
+    CHECK(xml.find("type=\"result\"") != std::string::npos);
+    CHECK(xml.find("to=\"bob@example.org\"") != std::string::npos);
+    CHECK(xml.find("from=\"alice@example.org\"") != std::string::npos);
+    CHECK(xml.find("4.9.0-test") != std::string::npos);
+    CHECK(xml.find("weechat") != std::string::npos);
+
+    xmpp_stanza_release(req);
+}
+
+TEST_CASE("handle_time_iq builds XEP-0202 result")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *req = xmpp_stanza_new_from_string(
+        env.ctx, "<iq type='get' id='t1' from='bob@example.org'/>");
+    REQUIRE(req != nullptr);
+
+    constexpr std::time_t now = 946684800;
+    auto reply = xmpp::handle_time_iq(
+        xmpp::StanzaView(req), "alice@example.org", now);
+    auto built = reply.build(env.ctx);
+    const std::string xml = stanza_to_xml(env.ctx, built.get());
+
+    CHECK(xml.find("type=\"result\"") != std::string::npos);
+    CHECK(xml.find("2000-01-01T00:00:00Z") != std::string::npos);
+
+    xmpp_stanza_release(req);
 }
 
 TEST_CASE("MAM PM IQ stanza builder: structure and attributes")

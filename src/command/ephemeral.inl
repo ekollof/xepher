@@ -18,26 +18,27 @@ int command__ephemeral(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(ptr_account->buffer,
-                       "%s%s: /ephemeral can only be used in a chat or MUC buffer",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(
+            "{}: /ephemeral can only be used in a chat or MUC buffer",
+            WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%s%s: you are not connected to server",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(
+            "{}: you are not connected to server", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     if (argc < 3)
     {
-        weechat_printf(buffer,
-                       "%s%s: /ephemeral <seconds> <message>",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(
+            "{}: /ephemeral <seconds> <message>", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -45,8 +46,9 @@ int command__ephemeral(const void *pointer, void *data,
     const auto timer_parsed = parse_int64(argv[1]);
     if (!timer_parsed || *timer_parsed <= 0)
     {
-        weechat_printf(buffer, "%s%s: /ephemeral: seconds must be a positive integer",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(
+            "{}: /ephemeral: seconds must be a positive integer",
+            WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
     const long timer_secs = *timer_parsed;

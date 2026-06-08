@@ -43,6 +43,7 @@
 #include "gcrypt.hh"
 #include "omemo.hh"
 #include "plugin.hh"
+#include "weechat/ui_port.hh"
 #include "strophe.hh"
 #include "xmpp/node.hh"
 #include "xmpp/ns.hh"

@@ -201,3 +201,62 @@ VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
 **When adding future XEP support or modifying**: Follow AGENTS checklist exactly (fetch spec, verify, commit .txt with code, update DOAP/README, add row here, test, commit, push).
 
 *This section created as Phase 0 of the audit. Next high-priority work (emission migration) requires user approval of specific batch before surgical edits.*
+
+---
+
+## Port Abstraction (Strophe + WeeChat)
+
+**Goal:** Isolate libstrophe inbound reads and WeeChat UI calls behind thin ports so domain
+logic is testable and handlers/commands are less noisy. Incremental only — no big-bang rewrite.
+See AGENTS.md § Port abstraction for API reference.
+
+### Phase 0 — Foundation + proof (complete)
+- [x] `xmpp::StanzaView` (`src/xmpp/stanza_view.{hh,cpp}`)
+- [x] `weechat::UiPort` + `weechat::RuntimePort` (`src/weechat/`)
+- [x] Pure XEP-0092/0202 handlers (`src/xmpp/iq_handlers.{hh,cpp}`); thin adapters in `connection.cpp`
+- [x] OMEMO `print_info` / `print_error` → `UiPort`
+- [x] `/ephemeral` command errors → `UiPort`
+- [x] `tests/weechat_stub.hh` (`CapturingUiPort`, `StubRuntimePort`)
+- [x] Doctests for `StanzaView`, `handle_version_iq`, `handle_time_iq`
+
+### Wave 1 — Low-risk migration (pick up anytime)
+- [ ] Command argv feedback: `encryption.inl`, `archive.inl` → `UiPort`
+- [ ] `encryption.inl` device-id parse errors → `UiPort` (partially done via parse helpers)
+- [ ] Replace ad-hoc `xmpp_stanza_get_from/id` in small handler slices with `StanzaView`
+- [ ] `pgp.cpp` user-facing errors → `UiPort`
+
+### Wave 2 — Handler split (multi-PR; largest long-term win)
+
+Split inbound handlers into **parse → domain struct → render** so protocol logic can be
+unit-tested without WeeChat. One PR per slice; keep behavior identical.
+
+**`message_handler.inl` slices (in suggested order):**
+- [ ] Receipts / markers (XEP-0184, 0333) — parse with `StanzaView`, render via `UiPort`
+- [ ] Chat states / typing (XEP-0085, 0308)
+- [ ] Carbons + MAM replay dispatch (XEP-0280, 0313)
+- [ ] Body + styling (XEP-0393/0394) + SIMS/SFS display
+- [ ] OMEMO inbound branch (delegate crypto, isolate `weechat_printf` / hdata line edits)
+- [ ] Remaining branches (errors, invites, ephemeral, etc.)
+
+**`iq_handler.inl` slices:**
+- [ ] Version/time (done — see `iq_handlers.cpp`)
+- [ ] Ping / error IQ replies
+- [ ] Pubsub / PEP (avatars, microblog, OMEMO bundles)
+- [ ] HTTP upload slot responses
+- [ ] MAM fin / RSM
+- [ ] Search / disco / caps
+- [ ] vCard / bookmarks
+
+**Shared infrastructure for Wave 2:**
+- [ ] `UiAction` / `RenderEvent` sum type (print, nicklist, line-update-by-tag)
+- [ ] `LineStorePort` — wrap `weechat_hdata_*` from `buffer.cpp` / `history.inl`
+- [ ] `BufferPort` (v2) — create/search/nicklist behind interface
+
+### Wave 3 — Outbound cleanup
+- [ ] Replace hybrid `stanza_node` + `xmpp_stanza_add_child` in `account.cpp`, `muc_admin.inl`, `channel.cpp` RDF path
+
+### Wave 4 — Test infrastructure
+- [ ] Extend `tests/weechat_stub.hh` for handler slice tests
+- [ ] `NullUiPort` for no-output protocol tests
+
+**Verification:** `CXX="ccache c++" make -j$(nproc)` after each slice; manual WeeChat retest for touched features; no `/plugin reload`.

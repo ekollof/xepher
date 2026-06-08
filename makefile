@@ -174,6 +174,8 @@ SRCS=src/plugin.cpp \
 	 src/pgp.cpp \
 	 src/user.cpp \
 	 src/util.cpp \
+	 src/weechat/ui_port.cpp \
+	 src/weechat/runtime_port.cpp \
 	 src/config/breadcrumb.cpp \
 	 src/config/file.cpp \
 	 src/config/section.cpp \
@@ -183,6 +185,8 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/presence.cpp \
 	 src/xmpp/iq.cpp \
 	 src/xmpp/node.cpp \
+	 src/xmpp/stanza_view.cpp \
+	 src/xmpp/iq_handlers.cpp \
 	 src/xmpp/atom.cpp \
 	 src/xmpp/xhtml.cpp \
 	 src/xmpp/embed.cpp \

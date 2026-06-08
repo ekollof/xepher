@@ -152,12 +152,12 @@ using c_string = std::unique_ptr<char, decltype(&free)>;
 
 void print_info(t_gui_buffer *buffer, std::string_view message)
 {
-    weechat_printf(buffer, "%s%s", weechat_prefix("network"), std::string {message}.c_str());
+    weechat::UiPort::for_buffer(buffer)->printf_network(message);
 }
 
 void print_error(t_gui_buffer *buffer, std::string_view message)
 {
-    weechat_printf(buffer, "%s%s", weechat_prefix("error"), std::string {message}.c_str());
+    weechat::UiPort::for_buffer(buffer)->printf_error(message);
 }
 
 [[nodiscard]] auto split(std::string_view input, char separator) -> std::vector<std::string>
