@@ -36,6 +36,7 @@
 #include "xmpp/iq_caps.hh"
 #include "xmpp/iq_vcard.hh"
 #include "xmpp/iq_bookmarks.hh"
+#include "weechat/render_event.hh"
 #include "xmpp/chat_state.hh"
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_body.hh"
@@ -1227,6 +1228,25 @@ TEST_CASE("message_reactions and reply helpers")
     xmpp_stanza_release(rxn);
     xmpp_stanza_release(rxn_clear);
     xmpp_stanza_release(reply);
+}
+
+TEST_CASE("render_event ack builders")
+{
+    const auto receipt = weechat::build_incoming_receipt_render_event("msg-1", false);
+    REQUIRE(receipt.size() == 1);
+    const auto *glyph = std::get_if<weechat::UpdateLineGlyphByTagAction>(&receipt.front());
+    REQUIRE(glyph != nullptr);
+    CHECK(glyph->acked_id == "msg-1");
+    CHECK(glyph->glyph == weechat::k_glyph_delivered);
+
+    const auto displayed = weechat::build_incoming_displayed_render_event("msg-2", false);
+    REQUIRE(displayed.size() == 1);
+    const auto *seen = std::get_if<weechat::UpdateLineGlyphByTagAction>(&displayed.front());
+    REQUIRE(seen != nullptr);
+    CHECK(seen->glyph == weechat::k_glyph_seen);
+
+    CHECK(weechat::build_incoming_receipt_render_event("msg-1", true).empty());
+    CHECK(weechat::build_incoming_displayed_render_event("", false).empty());
 }
 
 TEST_CASE("iq_vcard and iq_bookmarks helpers")

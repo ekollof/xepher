@@ -479,16 +479,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 if (auto ack = ::xmpp::parse_incoming_receipt(view))
                 {
                     const std::string bare_s = ::jid(nullptr, ack->from.c_str()).bare;
-                    weechat::channel *ch = nullptr;
                     if (auto ch_it = account.channels.find(bare_s); ch_it != account.channels.end())
                     {
-                        auto& [_, c] = *ch_it;
-                        ch = &c;
-                    }
-                    if (ch && ch->type != weechat::channel::chat_type::MUC)
-                    {
-                        (void)weechat::line_store_update_line_glyph_by_tag(
-                            ch->buffer, ack->acked_id, weechat::k_glyph_delivered);
+                        auto& [_, ch] = *ch_it;
+                        const bool muc_channel =
+                            ch.type == weechat::channel::chat_type::MUC;
+                        const auto event = weechat::build_incoming_receipt_render_event(
+                            ack->acked_id, muc_channel);
+                        weechat::apply_render_event(ch.buffer, event);
                     }
                 }
                 return 1;
@@ -498,16 +496,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 if (auto ack = ::xmpp::parse_incoming_displayed(view))
                 {
                     const std::string bare_s = ::jid(nullptr, ack->from.c_str()).bare;
-                    weechat::channel *ch = nullptr;
                     if (auto ch_it = account.channels.find(bare_s); ch_it != account.channels.end())
                     {
-                        auto& [_, c] = *ch_it;
-                        ch = &c;
-                    }
-                    if (ch && ch->type != weechat::channel::chat_type::MUC)
-                    {
-                        (void)weechat::line_store_update_line_glyph_by_tag(
-                            ch->buffer, ack->acked_id, weechat::k_glyph_seen);
+                        auto& [_, ch] = *ch_it;
+                        const bool muc_channel =
+                            ch.type == weechat::channel::chat_type::MUC;
+                        const auto event = weechat::build_incoming_displayed_render_event(
+                            ack->acked_id, muc_channel);
+                        weechat::apply_render_event(ch.buffer, event);
                     }
                 }
                 return 1;

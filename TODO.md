@@ -253,9 +253,9 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] vCard / bookmarks — `iq_vcard`, `iq_bookmarks`, `iq_vcard_handler`
 
 **Shared infrastructure for Wave 2:**
-- [ ] `UiAction` / `RenderEvent` sum type (print, nicklist, line-update-by-tag)
+- [x] `UiAction` / `RenderEvent` sum type (print, nicklist, line-update-by-tag) — `render_event.{hh,cpp}`; receipt/displayed ack path
 - [x] `LineStorePort` — `line_store_update_line_glyph_by_tag` in `src/weechat/line_store.{hh,cpp}`
-- [ ] `BufferPort` (v2) — create/search/nicklist behind interface
+- [x] `BufferPort` (v2) — `buffer_port.{hh,cpp}` (search/nicklist); `channel.cpp` adapter
 
 ### Wave 3 — Outbound cleanup
 - [ ] Replace hybrid `stanza_node` + `xmpp_stanza_add_child` in `account.cpp`, `muc_admin.inl`, `channel.cpp` RDF path

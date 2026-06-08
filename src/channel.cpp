@@ -7,6 +7,7 @@
 #include <time.h>
 #include <regex>
 #include <fmt/core.h>
+#include <memory>
 #include <optional>
 #include <ranges>
 #include <algorithm>
@@ -23,6 +24,7 @@
 #include "omemo.hh"
 #include "user.hh"
 #include "channel.hh"
+#include "weechat/buffer_port.hh"
 #include "input.hh"
 #include "buffer.hh"
 #include "debug.hh"
@@ -111,11 +113,9 @@ void weechat::channel::set_transport(enum weechat::channel::transport transport,
 struct t_gui_buffer *weechat::channel::search_buffer(weechat::channel::chat_type /*type*/,
                                                      const char *name)
 {
-    std::string buffer_name = fmt::format("{}.{}" , account.name, name);
-    struct t_gui_buffer *ptr_buffer = weechat_buffer_search("xmpp", buffer_name.c_str());
-    if (ptr_buffer && weechat_buffer_get_pointer(ptr_buffer, "plugin") == weechat_plugin)
-        return ptr_buffer;
-    return nullptr;
+    static const std::unique_ptr<BufferPort> buffer_port = BufferPort::default_port();
+    const std::string buffer_name = fmt::format("{}.{}", account.name, name);
+    return buffer_port->search("xmpp", buffer_name);
 }
 
 struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type type,
@@ -129,11 +129,10 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
 
     std::string buffer_name = fmt::format("{}.{}", account.name, name);
 
+    static const std::unique_ptr<BufferPort> buffer_port = BufferPort::default_port();
     ptr_buffer = weechat::channel::search_buffer(type, name);
     if (ptr_buffer)
-    {
-        weechat_nicklist_remove_all(ptr_buffer);
-    }
+        buffer_port->nicklist_remove_all(ptr_buffer);
     else
     {
         ptr_buffer = weechat_buffer_new(buffer_name.data(),
