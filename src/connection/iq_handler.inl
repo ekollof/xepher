@@ -2360,6 +2360,140 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
         }
 
+        // XEP-0045 §10.2/§10.5/§10.7: handle results for muc#owner (config form
+        // get/set + room destroy) and muc#admin (set-result for affiliation
+        // changes from /affiliation). All in-flight queries are tracked in
+        // account.muc_owner_queries so we can route by kind and room JID.
+        const char *owner_stanza_id = xmpp_stanza_get_id(stanza);
+        if (owner_stanza_id && account.muc_owner_queries.contains(owner_stanza_id))
+        {
+            auto info = account.muc_owner_queries[owner_stanza_id];
+            account.muc_owner_queries.erase(owner_stanza_id);
+            struct t_gui_buffer *out = info.buffer ? info.buffer : account.buffer;
+
+            xmpp_stanza_t *owner_q = xmpp_stanza_get_child_by_name_and_ns(
+                stanza, "query", "http://jabber.org/protocol/muc#owner");
+
+            // Error path: print a friendly message and return.
+            if (type && weechat_strcasecmp(type, "error") == 0)
+            {
+                std::string err = "server error";
+                if (auto err_el = xmpp_stanza_get_child_by_name(stanza, "error"))
+                {
+                    if (xmpp_stanza_get_child_by_name(err_el, "forbidden"))
+                        err = "permission denied (you must be a room owner)";
+                    else if (xmpp_stanza_get_child_by_name(err_el, "not-allowed"))
+                        err = "not allowed (room configuration is locked)";
+                    else if (xmpp_stanza_get_child_by_name(err_el, "item-not-found"))
+                        err = "room not found";
+                    else if (xmpp_stanza_get_child_by_name(err_el, "conflict"))
+                        err = "conflict";
+                    else if (xmpp_stanza_get_child_by_name(err_el, "not-acceptable"))
+                        err = "not acceptable";
+                }
+                const char *what = "operation";
+                switch (info.kind)
+                {
+                    case weechat::account::muc_owner_kind::config_get:  what = "fetch room config form"; break;
+                    case weechat::account::muc_owner_kind::config_set:  what = "submit room config";    break;
+                    case weechat::account::muc_owner_kind::destroy:     what = "destroy room";          break;
+                    case weechat::account::muc_owner_kind::aff_set:     what = "set affiliation";       break;
+                }
+                weechat_printf(out, "%s%s: %s failed: %s",
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                               what, err.c_str());
+                return true;
+            }
+
+            if (type && weechat_strcasecmp(type, "result") == 0)
+            {
+                switch (info.kind)
+                {
+                    case weechat::account::muc_owner_kind::config_get:
+                    {
+                        if (auto ch_it = account.channels.find(info.room_jid);
+                            ch_it != account.channels.end())
+                        {
+                            auto& [_, ch] = *ch_it;
+                            weechat::channel::room_config_form form;
+
+                            xmpp_stanza_t *xdata = owner_q
+                                ? xmpp_stanza_get_child_by_name_and_ns(
+                                      owner_q, "x", "jabber:x:data")
+                                : nullptr;
+                            if (xdata)
+                            {
+                                if (const char *sid = xmpp_stanza_get_attribute(xdata, "sessionid"))
+                                    form.sessionid = sid;
+                                xmpp_stanza_t *field = xmpp_stanza_get_child_by_name(xdata, "field");
+                                while (field)
+                                {
+                                    weechat::channel::room_config_field f;
+                                    if (const char *var = xmpp_stanza_get_attribute(field, "var"))
+                                        f.var = var;
+                                    if (const char *typ = xmpp_stanza_get_attribute(field, "type"))
+                                        f.type = typ;
+                                    if (const char *lbl = xmpp_stanza_get_attribute(field, "label"))
+                                        f.label = lbl;
+                                    xmpp_stanza_t *v = xmpp_stanza_get_child_by_name(field, "value");
+                                    while (v)
+                                    {
+                                        if (const char *t = xmpp_stanza_get_text_ptr(v))
+                                            f.values.push_back(t);
+                                        v = xmpp_stanza_get_next(v);
+                                    }
+                                    if (!f.var.empty())
+                                        form.fields.push_back(std::move(f));
+                                    field = xmpp_stanza_get_next(field);
+                                }
+                            }
+                            ch.store_config_form(std::move(form));
+                            weechat_printf(out, "%s%s: room config form cached for %s — "
+                                           "use /setmodes to apply changes",
+                                           weechat_prefix("network"),
+                                           WEECHAT_XMPP_PLUGIN_NAME,
+                                           info.room_jid.c_str());
+                        }
+                        else
+                        {
+                            weechat_printf(out, "%s%s: room config received for %s but channel no longer exists",
+                                           weechat_prefix("error"),
+                                           WEECHAT_XMPP_PLUGIN_NAME,
+                                           info.room_jid.c_str());
+                        }
+                        return true;
+                    }
+                    case weechat::account::muc_owner_kind::config_set:
+                    {
+                        weechat_printf(out, "%s%s: room config submitted for %s",
+                                       weechat_prefix("network"),
+                                       WEECHAT_XMPP_PLUGIN_NAME,
+                                       info.room_jid.c_str());
+                        if (auto ch_it = account.channels.find(info.room_jid);
+                            ch_it != account.channels.end())
+                            ch_it->second.clear_config_form();
+                        return true;
+                    }
+                    case weechat::account::muc_owner_kind::destroy:
+                    {
+                        weechat_printf(out, "%s%s: room %s destroyed",
+                                       weechat_prefix("network"),
+                                       WEECHAT_XMPP_PLUGIN_NAME,
+                                       info.room_jid.c_str());
+                        return true;
+                    }
+                    case weechat::account::muc_owner_kind::aff_set:
+                    {
+                        weechat_printf(out, "%s%s: affiliation change applied for %s",
+                                       weechat_prefix("network"),
+                                       WEECHAT_XMPP_PLUGIN_NAME,
+                                       info.room_jid.c_str());
+                        return true;
+                    }
+                }
+            }
+        }
+
         // Look for HTTP upload service in items
         xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items_query, "item");
         while (item)
