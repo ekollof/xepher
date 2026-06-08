@@ -69,7 +69,9 @@ sha256sums=('SKIP')
 
 build() {
     cd "\${srcdir}/xepher-\${pkgver}"
-    make clean
+    # Tarball has no .git; make clean would remove seeded deps/diff/libdiff.a.
+    rm -rf obj
+    rm -f xmpp.so
     make PACKAGE_BUILD=1 weechat-xmpp
 }
 

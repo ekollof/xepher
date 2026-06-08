@@ -10,6 +10,9 @@ override_dh_auto_build:
 	[ -f deps/diff/Makefile ] || git submodule update --init --recursive
 	$(MAKE) PACKAGE_BUILD=1 weechat-xmpp
 
+override_dh_auto_install:
+	# debian/install places xmpp.so; skip makefile install (root → PREFIX=/usr/local).
+
 override_dh_auto_clean:
 	$(MAKE) clean || true
 
