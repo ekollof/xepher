@@ -2376,6 +2376,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         // changes from /affiliation). All in-flight queries are tracked in
         // account.muc_owner_queries so we can route by kind and room JID.
         const char *owner_stanza_id = xmpp_stanza_get_id(stanza);
+        weechat_printf(account.buffer, "%s%s: pre-muc_owner lookup: id=%s contains=%d",
+                       weechat_prefix("error"),
+                       WEECHAT_XMPP_PLUGIN_NAME,
+                       owner_stanza_id ? owner_stanza_id : "(null)",
+                       (owner_stanza_id && account.muc_owner_queries.contains(owner_stanza_id)) ? 1 : 0);
         if (owner_stanza_id && account.muc_owner_queries.contains(owner_stanza_id))
         {
             auto info = account.muc_owner_queries[owner_stanza_id];
