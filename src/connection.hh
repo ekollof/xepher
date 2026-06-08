@@ -72,6 +72,7 @@ namespace weechat {
                              std::string_view override_archive_id = {},
                              std::string_view override_delay_stamp = {});
         void handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::string_view own_jid_str);
+        bool handle_ping_iq_event(xmpp_stanza_t *stanza, std::string_view own_jid_str);
         bool iq_handler(xmpp_stanza_t *stanza, bool top_level = true);
         bool sm_handler(xmpp_stanza_t *stanza);
 

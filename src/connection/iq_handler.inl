@@ -65,169 +65,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         account.pubsub_fetch_ids[rf_uid] = {pub_service, pub_node, "", 0};
     };
     
-    // Handle XMPP Ping (XEP-0199)
-    xmpp_stanza_t *ping = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "ping", "urn:xmpp:ping");
-    if (ping && type && weechat_strcasecmp(type, "get") == 0)
-    {
-        const ::xmpp::StanzaView view(stanza);
-        account.connection.send(stanza::iq()
-            .type("result")
-            .id(view.attr_string("id"))
-            .to(view.attr_string("from"))
-            .from(view.attr_string("to"))
-            .build(account.context)
-            .get());
+    if (handle_ping_iq_event(stanza, own_jid))
         return true;
-    }
-    
-    // Handle ping responses (XEP-0199 and XEP-0410)
-    if (type && (weechat_strcasecmp(type, "result") == 0 || weechat_strcasecmp(type, "error") == 0))
-    {
-        const char *stanza_id = xmpp_stanza_get_id(stanza);
-        auto ping_it = stanza_id ? account.user_ping_queries.find(stanza_id)
-                                 : account.user_ping_queries.end();
-        if (ping_it != account.user_ping_queries.end())
-        {
-            auto& [_, start_time] = *ping_it;
-            time_t now = time(nullptr);
-            long rtt_ms = (now - start_time) * 1000;  // Convert to milliseconds
-
-            account.user_ping_queries.erase(ping_it);
-
-            const char *from_jid = from ? from : own_jid.c_str();
-
-            // Check if this is a MUC self-ping (XEP-0410)
-            bool is_muc_selfping = false;
-            std::string room_jid;
-            if (from)
-            {
-                std::string from_str(from);
-                size_t slash_pos = from_str.find('/');
-                if (slash_pos != std::string::npos)
-                {
-                    room_jid = from_str.substr(0, slash_pos);
-                    std::string resource = from_str.substr(slash_pos + 1);
-
-                    // Check if this is our own nickname in a MUC
-                    if (resource == account.nickname())
-                    {
-                        // Check if we have a channel for this room
-                        if (account.channels.contains(room_jid))
-                        {
-                            is_muc_selfping = true;
-                        }
-                    }
-                }
-            }
-
-            if (weechat_strcasecmp(type, "result") == 0)
-            {
-                if (is_muc_selfping)
-                {
-                    weechat_printf(account.buffer, "%sMUC self-ping OK: still in %s",
-                                  weechat_prefix("network"), room_jid.c_str());
-                }
-                else
-                {
-                    weechat_printf(account.buffer, "%sPong from %s (RTT: %ld ms)",
-                                  weechat_prefix("network"), from_jid, rtt_ms);
-                }
-            }
-            else
-            {
-                // Error response
-                xmpp_stanza_t *err_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-                if (is_muc_selfping)
-                {
-                    // XEP-0410 §3.3: interpret error condition to decide whether we
-                    // are still joined or need to rejoin.
-                    //
-                    // Still joined (reflected-ping errors from MUC on behalf of a
-                    // client that doesn't support XMPP Ping, or nick-change race):
-                    //   <service-unavailable/>, <feature-not-implemented/>, <item-not-found/>
-                    //
-                    // Not joined — must rejoin:
-                    //   <not-acceptable/> (§3.2 "you are not in the room")
-                    //   <not-allowed/>, <bad-request/> (footnote 4 — some servers)
-                    //
-                    // Network errors — ambiguous, treat conservatively (no rejoin):
-                    //   <remote-server-not-found/>, <remote-server-timeout/>
-
-                    bool still_joined = false;
-                    bool ambiguous    = false;
-
-                    if (err_elem)
-                    {
-                        static constexpr const char *IETF_NS =
-                            "urn:ietf:params:xml:ns:xmpp-stanzas";
-
-                        auto has_cond = [&](const char *name) -> bool {
-                            return xmpp_stanza_get_child_by_name_and_ns(
-                                       err_elem, name, IETF_NS) != nullptr;
-                        };
-
-                        if (has_cond("service-unavailable") ||
-                            has_cond("feature-not-implemented") ||
-                            has_cond("item-not-found"))
-                        {
-                            still_joined = true;
-                        }
-                        else if (has_cond("remote-server-not-found") ||
-                                 has_cond("remote-server-timeout"))
-                        {
-                            ambiguous = true;
-                        }
-                        // not-acceptable / not-allowed / bad-request / anything else
-                        // → not joined → fall through to rejoin below
-                    }
-
-                    if (still_joined)
-                    {
-                        // Reflected ping: the pinged client doesn't support XMPP Ping
-                        // (or nick-change race) — we ARE still in the room.
-                        weechat_printf(account.buffer,
-                                       "%sMUC self-ping: still in %s (reflected error)",
-                                       weechat_prefix("network"), room_jid.c_str());
-                    }
-                    else if (ambiguous)
-                    {
-                        // Network-level error: cannot determine join state; skip rejoin.
-                        const char *etype = err_elem
-                            ? xmpp_stanza_get_attribute(err_elem, "type") : "unknown";
-                        weechat_printf(account.buffer,
-                                       "%sMUC self-ping to %s: network error (%s), skipping rejoin",
-                                       weechat_prefix("network"), room_jid.c_str(), etype);
-                    }
-                    else
-                    {
-                        // <not-acceptable/> or similar: we are NOT in the room.
-                        weechat_printf(account.buffer,
-                                       "%sMUC self-ping FAILED: no longer in %s — rejoining",
-                                       weechat_prefix("error"), room_jid.c_str());
-
-                        // Rejoin: send a fresh MUC join presence (room@domain/nick).
-                        std::string rejoin_jid = fmt::format("{}/{}", room_jid,
-                                                              account.nickname());
-                        auto join_pres = stanza::presence()
-                            .to(rejoin_jid.c_str())
-                            .from(account.jid());
-                        static_cast<stanza::xep0045::presence&>(join_pres).muc_join();
-                        account.connection.send(join_pres.build(account.context).get());
-                    }
-                }
-                else
-                {
-                    const char *error_type = err_elem
-                        ? xmpp_stanza_get_attribute(err_elem, "type") : "unknown";
-                    weechat_printf(account.buffer, "%sPing failed to %s: %s",
-                                  weechat_prefix("error"), from_jid, error_type);
-            }
-        }
-
-    return true;
-}
-    }
 
     // XEP-0441: MAM Preferences — handle <prefs xmlns='urn:xmpp:mam:2'> result/error
     if (id && account.mam_prefs_queries.contains(id))
@@ -1974,7 +1813,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 auto& [_, ctx] = *pub_it;
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
                 const std::string error_cond = error_elem
-                    ? iq_error_text(error_elem) : "unknown error";
+                    ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
                 struct t_gui_buffer *err_buf = ctx.buffer ? ctx.buffer : account.buffer;
                 weechat_printf(err_buf,
                     "%s%s: publish failed for %s/%s (item %s): %s",
@@ -1992,7 +1831,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 auto& [_, sub] = *sub_it;
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
                 const std::string error_cond = error_elem
-                    ? iq_error_text(error_elem) : "unknown error";
+                    ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
                 struct t_gui_buffer *fb = sub.buffer ? sub.buffer : account.buffer;
                 weechat_printf(fb,
                     "%s%s: subscribe to %s failed: %s",
@@ -2007,7 +1846,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 auto& [_, unsub] = *unsub_it;
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
                 const std::string error_cond = error_elem
-                    ? iq_error_text(error_elem) : "unknown error";
+                    ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
                 struct t_gui_buffer *fb = unsub.buffer ? unsub.buffer : account.buffer;
                 weechat_printf(fb,
                     "%s%s: unsubscribe from %s failed: %s",
@@ -2027,7 +1866,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
                 const std::string error_cond = error_elem
-                    ? iq_error_text(error_elem) : "unknown error";
+                    ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
 
                 // Report the error in the feed buffer if it already exists,
                 // otherwise fall back to the account buffer.

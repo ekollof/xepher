@@ -26,6 +26,8 @@
 #include "xmpp/node.hh"
 #include "xmpp/stanza_view.hh"
 #include "xmpp/iq_handlers.hh"
+#include "xmpp/iq_error.hh"
+#include "xmpp/iq_ping.hh"
 #include "xmpp/chat_state.hh"
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_body.hh"
@@ -535,6 +537,62 @@ TEST_CASE("handle_time_iq builds XEP-0202 result")
     CHECK(xml.find("2000-01-01T00:00:00Z") != std::string::npos);
 
     xmpp_stanza_release(req);
+}
+
+TEST_CASE("handle_ping_iq and ping helpers")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *ping_get = xmpp_stanza_new_from_string(env.ctx,
+        "<iq xmlns='jabber:client' type='get' id='p1' from='bob@example.org' to='alice@example.org'>"
+        "<ping xmlns='urn:xmpp:ping'/>"
+        "</iq>");
+    REQUIRE(ping_get != nullptr);
+    CHECK(xmpp::is_ping_get_iq(xmpp::StanzaView(ping_get)));
+
+    auto reply = xmpp::handle_ping_iq(xmpp::StanzaView(ping_get), "alice@example.org");
+    auto built = reply.build(env.ctx);
+    const std::string xml = stanza_to_xml(env.ctx, built.get());
+    CHECK(xml.find("type=\"result\"") != std::string::npos);
+    CHECK(xml.find("to=\"bob@example.org\"") != std::string::npos);
+    CHECK(xml.find("from=\"alice@example.org\"") != std::string::npos);
+
+    CHECK(xmpp::compute_ping_rtt_ms(100, 101) == 1000);
+
+    const auto muc_from = xmpp::parse_muc_ping_from("room@conf.example/nick");
+    REQUIRE(muc_from.has_value());
+    CHECK(muc_from->room_jid == "room@conf.example");
+    CHECK(muc_from->resource == "nick");
+
+    CHECK(xmpp::is_muc_self_ping(
+        *muc_from,
+        "nick",
+        [](std::string_view room) { return room == "room@conf.example"; }));
+    CHECK_FALSE(xmpp::is_muc_self_ping(
+        *muc_from,
+        "other",
+        [](std::string_view) { return true; }));
+
+    xmpp_stanza_t *err = xmpp_stanza_new_from_string(env.ctx,
+        "<error type='cancel' xmlns='jabber:client'>"
+        "<service-unavailable xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>"
+        "</error>");
+    REQUIRE(err != nullptr);
+    CHECK(xmpp::classify_muc_self_ping_error(xmpp::StanzaView(err))
+          == xmpp::MucSelfPingErrorOutcome::still_joined);
+
+    xmpp_stanza_t *err_text = xmpp_stanza_new_from_string(env.ctx,
+        "<error type='auth' xmlns='jabber:client'>"
+        "<text xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'>denied</text>"
+        "<not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>"
+        "</error>");
+    REQUIRE(err_text != nullptr);
+    CHECK(xmpp::iq_error_text(xmpp::StanzaView(err_text)) == "denied");
+
+    xmpp_stanza_release(ping_get);
+    xmpp_stanza_release(err);
+    xmpp_stanza_release(err_text);
 }
 
 TEST_CASE("MAM PM IQ stanza builder: structure and attributes")

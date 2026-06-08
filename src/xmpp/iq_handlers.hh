@@ -22,4 +22,8 @@ handle_version_iq(StanzaView request, weechat::RuntimePort &runtime, std::string
 [[nodiscard]] XMPP_TEST_EXPORT stanza::iq
 handle_time_iq(StanzaView request, std::string_view local_jid, std::time_t now = std::time(nullptr));
 
+// Pure XEP-0199 ping reply (caller builds + sends).
+[[nodiscard]] XMPP_TEST_EXPORT stanza::iq
+handle_ping_iq(StanzaView request, std::string_view local_jid);
+
 }  // namespace xmpp

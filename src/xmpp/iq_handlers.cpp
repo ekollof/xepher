@@ -59,4 +59,13 @@ stanza::iq handle_time_iq(StanzaView request, std::string_view local_jid, std::t
             .tzo(tzo_str));
 }
 
+stanza::iq handle_ping_iq(StanzaView request, std::string_view local_jid)
+{
+    return stanza::iq()
+        .type("result")
+        .id(request.attr_string("id"))
+        .to(request.attr_string("from"))
+        .from(std::string(local_jid));
+}
+
 }  // namespace xmpp
