@@ -19,28 +19,30 @@
 #include <doctest/doctest.h>
 
 // ── plugin headers (real symbols declared here) ───────────────────────────────
-#include "../src/util.hh"
-#include "../src/message.hh"
-#include "../src/color.hh"
-#include "../src/strophe.hh"
-#include "../src/xmpp/node.hh"
-#include "../src/xmpp/stanza_view.hh"
-#include "../src/xmpp/iq_handlers.hh"
-#include "../src/xmpp/chat_state.hh"
-#include "../src/xmpp/message_forward.hh"
-#include "../src/xmpp/message_body.hh"
-#include "../src/xmpp/message_media.hh"
-#include "../src/xmpp/message_omemo.hh"
-#include "../src/xmpp/message_invite.hh"
-#include "../src/xmpp/message_ephemeral.hh"
-#include "../src/xmpp/message_spoiler.hh"
-#include "../src/xmpp/message_fallback.hh"
-#include "../src/xmpp/message_line_tag.hh"
-#include "../src/xmpp/message_correct.hh"
-#include "../src/xmpp/message_retract.hh"
-#include "../src/xmpp/message_ack.hh"
-#include "../src/weechat/line_store.hh"
-#include "../src/weechat/runtime_port.hh"
+#include "util.hh"
+#include "message.hh"
+#include "color.hh"
+#include "strophe.hh"
+#include "xmpp/node.hh"
+#include "xmpp/stanza_view.hh"
+#include "xmpp/iq_handlers.hh"
+#include "xmpp/chat_state.hh"
+#include "xmpp/message_forward.hh"
+#include "xmpp/message_body.hh"
+#include "xmpp/message_media.hh"
+#include "xmpp/message_omemo.hh"
+#include "xmpp/message_invite.hh"
+#include "xmpp/message_ephemeral.hh"
+#include "xmpp/message_spoiler.hh"
+#include "xmpp/message_fallback.hh"
+#include "xmpp/message_line_tag.hh"
+#include "xmpp/message_correct.hh"
+#include "xmpp/message_retract.hh"
+#include "xmpp/message_reactions.hh"
+#include "xmpp/message_reply.hh"
+#include "xmpp/message_ack.hh"
+#include "weechat/line_store.hh"
+#include "weechat/runtime_port.hh"
 #include "weechat_stub.hh"
 
 // ── stdlib ────────────────────────────────────────────────────────────────────
@@ -1100,6 +1102,63 @@ TEST_CASE("message_line_tag and correction/retraction parsing")
     xmpp_stanza_release(corr);
     xmpp_stanza_release(retract);
     xmpp_stanza_release(moderated);
+}
+
+TEST_CASE("message_reactions and reply helpers")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *rxn = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat' from='alice@example.org'>"
+        "<reactions xmlns='urn:xmpp:reactions:0' id='m9'>"
+        "<reaction>👍</reaction><reaction>❤️</reaction>"
+        "</reactions>"
+        "</message>");
+    REQUIRE(rxn != nullptr);
+    auto parsed_rxn = xmpp::parse_message_reactions(xmpp::StanzaView(rxn));
+    REQUIRE(parsed_rxn.has_value());
+    CHECK(parsed_rxn->target_id == "m9");
+    CHECK(parsed_rxn->emojis == "👍 ❤️");
+
+    xmpp_stanza_t *rxn_clear = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<reactions xmlns='urn:xmpp:reactions:0' id='m9'/>"
+        "</message>");
+    REQUIRE(rxn_clear != nullptr);
+    auto parsed_clear = xmpp::parse_message_reactions(xmpp::StanzaView(rxn_clear));
+    REQUIRE(parsed_clear.has_value());
+    CHECK(parsed_clear->emojis.empty());
+
+    xmpp_stanza_t *reply = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='groupchat' from='room@conf/bob'>"
+        "<reply xmlns='urn:xmpp:reply:0' id='orig-1'/>"
+        "<body>answer</body>"
+        "</message>");
+    REQUIRE(reply != nullptr);
+    auto parsed_reply = xmpp::parse_message_reply(xmpp::StanzaView(reply));
+    REQUIRE(parsed_reply.has_value());
+    CHECK(parsed_reply->target_id == "orig-1");
+
+    CHECK_FALSE(xmpp::is_og_preview_continuation_line("hello"));
+    CHECK(xmpp::is_og_preview_continuation_line("\xE2\x94\x8C title"));
+
+    CHECK(xmpp::strip_leading_reply_chain(
+              "\xE2\x86\xAA alice: hi there") == "alice: hi there");
+    CHECK(xmpp::build_reply_excerpt("short") == "short");
+
+    const std::string long_line(201, 'x');
+    CHECK(xmpp::should_truncate_reply_excerpt(long_line));
+    CHECK(xmpp::build_reply_excerpt(long_line) == std::string(40, 'x') + "...");
+
+    const std::string_view tag_list[] = { "id_m1", "nick_carol" };
+    auto nick = xmpp::nick_from_line_tags(tag_list);
+    REQUIRE(nick.has_value());
+    CHECK(*nick == "carol");
+
+    xmpp_stanza_release(rxn);
+    xmpp_stanza_release(rxn_clear);
+    xmpp_stanza_release(reply);
 }
 
 TEST_CASE("format_inbound_message_body respects unstyled hint")

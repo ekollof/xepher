@@ -11,8 +11,10 @@
 #include <vector>
 #include <weechat/weechat-plugin.h>
 
-#include "../plugin.hh"
-#include "../xmpp/message_line_tag.hh"
+#include "plugin.hh"
+#include "xmpp/message_line_tag.hh"
+#include "xmpp/message_reactions.hh"
+#include "xmpp/message_reply.hh"
 
 namespace weechat {
 
@@ -307,6 +309,108 @@ LineStoreLookupResult line_store_tombstone_retraction_by_id(
         last_line = weechat_hdata_pointer(hdata_line, last_line, "prev_line");
     }
     return LineStoreLookupResult::NotFound;
+}
+
+std::optional<ReplyQuoteLookup> line_store_lookup_reply_quote(
+    struct t_gui_buffer *buffer, std::string_view target_id)
+{
+    if (!buffer || target_id.empty())
+        return std::nullopt;
+
+    static struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
+    static struct t_hdata *hdata_lines = weechat_hdata_get("lines");
+    static struct t_hdata *hdata_line = weechat_hdata_get("line");
+    static struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+
+    void *lines = weechat_hdata_pointer(hdata_buffer, buffer, "lines");
+    if (!lines)
+        return std::nullopt;
+
+    void *body_line = nullptr;
+    void *scan = weechat_hdata_pointer(hdata_lines, lines, "last_line");
+    bool in_group = false;
+    while (scan)
+    {
+        void *ld = weechat_hdata_pointer(hdata_line, scan, "data");
+        const bool has_tag = ld && line_data_has_message_id(ld, target_id, hdata_line_data);
+        if (has_tag)
+        {
+            in_group = true;
+            const char *msg = weechat_hdata_string(hdata_line_data, ld, "message");
+            if (!xmpp::extract_line_body_text(msg ? std::string_view(msg) : std::string_view{})
+                    .empty())
+                body_line = scan;
+        }
+        else if (in_group)
+            break;
+
+        scan = weechat_hdata_pointer(hdata_line, scan, "prev_line");
+    }
+
+    if (!body_line)
+        return std::nullopt;
+
+    void *line_data = weechat_hdata_pointer(hdata_line, body_line, "data");
+    if (!line_data)
+        return std::nullopt;
+
+    const char *orig_message = weechat_hdata_string(hdata_line_data, line_data, "message");
+    if (!orig_message)
+        return std::nullopt;
+
+    std::string clean_body =
+        xmpp::extract_line_body_text(orig_message ? std::string_view(orig_message)
+                                                  : std::string_view{});
+    clean_body = xmpp::strip_leading_reply_chain(clean_body);
+
+    ReplyQuoteLookup lookup;
+    lookup.excerpt = xmpp::build_reply_excerpt(clean_body);
+
+    const int tags_count = weechat_hdata_integer(hdata_line_data, line_data, "tags_count");
+    std::vector<std::string_view> tags;
+    tags.reserve(static_cast<std::size_t>(tags_count));
+    for (int n : std::views::iota(0, tags_count))
+    {
+        if (const char *tag = line_data_tag_at(line_data, n, hdata_line_data))
+            tags.emplace_back(tag);
+    }
+    if (auto nick = xmpp::nick_from_line_tags(tags))
+        lookup.quote_nick = std::move(*nick);
+
+    return lookup;
+}
+
+bool line_store_apply_reactions_by_id(struct t_gui_buffer *buffer,
+                                      std::string_view target_id,
+                                      std::string_view emojis)
+{
+    if (!buffer || target_id.empty())
+        return false;
+
+    static struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
+    static struct t_hdata *hdata_lines = weechat_hdata_get("lines");
+    static struct t_hdata *hdata_line = weechat_hdata_get("line");
+    static struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+
+    void *lines = weechat_hdata_pointer(hdata_buffer, buffer, "lines");
+    if (!lines)
+        return false;
+
+    void *last_line = weechat_hdata_pointer(hdata_lines, lines, "last_line");
+    while (last_line)
+    {
+        void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
+        if (line_data && line_data_has_message_id(line_data, target_id, hdata_line_data))
+        {
+            const char *orig_message = weechat_hdata_string(hdata_line_data, line_data, "message");
+            const std::string new_message = xmpp::format_message_with_reactions(
+                orig_message ? orig_message : "", emojis);
+            line_data_set_message(line_data, new_message, std::nullopt, hdata_line_data);
+            return true;
+        }
+        last_line = weechat_hdata_pointer(hdata_line, last_line, "prev_line");
+    }
+    return false;
 }
 
 }  // namespace weechat

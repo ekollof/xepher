@@ -2,6 +2,8 @@
 
 All coding agents working in this repository **must** read and follow this entire file before making any changes.
 
+**After any context compaction** (conversation summary, truncated history, or handoff to a new agent turn with only a recap): **re-read this entire `AGENTS.md` file before writing code or continuing the task.** Compaction drops detail from the thread — the repo rules here are authoritative, not the summary.
+
 For OMEMO troubleshooting tasks, agents may use `tools/correlate_omemo_xml.sh --account <account>` as a convenience helper to correlate WeeChat log events with raw XML.
 
 ---
@@ -43,11 +45,12 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 ## Build System
 
-- **Build command**: `make` (use ccache for fast incremental builds without `make clean`: `CXX="ccache c++" make`)
+- **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Combine with ccache for fast incremental builds: `CXX="ccache c++" make`
 - **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick)
 - **Output**: `xmpp.so` (WeeChat plugin)
 - **Dependencies**: Managed via git submodules in `deps/`
 - Always run `make` after code changes to verify compilation (doctests run automatically at end)
+- **Includes**: use `-Isrc` paths (`plugin.hh`, `xmpp/stanza_view.hh`) — never `../` relative includes in `src/`
 
 ## Coding Style & Practices
 
@@ -55,7 +58,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 - Minimize changes - make surgical, targeted fixes
 - Use existing code style and patterns consistently
-- **Use C++23 features** (project standard via `-std=c++23`)
+- **Write modern C++23 by default** (project standard via `-std=c++23`) in every new or touched `.cpp`/`.hh`/`.inl` — apply the Modernization Patterns below *as you implement*, not in a later sweep. Do not land raw loops, `const std::string&` read-only params, manual `find != npos`, or string `+` concatenation in new code when `ranges`/`string_view`/`fmt`/`expected`/`span` fit.
 - Use `nullptr` not `NULL`
 - RAII for resource management
 - Keep functions focused and concise
@@ -79,7 +82,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 - **Move semantics**: Use `std::move` to avoid unnecessary copies
 - **Structured bindings**: `auto [key, value] = map.find(...)` for cleaner code
 
-**Modernization Patterns** (established via surgical updates; future agents **must** prefer these for new code, refactors, and list/string/error handling in `.cpp`/`.inl` files. Follow "surgical/minimal" rule — only apply where it simplifies without touching C ABI boundaries like LMDB cursors, libstrophe child iteration, or WeeChat hooks. Match local style exactly by opening a nearby file first. Always `#include <ranges>` / `<expected>` / `<span>` in the thin `.cpp` wrapper before `#include`ing the `.inl`.)
+**Modernization Patterns** (non-negotiable for all new and modified code — not optional follow-up work. Established via surgical updates; agents **must** use these in new code, refactors, and list/string/error handling in `.cpp`/`.inl` files. Follow "surgical/minimal" rule — only apply where it simplifies without touching C ABI boundaries like LMDB cursors, libstrophe child iteration, or WeeChat hooks. Match local style exactly by opening a nearby file first. Always `#include <ranges>` / `<expected>` / `<span>` / `<algorithm>` (for `std::ranges::`) in the thin `.cpp` wrapper before `#include`ing the `.inl`. Use `fmt::format` for string assembly; `-Isrc` includes (`plugin.hh`, `xmpp/foo.hh`) — never `../` relative paths.)
 
 - **std::string_view for read-only params**: Replace `const std::string& s` (and `const char*`) with `std::string_view s`. Only `std::string(...)` cast when storing or returning ownership.
 - **std::span for byte buffers**: Use for owned data passed to C APIs, e.g.:
@@ -123,7 +126,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
   ```
 - **General**: Prefer `std::ranges::sort` / `unique` / `for_each` / `copy_if` etc. over raw loops or `<algorithm>`. Zero classical `<algorithm>` calls remain in src (except commented). Update this section when adding new patterns (e.g. more `views`).
 
-**Build note**: Use ccache for speed during iterative modernization: `CXX="ccache c++" make` (see Build System). Run `make` (not clean) after every logical group of changes; verify doctests pass.
+**Build note**: Use parallel + ccache during iterative work: `CXX="ccache c++" make` (parallel `-j` is on by default; see Build System). Run `make` (not clean) after every logical group of changes; verify doctests pass.
 
 (Concrete examples of these patterns are visible throughout `src/` — e.g. OMEMO helpers, account/channel map handling, connection data-form/OG parsing, and avatar/ base64 paths. Extend them surgically.)
 
@@ -631,8 +634,9 @@ Prefer the debug socket for all other interactions.
 
 ## Development Workflow
 
+0. **Read `AGENTS.md`** — full file at session start and again after any context compaction before continuing
 1. **Understand the request** - ask clarifying questions if needed
-2. **Explore existing code** - find similar patterns to follow
+2. **Explore existing code** - find similar patterns to follow (match modern C++23 patterns in nearby files)
 3. **Make minimal changes** - surgical fixes, don't refactor unnecessarily
 4. **Build and test**: `make && <test in WeeChat>`
 5. **Update documentation** - README.md, DOAP.xml if applicable
@@ -702,10 +706,14 @@ When updating documentation:
 ## Useful Commands
 
 ```bash
-# Build
+# Build (parallel by default; NPROC overrides core count)
 make
+CXX="ccache c++" make
 
-# Clean build (avoid; prefer ccache incremental: CXX="ccache c++" make )
+# Serial build (debugging only)
+make -j1
+
+# Clean build (avoid; prefer ccache incremental)
 make clean && make
 
 # Check git status
@@ -726,7 +734,8 @@ git push
 
 ## When in Doubt
 
-- **Follow existing patterns** in the codebase
+- **Re-read `AGENTS.md`** if the thread was compacted or you are continuing from a summary
+- **Follow existing patterns** in the codebase (prefer the modernized `ranges`/`string_view`/`fmt` style in touched areas)
 - **Make minimal changes** - don't refactor working code
 - **Test incrementally** - build after each logical change
 - **Document as you go** - don't leave docs for later

@@ -4,6 +4,12 @@
 UNAME_S := $(shell uname -s)
 IS_CLANG := $(shell $(CXX) --version 2>/dev/null | grep -i clang)
 
+# Parallel compilation: enabled by default; override with `make -j1` when debugging.
+NPROC ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+ifeq ($(filter -j%,$(MAKEFLAGS)),)
+	MAKEFLAGS += -j$(NPROC)
+endif
+
 ifeq ($(UNAME_S),Darwin)
 HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo /opt/homebrew)
 export PKG_CONFIG_PATH := $(HOMEBREW_PREFIX)/lib/pkgconfig:$(PKG_CONFIG_PATH)
@@ -200,6 +206,8 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/message_line_tag.cpp \
 	 src/xmpp/message_correct.cpp \
 	 src/xmpp/message_retract.cpp \
+	 src/xmpp/message_reactions.cpp \
+	 src/xmpp/message_reply.cpp \
 	 src/weechat/line_store.cpp \
 	 src/xmpp/atom.cpp \
 	 src/xmpp/xhtml.cpp \
@@ -225,7 +233,8 @@ include depend.mk
 
 .PHONY: all
 all: depend
-	$(MAKE) weechat-xmpp && $(MAKE) test
+	+$(MAKE) weechat-xmpp
+	+$(MAKE) test
 
 .PHONY: weechat-xmpp
 weechat-xmpp: $(DEPS) xmpp.so

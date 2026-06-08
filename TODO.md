@@ -240,7 +240,8 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] OMEMO inbound branch (parse/policy in `message_omemo.{hh,cpp}`; `decode()` + UI remain in handler)
 - [x] Invites, ephemeral, spoiler, fallback — `message_invite`, `message_ephemeral`, `message_spoiler`, `message_fallback`
 - [x] Retract/replace/moderation — `message_line_tag`, `message_correct`, `message_retract`, `line_store` tombstone helpers
-- [ ] Remaining branches (reactions, reply, PEP feeds)
+- [x] Reactions + reply (XEP-0444, 0461) — `message_reactions`, `message_reply`, `line_store` quote/reaction helpers
+- [ ] Remaining branches (PEP feeds in message_handler)
 
 **`iq_handler.inl` slices:**
 - [ ] Version/time (done — see `iq_handlers.cpp`)

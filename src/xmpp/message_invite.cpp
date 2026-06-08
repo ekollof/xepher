@@ -4,7 +4,7 @@
 
 #include "message_invite.hh"
 
-#include "../xmpp/node.hh"
+#include "xmpp/node.hh"
 
 namespace xmpp {
 

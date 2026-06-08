@@ -6,8 +6,8 @@
 
 #include <weechat/weechat-plugin.h>
 
-#include "../color.hh"
-#include "../plugin.hh"
+#include "color.hh"
+#include "plugin.hh"
 
 namespace xmpp {
 

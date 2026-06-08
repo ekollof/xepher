@@ -4,7 +4,7 @@
 
 #include "message_body.hh"
 
-#include "../util.hh"
+#include "util.hh"
 
 namespace xmpp {
 

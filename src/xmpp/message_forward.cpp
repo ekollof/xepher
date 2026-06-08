@@ -6,7 +6,7 @@
 
 #include <ctime>
 
-#include "../xmpp/node.hh"
+#include "xmpp/node.hh"
 
 namespace xmpp {
 

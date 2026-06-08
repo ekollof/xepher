@@ -8,8 +8,8 @@
 #include <string>
 #include <string_view>
 
-#include "../test_export.hh"
-#include "stanza_view.hh"
+#include "test_export.hh"
+#include "xmpp/stanza_view.hh"
 
 namespace xmpp {
 

@@ -2167,102 +2167,14 @@ message_handler_after_omemo:
 
 
     // XEP-0444: Message Reactions
-    xmpp_stanza_t *reactions = xmpp_stanza_get_child_by_name_and_ns(stanza, "reactions",
-                                                                     "urn:xmpp:reactions:0");
-    const char *reactions_id = reactions ? xmpp_stanza_get_attribute(reactions, "id") : nullptr;
-    
-    if (reactions_id)
+    if (auto reactions = ::xmpp::parse_message_reactions(::xmpp::StanzaView(stanza)))
     {
-        // Extract emoji from <reaction> elements
-        std::string emojis_str;
-        xmpp_stanza_t *reaction_elem = xmpp_stanza_get_children(reactions);
-        bool first = true;
-        while (reaction_elem)
+        if (channel)
         {
-            const char *name = xmpp_stanza_get_name(reaction_elem);
-            if (name && weechat_strcasecmp(name, "reaction") == 0)
-            {
-                const std::string emoji = stanza_element_text(reaction_elem);
-                if (!emoji.empty())
-                {
-                    if (!first) emojis_str += " ";
-                    emojis_str += emoji;
-                    first = false;
-                }
-            }
-            reaction_elem = xmpp_stanza_get_next(reaction_elem);
+            [[maybe_unused]] const bool reactions_applied =
+                weechat::line_store_apply_reactions_by_id(
+                    channel->buffer, reactions->target_id, reactions->emojis);
         }
-        
-        const char *emojis = emojis_str.c_str();
-        // Always walk the buffer to update the target line — even when emojis
-        // is empty (XEP-0444 §3.2: empty <reactions> means remove all reactions).
-        {
-            // Find the message being reacted to and append reaction
-            void *lines = weechat_hdata_pointer(hdata_buffer,
-                                                channel->buffer, "lines");
-            if (lines)
-            {
-                void *last_line = weechat_hdata_pointer(hdata_lines,
-                                                        lines, "last_line");
-                while (last_line)
-                {
-                    void *line_data = weechat_hdata_pointer(hdata_line,
-                                                            last_line, "data");
-                    if (line_data)
-                    {
-                        int tags_count = weechat_hdata_integer(hdata_line_data,
-                                                               line_data, "tags_count");
-                        std::string str_tag;
-                        for (int n_tag = 0; n_tag < tags_count; n_tag++)
-                        {
-                            str_tag = fmt::format("{}|tags_array", n_tag);
-                            const char *tag = weechat_hdata_string(hdata_line_data,
-                                                                   line_data, str_tag.c_str());
-                            if (tag && ::xmpp::line_tag_matches_message_id(tag, reactions_id))
-                            {
-                                // Found the message.
-                                // XEP-0444: a new <reactions> from a sender REPLACES their
-                                // previous reaction set — do not accumulate. Strip any
-                                // previously-appended reaction blocks (our format:
-                                // " <blue>[…]<reset>") before appending the new set.
-                                const char *orig_message = weechat_hdata_string(
-                                    hdata_line_data, line_data, "message");
-
-                                std::string base(orig_message ? orig_message : "");
-                                // The reaction suffix we append starts with " " + weechat_color("blue") + "["
-                                static const std::string rxn_prefix =
-                                    std::string(" ") + weechat_color("blue") + "[";
-                                auto rxn_pos = base.find(rxn_prefix);
-                                if (rxn_pos != std::string::npos)
-                                    base.resize(rxn_pos);
-
-                                std::string new_message = !emojis_str.empty()
-                                    ? base
-                                      + " " + weechat_color("blue")
-                                      + "[" + emojis + "]"
-                                      + weechat_color("resetcolor")
-                                    : base; // empty reactions = remove suffix
-
-                                // Update the line with reaction replaced
-                                struct t_hashtable *hashtable = weechat_hashtable_new(8,
-                                    WEECHAT_HASHTABLE_STRING,
-                                    WEECHAT_HASHTABLE_STRING,
-                                    nullptr, nullptr);
-                                weechat_hashtable_set(hashtable, "message", new_message.c_str());
-                                weechat_hdata_update(hdata_line_data, line_data, hashtable);
-                                weechat_hashtable_free(hashtable);
-
-                                 return 1;
-                            }
-                        }
-                    }
-
-                    last_line = weechat_hdata_pointer(hdata_line,
-                                                      last_line, "prev_line");
-                }
-            }
-        }
-        
         return 1;
     }
 
@@ -2637,181 +2549,22 @@ message_handler_after_omemo:
         }
     }
     
-    // XEP-0461: Message Replies - extract reply context
-    xmpp_stanza_t *reply_elem = xmpp_stanza_get_child_by_name_and_ns(stanza, "reply", "urn:xmpp:reply:0");
-    const char *reply_to_id = reply_elem ? xmpp_stanza_get_attribute(reply_elem, "id") : nullptr;
-    std::string reply_prefix;      // the excerpt text for the quote line
-    std::string reply_quote_nick;  // nick of the message being replied to
-    
-    if (reply_to_id)
+    // XEP-0461: Message Replies — extract reply context for quote line.
+    std::string reply_prefix;
+    std::string reply_quote_nick;
+    if (auto reply = ::xmpp::parse_message_reply(::xmpp::StanzaView(stanza)))
     {
-        // Find the original message being replied to.
-        // WeeChat splits messages on '\n' into multiple consecutive buffer lines,
-        // all sharing the same id tags.  Scanning backwards from last_line means
-        // we hit the OG-preview/OOB suffix lines first.  We must find the *first*
-        // (body) line that carries the tag by scanning backwards past all lines
-        // in the group, then stepping one line forward.
-        void *lines = weechat_hdata_pointer(hdata_buffer,
-                                            channel->buffer, "lines");
-        if (lines)
+        if (channel)
         {
-            // Helper: given a raw hdata message field, return the plain-text body.
-            // WeeChat's message hdata stores only the right-column text (no leading \t).
-            // For messages with OG/OOB/SIMS previews the full "\nbody\n\t┌ title..."
-            // string is stored; we truncate at the first \n.
-            // Returns empty string if the line looks like an OG/OOB continuation
-            // sub-line (starts with ┌ │ └ box-drawing chars after color stripping).
-            auto extract_body_text = [](const char *raw) -> std::string {
-                if (!raw) return {};
-                std::string_view sv(raw);
-                // Strip a leading \t if present (WeeChat continuation-line indent).
-                if (!sv.empty() && sv[0] == '\t')
-                    sv = sv.substr(1);
-                // Truncate at the first \n to discard OG/OOB/SIMS suffix.
-                auto nl = sv.find('\n');
-                if (nl != std::string_view::npos)
-                    sv = sv.substr(0, nl);
-                // Strip color codes.
-                std::string owned(sv);
-                std::unique_ptr<char, decltype(&free)>
-                    guard(weechat_string_remove_color(owned.c_str(), nullptr), &free);
-                std::string plain = guard ? guard.get() : owned;
-                // Trim leading whitespace.
-                auto first = plain.find_first_not_of(" \t");
-                if (first == std::string::npos) return {};
-                plain = plain.substr(first);
-                // Reject OG/OOB box-drawing continuation lines.
-                // UTF-8: ┌ = E2 94 8C, │ = E2 94 82, └ = E2 94 94, ┐ = E2 94 90
-                static constexpr std::string_view og_glyphs[] = {
-                    "\xE2\x94\x8C", // ┌
-                    "\xE2\x94\x82", // │
-                    "\xE2\x94\x94", // └
-                    "\xE2\x94\x90", // ┐
-                };
-                for (auto &g : og_glyphs)
-                    if (plain.starts_with(g)) return {};
-                return plain;
-            };
-
-            void *body_line = nullptr; // the first (body) line of the matched group
-            void *scan = weechat_hdata_pointer(hdata_lines, lines, "last_line");
-            bool in_group = false;
-            while (scan)
+            if (auto quote = weechat::line_store_lookup_reply_quote(
+                    channel->buffer, reply->target_id))
             {
-                void *ld = weechat_hdata_pointer(hdata_line, scan, "data");
-                bool has_tag = false;
-                if (ld)
-                {
-                    int tc = weechat_hdata_integer(hdata_line_data, ld, "tags_count");
-                    for (int ti = 0; ti < tc; ++ti)
-                    {
-                        std::string stag = fmt::format("{}|tags_array", ti);
-                        const char *t = weechat_hdata_string(hdata_line_data, ld, stag.c_str());
-                        if (t && ::xmpp::line_tag_matches_message_id(t, reply_to_id))
-                        {
-                            has_tag = true;
-                            break;
-                        }
-                    }
-                }
-                if (has_tag)
-                {
-                    in_group = true;
-                    // Only accept lines that look like a real message body
-                    // (not OG/OOB box-drawing continuation sub-lines).
-                    const char *msg = weechat_hdata_string(hdata_line_data, ld, "message");
-                    if (!extract_body_text(msg).empty())
-                        body_line = scan; // keep updating — earliest non-continuation wins
-                }
-                else if (in_group)
-                {
-                    // We have walked past the beginning of the tag group.
-                    break;
-                }
-                scan = weechat_hdata_pointer(hdata_line, scan, "prev_line");
-            }
-
-            if (body_line)
-            {
-                void *line_data = weechat_hdata_pointer(hdata_line, body_line, "data");
-                if (line_data)
-                {
-                    int tags_count = weechat_hdata_integer(hdata_line_data,
-                                                           line_data, "tags_count");
-                    const char *orig_message = weechat_hdata_string(
-                        hdata_line_data, line_data, "message");
-
-                    if (orig_message)
-                    {
-                        // Use the shared helper to get clean body text.
-                        std::string clean_body = extract_body_text(orig_message);
-                        std::string_view clean_text(clean_body);
-
-                        // Skip any leading reply prefix(es) (↪ …) from a prior reply chain.
-                        // UTF-8 encoding of ↪ is 3 bytes: e2 86 aa.
-                        {
-                            constexpr std::string_view arrow = "\xE2\x86\xAA"; // ↪
-                            auto pos = clean_text.find(arrow);
-                            while (pos != std::string_view::npos)
-                            {
-                                std::string_view after = clean_text.substr(pos + arrow.size());
-                                after = after.substr(after.find_first_not_of(' '));
-                                auto further = after.find(arrow);
-                                if (further != std::string_view::npos)
-                                {
-                                    clean_text = after.substr(further);
-                                    pos = 0;
-                                }
-                                else
-                                {
-                                    clean_text = after;
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Decide whether to truncate to a 40-char excerpt.
-                        bool do_truncate = false;
-                        {
-                            int newline_count = 0;
-                            int line_len = 0;
-                            std::ranges::for_each(clean_text, [&](char c) {
-                                if (c == '\n') { ++newline_count; line_len = 0; }
-                                else           { ++line_len; }
-                                if (newline_count > 5 || line_len > 200)
-                                { do_truncate = true; }
-                            });
-                        }
-
-                        std::string excerpt = (do_truncate && clean_text.size() > 40)
-                            ? std::string(clean_text.substr(0, 40)) + "..."
-                            : std::string(clean_text);
-
-                        // Extract the original sender's nick from the line tags.
-                        std::string str_tag2;
-                        for (int nn = 0; nn < tags_count; nn++)
-                        {
-                            str_tag2 = fmt::format("{}|tags_array", nn);
-                            const char *ntag = weechat_hdata_string(
-                                hdata_line_data, line_data, str_tag2.c_str());
-                            if (ntag && std::string_view(ntag).starts_with("nick_"))
-                            {
-                                reply_quote_nick = ntag + 5;
-                                break;
-                            }
-                        }
-
-                        reply_prefix = excerpt;
-                    }
-                }
+                reply_prefix = std::move(quote->excerpt);
+                reply_quote_nick = std::move(quote->quote_nick);
             }
         }
-        
-        // If we didn't find the original, just show reply indicator
         if (reply_prefix.empty())
-        {
-            reply_prefix = "[reply]";
-        }
+            reply_prefix = std::string(::xmpp::default_reply_excerpt());
     }
     
     // Inline image display candidates (weechat-icat / Kitty graphics protocol)
@@ -3057,12 +2810,8 @@ message_handler_after_omemo:
     // notify_none,no_log: no highlight, no duplicate log entry.
     if (!reply_prefix.empty())
     {
-        std::string quote_line = std::string(weechat::xmpp_color("darkgray"))
-            + "│ "
-            + weechat::xmpp_color("cyan").c_str();
-        if (!reply_quote_nick.empty())
-            quote_line += reply_quote_nick + weechat::xmpp_color("darkgray").c_str() + ": ";
-        quote_line += weechat::xmpp_color("darkgray").c_str() + reply_prefix + weechat::xmpp_color("resetcolor").c_str();
+        const std::string quote_line =
+            ::xmpp::format_reply_quote_body(reply_quote_nick, reply_prefix);
         std::string msg = fmt::format("{}\t{}", display_prefix, quote_line);
         weechat_printf_date_tags(channel->buffer, date,
             "notify_none,no_log,xmpp_reply_quote", "%s", msg.c_str());

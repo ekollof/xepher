@@ -10,7 +10,7 @@
 
 struct t_gui_buffer;
 
-#include "../test_export.hh"
+#include "test_export.hh"
 
 namespace weechat {
 
@@ -67,5 +67,20 @@ line_store_tombstone_retraction_by_id(struct t_gui_buffer *buffer,
                                       std::string_view sender_key,
                                       std::string_view occupant_id,
                                       bool prefer_occupant_id);
+
+struct ReplyQuoteLookup {
+    std::string excerpt;
+    std::string quote_nick;
+};
+
+// XEP-0461: find the body line of a tagged message group and build quote context.
+[[nodiscard]] XMPP_TEST_EXPORT std::optional<ReplyQuoteLookup>
+line_store_lookup_reply_quote(struct t_gui_buffer *buffer, std::string_view target_id);
+
+// XEP-0444: replace reaction suffix on the first line matching target_id.
+[[nodiscard]] XMPP_TEST_EXPORT bool line_store_apply_reactions_by_id(
+    struct t_gui_buffer *buffer,
+    std::string_view target_id,
+    std::string_view emojis);
 
 }  // namespace weechat

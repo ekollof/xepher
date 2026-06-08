@@ -7,8 +7,8 @@
 #include <fmt/core.h>
 #include <weechat/weechat-plugin.h>
 
-#include "../plugin.hh"
-#include "../util.hh"
+#include "plugin.hh"
+#include "util.hh"
 
 namespace xmpp {
 

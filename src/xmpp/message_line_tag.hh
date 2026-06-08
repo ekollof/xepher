@@ -9,7 +9,7 @@
 #include <string>
 #include <string_view>
 
-#include "../test_export.hh"
+#include "test_export.hh"
 
 namespace xmpp {
 

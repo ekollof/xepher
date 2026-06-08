@@ -29,8 +29,10 @@ endif
 tests/xmpp.cov.so: $(COVS) $(DEPS) $(HDRS)
 	$(CXX) --coverage $(SHARED_FLAG) $(LDFLAGS) -o tests/xmpp.cov.so $(AS_NEEDED) $(COVS) $(DEPS) $(LDLIBS)
 
+TEST_CPPFLAGS := $(subst -Ideps/lmdbxx,-I../deps/lmdbxx,$(subst -Isrc,-I../src,$(CPPFLAGS)))
+
 tests/run: $(COVS) tests/main.cc tests/xmpp.cov.so $(wildcard tests/*.inl)
-	cd tests && $(CXX) $(subst -Ideps/lmdbxx,-I../deps/lmdbxx,$(CPPFLAGS)) $(LDFLAGS) -o run main.cc $(patsubst %,../%,$(DEPS)) $(LDLIBS) \
+	cd tests && $(CXX) $(TEST_CPPFLAGS) $(LDFLAGS) -o run main.cc $(patsubst %,../%,$(DEPS)) $(LDLIBS) \
 		$(TEST_LDFLAGS) $(PWD)/tests/xmpp.cov.so
 
 # Hard cap for the whole doctest binary (per-test SIGALRM is in tests/timeout_listener.hh).

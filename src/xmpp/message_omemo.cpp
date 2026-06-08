@@ -6,7 +6,7 @@
 
 #include <ranges>
 
-#include "../util.hh"
+#include "util.hh"
 
 namespace xmpp {
 

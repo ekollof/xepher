@@ -7,9 +7,9 @@
 #include <fmt/core.h>
 #include <weechat/weechat-plugin.h>
 
-#include "../plugin.hh"
-#include "message_correct.hh"
-#include "../xmpp/node.hh"
+#include "plugin.hh"
+#include "xmpp/message_correct.hh"
+#include "xmpp/node.hh"
 
 namespace xmpp {
 

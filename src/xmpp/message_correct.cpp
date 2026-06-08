@@ -6,7 +6,7 @@
 
 #include <fmt/core.h>
 
-#include "../xmpp/node.hh"
+#include "xmpp/node.hh"
 
 namespace xmpp {
 

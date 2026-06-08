@@ -4,7 +4,7 @@
 
 #include "message_fallback.hh"
 
-#include "../util.hh"
+#include "util.hh"
 
 namespace xmpp {
 
