@@ -30,6 +30,7 @@
 #include "xmpp/iq_ping.hh"
 #include "xmpp/iq_pubsub_feed.hh"
 #include "xmpp/iq_omemo_pubsub.hh"
+#include "xmpp/iq_upload.hh"
 #include "xmpp/chat_state.hh"
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_body.hh"
@@ -1221,6 +1222,30 @@ TEST_CASE("message_reactions and reply helpers")
     xmpp_stanza_release(rxn);
     xmpp_stanza_release(rxn_clear);
     xmpp_stanza_release(reply);
+}
+
+TEST_CASE("iq_upload helpers")
+{
+    CHECK(xmpp::is_allowed_http_upload_put_header("Authorization"));
+    CHECK(xmpp::is_allowed_http_upload_put_header("cookie"));
+    CHECK_FALSE(xmpp::is_allowed_http_upload_put_header("X-Custom"));
+
+    CHECK(xmpp::sanitize_http_header_value("token\r\ninjected") == "tokeninjected");
+
+    CHECK(xmpp::content_type_from_upload_filename("photo.JPG") == "image/jpeg");
+    CHECK(xmpp::content_type_from_upload_filename("data.bin") == "application/octet-stream");
+
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *err = xmpp_stanza_new_from_string(env.ctx,
+        "<error type='cancel' xmlns='jabber:client'>"
+        "<not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>"
+        "</error>");
+    REQUIRE(err != nullptr);
+    CHECK(xmpp::format_upload_slot_error_message(xmpp::StanzaView(err))
+          == "Upload slot request failed: not-allowed");
+    xmpp_stanza_release(err);
 }
 
 TEST_CASE("iq_pubsub and omemo pubsub helpers")

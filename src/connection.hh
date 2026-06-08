@@ -76,6 +76,8 @@ namespace weechat {
         bool handle_avatar_pubsub_iq_event(xmpp_stanza_t *stanza, std::string_view own_jid_str);
         bool handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza);
         bool handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, std::string_view own_jid_str);
+        bool handle_upload_slot_iq_event(xmpp_stanza_t *stanza);
+        bool handle_upload_slot_iq_error(xmpp_stanza_t *stanza);
         bool iq_handler(xmpp_stanza_t *stanza, bool top_level = true);
         bool sm_handler(xmpp_stanza_t *stanza);
 
