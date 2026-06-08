@@ -190,6 +190,16 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/message_ack.cpp \
 	 src/xmpp/chat_state.cpp \
 	 src/xmpp/message_forward.cpp \
+	 src/xmpp/message_body.cpp \
+	 src/xmpp/message_media.cpp \
+	 src/xmpp/message_omemo.cpp \
+	 src/xmpp/message_invite.cpp \
+	 src/xmpp/message_ephemeral.cpp \
+	 src/xmpp/message_spoiler.cpp \
+	 src/xmpp/message_fallback.cpp \
+	 src/xmpp/message_line_tag.cpp \
+	 src/xmpp/message_correct.cpp \
+	 src/xmpp/message_retract.cpp \
 	 src/weechat/line_store.cpp \
 	 src/xmpp/atom.cpp \
 	 src/xmpp/xhtml.cpp \

@@ -33,9 +33,12 @@ tests/run: $(COVS) tests/main.cc tests/xmpp.cov.so $(wildcard tests/*.inl)
 	cd tests && $(CXX) $(subst -Ideps/lmdbxx,-I../deps/lmdbxx,$(CPPFLAGS)) $(LDFLAGS) -o run main.cc $(patsubst %,../%,$(DEPS)) $(LDLIBS) \
 		$(TEST_LDFLAGS) $(PWD)/tests/xmpp.cov.so
 
+# Hard cap for the whole doctest binary (per-test SIGALRM is in tests/timeout_listener.hh).
+TEST_RUN_TIMEOUT ?= 120
+
 .PHONY: test
 test: tests/run
-	cd tests && ./run -sm
+	cd tests && timeout --kill-after=5 $(TEST_RUN_TIMEOUT) ./run -sm
 
 .PHONY: coverage
 coverage: tests/run

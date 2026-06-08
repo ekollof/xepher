@@ -91,7 +91,7 @@ bool weechat_headless_available()
     return false;
 }
 
-TEST_CASE("weechat" * doctest::may_fail())
+TEST_CASE("weechat" * doctest::may_fail() * doctest::timeout(15))
 {
     const std::string plugin_api_version(WEECHAT_PLUGIN_API_VERSION);
 

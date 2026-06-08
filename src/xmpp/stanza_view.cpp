@@ -16,6 +16,16 @@ std::string_view StanzaView::name() const
     return n ? std::string_view(n) : std::string_view {};
 }
 
+std::optional<std::string_view> StanzaView::xmlns() const
+{
+    if (!stanza_)
+        return std::nullopt;
+    const char *ns = xmpp_stanza_get_ns(stanza_);
+    if (!ns)
+        return std::nullopt;
+    return std::string_view(ns);
+}
+
 std::optional<std::string_view> StanzaView::attr(std::string_view name) const
 {
     if (!stanza_)

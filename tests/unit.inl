@@ -28,6 +28,16 @@
 #include "../src/xmpp/iq_handlers.hh"
 #include "../src/xmpp/chat_state.hh"
 #include "../src/xmpp/message_forward.hh"
+#include "../src/xmpp/message_body.hh"
+#include "../src/xmpp/message_media.hh"
+#include "../src/xmpp/message_omemo.hh"
+#include "../src/xmpp/message_invite.hh"
+#include "../src/xmpp/message_ephemeral.hh"
+#include "../src/xmpp/message_spoiler.hh"
+#include "../src/xmpp/message_fallback.hh"
+#include "../src/xmpp/message_line_tag.hh"
+#include "../src/xmpp/message_correct.hh"
+#include "../src/xmpp/message_retract.hh"
 #include "../src/xmpp/message_ack.hh"
 #include "../src/weechat/line_store.hh"
 #include "../src/weechat/runtime_port.hh"
@@ -199,6 +209,26 @@ TEST_CASE("stanza_element_text reads element body")
     CHECK(stanza_element_text(el) == "hello world");
     CHECK(stanza_element_text(nullptr).empty());
     xmpp_stanza_release(el);
+}
+
+TEST_CASE("StanzaView child_iterator terminates on last child")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<body>a</body>"
+        "<reference xmlns='urn:xmpp:reference:0' type='data'/>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    int count = 0;
+    for ([[maybe_unused]] xmpp::StanzaView child : xmpp::StanzaView(msg))
+        ++count;
+    CHECK(count == 2);
+
+    xmpp_stanza_release(msg);
 }
 
 TEST_CASE("StanzaView reads inbound attributes and children")
@@ -751,6 +781,343 @@ static std::optional<std::string> text_opt(xmpp_stanza_t *el)
     if (t.empty())
         return std::nullopt;
     return t;
+}
+
+TEST_CASE("collect_sims_shares parses XEP-0385 reference")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<body>photo</body>"
+        "<reference xmlns='urn:xmpp:reference:0' type='data'>"
+        "<media-sharing xmlns='urn:xmpp:sims:1'>"
+        "<file xmlns='urn:xmpp:jingle:apps:file-transfer:5'>"
+        "<name>pic.png</name><media-type>image/png</media-type><size>1234</size>"
+        "</file>"
+        "<sources>"
+        "<reference xmlns='urn:xmpp:reference:0' type='data' uri='https://ex/img.png'/>"
+        "</sources>"
+        "</media-sharing>"
+        "</reference>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    auto shares = xmpp::collect_sims_shares(xmpp::StanzaView(msg));
+    REQUIRE(shares.size() == 1);
+    CHECK(shares[0].meta.name == "pic.png");
+    CHECK(shares[0].meta.mime == "image/png");
+    CHECK(shares[0].url == "https://ex/img.png");
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("collect_sfs_shares parses plain and encrypted sources")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *plain = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<file-sharing xmlns='urn:xmpp:sfs:0'>"
+        "<file xmlns='urn:xmpp:file:metadata:0'><name>a.txt</name></file>"
+        "<sources><url-data target='https://ex/a.txt'/></sources>"
+        "</file-sharing>"
+        "</message>");
+    REQUIRE(plain != nullptr);
+
+    auto plain_shares = xmpp::collect_sfs_shares(xmpp::StanzaView(plain));
+    REQUIRE(plain_shares.size() == 1);
+    REQUIRE(plain_shares[0].plain_url.has_value());
+    CHECK(*plain_shares[0].plain_url == "https://ex/a.txt");
+
+    xmpp_stanza_t *enc = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<file-sharing xmlns='urn:xmpp:sfs:0'>"
+        "<file xmlns='urn:xmpp:file:metadata:0'><name>secret.bin</name></file>"
+        "<sources>"
+        "<encrypted xmlns='urn:xmpp:esfs:0'"
+        " cipher='urn:xmpp:ciphers:aes-256-gcm-nopadding:0'>"
+        "<key>a2V5</key><iv>aXY=</iv>"
+        "<sources><url-data target='https://ex/ct.bin'/></sources>"
+        "</encrypted>"
+        "</sources>"
+        "</file-sharing>"
+        "</message>");
+    REQUIRE(enc != nullptr);
+
+    auto enc_shares = xmpp::collect_sfs_shares(xmpp::StanzaView(enc));
+    REQUIRE(enc_shares.size() == 1);
+    REQUIRE(enc_shares[0].encrypted.has_value());
+    CHECK(enc_shares[0].encrypted->ciphertext_url == "https://ex/ct.bin");
+    CHECK(enc_shares[0].encrypted->key_b64 == "a2V5");
+
+    xmpp_stanza_release(plain);
+    xmpp_stanza_release(enc);
+}
+
+TEST_CASE("message_omemo stable id and self-copy policy")
+{
+    CHECK(xmpp::omemo_stable_id({
+              "origin-1", "stanza-1", "msg-1"}) == "origin-1");
+    CHECK(xmpp::omemo_stable_id({
+              "", "stanza-1", "msg-1"}) == "stanza-1");
+    CHECK(xmpp::omemo_stable_id({
+              "", "", "msg-1"}) == "msg-1");
+
+    const auto live_own_copy = xmpp::evaluate_omemo_self_copy_advice(
+        true, true, false, true);
+    CHECK(live_own_copy.apply_advice);
+    CHECK_FALSE(live_own_copy.clear_encrypted_on_mam);
+
+    const auto mam_other_device = xmpp::evaluate_omemo_self_copy_advice(
+        true, true, true, false);
+    CHECK_FALSE(mam_other_device.apply_advice);
+
+    const auto mam_own_device = xmpp::evaluate_omemo_self_copy_advice(
+        true, true, true, true);
+    CHECK(mam_own_device.apply_advice);
+    CHECK(mam_own_device.clear_encrypted_on_mam);
+}
+
+TEST_CASE("message_omemo parses axolotl header and decode jid")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<encrypted xmlns='eu.siacs.conversations.axolotl'>"
+        "<header sid='424242'><keys/></header>"
+        "<payload>UEFZ</payload>"
+        "</encrypted>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto view = xmpp::StanzaView(msg);
+    const auto enc = xmpp::stanza_axolotl_encrypted(view);
+    REQUIRE(enc.valid());
+    REQUIRE(xmpp::axolotl_header_sender_id(enc) == 424242u);
+    CHECK(xmpp::is_own_device_omemo_self_copy(enc, 424242u));
+    CHECK_FALSE(xmpp::is_own_device_omemo_self_copy(enc, 1u));
+    CHECK_FALSE(xmpp::axolotl_payload_is_empty(enc));
+
+    CHECK(xmpp::resolve_omemo_decode_jid("room@conf.example", std::nullopt)
+          == "room@conf.example");
+    CHECK(xmpp::resolve_omemo_decode_jid(
+              "room@conf.example", std::string_view("alice@example.org"))
+          == "alice@example.org");
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("message_omemo decrypt failure disposition")
+{
+    using xmpp::OmemoDecryptFailureDisposition;
+    using xmpp::OmemoDecryptFailureInput;
+
+    CHECK(xmpp::disposition_for_omemo_decrypt_failure(
+              OmemoDecryptFailureInput{.is_self_outbound_copy = true})
+          == OmemoDecryptFailureDisposition::ContinueAfterOmemo);
+    CHECK(xmpp::disposition_for_omemo_decrypt_failure(
+              OmemoDecryptFailureInput{.is_mam_replay = true})
+          == OmemoDecryptFailureDisposition::ShowUndecryptablePlaceholder);
+    CHECK(xmpp::disposition_for_omemo_decrypt_failure(
+              OmemoDecryptFailureInput{.payload_missing_or_empty = true})
+          == OmemoDecryptFailureDisposition::AbortSilent);
+    CHECK(xmpp::disposition_for_omemo_decrypt_failure({})
+          == OmemoDecryptFailureDisposition::ShowDecryptionError);
+
+    CHECK(xmpp::should_note_omemo_peer_traffic(true, false, true));
+    CHECK_FALSE(xmpp::should_note_omemo_peer_traffic(true, true, true));
+    CHECK(xmpp::should_auto_enable_channel_omemo(true, false, false));
+    CHECK_FALSE(xmpp::should_auto_enable_channel_omemo(true, false, true));
+
+    const auto cache_ids = xmpp::omemo_plaintext_cache_ids({
+        "sid", "origin", "sid"});
+    REQUIRE(cache_ids.size() == 2);
+    CHECK(cache_ids[0] == "sid");
+    CHECK(cache_ids[1] == "origin");
+
+    CHECK(xmpp::should_skip_display_after_omemo(true, false, true, false));
+    CHECK_FALSE(xmpp::should_skip_display_after_omemo(false, false, true, false));
+}
+
+TEST_CASE("parse_direct_muc_invite reads XEP-0249 attributes")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' from='alice@example.org' to='bob@example.org'>"
+        "<x xmlns='jabber:x:conference' jid='room@conf.example' password='secret'"
+        " reason='join us'/>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    auto invite = xmpp::parse_direct_muc_invite(xmpp::StanzaView(msg));
+    REQUIRE(invite.has_value());
+    CHECK(invite->inviter_bare == "alice@example.org");
+    CHECK(invite->room_jid == "room@conf.example");
+    REQUIRE(invite->password.has_value());
+    CHECK(*invite->password == "secret");
+    REQUIRE(invite->reason.has_value());
+    CHECK(*invite->reason == "join us");
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("message_ephemeral spoiler and fallback helpers")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *eph = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<ephemeral xmlns='urn:xmpp:ephemeral:0' timer='30'/>"
+        "<body>hi</body>"
+        "</message>");
+    REQUIRE(eph != nullptr);
+    CHECK(xmpp::parse_ephemeral_timer(xmpp::StanzaView(eph)) == 30);
+    CHECK(xmpp::should_schedule_ephemeral_tombstone(30, "msg-1"));
+    CHECK_FALSE(xmpp::should_schedule_ephemeral_tombstone(30, ""));
+
+    xmpp_stanza_t *spoiler = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<spoiler xmlns='urn:xmpp:spoiler:0'>ending</spoiler>"
+        "<body>text</body>"
+        "</message>");
+    REQUIRE(spoiler != nullptr);
+    auto hint = xmpp::parse_spoiler_hint(xmpp::StanzaView(spoiler));
+    REQUIRE(hint.has_value());
+    CHECK(*hint == "ending");
+
+    xmpp_stanza_t *reply = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<reply xmlns='urn:xmpp:reply:0' to='orig'/>"
+        "<fallback xmlns='urn:xmpp:fallback:0'>"
+        "<body start='0' end='7'/>"
+        "</fallback>"
+        "<body>&gt; quote\n\nanswer</body>"
+        "</message>");
+    REQUIRE(reply != nullptr);
+    const auto fb = xmpp::apply_fallback_body_trim(
+        xmpp::StanzaView(reply), "> quote\n\nanswer", false);
+    CHECK(fb.disposition == xmpp::FallbackBodyDisposition::Trimmed);
+    CHECK(fb.trimmed == "answer");
+
+    xmpp_stanza_t *reactions = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<fallback xmlns='urn:xmpp:fallback:0'/>"
+        "<reactions xmlns='urn:xmpp:reactions:0'><reaction>👍</reaction></reactions>"
+        "<body>ignored</body>"
+        "</message>");
+    REQUIRE(reactions != nullptr);
+    CHECK(xmpp::apply_fallback_body_trim(
+              xmpp::StanzaView(reactions), "ignored", false).disposition
+          == xmpp::FallbackBodyDisposition::Cleared);
+
+    xmpp_stanza_t *err = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='error'/>");
+    REQUIRE(err != nullptr);
+    CHECK(xmpp::stanza_is_error_message(xmpp::StanzaView(err)));
+
+    xmpp_stanza_release(eph);
+    xmpp_stanza_release(spoiler);
+    xmpp_stanza_release(reply);
+    xmpp_stanza_release(reactions);
+    xmpp_stanza_release(err);
+}
+
+TEST_CASE("message_line_tag and correction/retraction parsing")
+{
+    CHECK(xmpp::line_tag_matches_message_id("id_abc", "abc"));
+    CHECK(xmpp::line_tag_matches_message_id("stanza_id_abc", "abc"));
+    CHECK(xmpp::line_tag_matches_message_id("origin_id_abc", "abc"));
+    CHECK_FALSE(xmpp::line_tag_matches_message_id("nick_alice", "abc"));
+    CHECK(xmpp::line_tag_matches_nick_sender("nick_alice", "alice"));
+    CHECK(xmpp::line_tag_matches_occupant_sender("occupant_id_o1", "o1"));
+
+    xmpp::LineSenderVerify nick_verify{ .sender_key = "alice" };
+    const std::string_view nick_tags[] = { "id_m1", "nick_alice" };
+    CHECK(xmpp::line_tags_verify_sender(nick_tags, nick_verify));
+
+    xmpp::LineSenderVerify occ_verify{
+        .sender_key = "alice",
+        .occupant_id = std::string("occ-9"),
+        .prefer_occupant_id = true,
+    };
+    const std::string_view occ_tags[] = { "occupant_id_occ-9" };
+    CHECK(xmpp::line_tags_verify_sender(occ_tags, occ_verify));
+    const std::string_view alice_only[] = { "nick_alice" };
+    CHECK_FALSE(xmpp::line_tags_verify_sender(alice_only, occ_verify));
+
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *corr = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='groupchat' from='room@conf/alice'>"
+        "<replace xmlns='urn:xmpp:message-correct:0' id='m1'/>"
+        "<body>fixed</body>"
+        "</message>");
+    REQUIRE(corr != nullptr);
+    CHECK(xmpp::stanza_has_message_correction(xmpp::StanzaView(corr)));
+    auto parsed_corr = xmpp::parse_message_correction(xmpp::StanzaView(corr));
+    REQUIRE(parsed_corr.has_value());
+    CHECK(parsed_corr->target_id == "m1");
+    CHECK(xmpp::message_correction_sender_key(
+              "room@conf/alice", "room@conf", true) == "alice");
+    CHECK(xmpp::format_message_correction_text("hi") == "📝 hi");
+
+    xmpp_stanza_t *retract = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat' from='alice@example.org'>"
+        "<retract xmlns='urn:xmpp:message-retract:1' id='m2'/>"
+        "</message>");
+    REQUIRE(retract != nullptr);
+    auto parsed_retract = xmpp::parse_message_retraction(xmpp::StanzaView(retract));
+    REQUIRE(parsed_retract.has_value());
+    CHECK(parsed_retract->target_id == "m2");
+
+    xmpp_stanza_t *moderated = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='groupchat' from='room@conf'>"
+        "<retract xmlns='urn:xmpp:message-retract:1' id='m3'>"
+        "<moderated xmlns='urn:xmpp:message-moderate:1'>"
+        "<reason>spam</reason>"
+        "</moderated>"
+        "</retract>"
+        "</message>");
+    REQUIRE(moderated != nullptr);
+    CHECK_FALSE(xmpp::parse_message_retraction(xmpp::StanzaView(moderated)).has_value());
+    auto parsed_mod = xmpp::parse_moderated_retraction(xmpp::StanzaView(moderated));
+    REQUIRE(parsed_mod.has_value());
+    CHECK(parsed_mod->target_id == "m3");
+    REQUIRE(parsed_mod->reason.has_value());
+    CHECK(*parsed_mod->reason == "spam");
+    CHECK(xmpp::should_accept_moderation_from_sender("room@conf", "room@conf"));
+    CHECK_FALSE(xmpp::should_accept_moderation_from_sender("alice@example.org", "room@conf"));
+
+    xmpp_stanza_release(corr);
+    xmpp_stanza_release(retract);
+    xmpp_stanza_release(moderated);
+}
+
+TEST_CASE("format_inbound_message_body respects unstyled hint")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<unstyled xmlns='urn:xmpp:styling:0'/>"
+        "<body>*bold*</body>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    CHECK(xmpp::stanza_has_unstyled_hint(xmpp::StanzaView(msg)));
+    CHECK(xmpp::format_inbound_message_body(msg, "*bold*") == "*bold*");
+
+    xmpp_stanza_release(msg);
 }
 
 TEST_CASE("parse_carbon_inner_message unwraps forwarded stanza")

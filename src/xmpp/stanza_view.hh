@@ -22,6 +22,7 @@ public:
     [[nodiscard]] xmpp_stanza_t *raw() const { return stanza_; }
 
     [[nodiscard]] XMPP_TEST_EXPORT std::string_view name() const;
+    [[nodiscard]] XMPP_TEST_EXPORT std::optional<std::string_view> xmlns() const;
     [[nodiscard]] XMPP_TEST_EXPORT std::optional<std::string_view> attr(std::string_view name) const;
     [[nodiscard]] XMPP_TEST_EXPORT std::string attr_string(std::string_view name) const;
     [[nodiscard]] std::optional<std::string_view> from() const { return attr("from"); }
@@ -48,7 +49,11 @@ public:
         child_iterator &operator++()
         {
             if (!end_ && current_)
+            {
                 current_ = xmpp_stanza_get_next(current_);
+                if (!current_)
+                    end_ = true;
+            }
             return *this;
         }
         child_iterator operator++(int)
@@ -71,7 +76,10 @@ public:
     {
         if (!stanza_)
             return {nullptr, true};
-        return {xmpp_stanza_get_children(stanza_), false};
+        xmpp_stanza_t *first = xmpp_stanza_get_children(stanza_);
+        if (!first)
+            return {nullptr, true};
+        return {first, false};
     }
     [[nodiscard]] child_iterator children_end() const { return {nullptr, true}; }
 

@@ -26,20 +26,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // XEP-0425 moderation, and XEP-0444 <reactions> all carry stanza-IDs, so
     // without this broadened check they silently fail to find their target line
     // during MAM replay.
-    auto id_matches_any = [](const char *tag, const char *target) noexcept -> bool {
-        if (!tag || !target || !*target) return false;
-        std::string_view tv(tag);
-        if (tv.starts_with("id_"))
-            return weechat_strcasecmp(tag + 3, target) == 0;
-        if (tv.starts_with("stanza_id_"))
-            return weechat_strcasecmp(tag + 10, target) == 0;
-        if (tv.starts_with("origin_id_"))
-            return weechat_strcasecmp(tag + 10, target) == 0;
-        return false;
-    };
-
     weechat::channel *channel, *parent_channel;
-    xmpp_stanza_t *x, *body, *delay, *topic, *replace, *result, *forwarded, *event, *items, *item, *encrypted;
+    xmpp_stanza_t *x, *body, *delay, *topic, *result, *forwarded, *event, *items, *item, *encrypted;
     const char *type, *from, *nick, *from_bare, *to, *to_bare, *id, *thread, *replace_id, *timestamp;
     const char *text = nullptr;
     std::string intext_storage;
@@ -59,8 +47,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
     auto binding = std::make_unique<xml::message>(account.context, stanza);
     body = xmpp_stanza_get_child_by_name(stanza, "body");
-    xmpp_stanza_t *encrypted_without_body = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "encrypted", "eu.siacs.conversations.axolotl");
+    xmpp_stanza_t *encrypted_without_body =
+        ::xmpp::stanza_axolotl_encrypted(::xmpp::StanzaView(stanza)).raw();
     xmpp_stanza_t *pgp_without_body = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "x", "jabber:x:encrypted");
 
@@ -77,7 +65,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         {
             intext_storage = stanza_element_text(topic);
             type = xmpp_stanza_get_type(stanza);
-        if (type != nullptr && std::string_view(type) == "error")
+        if (::xmpp::stanza_is_error_message(::xmpp::StanzaView(stanza)))
             return 1;
         from = xmpp_stanza_get_from(stanza);
         if (from == nullptr)
@@ -1589,7 +1577,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         return 1;
     }
     type = xmpp_stanza_get_type(stanza);
-    if (type != nullptr && std::string_view(type) == "error")
+    if (::xmpp::stanza_is_error_message(::xmpp::StanzaView(stanza)))
         return 1;
     from = xmpp_stanza_get_from(stanza);
     if (from == nullptr)
@@ -1621,11 +1609,17 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // over the message id attribute. The omemo_plaintext cache is keyed by
     // the client-assigned id (saved_id in the send path), so using origin-id
     // first ensures cache hits for self-sent OMEMO messages.
-    const char *stable_id = origin_id ? origin_id : (stanza_id ? stanza_id : id);
+    const std::string stable_id_storage = ::xmpp::omemo_stable_id({
+        origin_id ? std::string_view(origin_id) : std::string_view{},
+        stanza_id ? std::string_view(stanza_id) : std::string_view{},
+        id ? std::string_view(id) : std::string_view{}});
+    const char *stable_id = stable_id_storage.empty() ? nullptr : stable_id_storage.c_str();
     
-    replace = xmpp_stanza_get_child_by_name_and_ns(stanza, "replace",
-                                                   "urn:xmpp:message-correct:0");
-    replace_id = replace ? xmpp_stanza_get_id(replace) : nullptr;
+    const auto correction = ::xmpp::parse_message_correction(::xmpp::StanzaView(stanza));
+    const bool has_message_correction = correction.has_value();
+    std::string correction_target_storage = correction ? correction->target_id : std::string{};
+    replace_id = correction_target_storage.empty()
+        ? nullptr : correction_target_storage.c_str();
     const auto msg_view = ::xmpp::StanzaView(stanza);
     const bool receipt_requested = ::xmpp::stanza_requests_receipt(msg_view);
     const bool marker_markable = ::xmpp::stanza_is_marker_markable(msg_view);
@@ -1710,40 +1704,27 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     }
 
     // XEP-0249: Direct MUC Invitations
-    x = xmpp_stanza_get_child_by_name_and_ns(stanza, "x", "jabber:x:conference");
-    if (x)
+    if (auto invite = ::xmpp::parse_direct_muc_invite(::xmpp::StanzaView(stanza)))
     {
-        const char *room_jid = xmpp_stanza_get_attribute(x, "jid");
-        const char *password = xmpp_stanza_get_attribute(x, "password");
-        const char *reason = xmpp_stanza_get_attribute(x, "reason");
-        
-        if (room_jid)
-        {
-            from = xmpp_stanza_get_from(stanza);
-            std::string invite_from_bare_s = from ? ::jid(nullptr, from).bare : std::string{};
-            from_bare = !invite_from_bare_s.empty() ? invite_from_bare_s.c_str() : "unknown";
-            
-            weechat_printf(account.buffer,
-                          _("%s%s invited you to %s%s%s"),
-                          weechat_prefix("network"),
-                          from_bare,
-                          room_jid,
-                          reason ? " (" : "",
-                          reason ? reason : "");
-            if (reason)
-                weechat_printf(account.buffer, "%s)", "");
-            weechat_printf(account.buffer,
-                          _("%sTo join: /join %s%s%s"),
-                          weechat_prefix("network"),
-                          room_jid,
-                          password ? " " : "",
-                          password ? password : "");
-        }
+        weechat_printf(account.buffer,
+                      _("%s%s invited you to %s%s%s"),
+                      weechat_prefix("network"),
+                      invite->inviter_bare.c_str(),
+                      invite->room_jid.c_str(),
+                      invite->reason ? " (" : "",
+                      invite->reason ? invite->reason->c_str() : "");
+        if (invite->reason)
+            weechat_printf(account.buffer, "%s)", "");
+        weechat_printf(account.buffer,
+                      _("%sTo join: /join %s%s%s"),
+                      weechat_prefix("network"),
+                      invite->room_jid.c_str(),
+                      invite->password ? " " : "",
+                      invite->password ? invite->password->c_str() : "");
         return 1;
     }
 
-    encrypted = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "encrypted", "eu.siacs.conversations.axolotl");
+    encrypted = ::xmpp::stanza_axolotl_encrypted(::xmpp::StanzaView(stanza)).raw();
 
     // Record that this peer actively speaks OMEMO — but only for genuine
     // inbound encrypted messages (not self-outbound copies or plaintext).
@@ -1751,8 +1732,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // and establish a session; widening it caused spurious OMEMO initiation
     // toward contacts who send plaintext (the session was bootstrapped from
     // MAM traffic rather than from an actual inbound OMEMO message).
-    if (account.omemo && encrypted && !is_self_outbound_copy
-        && channel && channel->type == weechat::channel::chat_type::PM)
+    if (account.omemo
+        && ::xmpp::should_note_omemo_peer_traffic(
+            encrypted != nullptr,
+            is_self_outbound_copy,
+            channel && channel->type == weechat::channel::chat_type::PM))
     {
         account.omemo.note_peer_traffic(account.context, channel->id);
     }
@@ -1781,20 +1765,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // For MAM replays from OTHER devices on our account (sender_sid != our
     // device_id), fall through to decode() — they may have encrypted a key
     // for our device and we can attempt decryption normally.
-    const bool is_own_device_self_copy = [&]() -> bool {
-        if (!encrypted || !is_self_outbound_copy || !account.omemo)
-            return false;
-        xmpp_stanza_t *enc_header = xmpp_stanza_get_child_by_name(encrypted, "header");
-        if (!enc_header)
-            return false;
-        const char *sid_str = xmpp_stanza_get_attribute(enc_header, "sid");
-        if (!sid_str || !*sid_str)
-            return false;
-        if (auto sid_val = parse_uint32(sid_str); sid_val)
-            return *sid_val == account.omemo.device_id;
-        return false;
-    }();
-    if (encrypted && is_self_outbound_copy && (!is_mam_replay || is_own_device_self_copy))
+    const bool is_own_device_self_copy = encrypted && is_self_outbound_copy && account.omemo
+        ? ::xmpp::is_own_device_omemo_self_copy(
+            ::xmpp::StanzaView(encrypted), account.omemo.device_id)
+        : false;
+    if (const auto self_copy_advice = ::xmpp::evaluate_omemo_self_copy_advice(
+            encrypted != nullptr,
+            is_self_outbound_copy,
+            is_mam_replay,
+            is_own_device_self_copy);
+        self_copy_advice.apply_advice)
     {
         intext_storage = OMEMO_ADVICE;
         // For MAM replays of messages sent from this device: the self-copy
@@ -1805,9 +1785,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         // placeholder (showing the user their sent history exists without
         // corrupting the live Signal session state).
         // For live carbon copies (!is_mam_replay), leave |encrypted| set so
-        // the existing silently-discard path at line 2026 still applies
+        // the existing silently-discard path still applies
         // (live copies are already shown as sent messages; no replay needed).
-        if (is_mam_replay)
+        if (self_copy_advice.clear_encrypted_on_mam)
             encrypted = nullptr;
     }
 
@@ -1843,8 +1823,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     
     // Auto-enable OMEMO when receiving encrypted messages (PM or MUC).
     // MUC auto-enable is now safe because we have real-JID tracking + bundle readiness checks.
-    if (encrypted && !is_self_outbound_copy
-        && channel && !channel->omemo.enabled)
+    if (channel
+        && ::xmpp::should_auto_enable_channel_omemo(
+            encrypted != nullptr, is_self_outbound_copy, channel->omemo.enabled))
     {
         weechat_printf(channel->buffer, "%s", fmt::format("{}Auto-enabling OMEMO (received encrypted message)",
                        weechat_prefix("network")).c_str());
@@ -1894,11 +1875,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         // (using channel_id + stable_id) should already have supplied the
         // cleartext for historical MUC OMEMO messages, avoiding any ratchet
         // touch. This decode_jid mapping is a defensive fallback.
-        const char *decode_jid = from_bare;
+        std::optional<std::string_view> muc_sender_real_jid;
         std::string muc_sender_real_storage;
         if (channel && channel->type == weechat::channel::chat_type::MUC)
         {
-            std::string sender_nick = ::jid(nullptr, from).resource;
+            const std::string sender_nick = ::jid(nullptr, from).resource;
             if (!sender_nick.empty())
             {
                 if (auto member_opt = channel->member_search(sender_nick.c_str()))
@@ -1906,11 +1887,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     if ((*member_opt)->real_jid && !(*member_opt)->real_jid->empty())
                     {
                         muc_sender_real_storage = *(*member_opt)->real_jid;
-                        decode_jid = muc_sender_real_storage.c_str();
+                        muc_sender_real_jid = muc_sender_real_storage;
                     }
                 }
             }
         }
+        const std::string decode_jid_storage =
+            ::xmpp::resolve_omemo_decode_jid(from_bare, muc_sender_real_jid);
+        const char *decode_jid = decode_jid_storage.c_str();
 
         // Always attempt decryption — MAM messages can be decrypted if the
         // Signal session is still valid.  quiet=false so errors are logged.
@@ -1940,25 +1924,28 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 // so stable_id on replay resolves to origin-id or the message id=
                 // attribute instead.  Storing all three guarantees a cache hit
                 // regardless of which ID the next MAM replay uses as its stable_id.
-                std::string ch(channel_id);
-                std::string sid   = stanza_id  ? std::string(stanza_id)  : "";
-                std::string oid   = origin_id  ? std::string(origin_id)  : "";
-                std::string mid   = id         ? std::string(id)         : "";
-                if (!sid.empty())
-                    account.mam_cache_store_omemo_plaintext(ch, sid, omemo_cleartext_storage);
-                if (!oid.empty() && oid != sid)
-                    account.mam_cache_store_omemo_plaintext(ch, oid, omemo_cleartext_storage);
-                if (!mid.empty() && mid != sid && mid != oid)
-                    account.mam_cache_store_omemo_plaintext(ch, mid, omemo_cleartext_storage);
+                const std::string ch(channel_id);
+                for (const std::string &cache_id : ::xmpp::omemo_plaintext_cache_ids({
+                         stanza_id ? std::string_view(stanza_id) : std::string_view{},
+                         origin_id ? std::string_view(origin_id) : std::string_view{},
+                         id ? std::string_view(id) : std::string_view{}}))
+                {
+                    account.mam_cache_store_omemo_plaintext(ch, cache_id, omemo_cleartext_storage);
+                }
             }
         }
         if (!cleartext)
         {
-            if (is_self_outbound_copy)
-                goto message_handler_after_omemo;
+            const auto failure = ::xmpp::disposition_for_omemo_decrypt_failure({
+                is_self_outbound_copy,
+                is_mam_replay,
+                ::xmpp::axolotl_payload_is_empty(::xmpp::StanzaView(encrypted))});
 
-            if (is_mam_replay)
+            switch (failure)
             {
+            case ::xmpp::OmemoDecryptFailureDisposition::ContinueAfterOmemo:
+                goto message_handler_after_omemo;
+            case ::xmpp::OmemoDecryptFailureDisposition::ShowUndecryptablePlaceholder:
                 // Show a placeholder for all MAM decryption failures, including
                 // SG_ERR_DUPLICATE_MESSAGE (omemo_is_duplicate).  The within-session
                 // case (live delivery then MAM replay in the same WeeChat run) is
@@ -1969,18 +1956,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 // session.  The plaintext is irrecoverable either way, so show a
                 // placeholder so the user knows a message exists (matches what
                 // Conversations / Gajim show for undecryptable archived messages).
-                intext_storage = "[undecryptable OMEMO message]";
+                intext_storage = std::string(::xmpp::k_omemo_undecryptable_placeholder);
                 encrypted = nullptr;   // prevent the after-omemo null-text guard from skipping display
                 goto message_handler_after_omemo;
-            }
-
-            xmpp_stanza_t *payload = xmpp_stanza_get_child_by_name(encrypted, "payload");
-            if (!payload || stanza_element_text(payload).empty())
+            case ::xmpp::OmemoDecryptFailureDisposition::AbortSilent:
                 return 1;
-
-            weechat_printf_date_tags(channel->buffer, 0, "notify_none", "%s%s (%s)",
-                                     weechat_prefix("error"), "OMEMO Decryption Error", from);
-            return 1;
+            case ::xmpp::OmemoDecryptFailureDisposition::ShowDecryptionError:
+                weechat_printf_date_tags(channel->buffer, 0, "notify_none", "%s%s (%s)",
+                                         weechat_prefix("error"), "OMEMO Decryption Error", from);
+                return 1;
+            }
         }
     }
     else
@@ -2002,7 +1987,8 @@ message_handler_after_omemo:
     // Note: MAM replays with decryption failure (including cross-session duplicates)
     // set intext=[undecryptable] and clear |encrypted|, so they bypass this check
     // and display the placeholder.
-    if (encrypted && !cleartext && (is_self_outbound_copy || is_mam_replay))
+    if (::xmpp::should_skip_display_after_omemo(
+            encrypted != nullptr, cleartext != nullptr, is_self_outbound_copy, is_mam_replay))
         return 1;
 
     if (x)
@@ -2022,478 +2008,159 @@ message_handler_after_omemo:
     // XEP-0428 / XEP-0461: Fallback Indication handling.
     // When <fallback xmlns='urn:xmpp:fallback:0'> is present the <body> may
     // embed a legacy compatibility quote prefix that must be stripped.
-    xmpp_stanza_t *fallback_elem = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "fallback", "urn:xmpp:fallback:0");
     // Trimmed body storage — must outlive `text` usage below.
     std::string trimmed_body;
-    if (fallback_elem && text && !replace)
+    if (text)
     {
-        xmpp_stanza_t *reactions = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "reactions", "urn:xmpp:reactions:0");
-        xmpp_stanza_t *retract = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "retract", "urn:xmpp:message-retract:1");
-        xmpp_stanza_t *reply_fb = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "reply", "urn:xmpp:reply:0");
-        xmpp_stanza_t *apply_to = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "apply-to", "urn:xmpp:fasten:0");
-
-        if (reactions || retract || apply_to)
+        const auto fallback_body = ::xmpp::apply_fallback_body_trim(
+            ::xmpp::StanzaView(stanza), text, has_message_correction);
+        switch (fallback_body.disposition)
         {
-            // These handlers render the full content themselves; drop body.
+        case ::xmpp::FallbackBodyDisposition::Cleared:
             text = nullptr;
-        }
-        else if (reply_fb)
-        {
-            // XEP-0461 §3.1: strip the fallback quote prefix from the body.
-            // The <fallback> child <body start="N" end="M"/> gives the byte
-            // range [start,end) to remove (XEP-0428 §2.2).  Default start=0.
-            // After stripping, skip any leading whitespace (blank lines
-            // that separate the quote from the reply text).
-            xmpp_stanza_t *fb_body = xmpp_stanza_get_child_by_name(fallback_elem, "body");
-            const char *end_attr   = fb_body
-                ? xmpp_stanza_get_attribute(fb_body, "end")   : nullptr;
-            const char *start_attr = fb_body
-                ? xmpp_stanza_get_attribute(fb_body, "start") : nullptr;
-            if (end_attr)
-            {
-                const long end   = parse_int64(end_attr).value_or(0);
-                long start = start_attr ? parse_int64(start_attr).value_or(0) : 0L;
-                if (start < 0) start = 0;
-                std::string_view sv(text);
-                if (end > 0 && static_cast<std::size_t>(end) < sv.size())
-                {
-                    // Reconstruct: prefix (before start) + suffix (after end)
-                    std::string rebuilt;
-                    if (start > 0)
-                        rebuilt = std::string(sv.substr(0, static_cast<std::size_t>(start)));
-                    std::string_view suffix = sv.substr(static_cast<std::size_t>(end));
-                    // Skip blank lines / leading whitespace between quote and reply
-                    auto first_non_ws = suffix.find_first_not_of(" \t\r\n");
-                    if (first_non_ws != std::string_view::npos)
-                        suffix.remove_prefix(first_non_ws);
-                    rebuilt += suffix;
-                    trimmed_body = std::move(rebuilt);
-                    text = trimmed_body.empty() ? nullptr : trimmed_body.c_str();
-                }
-                // If end >= body length, the whole body was the fallback quote;
-                // nothing useful to display (reply_prefix provides the excerpt).
-                else if (end > 0)
-                    text = nullptr;
-            }
-            // No <body end=...> attribute — leave text as-is; better to show
-            // something than nothing.
+            break;
+        case ::xmpp::FallbackBodyDisposition::Trimmed:
+            trimmed_body = std::move(fallback_body.trimmed);
+            text = trimmed_body.empty() ? nullptr : trimmed_body.c_str();
+            break;
+        case ::xmpp::FallbackBodyDisposition::Unchanged:
+            break;
         }
     }
 
     // XEP-0382: Spoiler Messages — display hint before the body
-    xmpp_stanza_t *spoiler_elem = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "spoiler", "urn:xmpp:spoiler:0");
-    const std::string spoiler_hint_str = stanza_element_text(spoiler_elem);
-    const char *spoiler_hint = spoiler_hint_str.empty()
-        ? nullptr : spoiler_hint_str.c_str();
+    const auto spoiler_hint = ::xmpp::parse_spoiler_hint(::xmpp::StanzaView(stanza));
 
     // XEP-0466: Ephemeral Messages — detect timer value
-    xmpp_stanza_t *ephemeral_elem = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "ephemeral", "urn:xmpp:ephemeral:0");
-    long ephemeral_timer = 0;
-    if (ephemeral_elem)
+    const long ephemeral_timer =
+        ::xmpp::parse_ephemeral_timer(::xmpp::StanzaView(stanza)).value_or(0);
+
+    // XEP-0308: Message correction — replace the original line in-place.
+    if (has_message_correction)
     {
-        const char *timer_attr = xmpp_stanza_get_attribute(ephemeral_elem, "timer");
-        if (auto v = parse_int64(timer_attr); v && *v > 0)
-            ephemeral_timer = *v;
-    }
+        const bool is_muc_for_correction = channel
+            && channel->type == weechat::channel::chat_type::MUC;
+        const std::string sender_key = ::xmpp::message_correction_sender_key(
+            from, from_bare, is_muc_for_correction);
 
-    if (replace)
-    {
-        bool found_orig = false;
-        void *edit_line_data = nullptr; // line_data of the original message for in-place update
-        void *lines = weechat_hdata_pointer(hdata_buffer,
-                                            channel->buffer, "lines");
-        if (lines)
+        if (text
+            && weechat::line_store_find_message_line_for_sender(
+                channel->buffer, correction_target_storage, sender_key)
+                == weechat::LineStoreLookupResult::Found)
         {
-            void *last_line = weechat_hdata_pointer(hdata_lines,
-                                                    lines, "last_line");
-            while (last_line && !found_orig)
-            {
-                void *line_data = weechat_hdata_pointer(hdata_line,
-                                                        last_line, "data");
-                if (line_data)
-                {
-                    int tags_count = weechat_hdata_integer(hdata_line_data,
-                                                           line_data, "tags_count");
-                    std::string str_tag;
-                    for (int n_tag = 0; n_tag < tags_count; n_tag++)
-                    {
-                        str_tag = fmt::format("{}|tags_array", n_tag);
-                        const char *tag = weechat_hdata_string(hdata_line_data,
-                                                               line_data, str_tag.c_str());
-                         if (id_matches_any(tag, replace_id))
-                          {
-                             // XEP-0308 §3: Verify the correcting sender matches
-                              // the original message author before applying the edit.
-                              // For MUC: compare MUC nick (resource part of full JID).
-                              // For PM:  compare bare JID — the nick_ tag may store a full
-                              //          JID with a different resource than the correction,
-                              //          so bare-JID matching is the only robust approach.
-                              const char *corr_nick = from_bare; // default: bare JID for PM
-                              std::string corr_resource_s;
-                              if (channel && channel->type == weechat::channel::chat_type::MUC)
-                              {
-                                  corr_resource_s = ::jid(nullptr, from).resource;
-                                  if (!corr_resource_s.empty())
-                                      corr_nick = corr_resource_s.c_str();
-                              }
-
-                            bool sender_matches = false;
-                            for (int chk = 0; chk < tags_count; chk++)
-                            {
-                                str_tag = fmt::format("{}|tags_array", chk);
-                                const char *chk_tag = weechat_hdata_string(
-                                    hdata_line_data, line_data, str_tag.c_str());
-                                 if (chk_tag && std::string_view(chk_tag).starts_with("nick_") &&
-                                    weechat_strcasecmp(chk_tag + 5, corr_nick) == 0)
-                                {
-                                    sender_matches = true;
-                                    break;
-                                }
-                            }
-                            if (!sender_matches)
-                                break;  // Silently drop spoofed correction
-
-                            // Save this line_data for the in-place update below.
-                            edit_line_data = line_data;
-
-                            auto arraylist_deleter = [](struct t_arraylist *al) {
-                                weechat_arraylist_free(al);
-                            };
-                            std::unique_ptr<struct t_arraylist, decltype(arraylist_deleter)>
-                                orig_lines_ptr(weechat_arraylist_new(0, 0, 0, nullptr, nullptr, nullptr, nullptr),
-                                               arraylist_deleter);
-                            struct t_arraylist *orig_lines = orig_lines_ptr.get();
-                            char *msg = (char*)weechat_hdata_string(hdata_line_data,
-                                                                    line_data, "message");
-                            weechat_arraylist_insert(orig_lines, 0, msg);
-
-                            while (msg)
-                            {
-                                last_line = weechat_hdata_pointer(hdata_line,
-                                                                  last_line, "prev_line");
-                                if (last_line)
-                                    line_data = weechat_hdata_pointer(hdata_line,
-                                                                      last_line, "data");
-                                else
-                                    line_data = nullptr;
-
-                                msg = nullptr;
-                                if (line_data)
-                                {
-                                    tags_count = weechat_hdata_integer(hdata_line_data,
-                                                                       line_data, "tags_count");
-                                    for (n_tag = 0; n_tag < tags_count; n_tag++)
-                                    {
-                                        str_tag = fmt::format("{}|tags_array", n_tag);
-                                        tag = weechat_hdata_string(hdata_line_data,
-                                                                   line_data, str_tag.c_str());
-                                         if (id_matches_any(tag, replace_id))
-                                        {
-                                            msg = (char*)weechat_hdata_string(hdata_line_data,
-                                                                              line_data, "message");
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                if (msg)
-                                    weechat_arraylist_insert(orig_lines, 0, msg);
-                            }
-
-                            std::string orig_message;
-                            for (int i = 0; i < weechat_arraylist_size(orig_lines); i++)
-                            {
-                                if (const char *line = (const char*)weechat_arraylist_get(orig_lines, i))
-                                    orig_message += line;
-                            }
-                            found_orig = true;
-                            break;
-                        }
-                    }
-                }
-
-                last_line = weechat_hdata_pointer(hdata_line,
-                                                  last_line, "prev_line");
-            }
-        }
-
-        // diff display removed; corrected text shown as-is
-
-        // XEP-0308: Replace the original line in-place rather than appending a
-        // new "* " line.  Original message not in buffer (e.g. scrolled out or
-        // MAM replay) — drop the correction silently rather than printing a
-        // dangling 📝 line.
-        if (edit_line_data)
-        {
-            const std::string new_msg = std::string("📝 ") + text;
-            buffer__update_line_by_id(channel->buffer, replace_id, new_msg.c_str());
+            [[maybe_unused]] const bool correction_updated =
+                weechat::line_store_update_message_by_id(
+                    channel->buffer,
+                    correction_target_storage,
+                    ::xmpp::format_message_correction_text(text));
         }
         return 1;
     }
 
     // XEP-0425 v0.3: Message Moderation (extends XEP-0424)
-    // Wire format: <retract xmlns='urn:xmpp:message-retract:1' id='...'> with a
-    // <moderated xmlns='urn:xmpp:message-moderate:1'> child element.
-    // (The obsolete pre-v0.3 <apply-to xmlns='urn:xmpp:fasten:0'> wrapper is gone.)
-    //
-    // §5 MUST: accept moderation only from the MUC service itself (from_bare == channel JID).
-    xmpp_stanza_t *mod_retract = xmpp_stanza_get_child_by_name_and_ns(stanza, "retract",
-                                                                       "urn:xmpp:message-retract:1");
-    xmpp_stanza_t *moderated_elem = mod_retract
-        ? xmpp_stanza_get_child_by_name_and_ns(mod_retract, "moderated",
-                                               "urn:xmpp:message-moderate:1")
-        : nullptr;
-    const char *moderate_id = mod_retract ? xmpp_stanza_get_attribute(mod_retract, "id") : nullptr;
-    std::string moderate_reason_str;
-
-    if (moderated_elem && moderate_id)
+    if (auto moderation = ::xmpp::parse_moderated_retraction(::xmpp::StanzaView(stanza)))
     {
-        // §5 MUST: moderation stanza MUST originate from the MUC room itself.
-        // Reject if the sender is not the MUC service (i.e. from_bare != channel JID).
-        if (!channel || !from_bare ||
-            weechat_strcasecmp(from_bare, channel->id.data()) != 0)
+        if (!channel
+            || !::xmpp::should_accept_moderation_from_sender(from_bare, channel->id))
             return 1;
 
-        moderate_reason_str = stanza_element_text(
-            xmpp_stanza_get_child_by_name(moderated_elem, "reason"));
-        const char *moderate_reason = moderate_reason_str.empty()
-            ? nullptr : moderate_reason_str.c_str();
+        const char *moderation_channel_id = account.jid() == from_bare ? to_bare : from_bare;
+        account.mam_cache_retract_message(moderation_channel_id, moderation->target_id.c_str());
 
-        // Save moderation to MAM cache
-        const char *channel_id = account.jid() == from_bare ? to_bare : from_bare;
-        account.mam_cache_retract_message(channel_id, moderate_id);
+        std::optional<std::string_view> moderate_reason_view;
+        if (moderation->reason)
+            moderate_reason_view = *moderation->reason;
+        const std::string tombstone =
+            ::xmpp::format_moderation_tombstone(moderate_reason_view);
 
-        // Find and tombstone the moderated message in buffer
-        void *lines = weechat_hdata_pointer(hdata_buffer,
-                                            channel->buffer, "lines");
-        if (lines)
+        const auto moderation_lookup = weechat::line_store_tombstone_message_by_id(
+            channel->buffer,
+            moderation->target_id,
+            tombstone,
+            "xmpp_retracted,xmpp_moderated,notify_none");
+
+        if (moderation_lookup == weechat::LineStoreLookupResult::Found)
         {
-            void *last_line = weechat_hdata_pointer(hdata_lines,
-                                                    lines, "last_line");
-            while (last_line)
+            if (moderation->reason)
             {
-                void *line_data = weechat_hdata_pointer(hdata_line,
-                                                        last_line, "data");
-                if (line_data)
-                {
-                    int tags_count = weechat_hdata_integer(hdata_line_data,
-                                                           line_data, "tags_count");
-                    std::string str_tag;
-                    for (int n_tag = 0; n_tag < tags_count; n_tag++)
-                    {
-                        str_tag = fmt::format("{}|tags_array", n_tag);
-                        const char *tag = weechat_hdata_string(hdata_line_data,
-                                                               line_data, str_tag.c_str());
-                        if (id_matches_any(tag, moderate_id))
-                        {
-                            // Found the message to moderate - update it with tombstone
-                            std::string tombstone = moderate_reason
-                                ? fmt::format("{}[Message moderated: {}]{}",
-                                              weechat_color("darkgray"),
-                                              moderate_reason,
-                                              weechat_color("resetcolor"))
-                                : fmt::format("{}[Message moderated by room moderator]{}",
-                                              weechat_color("darkgray"),
-                                              weechat_color("resetcolor"));
-
-                            // Update the line with tombstone
-                            struct t_hashtable *hashtable = weechat_hashtable_new(8,
-                                WEECHAT_HASHTABLE_STRING,
-                                WEECHAT_HASHTABLE_STRING,
-                                nullptr, nullptr);
-                            weechat_hashtable_set(hashtable, "message", tombstone.c_str());
-                            weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,xmpp_moderated,notify_none");
-                            weechat_hdata_update(hdata_line_data, line_data, hashtable);
-                            weechat_hashtable_free(hashtable);
-
-                            // Print notification
-                            if (moderate_reason)
-                                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                                    "%s%s moderated a message: %s",
-                                    weechat_prefix("network"),
-                                    from_bare, moderate_reason);
-                            else
-                                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                                    "%s%s moderated a message",
-                                    weechat_prefix("network"),
-                                    from_bare);
-
-                            return 1;
-                        }
-                    }
-                }
-
-                last_line = weechat_hdata_pointer(hdata_line,
-                                                  last_line, "prev_line");
+                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                    "%s%s moderated a message: %s",
+                    weechat_prefix("network"),
+                    from_bare, moderation->reason->c_str());
+            }
+            else
+            {
+                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                    "%s%s moderated a message",
+                    weechat_prefix("network"),
+                    from_bare);
             }
         }
-
-        // If we didn't find the message, still print notification
-        if (moderate_reason)
+        else if (moderation->reason)
+        {
             weechat_printf_date_tags(channel->buffer, 0, "notify_none",
                 "%s%s moderated a message (not found in buffer): %s",
                 weechat_prefix("network"),
-                from_bare, moderate_reason);
+                from_bare, moderation->reason->c_str());
+        }
         else
+        {
             weechat_printf_date_tags(channel->buffer, 0, "notify_none",
                 "%s%s moderated a message (not found in buffer)",
                 weechat_prefix("network"),
                 from_bare);
+        }
 
         return 1;
     }
 
     // XEP-0424: Message Retraction
-    xmpp_stanza_t *retract = xmpp_stanza_get_child_by_name_and_ns(stanza, "retract",
-                                                                   "urn:xmpp:message-retract:1");
-    const char *retract_id = retract ? xmpp_stanza_get_attribute(retract, "id") : nullptr;
-
-    if (retract_id)
+    if (auto retraction = ::xmpp::parse_message_retraction(::xmpp::StanzaView(stanza)))
     {
-        // XEP-0424 §5 MUST: verify the retractor is the original sender.
-        // For MUC: compare MUC nick (resource part).
-        // For PM:  compare bare JID.
-        // Additionally, if the room advertises XEP-0421 (occupant-id), use
-        // the occupant-id from the retraction stanza to verify identity even
-        // through nick changes in semi-anonymous rooms.
-        const char *retract_nick = from_bare; // default for PM
-        std::string retract_resource_s;
-        if (channel && channel->type == weechat::channel::chat_type::MUC)
-        {
-            retract_resource_s = ::jid(nullptr, from).resource;
-            if (!retract_resource_s.empty())
-                retract_nick = retract_resource_s.c_str();
-        }
+        const bool is_muc_for_retraction = channel
+            && channel->type == weechat::channel::chat_type::MUC;
+        const std::string retraction_sender = ::xmpp::retraction_sender_key(
+            from, from_bare, is_muc_for_retraction);
 
-        // Extract occupant-id from the retraction stanza (XEP-0421 §4).
-        // Only trusted if the room advertises urn:xmpp:occupant-id:0.
-        const char *retract_occ_id = nullptr;
-        const bool room_has_occupant_ids = channel && from_bare &&
-            account.peer_supports_feature(from_bare, "urn:xmpp:occupant-id:0");
+        std::string retraction_occupant_id;
+        bool prefer_occupant_id = false;
+        const bool room_has_occupant_ids = channel && from_bare
+            && account.peer_supports_feature(from_bare, "urn:xmpp:occupant-id:0");
         if (room_has_occupant_ids)
         {
-            xmpp_stanza_t *occ_elem = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "occupant-id", "urn:xmpp:occupant-id:0");
-            if (occ_elem)
-                retract_occ_id = xmpp_stanza_get_attribute(occ_elem, "id");
-        }
-
-        // Save retraction to MAM cache
-        const char *channel_id = account.jid() == from_bare ? to_bare : from_bare;
-        account.mam_cache_retract_message(channel_id, retract_id);
-
-        // Find and tombstone the retracted message in buffer
-        void *lines = weechat_hdata_pointer(hdata_buffer,
-                                            channel->buffer, "lines");
-        if (lines)
-        {
-            void *last_line = weechat_hdata_pointer(hdata_lines,
-                                                    lines, "last_line");
-            while (last_line)
+            if (auto occupant_id = ::xmpp::parse_retraction_occupant_id(::xmpp::StanzaView(stanza)))
             {
-                void *line_data = weechat_hdata_pointer(hdata_line,
-                                                        last_line, "data");
-                if (line_data)
-                {
-                    int tags_count = weechat_hdata_integer(hdata_line_data,
-                                                           line_data, "tags_count");
-                    std::string str_tag;
-                    bool id_matched = false;
-                    for (int n_tag = 0; n_tag < tags_count; n_tag++)
-                    {
-                        str_tag = fmt::format("{}|tags_array", n_tag);
-                        const char *tag = weechat_hdata_string(hdata_line_data,
-                                                               line_data, str_tag.c_str());
-                        if (id_matches_any(tag, retract_id))
-                        {
-                            id_matched = true;
-                            break;
-                        }
-                    }
-
-                    if (id_matched)
-                    {
-                        // XEP-0424 §5 MUST: sender verification.
-                        // Primary method: nick_ tag match.
-                        // Secondary (MUC semi-anon): occupant_id_ tag match.
-                        bool sender_ok = false;
-
-                        if (retract_occ_id)
-                        {
-                            // Occupant-id available and room is trusted — use it.
-                            // It is robust against nick changes.
-                            std::string occ_needle =
-                                std::string("occupant_id_") + retract_occ_id;
-                            for (int chk = 0; chk < tags_count && !sender_ok; chk++)
-                            {
-                                str_tag = fmt::format("{}|tags_array", chk);
-                                const char *t = weechat_hdata_string(hdata_line_data,
-                                                                     line_data, str_tag.c_str());
-                                if (t && weechat_strcasecmp(t, occ_needle.c_str()) == 0)
-                                    sender_ok = true;
-                            }
-                        }
-                        else
-                        {
-                            // Fall back to nick_ tag comparison.
-                            for (int chk = 0; chk < tags_count && !sender_ok; chk++)
-                            {
-                                str_tag = fmt::format("{}|tags_array", chk);
-                                const char *t = weechat_hdata_string(hdata_line_data,
-                                                                     line_data, str_tag.c_str());
-                                if (t && std::string_view(t).starts_with("nick_") &&
-                                    weechat_strcasecmp(t + 5, retract_nick) == 0)
-                                    sender_ok = true;
-                            }
-                        }
-
-                        if (!sender_ok)
-                        {
-                            // Sender mismatch — silently drop the spoofed retraction.
-                            break;
-                        }
-
-                        // Found the message to retract - update it with tombstone
-                        auto tombstone = fmt::format("{}[Message deleted]{}",
-                                                     weechat_color("darkgray"),
-                                                     weechat_color("resetcolor"));
-
-                        struct t_hashtable *hashtable = weechat_hashtable_new(8,
-                            WEECHAT_HASHTABLE_STRING,
-                            WEECHAT_HASHTABLE_STRING,
-                            nullptr, nullptr);
-                        weechat_hashtable_set(hashtable, "message", tombstone.c_str());
-                        weechat_hashtable_set(hashtable, "tags", "xmpp_retracted,notify_none");
-                        weechat_hdata_update(hdata_line_data, line_data, hashtable);
-                        weechat_hashtable_free(hashtable);
-
-                        // Print notification
-                        weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                            "%s%s retracted a message",
-                            weechat_prefix("network"),
-                            from_bare);
-
-                        return 1;
-                    }
-                }
-
-                last_line = weechat_hdata_pointer(hdata_line,
-                                                  last_line, "prev_line");
+                retraction_occupant_id = std::move(*occupant_id);
+                prefer_occupant_id = true;
             }
         }
 
-        // If we didn't find the message, still print notification
-        weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-            "%s%s retracted a message (not found in buffer)",
-            weechat_prefix("network"),
-            from_bare);
+        const char *retraction_channel_id = account.jid() == from_bare ? to_bare : from_bare;
+        account.mam_cache_retract_message(retraction_channel_id, retraction->target_id.c_str());
+
+        const auto retraction_lookup = weechat::line_store_tombstone_retraction_by_id(
+            channel->buffer,
+            retraction->target_id,
+            ::xmpp::format_retraction_tombstone(),
+            "xmpp_retracted,notify_none",
+            retraction_sender,
+            retraction_occupant_id,
+            prefer_occupant_id);
+
+        if (retraction_lookup == weechat::LineStoreLookupResult::Found)
+        {
+            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                "%s%s retracted a message",
+                weechat_prefix("network"),
+                from_bare);
+        }
+        else if (retraction_lookup != weechat::LineStoreLookupResult::SenderRejected)
+        {
+            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
+                "%s%s retracted a message (not found in buffer)",
+                weechat_prefix("network"),
+                from_bare);
+        }
 
         return 1;
     }
@@ -2551,7 +2218,7 @@ message_handler_after_omemo:
                             str_tag = fmt::format("{}|tags_array", n_tag);
                             const char *tag = weechat_hdata_string(hdata_line_data,
                                                                    line_data, str_tag.c_str());
-                            if (id_matches_any(tag, reactions_id))
+                            if (tag && ::xmpp::line_tag_matches_message_id(tag, reactions_id))
                             {
                                 // Found the message.
                                 // XEP-0444: a new <reactions> from a sender REPLACES their
@@ -2810,7 +2477,7 @@ message_handler_after_omemo:
 
     if (weechat_string_match(text, "/me *", 0))
         weechat_string_dyn_concat(dyn_tags, ",xmpp_action", -1);
-    if (replace)
+    if (has_message_correction)
     {
         weechat_string_dyn_concat(dyn_tags, ",edit", -1);
         weechat_string_dyn_concat(dyn_tags, ",replace_", -1);
@@ -2906,7 +2573,7 @@ message_handler_after_omemo:
         // "on-mention": no override — WeeChat highlight rules handle @nick detection
     }
 
-    const char *edit = replace ? "📝 " : "";
+    const char *edit = has_message_correction ? "📝 " : "";
     if (x && text == cleartext && channel->transport != weechat::channel::transport::PGP)
         channel->transport = weechat::channel::transport::PGP;
     else if (!x && !encrypted && text && !cleartext
@@ -3040,7 +2707,11 @@ message_handler_after_omemo:
                     {
                         std::string stag = fmt::format("{}|tags_array", ti);
                         const char *t = weechat_hdata_string(hdata_line_data, ld, stag.c_str());
-                        if (id_matches_any(t, reply_to_id)) { has_tag = true; break; }
+                        if (t && ::xmpp::line_tag_matches_message_id(t, reply_to_id))
+                        {
+                            has_tag = true;
+                            break;
+                        }
                     }
                 }
                 if (has_tag)
@@ -3191,244 +2862,87 @@ message_handler_after_omemo:
         }
     }
 
-    // XEP-0385: Stateless Inline Media Sharing (SIMS)
-    // Parse <reference type="data"><media-sharing xmlns="urn:xmpp:sims:1">
+    // XEP-0385 / XEP-0447 / XEP-0448: SIMS and SFS display suffixes
     std::string sims_suffix;
-    for (xmpp_stanza_t *ref = xmpp_stanza_get_children(stanza);
-         ref; ref = xmpp_stanza_get_next(ref))
+    const auto media_view = ::xmpp::StanzaView(stanza);
+    for (const auto &share : ::xmpp::collect_sims_shares(media_view))
     {
-        const char *ref_name = xmpp_stanza_get_name(ref);
-        const char *ref_ns   = xmpp_stanza_get_ns(ref);
-        if (!ref_name || !ref_ns) continue;
-        if (std::string_view(ref_name) != "reference"
-            || std::string_view(ref_ns) != "urn:xmpp:reference:0") continue;
-        const char *ref_type = xmpp_stanza_get_attribute(ref, "type");
-        if (!ref_type || std::string_view(ref_type) != "data") continue;
-
-        xmpp_stanza_t *ms = xmpp_stanza_get_child_by_name_and_ns(
-            ref, "media-sharing", "urn:xmpp:sims:1");
-        if (!ms) continue;
-
-        // Extract file info from <file xmlns='urn:xmpp:jingle:apps:file-transfer:5'>
-        xmpp_stanza_t *file_elem = xmpp_stanza_get_child_by_name_and_ns(
-            ms, "file", "urn:xmpp:jingle:apps:file-transfer:5");
-
-        const auto sims_meta = parse_file_metadata(file_elem);
-
-        // Extract first source URL from <sources>
-        xmpp_stanza_t *sources = xmpp_stanza_get_child_by_name(ms, "sources");
-        std::string sims_url;
-        if (sources)
+        if (is_image_mime_type(share.meta.mime))
         {
-            // Try <reference type="data" uri="https://...">
-            for (xmpp_stanza_t *src = xmpp_stanza_get_children(sources);
-                 src && sims_url.empty(); src = xmpp_stanza_get_next(src))
-            {
-                const char *sname = xmpp_stanza_get_name(src);
-                const char *sns   = xmpp_stanza_get_ns(src);
-                if (!sname || !sns) continue;
-                if (std::string_view(sname) == "reference"
-                    && std::string_view(sns) == "urn:xmpp:reference:0")
-                {
-                    // XEP-0385: <reference type='data' uri='https://...'/>
-                    const char *uri = xmpp_stanza_get_attribute(src, "uri");
-                    if (uri) sims_url = uri;
-                }
-                else if (std::string_view(sname) == "url-data")
-                {
-                    const char *target = xmpp_stanza_get_attribute(src, "target");
-                    if (target) sims_url = target;
-                }
-            }
+            incoming_image_url = share.url;
+            incoming_image_mime = share.meta.mime;
+            incoming_image_width = share.meta.width;
+            incoming_image_height = share.meta.height;
         }
 
-        if (!sims_url.empty())
-        {
-            // Candidate for weechat-icat (SIMS provides MIME type)
-            if (is_image_mime_type(sims_meta.mime))
-            {
-                incoming_image_url = sims_url;
-                incoming_image_mime = sims_meta.mime;
-                incoming_image_width = sims_meta.width;
-                incoming_image_height = sims_meta.height;
-            }
+        sims_suffix += ::xmpp::format_file_share_suffix(
+            share.meta.name, share.meta.mime, share.meta.size_raw, share.url);
 
-            sims_suffix += format_file_share_suffix(
-                sims_meta.name, sims_meta.mime, sims_meta.size_raw, sims_url);
-
-            // If OOB already shows this same URL, suppress the OOB suffix to avoid duplication
-            if (!oob_suffix.empty() && oob_suffix.contains(sims_url))
-                oob_suffix.clear();
-        }
+        if (!oob_suffix.empty() && oob_suffix.contains(share.url))
+            oob_suffix.clear();
     }
 
-    // XEP-0447: Stateless File Sharing (SFS)
-    // Parse <file-sharing xmlns='urn:xmpp:sfs:0'> — preferred by Conversations ≥2.10 / Dino / Gajim.
-    // Deduplicate with the SIMS block: if we already built a sims_suffix for the same URL, skip.
-    for (xmpp_stanza_t *fs = xmpp_stanza_get_children(stanza);
-         fs; fs = xmpp_stanza_get_next(fs))
+    for (const auto &sfs : ::xmpp::collect_sfs_shares(media_view))
     {
-        const char *fs_name = xmpp_stanza_get_name(fs);
-        const char *fs_ns   = xmpp_stanza_get_ns(fs);
-        if (!fs_name || !fs_ns) continue;
-        if (std::string_view(fs_name) != "file-sharing"
-            || std::string_view(fs_ns) != "urn:xmpp:sfs:0") continue;
-
-        // <file xmlns='urn:xmpp:file:metadata:0'>
-        xmpp_stanza_t *file_elem = xmpp_stanza_get_child_by_name_and_ns(
-            fs, "file", "urn:xmpp:file:metadata:0");
-
-        const auto sfs_meta = parse_file_metadata(file_elem);
-
-        // <sources><url-data xmlns='http://jabber.org/protocol/url-data' target='https://...'/>
-        xmpp_stanza_t *sources = xmpp_stanza_get_child_by_name(fs, "sources");
-        std::string sfs_url;
-        bool sfs_encrypted = false; // true when source is XEP-0448 encrypted
-        if (sources)
+        if (sfs.encrypted)
         {
-            for (xmpp_stanza_t *src = xmpp_stanza_get_children(sources);
-                 src; src = xmpp_stanza_get_next(src))
+            const auto &enc = *sfs.encrypted;
+            const std::string esfs_stable_id = stable_id ? std::string(stable_id) : std::string();
+            const std::string esfs_channel_jid = channel_id ? std::string(channel_id) : std::string();
+
+            bool already_downloaded = false;
+            if (!esfs_stable_id.empty() && !esfs_channel_jid.empty())
             {
-                const char *sname = xmpp_stanza_get_name(src);
-                const char *sns   = xmpp_stanza_get_ns(src);
-                if (!sname) continue;
-
-                // XEP-0448: <encrypted xmlns='urn:xmpp:esfs:0'>
-                if (std::string_view(sname) == "encrypted" && sns
-                    && std::string_view(sns) == "urn:xmpp:esfs:0")
+                if (auto prev = account.mam_cache_lookup_esfs_download(
+                        esfs_channel_jid, esfs_stable_id))
                 {
-                    // XEP-0448 §4: cipher attribute identifies the algorithm.
-                    // We only support AES-256-GCM/NoPadding; skip other ciphers.
-                    const char *cipher_attr = xmpp_stanza_get_attribute(src, "cipher");
-                    if (!cipher_attr || std::string_view(cipher_attr)
-                            != "urn:xmpp:ciphers:aes-256-gcm-nopadding:0")
+                    sims_suffix += ::xmpp::format_encrypted_file_saved_suffix(
+                        enc.meta.name, *prev);
+                    already_downloaded = true;
+
+                    if (weechat::config::instance &&
+                        weechat_config_boolean(weechat::config::instance->look.icat) &&
+                        is_image_mime_type(enc.meta.mime))
                     {
-                        XDEBUG("XEP-0448: unsupported cipher '{}', skipping encrypted source",
-                               cipher_attr ? cipher_attr : "(none)");
-                        break; // still prefer encrypted source, even if unsupported
+                        auto [w, h] = read_image_dimensions(prev->c_str());
+                        const std::string dim_args = icat_dimension_args(w, h);
+                        const std::string icat_cmd = fmt::format(
+                            "/icat -print_immediately{} {}", dim_args, *prev);
+                        weechat_command(channel->buffer, icat_cmd.c_str());
                     }
-
-                    // Extract key, iv, and inner url-data target.
-                    std::string esfs_key, esfs_iv, esfs_ct_url;
-                    xmpp_stanza_t *key_el = xmpp_stanza_get_child_by_name(src, "key");
-                    xmpp_stanza_t *iv_el  = xmpp_stanza_get_child_by_name(src, "iv");
-                    if (key_el)
-                        esfs_key = stanza_element_text(key_el);
-                    if (iv_el)
-                        esfs_iv = stanza_element_text(iv_el);
-
-                    xmpp_stanza_t *inner_sources = xmpp_stanza_get_child_by_name(src, "sources");
-                    if (inner_sources)
-                    {
-                        for (xmpp_stanza_t *isrc = xmpp_stanza_get_children(inner_sources);
-                             isrc && esfs_ct_url.empty(); isrc = xmpp_stanza_get_next(isrc))
-                        {
-                            const char *iname = xmpp_stanza_get_name(isrc);
-                            if (iname && std::string_view(iname) == "url-data")
-                            {
-                                const char *target = xmpp_stanza_get_attribute(isrc, "target");
-                                if (target) esfs_ct_url = target;
-                            }
-                        }
-                    }
-
-                    if (!esfs_key.empty() && !esfs_iv.empty() && !esfs_ct_url.empty())
-                    {
-                        // Build a stable ID for LMDB dedup: prefer server stanza-id,
-                        // fall back to origin-id, then the raw message id attribute.
-                        std::string esfs_stable_id = stable_id ? std::string(stable_id) : std::string();
-                        std::string esfs_channel_jid = channel_id ? std::string(channel_id) : std::string();
-
-                        // Layer 2: persistent dedup — check LMDB for a previous download
-                        // of this exact message (survives restarts; blocks MAM replay re-downloads).
-                        bool already_downloaded = false;
-                        if (!esfs_stable_id.empty() && !esfs_channel_jid.empty())
-                        {
-                            auto prev = account.mam_cache_lookup_esfs_download(
-                                esfs_channel_jid, esfs_stable_id);
-                            if (prev)
-                            {
-                                // File was previously downloaded — annotate and skip download.
-                                // Set sfs_url so dedup checks work; leave sfs_encrypted false
-                                // so the outer display block does not add a second suffix.
-                                sfs_url = esfs_ct_url;
-                                sims_suffix += std::string("\n") + weechat_color("cyan")
-                                    + "[Encrypted file: "
-                                    + (sfs_meta.name.empty() ? "(unnamed)" : sfs_meta.name)
-                                    + " — already saved: " + *prev + "]"
-                                    + std::string(weechat_color("resetcolor"));
-                                already_downloaded = true;
-
-                                // weechat-icat: display already-cached decrypted image inline
-                                if (weechat::config::instance &&
-                                    weechat_config_boolean(weechat::config::instance->look.icat) &&
-                                    is_image_mime_type(sfs_meta.mime))
-                                {
-                                    auto [w, h] = read_image_dimensions(prev->c_str());
-                                    std::string dim_args = icat_dimension_args(w, h);
-                                    std::string icat_cmd = fmt::format(
-                                        "/icat -print_immediately{} {}", dim_args, *prev);
-                                    weechat_command(channel->buffer, icat_cmd.c_str());
-                                }
-                            }
-                        }
-
-                        if (!already_downloaded)
-                        {
-                            // Kick off background download + decrypt.
-                            esfs_start_download(esfs_ct_url, sfs_meta.name, esfs_key, esfs_iv,
-                                                channel ? channel->buffer : account.buffer,
-                                                &account, esfs_channel_jid, esfs_stable_id);
-                            sfs_encrypted = true;
-                            sfs_url = esfs_ct_url;
-                        }
-                    }
-                    break; // prefer encrypted source
-                }
-
-                if (!sfs_url.empty()) continue; // already have a plain URL
-
-                if (std::string_view(sname) == "url-data")
-                {
-                    const char *target = xmpp_stanza_get_attribute(src, "target");
-                    if (target) sfs_url = target;
-                }
-                else if (std::string_view(sname) == "reference")
-                {
-                    const char *uri = xmpp_stanza_get_attribute(src, "uri");
-                    if (uri) sfs_url = uri;
                 }
             }
-        }
 
-        // Skip if SIMS already covered this URL
-        if (!sfs_url.empty() && !sims_suffix.empty()
-            && sims_suffix.contains(sfs_url))
+            if (!already_downloaded)
+            {
+                esfs_start_download(enc.ciphertext_url, enc.meta.name, enc.key_b64, enc.iv_b64,
+                                    channel ? channel->buffer : account.buffer,
+                                    &account, esfs_channel_jid, esfs_stable_id);
+                sims_suffix += ::xmpp::format_encrypted_file_suffix(
+                    enc.meta.name, enc.meta.size_raw);
+            }
             continue;
-        // Also skip if the OOB suffix already covers it
-        if (!sfs_url.empty() && !oob_suffix.empty()
-            && oob_suffix.contains(sfs_url))
-        {
-            oob_suffix.clear(); // show the richer SFS line instead
         }
 
-        if (!sfs_url.empty())
-        {
-            // Candidate for weechat-icat (SFS provides MIME type; skip encrypted — handled in esfs_download_cb)
-            if (!sfs_encrypted && is_image_mime_type(sfs_meta.mime))
-            {
-                incoming_image_url = sfs_url;
-                incoming_image_mime = sfs_meta.mime;
-                incoming_image_width = sfs_meta.width;
-                incoming_image_height = sfs_meta.height;
-            }
+        if (!sfs.plain_url)
+            continue;
 
-            if (sfs_encrypted)
-                sims_suffix += format_encrypted_file_suffix(sfs_meta.name, sfs_meta.size_raw);
-            else
-                sims_suffix += format_file_share_suffix(
-                    sfs_meta.name, sfs_meta.mime, sfs_meta.size_raw, sfs_url);
+        const std::string &sfs_url = *sfs.plain_url;
+        if (!sims_suffix.empty() && sims_suffix.contains(sfs_url))
+            continue;
+        if (!oob_suffix.empty() && oob_suffix.contains(sfs_url))
+            oob_suffix.clear();
+
+        if (is_image_mime_type(sfs.meta.mime))
+        {
+            incoming_image_url = sfs_url;
+            incoming_image_mime = sfs.meta.mime;
+            incoming_image_width = sfs.meta.width;
+            incoming_image_height = sfs.meta.height;
         }
+
+        sims_suffix += ::xmpp::format_file_share_suffix(
+            sfs.meta.name, sfs.meta.mime, sfs.meta.size_raw, sfs_url);
     }
 
     // XEP-0511: Link Metadata — parse <rdf:Description> containing OpenGraph metadata.
@@ -3516,18 +3030,12 @@ message_handler_after_omemo:
         }
     }
 
-    // Apply XEP-0393 Message Styling
-    // Skip if <unstyled xmlns='urn:xmpp:styling:0'/> hint is present
-    const char *display_text = text;
+    // XEP-0393 / XEP-0394: message body styling
     std::string styled_text;
-    bool has_unstyled = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "unstyled", "urn:xmpp:styling:0") != nullptr;
-    if (text && !has_unstyled)  // Apply styling
+    const char *display_text = text;
+    if (text)
     {
-        // XEP-0394: Message Markup takes precedence over XEP-0393 ad-hoc styling.
-        styled_text = apply_xep394_markup(stanza, text);
-        if (styled_text.empty())
-            styled_text = apply_xep393_styling(text);
+        styled_text = ::xmpp::format_inbound_message_body(stanza, text);
         display_text = styled_text.c_str();
     }
 
@@ -3563,13 +3071,11 @@ message_handler_after_omemo:
     // XEP-0382: Spoiler Messages — prepend spoiler warning before the body
     if (spoiler_hint)
     {
-        std::string spoiler_prefix = std::string(weechat::xmpp_color("yellow"))
-            + "[Spoiler"
-            + (spoiler_hint && !std::string_view(spoiler_hint).empty()
-               ? std::string(": ") + spoiler_hint
-               : std::string(""))
-            + "] "
-            + weechat::xmpp_color("resetcolor").c_str();
+        std::optional<std::string_view> hint_view;
+        if (!spoiler_hint->empty())
+            hint_view = *spoiler_hint;
+        const std::string spoiler_prefix =
+            ::xmpp::format_spoiler_display_prefix(hint_view);
         if (final_text.empty())
             final_text = display_text ? display_text : "";
         final_text = spoiler_prefix + final_text;
@@ -3579,9 +3085,8 @@ message_handler_after_omemo:
     // XEP-0466: Ephemeral Messages — prepend timer indicator before the body
     if (ephemeral_timer > 0)
     {
-        std::string eph_prefix = std::string(weechat::xmpp_color("magenta"))
-            + "[⏱ " + std::to_string(ephemeral_timer) + "s] "
-            + weechat::xmpp_color("resetcolor").c_str();
+        const std::string eph_prefix =
+            ::xmpp::format_ephemeral_display_prefix(ephemeral_timer);
         if (final_text.empty())
             final_text = display_text ? display_text : "";
         final_text = eph_prefix + final_text;
@@ -3728,7 +3233,8 @@ message_handler_after_omemo:
 
     // XEP-0466: schedule tombstone timer if this was an ephemeral message.
     // Timer starts when the message is displayed (now), fires after ephemeral_timer seconds.
-    if (ephemeral_timer > 0 && stable_id && *stable_id)
+    if (::xmpp::should_schedule_ephemeral_tombstone(
+            ephemeral_timer, stable_id ? std::string_view(stable_id) : std::string_view{}))
     {
         g_ephemeral_pending.push_back({ channel->buffer, std::string(stable_id) });
         weechat_hook_timer(ephemeral_timer * 1000, 0, 1,

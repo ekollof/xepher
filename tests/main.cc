@@ -8,6 +8,7 @@ int main() { return 0; }
 
 #include <doctest/doctest.h>
 
+#include "timeout_listener.hh"
 #include "plugin.inl"
 #include "omemo_xep.inl"
 #include "unit.inl"

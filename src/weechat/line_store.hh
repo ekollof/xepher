@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -31,5 +32,40 @@ inline constexpr std::string_view k_glyph_seen = " ✓✓";
     struct t_gui_buffer *buffer,
     std::initializer_list<std::string_view> needles,
     int max_scan = 256);
+
+enum class LineStoreLookupResult {
+    NotFound,
+    Found,
+    SenderRejected,
+};
+
+// True when a line tagged for target_id exists and nick_ sender tag matches.
+[[nodiscard]] XMPP_TEST_EXPORT LineStoreLookupResult
+line_store_find_message_line_for_sender(struct t_gui_buffer *buffer,
+                                        std::string_view target_id,
+                                        std::string_view sender_key);
+
+// Update message text on the first line whose tags match target_id.
+[[nodiscard]] XMPP_TEST_EXPORT bool line_store_update_message_by_id(
+    struct t_gui_buffer *buffer,
+    std::string_view target_id,
+    std::string_view new_message);
+
+// Tombstone the first matching line (no sender verification).
+[[nodiscard]] XMPP_TEST_EXPORT LineStoreLookupResult
+line_store_tombstone_message_by_id(struct t_gui_buffer *buffer,
+                                   std::string_view target_id,
+                                   std::string_view tombstone_message,
+                                   std::string_view replacement_tags);
+
+// Tombstone with XEP-0424 sender verification (nick_ or occupant_id_ tags).
+[[nodiscard]] XMPP_TEST_EXPORT LineStoreLookupResult
+line_store_tombstone_retraction_by_id(struct t_gui_buffer *buffer,
+                                      std::string_view target_id,
+                                      std::string_view tombstone_message,
+                                      std::string_view replacement_tags,
+                                      std::string_view sender_key,
+                                      std::string_view occupant_id,
+                                      bool prefer_occupant_id);
 
 }  // namespace weechat

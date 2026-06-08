@@ -236,9 +236,11 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] Receipts / markers (XEP-0184, 0333) — `message_ack.{hh,cpp}` + `line_store.{hh,cpp}`
 - [x] Chat states / typing (XEP-0085) — `chat_state.{hh,cpp}`
 - [x] Carbons + MAM replay dispatch (XEP-0280, 0313) — `message_forward.{hh,cpp}`
-- [ ] Body + styling (XEP-0393/0394) + SIMS/SFS display
-- [ ] OMEMO inbound branch (delegate crypto, isolate `weechat_printf` / hdata line edits)
-- [ ] Remaining branches (errors, invites, ephemeral, etc.)
+- [x] Body + styling (XEP-0393/0394) + SIMS/SFS display — `message_body.{hh,cpp}`, `message_media.{hh,cpp}`
+- [x] OMEMO inbound branch (parse/policy in `message_omemo.{hh,cpp}`; `decode()` + UI remain in handler)
+- [x] Invites, ephemeral, spoiler, fallback — `message_invite`, `message_ephemeral`, `message_spoiler`, `message_fallback`
+- [x] Retract/replace/moderation — `message_line_tag`, `message_correct`, `message_retract`, `line_store` tombstone helpers
+- [ ] Remaining branches (reactions, reply, PEP feeds)
 
 **`iq_handler.inl` slices:**
 - [ ] Version/time (done — see `iq_handlers.cpp`)
