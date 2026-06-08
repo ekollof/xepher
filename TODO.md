@@ -234,7 +234,7 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 
 **`message_handler.inl` slices (in suggested order):**
 - [x] Receipts / markers (XEP-0184, 0333) — `message_ack.{hh,cpp}` + `line_store.{hh,cpp}`
-- [ ] Chat states / typing (XEP-0085, 0308)
+- [x] Chat states / typing (XEP-0085) — `chat_state.{hh,cpp}`
 - [ ] Carbons + MAM replay dispatch (XEP-0280, 0313)
 - [ ] Body + styling (XEP-0393/0394) + SIMS/SFS display
 - [ ] OMEMO inbound branch (delegate crypto, isolate `weechat_printf` / hdata line edits)

@@ -39,7 +39,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     };
 
     weechat::channel *channel, *parent_channel;
-    xmpp_stanza_t *x, *body, *delay, *topic, *replace, *composing, *sent, *received, *result, *forwarded, *event, *items, *item, *encrypted;
+    xmpp_stanza_t *x, *body, *delay, *topic, *replace, *sent, *received, *result, *forwarded, *event, *items, *item, *encrypted;
     const char *type, *from, *nick, *from_bare, *to, *to_bare, *id, *thread, *replace_id, *timestamp;
     const char *text = nullptr;
     std::string intext_storage;
@@ -142,67 +142,52 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             intext_storage.clear();
         }
 
-        // XEP-0085: Chat State Notifications - handle all states
-        composing = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "composing", "http://jabber.org/protocol/chatstates");
-        xmpp_stanza_t *paused = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "paused", "http://jabber.org/protocol/chatstates");
-        xmpp_stanza_t *active = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "active", "http://jabber.org/protocol/chatstates");
-        xmpp_stanza_t *inactive = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "inactive", "http://jabber.org/protocol/chatstates");
-        xmpp_stanza_t *gone = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "gone", "http://jabber.org/protocol/chatstates");
-        
-        if (composing || paused || active || inactive || gone)
+        // XEP-0085: Chat State Notifications
         {
-            from = xmpp_stanza_get_from(stanza);
-            if (from == nullptr)
-                return 1;
-            std::string cs_from_bare_s = ::jid(nullptr, from).bare;
-            std::string cs_nick_s = ::jid(nullptr, from).resource;
-            from_bare = cs_from_bare_s.c_str();
-            nick = cs_nick_s.c_str();
-            channel = nullptr;
-            if (auto it = account.channels.find(from_bare); it != account.channels.end())
+            const auto view = ::xmpp::StanzaView(stanza);
+            if (::xmpp::stanza_has_chat_state(view))
             {
-                auto& [_, ch] = *it;
-                channel = &ch;
-            }
-            if (!channel)
-                return 1;
-            auto user = user::search(&account, from);
-            if (!user)
-            {
-                auto name = from;
-                auto [it_usr, _ins_usr] = account.users.emplace(std::piecewise_construct,
-                                              std::forward_as_tuple(name),
-                                              std::forward_as_tuple(&account, channel, name,
-                                                                    weechat_strcasecmp(from_bare, channel->id.data()) == 0
-                                                                    ? nick : from));
-                auto& [_, u] = *it_usr;
-                user = &u;
-            }
+                if (!view.from())
+                    return 1;
 
-            // XEP-0085 §5.1: record that this JID supports chat states so we
-            // may send states back to them.
-            channel->mark_chat_state_supported(std::string(from));
-            channel->mark_chat_state_supported(std::string(from_bare));
+                auto chat_state = ::xmpp::parse_incoming_chat_state(view);
+                if (!chat_state)
+                    return 1;
 
-            if (composing)
-            {
-                channel->add_typing(user);
-            }
-            else if (paused)
-            {
-                // <paused> means stopped typing but hasn't sent yet — remove from
-                // typing list so the indicator clears immediately
-                channel->remove_typing(user);
-            }
-            else if (active || inactive || gone)
-            {
-                // Clear typing state for active/inactive/gone
-                channel->remove_typing(user);
+                const std::string cs_from_bare_s = ::jid(nullptr, chat_state->from.c_str()).bare;
+                const std::string cs_nick_s = ::jid(nullptr, chat_state->from.c_str()).resource;
+                from_bare = cs_from_bare_s.c_str();
+                nick = cs_nick_s.c_str();
+                channel = nullptr;
+                if (auto it = account.channels.find(cs_from_bare_s); it != account.channels.end())
+                {
+                    auto& [_, ch] = *it;
+                    channel = &ch;
+                }
+                if (!channel)
+                    return 1;
+
+                const char *from_full = chat_state->from.c_str();
+                auto user = user::search(&account, from_full);
+                if (!user)
+                {
+                    auto [it_usr, _ins_usr] = account.users.emplace(
+                        std::piecewise_construct,
+                        std::forward_as_tuple(from_full),
+                        std::forward_as_tuple(
+                            &account, channel, from_full,
+                            weechat_strcasecmp(from_bare, channel->id.data()) == 0 ? nick : from_full));
+                    auto& [_, u] = *it_usr;
+                    user = &u;
+                }
+
+                channel->mark_chat_state_supported(chat_state->from);
+                channel->mark_chat_state_supported(cs_from_bare_s);
+
+                if (::xmpp::typing_action_for_state(chat_state->state) == ::xmpp::TypingAction::show)
+                    channel->add_typing(user);
+                else
+                    channel->remove_typing(user);
             }
         }
 
@@ -2825,8 +2810,9 @@ message_handler_after_omemo:
     }
 
     // XEP-0085: receiving a message implicitly clears the composing state
-    // Only do this for live (non-delayed) messages from others
-    if (!delay && from_bare && weechat_strcasecmp(from_bare, account.jid().data()) != 0)
+    const bool from_self = from_bare
+        && weechat_strcasecmp(from_bare, account.jid().data()) == 0;
+    if (::xmpp::should_clear_typing_on_message(delay != nullptr, from_self))
     {
         auto *msg_user = user::search(&account, from);
         if (msg_user)

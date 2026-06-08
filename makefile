@@ -188,6 +188,7 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/stanza_view.cpp \
 	 src/xmpp/iq_handlers.cpp \
 	 src/xmpp/message_ack.cpp \
+	 src/xmpp/chat_state.cpp \
 	 src/weechat/line_store.cpp \
 	 src/xmpp/atom.cpp \
 	 src/xmpp/xhtml.cpp \

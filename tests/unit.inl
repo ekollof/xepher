@@ -26,6 +26,7 @@
 #include "../src/xmpp/node.hh"
 #include "../src/xmpp/stanza_view.hh"
 #include "../src/xmpp/iq_handlers.hh"
+#include "../src/xmpp/chat_state.hh"
 #include "../src/xmpp/message_ack.hh"
 #include "../src/weechat/line_store.hh"
 #include "../src/weechat/runtime_port.hh"
@@ -749,6 +750,57 @@ static std::optional<std::string> text_opt(xmpp_stanza_t *el)
     if (t.empty())
         return std::nullopt;
     return t;
+}
+
+TEST_CASE("parse_incoming_chat_state from StanzaView")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message from='bob@example.org/phone' type='chat'>"
+        "<composing xmlns='http://jabber.org/protocol/chatstates'/>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto view = xmpp::StanzaView(msg);
+    CHECK(xmpp::stanza_has_chat_state(view));
+
+    auto state = xmpp::parse_incoming_chat_state(view);
+    REQUIRE(state.has_value());
+    CHECK(state->from == "bob@example.org/phone");
+    CHECK(state->state == xmpp::ChatStateKind::composing);
+    CHECK(xmpp::typing_action_for_state(state->state) == xmpp::TypingAction::show);
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("chat state priority prefers composing over paused")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message from='bob@example.org/phone' type='chat'>"
+        "<composing xmlns='http://jabber.org/protocol/chatstates'/>"
+        "<paused xmlns='http://jabber.org/protocol/chatstates'/>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    auto state = xmpp::parse_incoming_chat_state(xmpp::StanzaView(msg));
+    REQUIRE(state.has_value());
+    CHECK(state->state == xmpp::ChatStateKind::composing);
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("typing_action_for_state maps paused and gone to clear")
+{
+    CHECK(xmpp::typing_action_for_state(xmpp::ChatStateKind::paused) == xmpp::TypingAction::clear);
+    CHECK(xmpp::typing_action_for_state(xmpp::ChatStateKind::gone) == xmpp::TypingAction::clear);
+    CHECK(xmpp::should_clear_typing_on_message(false, false));
+    CHECK_FALSE(xmpp::should_clear_typing_on_message(true, false));
+    CHECK_FALSE(xmpp::should_clear_typing_on_message(false, true));
 }
 
 TEST_CASE("parse_incoming_receipt from StanzaView")
