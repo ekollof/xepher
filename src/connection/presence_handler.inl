@@ -502,9 +502,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     weechat::account::muc_owner_kind::config_get
                 };
                 account.muc_owner_queries[get_id] = info;
-                stanza::xep0004::form f("");
                 stanza::xep0045::xep0045owner::query q;
-                q.form(f);
                 auto get_iq = stanza::iq().type("get").to(room_jid).id(get_id);
                 get_iq.muc_owner(q);
                 account.connection.send(get_iq.build(account.context).get());
