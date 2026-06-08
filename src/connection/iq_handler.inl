@@ -6,7 +6,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     (void) top_level;
     append_raw_xml_trace(account, "RECV", stanza);
 
-    xmpp_stanza_t *reply, *query, *text, *fin;
+    xmpp_stanza_t *reply, *query, *fin;
     xmpp_stanza_t         *pubsub, *items, *item;
     xmpp_stanza_t         *storage, *conference, *nick;
 
@@ -323,10 +323,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // Build a vcard_fields struct pre-populated from the server's vCard.
                 auto ctext = [&](xmpp_stanza_t *parent, const char *name) -> std::string {
                     xmpp_stanza_t *ch = xmpp_stanza_get_child_by_name(parent, name);
-                    if (!ch) return {};
-                    char *txt = xmpp_stanza_get_text(ch);
-                    if (!txt) return {};
-                    std::string s(txt); xmpp_free(account.context, txt); return s;
+                    return ch ? stanza_element_text(ch) : std::string {};
                 };
                 ::xmpp::xep0054::vcard_fields f;
                 f.fn       = ctext(vcard, "FN");
@@ -393,12 +390,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         // Helper: get direct text content of a child element
         auto child_text = [&](xmpp_stanza_t *parent, const char *name) -> std::string {
             xmpp_stanza_t *child = xmpp_stanza_get_child_by_name(parent, name);
-            if (!child) return {};
-            char *txt = xmpp_stanza_get_text(child);
-            if (!txt) return {};
-            std::string s(txt);
-            xmpp_free(account.context, txt);
-            return s;
+            return child ? stanza_element_text(child) : std::string {};
         };
 
         // Helper: print a labelled line only if value is non-empty
@@ -686,10 +678,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 xmpp_stanza_t *el =
                                     xmpp_stanza_get_child_by_name(entry, tag);
                                 if (!el) continue;
-                                char *t = xmpp_stanza_get_text(el);
-                                if (!t) continue;
-                                std::string s(t);
-                                xmpp_free(ctx, t);
+                                const std::string s = stanza_element_text(el);
                                 if (!s.empty()) return s;
                             }
                             return {};
@@ -1026,9 +1015,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             pubsub_feed, "set", "http://jabber.org/protocol/rsm");
                         if (rsm_set2)
                         {
-                            xmpp_stanza_t *first_el2  = xmpp_stanza_get_child_by_name(rsm_set2, "first");
-                            char          *first_text2 = first_el2 ? xmpp_stanza_get_text(first_el2) : nullptr;
-                            if (first_text2)
+                            xmpp_stanza_t *first_el2 = xmpp_stanza_get_child_by_name(rsm_set2, "first");
+                            const std::string first_text2 = stanza_element_text(first_el2);
+                            if (!first_text2.empty())
                             {
                                 std::string hint = fmt::format(
                                     "/feed {} {} --before {}",
@@ -1042,7 +1031,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                         "%sFor older entries: %s",
                                         weechat_prefix("network"), hint.c_str());
-                                xmpp_free(account.context, first_text2);
                             }
                         }
                     }
@@ -1204,8 +1192,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 while (header)
                 {
                     const char *name = xmpp_stanza_get_attribute(header, "name");
-                    char *value = xmpp_stanza_get_text(header);
-                    if (name && value)
+                    const std::string value = stanza_element_text(header);
+                    if (name)
                     {
                         // Only forward headers explicitly listed in §9.2
                         bool allowed = std::ranges::any_of(allowed_headers, [&](const auto& allowed_name) {
@@ -1214,7 +1202,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         if (allowed)
                         {
                             // Strip CR and LF to prevent HTTP header injection
-                            std::string safe_value(value);
+                            std::string safe_value = value;
                             std::erase_if(safe_value, [](char c) { return c == '\r' || c == '\n'; });
                             std::string header_str = fmt::format("{}: {}", name, safe_value);
                             put_headers.push_back(header_str);
@@ -1225,7 +1213,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             XDEBUG("PUT header '{}' not in XEP-0363 §9.2 allowlist — dropped", name);
                         }
                     }
-                    if (value) xmpp_free(account.context, value);
                     header = xmpp_stanza_get_next(header);
                 }
             }
@@ -1921,12 +1908,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 xmpp_stanza_t *text_elem = xmpp_stanza_get_child_by_name(error_elem, "text");
                 if (text_elem)
                 {
-                    char *text = xmpp_stanza_get_text(text_elem);
-                    if (text)
-                    {
+                    const std::string text = stanza_element_text(text_elem);
+                    if (!text.empty())
                         error_msg = fmt::format("Upload slot request failed: {}", text);
-                        xmpp_free(account.context, text);
-                    }
                 }
                 else
                 {
@@ -1997,27 +1981,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 auto& [_, ctx] = *pub_it;
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-                std::string error_cond = "unknown error";
-                if (error_elem)
-                {
-                    // Prefer <text> child, fall back to first non-text child name
-                    xmpp_stanza_t *text_elem = xmpp_stanza_get_child_by_name(error_elem, "text");
-                    if (text_elem)
-                    {
-                        char *t = xmpp_stanza_get_text(text_elem);
-                        if (t) { error_cond = t; xmpp_free(account.context, t); }
-                    }
-                    else
-                    {
-                        for (xmpp_stanza_t *c = xmpp_stanza_get_children(error_elem);
-                             c; c = xmpp_stanza_get_next(c))
-                        {
-                            const char *cname = xmpp_stanza_get_name(c);
-                            if (cname && std::string_view(cname) != "text")
-                            { error_cond = cname; break; }
-                        }
-                    }
-                }
+                const std::string error_cond = error_elem
+                    ? iq_error_text(error_elem) : "unknown error";
                 struct t_gui_buffer *err_buf = ctx.buffer ? ctx.buffer : account.buffer;
                 weechat_printf(err_buf,
                     "%s%s: publish failed for %s/%s (item %s): %s",
@@ -2033,27 +1998,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (auto sub_it = account.pubsub_subscribe_queries.find(id); sub_it != account.pubsub_subscribe_queries.end())
             {
                 auto& [_, sub] = *sub_it;
-                std::string error_cond = "unknown error";
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-                if (error_elem)
-                {
-                    xmpp_stanza_t *text_el = xmpp_stanza_get_child_by_name(error_elem, "text");
-                    if (text_el)
-                    {
-                        char *t = xmpp_stanza_get_text(text_el);
-                        if (t) { error_cond = t; xmpp_free(account.context, t); }
-                    }
-                    else
-                    {
-                        for (xmpp_stanza_t *c = xmpp_stanza_get_children(error_elem);
-                             c; c = xmpp_stanza_get_next(c))
-                        {
-                            const char *cname = xmpp_stanza_get_name(c);
-                            if (cname && std::string_view(cname) != "text")
-                            { error_cond = cname; break; }
-                        }
-                    }
-                }
+                const std::string error_cond = error_elem
+                    ? iq_error_text(error_elem) : "unknown error";
                 struct t_gui_buffer *fb = sub.buffer ? sub.buffer : account.buffer;
                 weechat_printf(fb,
                     "%s%s: subscribe to %s failed: %s",
@@ -2066,27 +2013,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (auto unsub_it = account.pubsub_unsubscribe_queries.find(id); unsub_it != account.pubsub_unsubscribe_queries.end())
             {
                 auto& [_, unsub] = *unsub_it;
-                std::string error_cond = "unknown error";
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-                if (error_elem)
-                {
-                    xmpp_stanza_t *text_el = xmpp_stanza_get_child_by_name(error_elem, "text");
-                    if (text_el)
-                    {
-                        char *t = xmpp_stanza_get_text(text_el);
-                        if (t) { error_cond = t; xmpp_free(account.context, t); }
-                    }
-                    else
-                    {
-                        for (xmpp_stanza_t *c = xmpp_stanza_get_children(error_elem);
-                             c; c = xmpp_stanza_get_next(c))
-                        {
-                            const char *cname = xmpp_stanza_get_name(c);
-                            if (cname && std::string_view(cname) != "text")
-                            { error_cond = cname; break; }
-                        }
-                    }
-                }
+                const std::string error_cond = error_elem
+                    ? iq_error_text(error_elem) : "unknown error";
                 struct t_gui_buffer *fb = unsub.buffer ? unsub.buffer : account.buffer;
                 weechat_printf(fb,
                     "%s%s: unsubscribe from %s failed: %s",
@@ -2104,27 +2033,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 const std::string &err_service = fi.service;
                 const std::string &err_node    = fi.node;
 
-                std::string error_cond = "unknown error";
                 xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-                if (error_elem)
-                {
-                    xmpp_stanza_t *text_el = xmpp_stanza_get_child_by_name(error_elem, "text");
-                    if (text_el)
-                    {
-                        char *t = xmpp_stanza_get_text(text_el);
-                        if (t) { error_cond = t; xmpp_free(account.context, t); }
-                    }
-                    else
-                    {
-                        for (xmpp_stanza_t *c = xmpp_stanza_get_children(error_elem);
-                             c; c = xmpp_stanza_get_next(c))
-                        {
-                            const char *cname = xmpp_stanza_get_name(c);
-                            if (cname && std::string_view(cname) != "text")
-                            { error_cond = cname; break; }
-                        }
-                    }
-                }
+                const std::string error_cond = error_elem
+                    ? iq_error_text(error_elem) : "unknown error";
 
                 // Report the error in the feed buffer if it already exists,
                 // otherwise fall back to the account buffer.
@@ -2356,9 +2267,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     const char *vname = xmpp_stanza_get_name(v);
                                     if (!vname || weechat_strcasecmp(vname, "value") != 0)
                                         continue;
-                                    std::unique_ptr<char, decltype(&free)> t(
-                                        xmpp_stanza_get_text(v), free);
-                                    f.values.push_back(t ? t.get() : "");
+                                    f.values.push_back(stanza_element_text(v));
                                 }
                                 if (!f.var.empty())
                                     form.fields.push_back(std::move(f));
@@ -3238,9 +3147,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             const char *vname = xmpp_stanza_get_name(vnode);
                             if (!vname || weechat_strcasecmp(vname, "value") != 0)
                                 continue;
-                            std::unique_ptr<char, decltype(&free)> vtext(
-                                xmpp_stanza_get_text(vnode), free);
-                            txt = vtext ? vtext.get() : "";
+                            txt = stanza_element_text(vnode);
                             break;
                         }
                         if (!txt.empty())
@@ -3430,9 +3337,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 const char *vname = xmpp_stanza_get_name(vnode);
                                 if (!vname || weechat_strcasecmp(vname, "value") != 0)
                                     continue;
-                                std::unique_ptr<char, decltype(&free)> vtext(
-                                    xmpp_stanza_get_text(vnode), free);
-                                txt = vtext ? vtext.get() : "";
+                                txt = stanza_element_text(vnode);
                                 break;
                             }
                             if (txt.empty())
@@ -3531,8 +3436,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         bool has_form_type = false;
                         // find FORM_TYPE value (XEP-0115 §5: skip form if missing or not hidden)
                         // NOTE: xmpp_stanza_get_text_ptr only works on raw XMPP_STANZA_TEXT
-                        // nodes; for element nodes like <value> we must use xmpp_stanza_get_text
-                        // which allocates and concatenates all text-node children.
+                        // nodes; for element nodes like <value> use stanza_element_text().
                         for (xmpp_stanza_t *f = xmpp_stanza_get_child_by_name(x_elem, "field");
                              f; f = next_named(f, "field"))
                         {
@@ -3540,11 +3444,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             if (fvar && std::string_view(fvar) == "FORM_TYPE")
                             {
                                 xmpp_stanza_t *vnode = xmpp_stanza_get_child_by_name(f, "value");
-                                if (vnode) {
-                                    std::unique_ptr<char, decltype(&free)> vtext(
-                                        xmpp_stanza_get_text(vnode), free);
-                                    fd.form_type = vtext ? vtext.get() : "";
-                                }
+                                if (vnode)
+                                    fd.form_type = stanza_element_text(vnode);
                                 has_form_type = true;
                                 break;
                             }
@@ -3563,12 +3464,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 for (xmpp_stanza_t *vnode = xmpp_stanza_get_child_by_name(f, "value");
                                      vnode; vnode = next_named(vnode, "value"))
                                 {
-                                    std::unique_ptr<char, decltype(&free)> vtext(
-                                        xmpp_stanza_get_text(vnode), free);
                                     // Always include the value, even if empty: an empty
                                     // <value></value> must contribute "" to the S string
                                     // (e.g. Psi sends os_version with an empty value).
-                                    vals.push_back(vtext ? vtext.get() : "");
+                                    vals.push_back(stanza_element_text(vnode));
                                 }
                                 std::ranges::sort(vals);
                                 fd.fields.emplace_back(fvar, std::move(vals));
@@ -3661,12 +3560,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 xmpp_stanza_t *value = xmpp_stanza_get_child_by_name(field, "value");
                                 if (value)
                                 {
-                                    char *value_text = xmpp_stanza_get_text(value);
-                                    if (value_text)
-                                    {
-                                        max_size = strtoull(value_text, nullptr, 10);
-                                        xmpp_free(account.context, value_text);
-                                    }
+                                    if (auto n = parse_int64(stanza_element_text(value)); n && *n > 0)
+                                        max_size = static_cast<size_t>(*n);
                                 }
                             }
                             field = xmpp_stanza_get_next(field);
@@ -3878,14 +3773,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         {
             if (weechat_strcasecmp(xmpp_stanza_get_name(g), "group") != 0)
                 continue;
-            xmpp_stanza_t *gtxt = xmpp_stanza_get_children(g);
-            if (gtxt) {
-                char *text = xmpp_stanza_get_text(gtxt);
-                if (text) {
-                    account.roster[jid].groups.push_back(text);
-                    xmpp_free(account.context, text);
-                }
-            }
+            const std::string group_name = stanza_element_text(g);
+            if (!group_name.empty())
+                account.roster[jid].groups.push_back(group_name);
         }
     };
 
@@ -3994,13 +3884,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 const char *autojoin = xmpp_stanza_get_attribute(conference, "autojoin");
                 name = xmpp_stanza_get_attribute(conference, "name");
                 nick = xmpp_stanza_get_child_by_name(conference, "nick");
-                char *intext = nullptr;
-                if (nick)
-                {
-                    text = xmpp_stanza_get_children(nick);
-                    // BUG 3 fix: text may be nullptr if <nick/> element is empty
-                    intext = text ? xmpp_stanza_get_text(text) : nullptr;
-                }
+                const std::string bookmark_nick = nick ? stanza_element_text(nick) : std::string {};
 
                 if (!jid)
                     continue;
@@ -4008,7 +3892,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 // Store bookmark
                 account.bookmarks[jid].jid = jid;
                 account.bookmarks[jid].name = name ? name : "";
-                account.bookmarks[jid].nick = intext ? intext : "";
+                account.bookmarks[jid].nick = bookmark_nick;
                 account.bookmarks[jid].autojoin = autojoin
                     && (weechat_strcasecmp(autojoin, "true") == 0
                         || weechat_strcasecmp(autojoin, "1") == 0);
@@ -4044,8 +3928,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     {
                         std::string cmd = fmt::format("/enter {}{}{}",
                                                       jid,
-                                                      (intext && intext[0]) ? "/" : "",
-                                                      (intext && intext[0]) ? intext : "");
+                                                      bookmark_nick.empty() ? "" : "/",
+                                                      bookmark_nick);
                         weechat_command(account.buffer, cmd.c_str());
                         struct t_gui_buffer *ptr_buffer = nullptr;
                         if (auto ptr_channel = account.channels.find(jid); ptr_channel != account.channels.end())
@@ -4057,9 +3941,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         }
                     }
                 }
-
-                if (nick)
-                    xmpp_free(account.context, intext);
             }
         }
     }
@@ -4213,14 +4094,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 account.omemo.missing_axolotl_devicelist.erase(dl_target_jid);
 
                 // Log the transient error so the user has visibility.
-                const char *err_text = dl_err_elem
-                    ? xmpp_stanza_get_text(dl_err_elem) : nullptr;
+                const std::string err_text = dl_err_elem
+                    ? stanza_element_text(dl_err_elem) : std::string {};
                 weechat_printf(account.buffer,
                     "%somemo: transient devicelist fetch error for %s (%s) — "
                     "guard cleared, will retry on next send",
                     weechat_prefix("network"),
                     dl_target_jid.c_str(),
-                    err_text ? err_text : "unknown error");
+                    err_text.empty() ? "unknown error" : err_text.c_str());
             }
         }
     }
@@ -4495,12 +4376,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     xmpp_stanza_t *plast = xmpp_stanza_get_child_by_name(prsm, "last");
                     if (plast)
                     {
-                        xmpp_string_guard plast_text_g(account.context,
-                            xmpp_stanza_get_text(plast));
-                        if (plast_text_g.ptr)
+                        const std::string plast_text = stanza_element_text(plast);
+                        if (!plast_text.empty())
                             account.mam_cursor_set(
                                 fmt::format("pubsub:{}", feed_key),
-                                plast_text_g.ptr);
+                                plast_text);
                     }
                 }
                 return true;
@@ -4513,8 +4393,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     if (fin)
     {
         xmpp_stanza_t *set, *set__last;
-        xmpp_string_guard set__last__text_g { account.context, nullptr };
-        char *&set__last__text = set__last__text_g.ptr;
         weechat::account::mam_query mam_query;
 
         const char *fin_complete = xmpp_stanza_get_attribute(fin, "complete");
@@ -4552,25 +4430,24 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
                 return true;
             }
+
+            set__last = set ? xmpp_stanza_get_child_by_name(set, "last") : nullptr;
+            const std::string set_last_text = stanza_element_text(set__last);
             
             if (auto channel_it = account.channels.find(mam_query.with.data()); channel_it != account.channels.end())
             {
                 auto& [_, ch] = *channel_it;
 
-                set__last = set ? xmpp_stanza_get_child_by_name(set, "last") : nullptr;
-                set__last__text = set__last
-                    ? xmpp_stanza_get_text(set__last) : nullptr;
-
                 // Only page when the result set is not complete.
                 // Some servers include <last/> even on the final page.
-                if (set__last__text && !fin_is_complete)
+                if (!set_last_text.empty() && !fin_is_complete)
                 {
                     account.mam_deferred_pages.push_back({
                         ch.id,
                         mam_query.id,
                         mam_query.start,
                         mam_query.end,
-                        std::string(set__last__text)
+                        set_last_text
                     });
                     account.schedule_next_mam_page();
                 }
@@ -4614,10 +4491,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             else if (is_global_query)
             {
                 // Only page when the result set is not complete.
-                if (set__last__text && !fin_is_complete)
+                if (!set_last_text.empty() && !fin_is_complete)
                 {
                     // Persist the RSM cursor so the next reconnect resumes from here
-                    account.mam_cursor_set("global", set__last__text);
+                    account.mam_cursor_set("global", set_last_text);
 
                     // Defer the next page to the next event-loop tick so the GUI
                     // gets a chance to render between batches.
@@ -4629,7 +4506,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         std::string{},
                         mam_query.start,
                         mam_query.end,
-                        std::string(set__last__text)
+                        set_last_text
                     });
                     account.schedule_next_mam_page();
                 }
@@ -4638,8 +4515,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // Global MAM query complete — persist the final RSM cursor so
                     // the next reconnect resumes from the very end of the archive
                     // rather than replaying from a stale intermediate cursor.
-                    if (set__last__text)
-                        account.mam_cursor_set("global", set__last__text);
+                    if (!set_last_text.empty())
+                        account.mam_cursor_set("global", set_last_text);
 
                     account.mam_query_remove(mam_query.id);
                     account.release_mam_slot();
@@ -4651,7 +4528,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
             else
             {
-                if (!set__last__text) {
+                if (set_last_text.empty()) {
                     account.mam_query_remove(mam_query.id);
                     account.release_mam_slot();
                 }

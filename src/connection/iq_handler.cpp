@@ -44,4 +44,28 @@
 #include "xmpp/xep-0172.inl"
 #include "xmpp/xep-0292.inl"
 
+namespace {
+
+[[nodiscard]] auto iq_error_text(xmpp_stanza_t *error_elem) -> std::string
+{
+    if (!error_elem)
+        return "unknown error";
+    if (auto *text_el = xmpp_stanza_get_child_by_name(error_elem, "text"))
+    {
+        const auto t = stanza_element_text(text_el);
+        if (!t.empty())
+            return t;
+    }
+    for (auto *child = xmpp_stanza_get_children(error_elem);
+         child; child = xmpp_stanza_get_next(child))
+    {
+        const char *name = xmpp_stanza_get_name(child);
+        if (name && std::string_view(name) != "text")
+            return name;
+    }
+    return "unknown error";
+}
+
+} // namespace
+
 #include "connection/iq_handler.inl"
