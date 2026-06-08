@@ -2453,6 +2453,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             // take the pending diff, apply it to the form,
                             // and send the submit. Single-shot apply.
                             auto pending = ch.take_pending_setmodes();
+                            weechat_printf(out, "%s%s: config_get handler reached for %s, "
+                                           "pending.has_value()=%d, form has %zu fields",
+                                           weechat_prefix("error"),
+                                           WEECHAT_XMPP_PLUGIN_NAME,
+                                           info.room_jid.c_str(),
+                                           pending.has_value() ? 1 : 0,
+                                           form.fields.size());
                             if (pending.has_value())
                             {
                                 // Apply the diff in place.
