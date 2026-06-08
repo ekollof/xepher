@@ -33,6 +33,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     xmpp_stanza_t *reply, *query, *text, *fin;
     xmpp_stanza_t         *pubsub, *items, *item;
     xmpp_stanza_t         *storage, *conference, *nick;
+    { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "AT_L33 id=%s type=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)", xmpp_stanza_get_attribute(stanza,"type")?xmpp_stanza_get_attribute(stanza,"type"):"(null)"); fclose(_fp); } }
 
     auto binding = std::make_unique<xml::iq>(account.context, stanza);
     const char *id = xmpp_stanza_get_id(stanza);
@@ -2180,6 +2181,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         }
     }
     
+    { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "AT_L2184 id=%s type=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)", xmpp_stanza_get_attribute(stanza,"type")?xmpp_stanza_get_attribute(stanza,"type"):"(null)"); fclose(_fp); } }
     // XEP-0191: Blocking Command
     xmpp_stanza_t *blocklist = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "blocklist", "urn:xmpp:blocking");
@@ -2261,6 +2263,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
 
     // XEP-0191: server-pushed block/unblock IQ sets (§8.4, §8.5)
+    { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "AT_L2264 id=%s type=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)", xmpp_stanza_get_attribute(stanza,"type")?xmpp_stanza_get_attribute(stanza,"type"):"(null)"); fclose(_fp); } }
     if (block && type && weechat_strcasecmp(type, "set") == 0)
     {
         xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(block, "item");
@@ -2409,6 +2412,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         // get/set + room destroy) and muc#admin (set-result for affiliation
         // changes from /affiliation). All in-flight queries are tracked in
         // account.muc_owner_queries so we can route by kind and room JID.
+        { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "AT_L2408 id=%s type=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)", xmpp_stanza_get_attribute(stanza,"type")?xmpp_stanza_get_attribute(stanza,"type"):"(null)"); fclose(_fp); } }
         const char *owner_stanza_id = xmpp_stanza_get_id(stanza);
         weechat_printf(account.buffer, "%s%s: pre-muc_owner lookup: id=%s contains=%d map_size=%zu",
                        weechat_prefix("error"),
