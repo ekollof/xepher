@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        0.7.0
+Version:        0.8.0
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -70,6 +70,17 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Mon Jun 08 2026 Emiel Kollof <emiel@kollof.nl> - 0.8.0-1
+- Update to v0.8.0
+- Feat(muc): /create command for room creation (XEP-0045)
+- Feat(muc): channel mode display (XEP-0045 §6.4/6.5)
+- Feat(icat): vendored weechat-icat script; dynamic dimensions from image metadata
+- Fix(icat): sync inline image previews during MAM replay; aesgcm upload support
+- Fix(muc): /setmodes form submit, -k --confirm, muc#owner IQ handler registration
+- Feat(xep0437): actionable Room Activity Indicator notifications
+- Refactor: port abstraction layer and handler splits (Wave 1–4); 109 unit tests
+- Refactor: C++23 modernization sweep; fluent Atom/RDF stanza builders (Wave 3)
+
 * Wed Jun 03 2026 Emiel Kollof <emiel@kollof.nl> - 0.7.0-1
 - Update to v0.7.0
 - Fix(upload): replace unsafe OpenSSL BIO base64 with weechat_string_base_encode to prevent corrupted hash values and connection drops
