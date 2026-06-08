@@ -2453,6 +2453,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 weechat_printf(out, "%s%s: %s failed: %s",
                                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
                                what, err.c_str());
+                    { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2456 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                 return true;
             }
 
@@ -2595,6 +2596,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         FILE *fp = fopen("/tmp/opencode/iq_handler_trace.log", "a");
         if (fp) { fprintf(fp, "END\n"); fclose(fp); }
     }
+        { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2598 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
     return true;
 }
 
@@ -2614,6 +2616,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                            WEECHAT_XMPP_PLUGIN_NAME,
                                            info.room_jid.c_str());
                         }
+                            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2617 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                         return true;
                     }
                     case weechat::account::muc_owner_kind::config_set:
@@ -2639,6 +2642,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     .xep0030().query()
                                     .build(account.context).get());
                         }
+                            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2642 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                         return true;
                     }
                     case weechat::account::muc_owner_kind::destroy:
@@ -2647,6 +2651,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                        weechat_prefix("network"),
                                        WEECHAT_XMPP_PLUGIN_NAME,
                                        info.room_jid.c_str());
+                            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2650 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                         return true;
                     }
                     case weechat::account::muc_owner_kind::aff_set:
@@ -2655,6 +2660,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                        weechat_prefix("network"),
                                        WEECHAT_XMPP_PLUGIN_NAME,
                                        info.room_jid.c_str());
+                            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2658 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                         return true;
                     }
                 }
@@ -2973,6 +2979,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                                  weechat_prefix("error"),
                                                  cs_info.service_jid.c_str());
                         account.channel_search_queries.erase(cs_id);
+                            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2976 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                         return true;
                     }
 
@@ -3030,6 +3037,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     account.connection.send(submit_iq.build(ctx).get());
 
                     account.channel_search_queries.erase(cs_id);
+                        { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L3033 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                     return true;
                 }
 
@@ -3975,6 +3983,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             .from(to ? to : "")
             .build(account.context)
             .get());
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L3978 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
         return true;
     }
 
@@ -4520,6 +4529,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 plast_text_g.ptr);
                     }
                 }
+                    { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L4523 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                 return true;
             }
         }
@@ -4567,6 +4577,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     account.omemo.process_postponed_key_transports(account);
                     account.omemo.process_postponed_bundle_republish(account);
                 }
+                    { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L4570 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                 return true;
             }
             
@@ -4676,5 +4687,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         }
     }
 
+        { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L4679 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
     return true;
 }
