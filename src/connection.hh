@@ -78,6 +78,8 @@ namespace weechat {
         bool handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, std::string_view own_jid_str);
         bool handle_upload_slot_iq_event(xmpp_stanza_t *stanza);
         bool handle_upload_slot_iq_error(xmpp_stanza_t *stanza);
+        void handle_mam_query_iq_error(xmpp_stanza_t *stanza);
+        bool handle_mam_fin_iq_event(xmpp_stanza_t *stanza);
         bool iq_handler(xmpp_stanza_t *stanza, bool top_level = true);
         bool sm_handler(xmpp_stanza_t *stanza);
 

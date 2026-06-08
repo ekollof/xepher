@@ -163,6 +163,7 @@ SRCS=src/plugin.cpp \
 	 src/connection/iq_pubsub_feed_handler.cpp \
 	 src/connection/iq_omemo_pubsub_handler.cpp \
 	 src/connection/iq_upload_handler.cpp \
+	 src/connection/iq_mam_handler.cpp \
 	 src/connection/iq_handler.cpp \
 	 src/connection/session_lifecycle.cpp \
 	 src/account/callbacks.cpp \
@@ -204,6 +205,7 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/iq_pubsub_feed.cpp \
 	 src/xmpp/iq_omemo_pubsub.cpp \
 	 src/xmpp/iq_upload.cpp \
+	 src/xmpp/iq_mam.cpp \
 	 src/xmpp/message_ack.cpp \
 	 src/xmpp/chat_state.cpp \
 	 src/xmpp/message_forward.cpp \

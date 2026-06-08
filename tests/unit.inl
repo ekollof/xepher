@@ -31,6 +31,7 @@
 #include "xmpp/iq_pubsub_feed.hh"
 #include "xmpp/iq_omemo_pubsub.hh"
 #include "xmpp/iq_upload.hh"
+#include "xmpp/iq_mam.hh"
 #include "xmpp/chat_state.hh"
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_body.hh"
@@ -1222,6 +1223,38 @@ TEST_CASE("message_reactions and reply helpers")
     xmpp_stanza_release(rxn);
     xmpp_stanza_release(rxn_clear);
     xmpp_stanza_release(reply);
+}
+
+TEST_CASE("iq_mam helpers")
+{
+    CHECK(xmpp::is_mam_fin_bool_attr_true("true"));
+    CHECK(xmpp::is_mam_fin_bool_attr_true("1"));
+    CHECK(xmpp::is_mam_fin_bool_attr_true("TRUE"));
+    CHECK_FALSE(xmpp::is_mam_fin_bool_attr_true("false"));
+    CHECK_FALSE(xmpp::is_mam_fin_bool_attr_true(""));
+
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *fin = xmpp_stanza_new_from_string(env.ctx,
+        "<fin xmlns='urn:xmpp:mam:2' complete='true'>"
+        "<set xmlns='http://jabber.org/protocol/rsm'>"
+        "<last>cursor-abc</last>"
+        "</set>"
+        "</fin>");
+    REQUIRE(fin != nullptr);
+    CHECK(xmpp::mam_fin_rsm_last(xmpp::StanzaView(fin)) == "cursor-abc");
+    xmpp_stanza_release(fin);
+
+    xmpp_stanza_t *err_iq = xmpp_stanza_new_from_string(env.ctx,
+        "<iq type='error' xmlns='jabber:client'>"
+        "<error type='cancel'>"
+        "<item-not-found xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>"
+        "</error>"
+        "</iq>");
+    REQUIRE(err_iq != nullptr);
+    CHECK(xmpp::iq_has_item_not_found_error(xmpp::StanzaView(err_iq)));
+    xmpp_stanza_release(err_iq);
 }
 
 TEST_CASE("iq_upload helpers")
