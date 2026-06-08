@@ -397,19 +397,19 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
         // Print the form title/instructions if present
         xmpp_stanza_t *title_el = xmpp_stanza_get_child_by_name(xdata, "title");
         if (title_el) {
-            xmpp_string_guard title_g(st->ctx, xmpp_stanza_get_text(title_el));
-            if (title_g)
+            const std::string title = stanza_element_text(title_el);
+            if (!title.empty())
                 weechat_printf(st->buffer, _("%s%s: IBR form title: %s"),
                                weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                               title_g.c_str());
+                               title.c_str());
         }
         xmpp_stanza_t *instr_el = xmpp_stanza_get_child_by_name(xdata, "instructions");
         if (instr_el) {
-            xmpp_string_guard instr_g(st->ctx, xmpp_stanza_get_text(instr_el));
-            if (instr_g)
+            const std::string instructions = stanza_element_text(instr_el);
+            if (!instructions.empty())
                 weechat_printf(st->buffer, _("%s%s: IBR form instructions: %s"),
                                weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                               instr_g.c_str());
+                               instructions.c_str());
         }
 
         // Print each field's var and label so the user can identify what's needed
@@ -468,11 +468,11 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     if (!oob) oob = xmpp_stanza_get_child_by_ns(query, "jabber:x:oob");
     if (oob) {
         xmpp_stanza_t *url_el = xmpp_stanza_get_child_by_name(oob, "url");
-        xmpp_string_guard url_g(st->ctx, url_el ? xmpp_stanza_get_text(url_el) : nullptr);
+        const std::string oob_url = stanza_element_text(url_el);
         weechat_printf(st->buffer,
                        _("%s%s: IBR: server requires out-of-band registration: %s"),
                        weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                       url_g ? url_g.c_str() : "(no URL provided)");
+                       oob_url.empty() ? "(no URL provided)" : oob_url.c_str());
         xmpp_disconnect(conn);
         st->done = true;
         return 1;

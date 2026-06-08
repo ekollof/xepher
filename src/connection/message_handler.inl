@@ -42,8 +42,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     xmpp_stanza_t *x, *body, *delay, *topic, *replace, *request, *markable, *composing, *sent, *received, *result, *forwarded, *event, *items, *item, *encrypted;
     const char *type, *from, *nick, *from_bare, *to, *to_bare, *id, *thread, *replace_id, *timestamp;
     const char *text = nullptr;
-    xmpp_string_guard intext_g { account.context, nullptr };
-    char *&intext = intext_g.ptr;
+    std::string intext_storage;
+    auto intext_ptr = [&]() -> const char * {
+        return intext_storage.empty() ? nullptr : intext_storage.c_str();
+    };
     std::string from_bare_main_storage; // owns main from_bare string
     std::string to_bare_main_storage;   // owns main to_bare string
     // Cache own JID for use when stanza 'from' is absent (e.g. self-messages).
@@ -68,31 +70,22 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             return false;
 
         xmpp_stanza_t *msg_body = xmpp_stanza_get_child_by_name(msg, "body");
-        if (msg_body)
-        {
-            const char *body_text = xmpp_stanza_get_text_ptr(msg_body);
-            if (body_text && *body_text)
-                return true;
-        }
+        if (msg_body && !stanza_element_text(msg_body).empty())
+            return true;
 
         xmpp_stanza_t *msg_encrypted = xmpp_stanza_get_child_by_name_and_ns(
             msg, "encrypted", "eu.siacs.conversations.axolotl");
         if (msg_encrypted)
         {
             xmpp_stanza_t *payload = xmpp_stanza_get_child_by_name(msg_encrypted, "payload");
-            const char *payload_text = payload ? xmpp_stanza_get_text_ptr(payload) : nullptr;
-            if (payload_text && *payload_text)
+            if (payload && !stanza_element_text(payload).empty())
                 return true;
         }
 
         xmpp_stanza_t *msg_pgp = xmpp_stanza_get_child_by_name_and_ns(
             msg, "x", "jabber:x:encrypted");
-        if (msg_pgp)
-        {
-            const char *pgp_text = xmpp_stanza_get_text_ptr(msg_pgp);
-            if (pgp_text && *pgp_text)
-                return true;
-        }
+        if (msg_pgp && !stanza_element_text(msg_pgp).empty())
+            return true;
 
         return false;
     };
@@ -107,7 +100,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         topic = xmpp_stanza_get_child_by_name(stanza, "subject");
         if (topic != nullptr)
         {
-            intext = xmpp_stanza_get_text(topic);
+            intext_storage = stanza_element_text(topic);
             type = xmpp_stanza_get_type(stanza);
         if (type != nullptr && std::string_view(type) == "error")
             return 1;
@@ -145,8 +138,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     channel = &ch_pm;
                 }
             }
-            channel->update_topic(intext ? intext : "", from, 0);
-            intext = nullptr;  // Released by RAII guard (was xmpp_free)
+            channel->update_topic(intext_storage.c_str(), from, 0);
+            intext_storage.clear();
         }
 
         // XEP-0085: Chat State Notifications - handle all states
@@ -288,9 +281,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
                             xmpp_stanza_t *mmn_body =
                                 xmpp_stanza_get_child_by_name(mmn_msg, "body");
-                            xmpp_string_guard mmn_body_text_g(account.context,
-                                mmn_body ? xmpp_stanza_get_text(mmn_body) : nullptr);
-                            const char *mmn_text = mmn_body_text_g.ptr;
+                            const std::string mmn_text_str = stanza_element_text(mmn_body);
+                            const char *mmn_text = mmn_text_str.empty()
+                                ? nullptr : mmn_text_str.c_str();
 
                             const char *mmn_from = xmpp_stanza_get_from(mmn_msg);
                             std::string mmn_nick_s = mmn_from ? ::jid(nullptr, mmn_from).resource : std::string{};
@@ -617,9 +610,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     const char *msg_from = xmpp_stanza_get_from(message);
                     const char *msg_to = xmpp_stanza_get_to(message);
                     xmpp_stanza_t *msg_body = xmpp_stanza_get_child_by_name(message, "body");
-                    xmpp_string_guard msg_text_g(account.context,
-                        msg_body ? xmpp_stanza_get_text(msg_body) : nullptr);
-                    const char *msg_text = msg_text_g.ptr;
+                    const std::string msg_text_str = stanza_element_text(msg_body);
+                    const char *msg_text = msg_text_str.empty()
+                        ? nullptr : msg_text_str.c_str();
                     
                     delay = xmpp_stanza_get_child_by_name_and_ns(
                         forwarded, "delay", "urn:xmpp:delay");
@@ -856,16 +849,15 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         
                             if (data_elem)
                             {
-                        xmpp_string_guard b64_data_g(account.context, xmpp_stanza_get_text(data_elem));
-                                char *b64_data = b64_data_g.ptr;
-                                if (b64_data)
+                        const std::string b64_data = stanza_element_text(data_elem);
+                                if (!b64_data.empty())
                                 {
                                     // Decode base64 avatar data
                                     BIO *bio, *b64;
-                                    size_t decode_len = std::string_view(b64_data).size();
+                                    size_t decode_len = b64_data.size();
                                 std::vector<uint8_t> image_data(decode_len);
                                 
-                                bio = BIO_new_mem_buf(b64_data, -1);
+                                bio = BIO_new_mem_buf(b64_data.data(), -1);
                                 b64 = BIO_new(BIO_f_base64());
                                 bio = BIO_push(b64, bio);
                                 BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
@@ -971,9 +963,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         const char *autojoin = xmpp_stanza_get_attribute(conference, "autojoin");
                         
                         xmpp_stanza_t *nick_elem = xmpp_stanza_get_child_by_name(conference, "nick");
-                        xmpp_string_guard nick_text_g(account.context,
-                            nick_elem ? xmpp_stanza_get_text(nick_elem) : nullptr);
-                        const char *nick_text = nick_text_g.ptr;
+                        const std::string nick_text_str = stanza_element_text(nick_elem);
+                        const char *nick_text = nick_text_str.empty()
+                            ? nullptr : nick_text_str.c_str();
 
                         bool do_autojoin = autojoin &&
                             (weechat_strcasecmp(autojoin, "true") == 0 ||
@@ -1987,7 +1979,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     const char *eme_namespace = eme ? xmpp_stanza_get_attribute(eme, "namespace") : nullptr;
     const char *eme_name = eme ? xmpp_stanza_get_attribute(eme, "name") : nullptr;
     
-    intext = body ? xmpp_stanza_get_text(body) : nullptr;
+    intext_storage = body ? stanza_element_text(body) : std::string {};
 
     // For live carbon copies of self-sent OMEMO messages we don't have the
     // session state to decrypt them on the spot, so show the advisory text.
@@ -2020,12 +2012,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     }();
     if (encrypted && is_self_outbound_copy && (!is_mam_replay || is_own_device_self_copy))
     {
-        if (intext)
-            xmpp_free(account.context, intext);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        intext = xmpp_strdup(account.context, OMEMO_ADVICE);
-#pragma GCC diagnostic pop
+        intext_storage = OMEMO_ADVICE;
         // For MAM replays of messages sent from this device: the self-copy
         // can never be decrypted (Signal does not support self-decryption of
         // outbound messages — the inbound session at {own_jid, own_device_id}
@@ -2064,14 +2051,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     xhtml_fallback = xhtml_fallback.substr(0, trim_pos + 1);
                 if (!xhtml_fallback.empty())
                 {
-                    // Free original intext (if any) and replace with rich version
-                    if (intext) xmpp_free(account.context, intext);
-                    // xmpp_strdup is deprecated but is the only allocator-paired
-                    // string dup available; xmpp_alloc/xmpp_strndup are equally deprecated
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-                    intext = xmpp_strdup(account.context, xhtml_fallback.c_str());
-#pragma GCC diagnostic pop
+                    intext_storage = xhtml_fallback;
                 }
             }
         }
@@ -2205,12 +2185,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 // session.  The plaintext is irrecoverable either way, so show a
                 // placeholder so the user knows a message exists (matches what
                 // Conversations / Gajim show for undecryptable archived messages).
-                if (intext)
-                    xmpp_free(account.context, intext);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-                intext = xmpp_strdup(account.context, "[undecryptable OMEMO message]");
-#pragma GCC diagnostic pop
+                intext_storage = "[undecryptable OMEMO message]";
                 encrypted = nullptr;   // prevent the after-omemo null-text guard from skipping display
                 goto message_handler_after_omemo;
             }
@@ -2249,14 +2224,17 @@ message_handler_after_omemo:
 
     if (x)
     {
-        xmpp_string_guard ciphertext_g(account.context, xmpp_stanza_get_text(x));
-        const char *ciphertext = ciphertext_g.ptr;
-        if (auto decrypted = account.pgp.decrypt(channel->buffer, ciphertext)) {
-            pgp_cleartext_storage = std::move(*decrypted);
-            cleartext = pgp_cleartext_storage.data();
+        const std::string ciphertext = stanza_element_text(x);
+        if (!ciphertext.empty())
+        {
+            if (auto decrypted = account.pgp.decrypt(channel->buffer, ciphertext.c_str()))
+            {
+                pgp_cleartext_storage = std::move(*decrypted);
+                cleartext = pgp_cleartext_storage.data();
+            }
         }
     }
-    text = cleartext ? cleartext : intext;
+    text = cleartext ? cleartext : intext_ptr();
 
     // XEP-0428 / XEP-0461: Fallback Indication handling.
     // When <fallback xmlns='urn:xmpp:fallback:0'> is present the <body> may
@@ -2327,9 +2305,9 @@ message_handler_after_omemo:
     // XEP-0382: Spoiler Messages — display hint before the body
     xmpp_stanza_t *spoiler_elem = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "spoiler", "urn:xmpp:spoiler:0");
-    xmpp_string_guard spoiler_hint_g(account.context,
-        spoiler_elem ? xmpp_stanza_get_text(spoiler_elem) : nullptr);
-    const char *spoiler_hint = spoiler_hint_g.ptr;
+    const std::string spoiler_hint_str = stanza_element_text(spoiler_elem);
+    const char *spoiler_hint = spoiler_hint_str.empty()
+        ? nullptr : spoiler_hint_str.c_str();
 
     // XEP-0466: Ephemeral Messages — detect timer value
     xmpp_stanza_t *ephemeral_elem = xmpp_stanza_get_child_by_name_and_ns(
@@ -2490,8 +2468,7 @@ message_handler_after_omemo:
                                                "urn:xmpp:message-moderate:1")
         : nullptr;
     const char *moderate_id = mod_retract ? xmpp_stanza_get_attribute(mod_retract, "id") : nullptr;
-    const char *moderate_reason = nullptr;
-    xmpp_string_guard moderate_reason_g { account.context, nullptr };
+    std::string moderate_reason_str;
 
     if (moderated_elem && moderate_id)
     {
@@ -2501,13 +2478,10 @@ message_handler_after_omemo:
             weechat_strcasecmp(from_bare, channel->id.data()) != 0)
             return 1;
 
-        // Extract optional reason
-        xmpp_stanza_t *reason_elem = xmpp_stanza_get_child_by_name(moderated_elem, "reason");
-        if (reason_elem)
-        {
-            moderate_reason_g = xmpp_string_guard(account.context, xmpp_stanza_get_text(reason_elem));
-            moderate_reason = moderate_reason_g.ptr;
-        }
+        moderate_reason_str = stanza_element_text(
+            xmpp_stanza_get_child_by_name(moderated_elem, "reason"));
+        const char *moderate_reason = moderate_reason_str.empty()
+            ? nullptr : moderate_reason_str.c_str();
 
         // Save moderation to MAM cache
         const char *channel_id = account.jid() == from_bare ? to_bare : from_bare;
@@ -2758,9 +2732,8 @@ message_handler_after_omemo:
             const char *name = xmpp_stanza_get_name(reaction_elem);
             if (name && weechat_strcasecmp(name, "reaction") == 0)
             {
-                xmpp_string_guard emoji_g(account.context, xmpp_stanza_get_text(reaction_elem));
-                const char *emoji = emoji_g.ptr;
-                if (emoji)
+                const std::string emoji = stanza_element_text(reaction_elem);
+                if (!emoji.empty())
                 {
                     if (!first) emojis_str += " ";
                     emojis_str += emoji;
@@ -3152,7 +3125,9 @@ message_handler_after_omemo:
     const char *edit = replace ? "📝 " : "";
     if (x && text == cleartext && channel->transport != weechat::channel::transport::PGP)
         channel->transport = weechat::channel::transport::PGP;
-    else if (!x && !encrypted && text == intext && channel->transport != weechat::channel::transport::PLAIN)
+    else if (!x && !encrypted && text && !cleartext
+             && text == intext_storage.c_str()
+             && channel->transport != weechat::channel::transport::PLAIN)
         channel->transport = weechat::channel::transport::PLAIN;
     // For groupchat messages, display_from is the full occupant JID (room/nick).
     // Look up the user by full JID to get their avatar/color, but always format
@@ -3397,9 +3372,8 @@ message_handler_after_omemo:
         xmpp_stanza_t *url_elem = xmpp_stanza_get_child_by_name(oob_x, "url");
         if (url_elem)
         {
-            xmpp_string_guard url_text_g(account.context, xmpp_stanza_get_text(url_elem));
-            const char *url_text = url_text_g.ptr;
-            if (url_text)
+            const std::string url_text = stanza_element_text(url_elem);
+            if (!url_text.empty())
             {
                 // Candidate for weechat-icat (no MIME in OOB — check extension)
                 std::string_view url_sv(url_text);
@@ -3410,14 +3384,11 @@ message_handler_after_omemo:
                     incoming_image_url = url_text;
                 }
 
-                // Optionally get description
-                xmpp_stanza_t *desc_elem = xmpp_stanza_get_child_by_name(oob_x, "desc");
-                xmpp_string_guard desc_text_g(account.context,
-                    desc_elem ? xmpp_stanza_get_text(desc_elem) : nullptr);
-                const char *desc_text = desc_text_g.ptr;
-                
+                const std::string desc_text = stanza_element_text(
+                    xmpp_stanza_get_child_by_name(oob_x, "desc"));
+
                 // Format: [URL: url] or [URL: description (url)]
-                if (desc_text && !std::string_view(desc_text).empty())
+                if (!desc_text.empty())
                 {
                     oob_suffix = fmt::format(" {}[URL: {} ({})]{}",
                                             weechat_color("blue"),
@@ -3705,9 +3676,8 @@ message_handler_after_omemo:
                 if (!prop_name || !prop_ns) continue;
                 if (std::string_view(prop_ns) != "https://ogp.me/ns#") continue;
 
-                xmpp_string_guard val_g(account.context, xmpp_stanza_get_text(prop));
-                const char *val = val_g.ptr;
-                if (!val) continue;
+                const std::string val = stanza_element_text(prop);
+                if (val.empty()) continue;
 
                 if (std::string_view(prop_name) == "title" && p.title.empty())
                     p.title = val;

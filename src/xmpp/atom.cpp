@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "atom.hh"
+#include "node.hh"
 #include "xhtml.hh"
 #include "util.hh"
 
@@ -15,16 +16,15 @@
 // If the element has type='html', strip tags via html_strip_to_plain().
 static std::string atom_text_child(xmpp_ctx_t *ctx, xmpp_stanza_t *parent, const char *tag)
 {
+    (void)ctx;
     if (!parent) return {};
     xmpp_stanza_t *el = xmpp_stanza_get_child_by_name(parent, tag);
     if (!el) return {};
     const char *type_attr = xmpp_stanza_get_attribute(el, "type");
     if (type_attr && strcasecmp(type_attr, "xhtml") == 0)
         return xhtml_to_weechat(el);
-    char *t = xmpp_stanza_get_text(el);
-    if (!t) return {};
-    std::string s(t);
-    xmpp_free(ctx, t);
+    std::string s = stanza_element_text(el);
+    if (s.empty()) return {};
     if (type_attr && strcasecmp(type_attr, "html") == 0)
         return html_strip_to_plain(s);
     return s;
@@ -66,8 +66,8 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
             {
                 if (!found_text)
                 {
-                    char *t = xmpp_stanza_get_text(child);
-                    if (t) { text_content = t; xmpp_free(ctx, t); found_text = true; }
+                    text_content = stanza_element_text(child);
+                    found_text = !text_content.empty();
                 }
             }
             else if (strcasecmp(type_attr, "xhtml") == 0)
@@ -85,11 +85,10 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
             {
                 if (!found_html)
                 {
-                    char *t = xmpp_stanza_get_text(child);
-                    if (t)
+                    const std::string raw = stanza_element_text(child);
+                    if (!raw.empty())
                     {
-                        html_content = html_strip_to_plain(std::string(t));
-                        xmpp_free(ctx, t);
+                        html_content = html_strip_to_plain(raw);
                         found_html = !html_content.empty();
                     }
                 }
@@ -136,24 +135,15 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
         {
             xmpp_stanza_t *name_el = xmpp_stanza_get_child_by_name(child, "name");
             if (name_el)
-            {
-                char *t = xmpp_stanza_get_text(name_el);
-                if (t) { e.author = t; xmpp_free(ctx, t); }
-            }
+                e.author = stanza_element_text(name_el);
         }
 
         // Fall back to bare text content of <author> itself.
         if (e.author.empty())
         {
-            char *t = xmpp_stanza_get_text(child);
-            if (t)
-            {
-                std::string s(t);
-                xmpp_free(ctx, t);
-                // Reject whitespace-only strings.
-                if (s.find_first_not_of(" \t\r\n") != std::string::npos)
-                    e.author = std::move(s);
-            }
+            std::string s = stanza_element_text(child);
+            if (s.find_first_not_of(" \t\r\n") != std::string::npos)
+                e.author = std::move(s);
         }
 
         // <uri> child — take the first one found.
@@ -161,10 +151,7 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
         {
             xmpp_stanza_t *uri_el = xmpp_stanza_get_child_by_name(child, "uri");
             if (uri_el)
-            {
-                char *t = xmpp_stanza_get_text(uri_el);
-                if (t) { e.author_uri = t; xmpp_free(ctx, t); }
-            }
+                e.author_uri = stanza_element_text(uri_el);
         }
 
         if (!e.author.empty() && !e.author_uri.empty())
@@ -316,8 +303,7 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
                     const char *algo = xmpp_stanza_get_attribute(hc, "algo");
                     if (algo && strcasecmp(algo, "sha-256") == 0)
                     {
-                        char *ht = xmpp_stanza_get_text(hc);
-                        if (ht) { att.sha256_b64 = ht; xmpp_free(ctx, ht); }
+                        att.sha256_b64 = stanza_element_text(hc);
                         break;
                     }
                 }
@@ -365,25 +351,11 @@ atom_feed parse_atom_feed(xmpp_ctx_t *ctx, xmpp_stanza_t *feed)
     {
         xmpp_stanza_t *name_el = xmpp_stanza_get_child_by_name(author_el, "name");
         if (name_el)
-        {
-            char *t = xmpp_stanza_get_text(name_el);
-            if (t)
-            {
-                f.author = t;
-                xmpp_free(ctx, t);
-            }
-        }
+            f.author = stanza_element_text(name_el);
 
         xmpp_stanza_t *uri_el = xmpp_stanza_get_child_by_name(author_el, "uri");
         if (uri_el)
-        {
-            char *t = xmpp_stanza_get_text(uri_el);
-            if (t)
-            {
-                f.author_uri = t;
-                xmpp_free(ctx, t);
-            }
-        }
+            f.author_uri = stanza_element_text(uri_el);
     }
 
     if (f.author.empty() && !f.author_uri.empty())
