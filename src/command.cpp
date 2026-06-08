@@ -723,7 +723,7 @@ void command__init()
         "setmodes",
         N_("set MUC room mode flags (XEP-0045 §10.2, owner-only)"),
         N_("[+|-][m][i][k][p][P][N][S] [<secret>] [--confirm]"),
-        N_("flags: m=moderated i=members-only k=password p=public "
+        N_("flags: m=moderated i=members-only k=password p=hidden "
            "P=persistent N=non-anonymous S=semi-anonymous\n"
            "Add '+' before letters to set, '-' to clear (e.g. '+m -i +k'). "
            "Pass --confirm to actually apply the changes; without it the "

@@ -2391,6 +2391,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     if (i == 5 && pending->want_set[5])       val = "anyone";
                                     else if (i == 6 && pending->want_set[6])  val = "moderators";
                                     else if (i == 5 || i == 6)                val = "moderators"; // want_clear
+                                    else if (i == 3)                          val = pending->want_set[i] ? "0" : "1"; // p=hidden
                                     else                                     val = pending->want_set[i] ? "1" : "0";
                                     for (auto &fld : form.fields)
                                     {

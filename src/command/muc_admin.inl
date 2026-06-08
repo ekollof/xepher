@@ -2101,8 +2101,8 @@ void set_form_field_value(weechat::channel::room_config_form &form,
 //   k = muc_passwordprotected (also requires a room secret; +k must be
 //       followed by the password as argv_eol[1] OR omitted to clear the
 //       existing password)
-//   p = muc_public (inverted: +p sets publicroom=1, -p sets publicroom=0
-//       which maps to muc_hidden)
+//   p = muc_hidden (+p sets publicroom=0, -p sets publicroom=1); matches
+//       the IRC-style "p" shown by /modes and update_modes()
 //   P = muc_persistent
 //   N = muc_nonanonymous     (muc#roomconfig_whois=anyone)
 //   S = muc_semianonymous    (muc#roomconfig_whois=moderators)
@@ -2229,7 +2229,7 @@ int command__setmodes([[maybe_unused]] const void *pointer,
                    want_set[2] ? fmt::format(" (secret set to {} chars)", password.size()).c_str() : "",
                    weechat_color("reset"));
     weechat_printf(buffer, "  %s%-16s%s %s%s%s",
-                   weechat_color("chat_nick"), "public", weechat_color("reset"),
+                   weechat_color("chat_nick"), "hidden", weechat_color("reset"),
                    weechat_color("chat_value"),
                    (want_set[3]   ? "on" : (want_clear[3] ? "off" : "(unchanged)")),
                    weechat_color("reset"));
@@ -2288,7 +2288,7 @@ int command__setmodes([[maybe_unused]] const void *pointer,
         }
         if (want_set[3] || want_clear[3])
             set_form_field_value(form, "muc#roomconfig_publicroom",
-                                 want_set[3] ? "1" : "0");
+                                 want_set[3] ? "0" : "1");
         if (want_set[4] || want_clear[4])
             set_form_field_value(form, "muc#roomconfig_persistentroom",
                                  want_set[4] ? "1" : "0");
