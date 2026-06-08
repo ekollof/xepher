@@ -26,4 +26,10 @@ inline constexpr std::string_view k_glyph_seen = " ✓✓";
                                                          std::string_view acked_id,
                                                          std::string_view new_glyph);
 
+// Scan recent buffer lines for any tag string containing one of the needles.
+[[nodiscard]] XMPP_TEST_EXPORT bool line_store_buffer_contains_any_tag(
+    struct t_gui_buffer *buffer,
+    std::initializer_list<std::string_view> needles,
+    int max_scan = 256);
+
 }  // namespace weechat

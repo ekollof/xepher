@@ -46,6 +46,7 @@
 #include "connection/internal.hh"
 #include "xmpp/chat_state.hh"
 #include "xmpp/message_ack.hh"
+#include "xmpp/message_forward.hh"
 #include "xmpp/stanza_view.hh"
 #include "weechat/line_store.hh"
 #include "xmpp/xhtml.hh"

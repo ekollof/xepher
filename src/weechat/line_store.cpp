@@ -78,4 +78,42 @@ bool line_store_update_line_glyph_by_tag(struct t_gui_buffer *buffer,
     return false;
 }
 
+bool line_store_buffer_contains_any_tag(struct t_gui_buffer *buffer,
+                                        std::initializer_list<std::string_view> needles,
+                                        int max_scan)
+{
+    if (!buffer || needles.size() == 0 || max_scan <= 0)
+        return false;
+
+    static struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
+    static struct t_hdata *hdata_lines = weechat_hdata_get("lines");
+    static struct t_hdata *hdata_line = weechat_hdata_get("line");
+    static struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
+
+    void *lines = weechat_hdata_pointer(hdata_buffer, buffer, "lines");
+    if (!lines)
+        return false;
+
+    void *line = weechat_hdata_pointer(hdata_lines, lines, "last_line");
+    for (int scan = 0; line && scan < max_scan; ++scan)
+    {
+        void *line_data = weechat_hdata_pointer(hdata_line, line, "data");
+        if (line_data)
+        {
+            const char *tags = weechat_hdata_string(hdata_line_data, line_data, "tags");
+            if (tags)
+            {
+                const std::string_view tag_view(tags);
+                for (const std::string_view needle : needles)
+                {
+                    if (!needle.empty() && tag_view.contains(needle))
+                        return true;
+                }
+            }
+        }
+        line = weechat_hdata_pointer(hdata_line, line, "prev_line");
+    }
+    return false;
+}
+
 }  // namespace weechat

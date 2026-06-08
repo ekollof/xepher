@@ -39,7 +39,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     };
 
     weechat::channel *channel, *parent_channel;
-    xmpp_stanza_t *x, *body, *delay, *topic, *replace, *sent, *received, *result, *forwarded, *event, *items, *item, *encrypted;
+    xmpp_stanza_t *x, *body, *delay, *topic, *replace, *result, *forwarded, *event, *items, *item, *encrypted;
     const char *type, *from, *nick, *from_bare, *to, *to_bare, *id, *thread, *replace_id, *timestamp;
     const char *text = nullptr;
     std::string intext_storage;
@@ -64,35 +64,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     xmpp_stanza_t *pgp_without_body = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "x", "jabber:x:encrypted");
 
-    auto stanza_has_user_message_payload = [](xmpp_stanza_t *msg) -> bool
-    {
-        if (!msg)
-            return false;
-
-        xmpp_stanza_t *msg_body = xmpp_stanza_get_child_by_name(msg, "body");
-        if (msg_body && !stanza_element_text(msg_body).empty())
-            return true;
-
-        xmpp_stanza_t *msg_encrypted = xmpp_stanza_get_child_by_name_and_ns(
-            msg, "encrypted", "eu.siacs.conversations.axolotl");
-        if (msg_encrypted)
-        {
-            xmpp_stanza_t *payload = xmpp_stanza_get_child_by_name(msg_encrypted, "payload");
-            if (payload && !stanza_element_text(payload).empty())
-                return true;
-        }
-
-        xmpp_stanza_t *msg_pgp = xmpp_stanza_get_child_by_name_and_ns(
-            msg, "x", "jabber:x:encrypted");
-        if (msg_pgp && !stanza_element_text(msg_pgp).empty())
-            return true;
-
-        return false;
-    };
-
     // Payloadless OMEMO stanzas are control/key-transport messages and must
     // not create PM buffers for inactive roster contacts.
-    if (body == nullptr && encrypted_without_body && !stanza_has_user_message_payload(stanza))
+    if (body == nullptr && encrypted_without_body
+        && !::xmpp::stanza_has_user_message_payload(::xmpp::StanzaView(stanza)))
         return 1;
 
     if (body == nullptr && !encrypted_without_body && !pgp_without_body)
@@ -191,32 +166,15 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             }
         }
 
-        sent = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "sent", "urn:xmpp:carbons:2");
-        if (sent)
-            forwarded = xmpp_stanza_get_child_by_name_and_ns(
-                sent, "forwarded", "urn:xmpp:forward:0");
-        received = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "received", "urn:xmpp:carbons:2");
-        if (received)
-            forwarded = xmpp_stanza_get_child_by_name_and_ns(
-                received, "forwarded", "urn:xmpp:forward:0");
-        if ((sent || received) && forwarded != nullptr)
+        // XEP-0280: Message Carbons — unwrap and recurse into inner message
         {
-            // XEP-0280 §8.5: MUST verify the outer stanza's `from` is the
-            // account's own bare JID (server-stamped). Drop spoofed carbons.
-            const char *carbon_from = xmpp_stanza_get_from(stanza);
-            if (!carbon_from)
+            const auto view = ::xmpp::StanzaView(stanza);
+            if (::xmpp::stanza_is_carbon(view))
+            {
+                if (auto inner = ::xmpp::parse_carbon_inner_message(view, account.jid()))
+                    return message_handler(*inner, false);
                 return 1;
-            std::string carbon_from_bare_s = ::jid(nullptr, carbon_from).bare;
-            if (carbon_from_bare_s.empty() ||
-                weechat_strcasecmp(carbon_from_bare_s.c_str(), account.jid().data()) != 0)
-                return 1;
-
-            xmpp_stanza_t *message = xmpp_stanza_get_child_by_name(forwarded, "message");
-            if (message)
-                return message_handler(message, false);  // Don't double-count nested stanza
-            return 1;
+            }
         }
 
         // XEP-0452: MUC Mention Notifications (v0.2.x wire format)
@@ -310,14 +268,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             stanza, "result", "urn:xmpp:mam:2");
         if (result)
         {
+            const auto mam_view = ::xmpp::StanzaView(stanza);
+
             // XEP-0442: pubsub MAM result — forwarded stanza contains a pubsub
             // <event> with the original item payload. Process it here so we can
             // build the correct feed_key from the query context (service JID from
             // our IQ) rather than from the inner message's from= attribute.
-            const char *queryid = xmpp_stanza_get_attribute(result, "queryid");
-            if (queryid && account.pubsub_mam_queries.contains(queryid))
+            const auto pubsub_queryid = ::xmpp::mam_pubsub_query_id(mam_view);
+            if (pubsub_queryid && account.pubsub_mam_queries.contains(*pubsub_queryid))
             {
-                const auto &pq = account.pubsub_mam_queries.at(queryid);
+                const auto &pq = account.pubsub_mam_queries.at(*pubsub_queryid);
                 std::string feed_service = pq.service;
                 std::string node_name    = pq.node;
                 std::string feed_key     = fmt::format("{}/{}", feed_service, node_name);
@@ -543,213 +503,123 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             }
 
             // Regular MAM result (chat/MUC message archive)
-            forwarded = xmpp_stanza_get_child_by_name_and_ns(
-                result, "forwarded", "urn:xmpp:forward:0");
-            if (forwarded != nullptr)
+            if (auto dispatch = ::xmpp::parse_mam_forwarded_dispatch(mam_view))
             {
-                xmpp_stanza_t *message = xmpp_stanza_get_child_by_name(forwarded, "message");
-                if (message)
+                xmpp_stanza_t *message = dispatch->message;
+                const auto msg_view = ::xmpp::StanzaView(message);
+
+                const char *debug_from = xmpp_stanza_get_from(message);
+                const char *debug_to = xmpp_stanza_get_to(message);
+                const char *debug_type = xmpp_stanza_get_type(message);
+
+                const std::string from_bare_s = debug_from ? ::jid(nullptr, debug_from).bare : std::string{};
+                const std::string to_bare_s = debug_to ? ::jid(nullptr, debug_to).bare : std::string{};
+                const auto partner = ::xmpp::mam_conversation_partner_jid(
+                    from_bare_s, to_bare_s, account.jid());
+
+                ::xmpp::MamPmDiscoveryPolicy discovery;
+                discovery.is_groupchat = debug_type
+                    && weechat_strcasecmp(debug_type, "groupchat") == 0;
+                discovery.has_partner_jid = partner.has_value();
+                discovery.channel_already_exists = partner && account.channels.contains(*partner);
+                discovery.deliberately_closed = partner
+                    && account.mam_cache_get_last_timestamp(*partner) == static_cast<time_t>(-1);
+                discovery.has_user_payload = ::xmpp::stanza_has_user_message_payload(msg_view);
+
+                if (::xmpp::should_discover_pm_channel_from_mam(discovery))
                 {
-                    const char *debug_from = xmpp_stanza_get_from(message);
-                    const char *debug_to = xmpp_stanza_get_to(message);
-                    const char *debug_type = xmpp_stanza_get_type(message);
-                    
-                    // For global MAM queries, create PM channels based on conversation partners.
-                    // Only create a channel if the archived stanza contains actual user content
-                    // (a plaintext body, an OMEMO encrypted payload, or a PGP payload).
-                    // This prevents pure control stanzas — OMEMO key-transport messages,
-                    // chat-state notifications, read receipts — from spuriously opening PM
-                    // buffers for contacts who haven't sent a real message in >7 days.
-                    if (!debug_type || weechat_strcasecmp(debug_type, "groupchat") != 0)
-                    {
-                        const std::string from_bare_s = debug_from ? ::jid(nullptr, debug_from).bare : std::string {};
-                        const std::string to_bare_s   = debug_to   ? ::jid(nullptr, debug_to).bare   : std::string {};
-                        const char *from_bare_cs = from_bare_s.empty() ? nullptr : from_bare_s.c_str();
-                        const char *to_bare_cs   = to_bare_s.empty()   ? nullptr : to_bare_s.c_str();
-                        
-                        // Determine the conversation partner JID
-                        const char *partner_jid = nullptr;
-                        if (from_bare_cs && weechat_strcasecmp(from_bare_cs, account.jid().data()) != 0)
-                            partner_jid = from_bare_cs;  // Message FROM someone else
-                        else if (to_bare_cs && weechat_strcasecmp(to_bare_cs, account.jid().data()) != 0)
-                            partner_jid = to_bare_cs;  // Message TO someone else (sent by us)
-                        
-                        // Create PM channel only if the stanza carries real user content AND
-                        // the user hasn't deliberately closed it (last_mam_fetch == -1 in LMDB).
-                        if (partner_jid && !account.channels.contains(partner_jid)
-                            && account.mam_cache_get_last_timestamp(partner_jid) != static_cast<time_t>(-1)
-                            && stanza_has_user_message_payload(message))
-                        {
-                            XDEBUG("MAM: discovered conversation with {}", partner_jid);
-
-                            account.channels.emplace(
-                                std::make_pair(partner_jid, weechat::channel {
-                                        account, weechat::channel::chat_type::PM,
-                                        partner_jid, partner_jid
-                                    }));
-                        }
-                    }
-                    
-                    // Extract message details for caching
-                    const char *msg_id = xmpp_stanza_get_id(message);
-                    const char *msg_from = xmpp_stanza_get_from(message);
-                    const char *msg_to = xmpp_stanza_get_to(message);
-                    xmpp_stanza_t *msg_body = xmpp_stanza_get_child_by_name(message, "body");
-                    const std::string msg_text_str = stanza_element_text(msg_body);
-                    const char *msg_text = msg_text_str.empty()
-                        ? nullptr : msg_text_str.c_str();
-                    
-                    delay = xmpp_stanza_get_child_by_name_and_ns(
-                        forwarded, "delay", "urn:xmpp:delay");
-                    const char *timestamp_str = delay ? xmpp_stanza_get_attribute(delay, "stamp") : nullptr;
-                    
-                    // Parse timestamp (stamp is always UTC, use timegm not mktime)
-                    time_t msg_timestamp = 0;
-                    if (timestamp_str)
-                    {
-                        struct tm time = {0};
-                        strptime(timestamp_str, "%FT%T", &time);
-                        msg_timestamp = timegm(&time);
-                    }
-                    
-                    // Cache the message if we have all required fields.
-                    // For OMEMO messages there is no plaintext <body> in the stanza, so
-                    // fall back to the omemo_plaintext LMDB table (populated at live
-                    // delivery) to get the decrypted body.  This lets mam_cache_load_messages
-                    // replay OMEMO conversations on the next restart without needing to
-                    // re-decrypt from the server archive (which would fail due to ratchet
-                    // state having advanced).
-                    if (msg_id && msg_from && msg_timestamp > 0)
-                    {
-                        std::string from_bare_s2 = ::jid(nullptr, msg_from).bare;
-                        std::string to_bare_s2 = msg_to ? ::jid(nullptr, msg_to).bare : std::string{};
-                        
-                        // Determine channel JID (from_bare for received, to_bare for sent)
-                        const char *channel_jid = from_bare_s2.c_str();
-                        if (!to_bare_s2.empty() && weechat_strcasecmp(to_bare_s2.c_str(), account.jid().data()) != 0)
-                            channel_jid = to_bare_s2.c_str();
-
-                        // Use plaintext body if available; otherwise check omemo_plaintext cache.
-                        // OMEMO messages carry <body>OMEMO_ADVICE</body> — the cache holds the
-                        // real plaintext, so look it up even when msg_text is the placeholder.
-                        //
-                        // For MUC OMEMO (plan §7): we deliberately serve the cached cleartext
-                        // on MAM replay instead of calling decode(). This avoids advancing the
-                        // Signal ratchet for historical messages. The cache key uses the room
-                        // bare JID (channel_jid) for MUCs.
-                        std::expected<std::string, std::string> omemo_body = std::unexpected("");
-                        if (!msg_text || std::string_view(msg_text) == OMEMO_ADVICE)
-                            omemo_body = account.mam_cache_lookup_omemo_plaintext(channel_jid, msg_id);
-
-                        const char *effective_body = (omemo_body && !omemo_body->empty())
-                            ? omemo_body->c_str()
-                            : (msg_text ? msg_text : nullptr);
-
-                        if (effective_body)
-                        {
-                            // For MUC messages, store the occupant nick (resource part of the
-                            // full JID, e.g. "Nick" from "room@service/Nick") so that
-                            // mam_cache_load_messages displays the sender correctly.
-                            // For PM messages, the bare JID is the right display string.
-                            std::string cache_from;
-                            if (debug_type && weechat_strcasecmp(debug_type, "groupchat") == 0)
-                            {
-                                cache_from = ::jid(nullptr, msg_from).resource;
-                                if (cache_from.empty())
-                                    cache_from = from_bare_s2; // fallback if resource missing
-                            }
-                            else
-                            {
-                                cache_from = from_bare_s2;
-                            }
-                            account.mam_cache_message(channel_jid, msg_id, cache_from,
-                                                      msg_timestamp, effective_body);
-                        }
-                    }
-                    
-                    // XEP-0313: Dedup MAM results against already-displayed live messages.
-                    // Two tag strategies are used:
-                    //   1. stanza_id_<archive-id>  – written when the server injects a
-                    //      <stanza-id> element on live delivery (XEP-0359).
-                    //   2. id_<msg-id>              – written from the message's own id=
-                    //      attribute (always present); used as fallback for servers that
-                    //      do not inject <stanza-id> on direct delivery.
-                    // If either tag is found in the channel buffer, the message was
-                    // already displayed and the MAM copy should be silently discarded.
-                    const char *archive_id = xmpp_stanza_get_attribute(result, "id");
-                    if ((archive_id && *archive_id) || (msg_id && *msg_id))
-                    {
-                        // Resolve channel JID from the forwarded message addresses
-                        std::string chk_from_s = msg_from ? ::jid(nullptr, msg_from).bare : std::string{};
-                        std::string chk_to_s   = msg_to   ? ::jid(nullptr, msg_to).bare   : std::string{};
-
-                        const char *channel_jid_chk = !chk_from_s.empty() ? chk_from_s.c_str() : nullptr;
-                        if (!chk_to_s.empty() && weechat_strcasecmp(chk_to_s.c_str(), account.jid().data()) != 0)
-                            channel_jid_chk = chk_to_s.c_str();
-
-                        struct t_gui_buffer *chk_buf = nullptr;
-                        if (channel_jid_chk) {
-                            if (auto it = account.channels.find(channel_jid_chk); it != account.channels.end())
-                            {
-                                auto& [_, ch] = *it;
-                                chk_buf = ch.buffer;
-                            }
-                        }
-
-                        bool already_displayed = false;
-                        if (chk_buf)
-                        {
-                            // Primary needle: stanza_id set by server on live delivery (XEP-0359)
-                            std::string needle1 = (archive_id && *archive_id)
-                                ? std::string("stanza_id_") + archive_id : std::string{};
-                            // Fallback needle: message's own id= tag, always written on live delivery
-                            std::string needle2 = (msg_id && *msg_id)
-                                ? std::string("id_") + msg_id : std::string{};
-
-                            struct t_gui_lines *own_lines = (struct t_gui_lines*)
-                                weechat_hdata_pointer(hdata_buffer,
-                                                      chk_buf, "lines");
-                            if (own_lines)
-                            {
-                                struct t_gui_line *ln = (struct t_gui_line*)
-                                    weechat_hdata_pointer(hdata_lines, own_lines, "last_line");
-                                int scan_count = 0;
-                                while (ln && !already_displayed && scan_count < 256)
-                                {
-                                    struct t_gui_line_data *ld = (struct t_gui_line_data*)
-                                        weechat_hdata_pointer(hdata_line, ln, "data");
-                                    if (ld)
-                                    {
-                                        const char *tags = (const char*)
-                                            weechat_hdata_string(hdata_line_data, ld, "tags");
-                                        if (tags)
-                                        {
-                                            std::string_view tv(tags);
-                                            if ((!needle1.empty() && tv.contains(needle1)) ||
-                                                (!needle2.empty() && tv.contains(needle2)))
-                                                already_displayed = true;
-                                        }
-                                    }
-                                    ln = (struct t_gui_line*)
-                                        weechat_hdata_move(hdata_line, ln, -1);
-                                    ++scan_count;
-                                }
-                            }
-                        }
-
-                        if (already_displayed)
-                            return 1;
-                    }
-
-                    std::string_view delay_stamp;
-                    if (delay)
-                        if (const char *ds = xmpp_stanza_get_attribute(delay, "stamp"))
-                            delay_stamp = ds;
-                    int ret = message_handler(message, false, true,
-                                             archive_id ? std::string_view(archive_id) : std::string_view{},
-                                             delay_stamp);
-                    return ret;
+                    XDEBUG("MAM: discovered conversation with {}", *partner);
+                    account.channels.emplace(
+                        std::make_pair(*partner, weechat::channel {
+                                account, weechat::channel::chat_type::PM,
+                                *partner, *partner
+                            }));
                 }
+
+                const char *msg_id = xmpp_stanza_get_id(message);
+                const char *msg_from = debug_from;
+                const char *msg_to = debug_to;
+                const std::string msg_text_str = msg_view.child("body").text();
+                const char *msg_text = msg_text_str.empty() ? nullptr : msg_text_str.c_str();
+                const time_t msg_timestamp = ::xmpp::parse_forward_delay_stamp(dispatch->delay_stamp);
+
+                if (msg_id && msg_from && msg_timestamp > 0)
+                {
+                    const std::string from_bare_s2 = ::jid(nullptr, msg_from).bare;
+                    const std::string to_bare_s2 = msg_to ? ::jid(nullptr, msg_to).bare : std::string{};
+                    const auto channel_jid_opt = ::xmpp::mam_channel_jid_for_addresses(
+                        from_bare_s2, to_bare_s2, account.jid());
+                    const char *channel_jid = channel_jid_opt
+                        ? channel_jid_opt->c_str() : from_bare_s2.c_str();
+
+                    std::expected<std::string, std::string> omemo_body = std::unexpected("");
+                    if (!msg_text || std::string_view(msg_text) == OMEMO_ADVICE)
+                        omemo_body = account.mam_cache_lookup_omemo_plaintext(channel_jid, msg_id);
+
+                    const char *effective_body = (omemo_body && !omemo_body->empty())
+                        ? omemo_body->c_str()
+                        : (msg_text ? msg_text : nullptr);
+
+                    if (effective_body)
+                    {
+                        const std::string cache_from = ::xmpp::mam_cache_from_label(
+                            debug_type ? debug_type : "",
+                            msg_from ? msg_from : "",
+                            from_bare_s2);
+                        account.mam_cache_message(channel_jid, msg_id, cache_from,
+                                                  msg_timestamp, effective_body);
+                    }
+                }
+
+                if (!dispatch->archive_id.empty() || (msg_id && *msg_id))
+                {
+                    const auto dedup_needles = ::xmpp::mam_dedup_needles(
+                        dispatch->archive_id, msg_id ? msg_id : "");
+                    const auto channel_jid_chk = ::xmpp::mam_channel_jid_for_addresses(
+                        msg_from ? ::jid(nullptr, msg_from).bare : std::string_view{},
+                        msg_to ? ::jid(nullptr, msg_to).bare : std::string_view{},
+                        account.jid());
+
+                    struct t_gui_buffer *chk_buf = nullptr;
+                    if (channel_jid_chk)
+                    {
+                        if (auto it = account.channels.find(*channel_jid_chk); it != account.channels.end())
+                        {
+                            auto& [_, ch] = *it;
+                            chk_buf = ch.buffer;
+                        }
+                    }
+
+                    if (chk_buf)
+                    {
+                        if (!dedup_needles.stanza_id_needle.empty()
+                            && !dedup_needles.message_id_needle.empty())
+                        {
+                            if (weechat::line_store_buffer_contains_any_tag(
+                                    chk_buf,
+                                    { dedup_needles.stanza_id_needle,
+                                      dedup_needles.message_id_needle }))
+                                return 1;
+                        }
+                        else if (!dedup_needles.stanza_id_needle.empty())
+                        {
+                            if (weechat::line_store_buffer_contains_any_tag(
+                                    chk_buf, { dedup_needles.stanza_id_needle }))
+                                return 1;
+                        }
+                        else if (!dedup_needles.message_id_needle.empty())
+                        {
+                            if (weechat::line_store_buffer_contains_any_tag(
+                                    chk_buf, { dedup_needles.message_id_needle }))
+                                return 1;
+                        }
+                    }
+                }
+
+                return message_handler(
+                    message, false, true,
+                    dispatch->archive_id.empty() ? std::string_view{} : dispatch->archive_id,
+                    dispatch->delay_stamp.empty() ? std::string_view{} : dispatch->delay_stamp);
             }
         }
 

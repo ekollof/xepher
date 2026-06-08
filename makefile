@@ -189,6 +189,7 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/iq_handlers.cpp \
 	 src/xmpp/message_ack.cpp \
 	 src/xmpp/chat_state.cpp \
+	 src/xmpp/message_forward.cpp \
 	 src/weechat/line_store.cpp \
 	 src/xmpp/atom.cpp \
 	 src/xmpp/xhtml.cpp \

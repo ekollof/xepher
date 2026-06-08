@@ -27,6 +27,7 @@
 #include "../src/xmpp/stanza_view.hh"
 #include "../src/xmpp/iq_handlers.hh"
 #include "../src/xmpp/chat_state.hh"
+#include "../src/xmpp/message_forward.hh"
 #include "../src/xmpp/message_ack.hh"
 #include "../src/weechat/line_store.hh"
 #include "../src/weechat/runtime_port.hh"
@@ -750,6 +751,79 @@ static std::optional<std::string> text_opt(xmpp_stanza_t *el)
     if (t.empty())
         return std::nullopt;
     return t;
+}
+
+TEST_CASE("parse_carbon_inner_message unwraps forwarded stanza")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message from='alice@example.org' to='alice@example.org/phone'>"
+        "<received xmlns='urn:xmpp:carbons:2'>"
+        "<forwarded xmlns='urn:xmpp:forward:0'>"
+        "<message xmlns='jabber:client' from='bob@example.org' to='alice@example.org' type='chat'>"
+        "<body>hi</body>"
+        "</message>"
+        "</forwarded>"
+        "</received>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto view = xmpp::StanzaView(msg);
+    CHECK(xmpp::stanza_is_carbon(view));
+
+    auto inner = xmpp::parse_carbon_inner_message(view, "alice@example.org");
+    REQUIRE(inner.has_value());
+    CHECK(xmpp::stanza_has_user_message_payload(xmpp::StanzaView(*inner)));
+
+    CHECK_FALSE(xmpp::parse_carbon_inner_message(view, "eve@example.org").has_value());
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("parse_mam_forwarded_dispatch extracts archive metadata")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message from='alice@example.org' to='alice@example.org/phone'>"
+        "<result xmlns='urn:xmpp:mam:2' id='arch-1' queryid='q1'>"
+        "<forwarded xmlns='urn:xmpp:forward:0'>"
+        "<delay xmlns='urn:xmpp:delay' stamp='2020-01-01T12:00:00Z'/>"
+        "<message xmlns='jabber:client' from='bob@example.org' to='alice@example.org'"
+        " type='chat' id='m1'><body>hello</body></message>"
+        "</forwarded>"
+        "</result>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto view = xmpp::StanzaView(msg);
+    CHECK(xmpp::stanza_is_mam_result(view));
+    REQUIRE(xmpp::mam_pubsub_query_id(view) == "q1");
+
+    auto dispatch = xmpp::parse_mam_forwarded_dispatch(view);
+    REQUIRE(dispatch.has_value());
+    CHECK(dispatch->archive_id == "arch-1");
+    CHECK(dispatch->delay_stamp == "2020-01-01T12:00:00Z");
+    CHECK(xmpp::parse_forward_delay_stamp(dispatch->delay_stamp) > 0);
+
+    const auto partner = xmpp::mam_conversation_partner_jid(
+        "bob@example.org", "alice@example.org", "alice@example.org");
+    REQUIRE(partner.has_value());
+    CHECK(*partner == "bob@example.org");
+
+    const auto needles = xmpp::mam_dedup_needles("arch-1", "m1");
+    CHECK(needles.stanza_id_needle == "stanza_id_arch-1");
+    CHECK(needles.message_id_needle == "id_m1");
+
+    xmpp::MamPmDiscoveryPolicy policy;
+    policy.has_partner_jid = true;
+    policy.has_user_payload = true;
+    CHECK(xmpp::should_discover_pm_channel_from_mam(policy));
+
+    xmpp_stanza_release(msg);
 }
 
 TEST_CASE("parse_incoming_chat_state from StanzaView")
