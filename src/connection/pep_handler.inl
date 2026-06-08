@@ -86,54 +86,14 @@ if (event)
                     if (data_elem)
                     {
                 const std::string b64_data = stanza_element_text(data_elem);
-                        if (!b64_data.empty())
-                        {
-                            // Decode base64 avatar data
-                            BIO *bio, *b64;
-                            size_t decode_len = b64_data.size();
-                        std::vector<uint8_t> image_data(decode_len);
-                        
-                        bio = BIO_new_mem_buf(b64_data.data(), -1);
-                        b64 = BIO_new(BIO_f_base64());
-                        bio = BIO_push(b64, bio);
-                        BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
-                        
-                        int actual_len = BIO_read(bio, image_data.data(), decode_len);
-                        BIO_free_all(bio);
-                        
-                        if (actual_len > 0)
-                        {
-                            image_data.resize(actual_len);
-                            
-                            const char *from_jid = from ? from : own_jid;
-                            std::string hash = weechat::avatar::calculate_hash(image_data);
-                            
-                            // Save to cache
-                            weechat::avatar::data avatar_data;
-                            avatar_data.image_data = image_data;
-                            avatar_data.meta.id = hash;
-                            avatar_data.meta.bytes = actual_len;
-                            avatar_data.meta.type = "image/png";  // Default, should get from metadata
-                            
-                            weechat::avatar::save_to_cache(account, hash, avatar_data);
-                            
-                            // Update user profile
-                            weechat::user *user = weechat::user::search(&account, from_jid);
-                            if (user)
-                            {
-                                user->profile.avatar_data = image_data;
-                                user->profile.avatar_rendered = 
-                                    weechat::avatar::render_unicode_blocks(image_data, 
-                                                                           avatar_data.meta.type);
-                                user->cached_prefix_raw.clear();
-                         }
-                         
-                         XDEBUG("Avatar data received from {} ({} bytes, hash verified: {})",
-                                from_jid,
-                                actual_len,
-                                hash);
-                         }
-                     }
+                if (!b64_data.empty())
+                {
+                    const char *from_jid = from ? from : own_jid;
+                    if (weechat::avatar::apply_pep_data_b64(account, from_jid, b64_data))
+                    {
+                        XDEBUG("Avatar data received from {} (PEP push)", from_jid);
+                    }
+                }
                 }
             }
         }

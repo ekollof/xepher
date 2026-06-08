@@ -60,6 +60,11 @@ namespace weechat
         // Request avatar from remote JID
         static void request_metadata(account& acc, const char *jid);
         static void request_data(account& acc, const char *jid, std::string_view hash);
+
+        // Apply XEP-0084 avatar <data> payload (base64) to cache + user profile.
+        [[nodiscard]] static bool apply_pep_data_b64(account& acc,
+                                                     const char *jid,
+                                                     std::string_view b64_data);
         
         // Load avatar for user from cache (called on user creation/presence)
         static void load_for_user(account& acc, class user& user);

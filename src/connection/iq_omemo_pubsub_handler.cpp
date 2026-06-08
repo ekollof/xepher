@@ -4,27 +4,22 @@
 
 #include <string>
 #include <string_view>
-#include <vector>
 #include <fmt/core.h>
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
-#include "util.hh"
 #include "account.hh"
-#include "user.hh"
 #include "channel.hh"
 #include "connection.hh"
-#include "avatar.hh"
 #include "debug.hh"
+#include "omemo.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
-#include "connection/internal.hh"
-#include "xmpp/atom.hh"
-#include "xmpp/message_pep.hh"
-#include "xmpp/message_pep_feed.hh"
 #include "xmpp/xep-0060.inl"
+
+#include "connection/internal.hh"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
-#include "connection/pep_handler.inl"
+#include "connection/iq_omemo_pubsub_handler.inl"
 #pragma GCC diagnostic pop

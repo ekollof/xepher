@@ -213,6 +213,52 @@ void weechat::avatar::request_data(account& acc, const char *jid,
     xmpp_stanza_release(iq);
 }
 
+bool weechat::avatar::apply_pep_data_b64(account& acc,
+                                         const char *jid,
+                                         const std::string_view b64_data)
+{
+    if (b64_data.empty() || !jid || !*jid)
+        return false;
+
+    BIO *bio = BIO_new_mem_buf(b64_data.data(), static_cast<int>(b64_data.size()));
+    BIO *b64 = BIO_new(BIO_f_base64());
+    if (!bio || !b64)
+    {
+        BIO_free_all(bio);
+        BIO_free_all(b64);
+        return false;
+    }
+
+    bio = BIO_push(b64, bio);
+    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+
+    std::vector<uint8_t> image_data(b64_data.size());
+    const int actual_len = BIO_read(bio, image_data.data(), static_cast<int>(image_data.size()));
+    BIO_free_all(bio);
+    if (actual_len <= 0)
+        return false;
+
+    image_data.resize(static_cast<size_t>(actual_len));
+    const std::string hash = calculate_hash(image_data);
+
+    data avatar_data;
+    avatar_data.image_data = image_data;
+    avatar_data.meta.id = hash;
+    avatar_data.meta.bytes = static_cast<uint32_t>(actual_len);
+    avatar_data.meta.type = "image/png";
+
+    save_to_cache(acc, hash, avatar_data);
+
+    if (weechat::user *user = weechat::user::search(&acc, jid))
+    {
+        user->profile.avatar_data = image_data;
+        user->profile.avatar_rendered = render_unicode_blocks(image_data, avatar_data.meta.type);
+        user->cached_prefix_raw.clear();
+    }
+
+    return true;
+}
+
 void weechat::avatar::load_for_user(account& acc, user& user)
 {
     // If user has an avatar hash, try to load it from cache

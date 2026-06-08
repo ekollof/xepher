@@ -246,7 +246,7 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 **`iq_handler.inl` slices:**
 - [ ] Version/time (done — see `iq_handlers.cpp`)
 - [x] Ping / error IQ replies — `iq_ping`, `iq_error`, `iq_ping_handler`; `handle_ping_iq` in `iq_handlers`
-- [ ] Pubsub / PEP (avatars, microblog, OMEMO bundles)
+- [x] Pubsub / PEP (avatars, microblog, OMEMO bundles) — `iq_avatar_handler`, `iq_pubsub_feed_handler`, `iq_omemo_pubsub_handler`; `avatar::apply_pep_data_b64`
 - [ ] HTTP upload slot responses
 - [ ] MAM fin / RSM
 - [ ] Search / disco / caps

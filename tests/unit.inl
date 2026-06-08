@@ -28,6 +28,8 @@
 #include "xmpp/iq_handlers.hh"
 #include "xmpp/iq_error.hh"
 #include "xmpp/iq_ping.hh"
+#include "xmpp/iq_pubsub_feed.hh"
+#include "xmpp/iq_omemo_pubsub.hh"
 #include "xmpp/chat_state.hh"
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_body.hh"
@@ -1219,6 +1221,42 @@ TEST_CASE("message_reactions and reply helpers")
     xmpp_stanza_release(rxn);
     xmpp_stanza_release(rxn_clear);
     xmpp_stanza_release(reply);
+}
+
+TEST_CASE("iq_pubsub and omemo pubsub helpers")
+{
+    CHECK(xmpp::is_skipped_non_atom_feed_item_id("urn:xmpp:avatar:metadata"));
+    CHECK_FALSE(xmpp::is_skipped_non_atom_feed_item_id("post-uuid"));
+
+    CHECK(xmpp::is_microblog_comments_node("urn:xmpp:microblog:0:comments/abc"));
+    CHECK_FALSE(xmpp::is_microblog_comments_node("urn:xmpp:microblog:0"));
+
+    CHECK(xmpp::is_legacy_devicelist_pubsub_node(
+              "eu.siacs.conversations.axolotl.devicelist"));
+    CHECK(xmpp::is_legacy_bundle_pubsub_node(
+              "eu.siacs.conversations.axolotl.bundles:42"));
+
+    CHECK(xmpp::omemo_precondition_retry_node_from_publish_id("announce-legacy1", 7)
+          == "eu.siacs.conversations.axolotl.devicelist");
+    CHECK(xmpp::omemo_precondition_retry_node_from_publish_id("omemo-legacy-bundle", 9)
+          == "eu.siacs.conversations.axolotl.bundles:9");
+
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *dl_err = xmpp_stanza_new_from_string(env.ctx,
+        "<iq xmlns='jabber:client' type='error' id='dl1'>"
+        "<error type='cancel'>"
+        "<item-not-found xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>"
+        "</error>"
+        "<pubsub xmlns='http://jabber.org/protocol/pubsub'>"
+        "<items node='eu.siacs.conversations.axolotl.devicelist'/>"
+        "</pubsub>"
+        "</iq>");
+    REQUIRE(dl_err != nullptr);
+    CHECK(xmpp::iq_error_has_item_not_found(xmpp::StanzaView(dl_err)));
+    CHECK(xmpp::iq_has_legacy_devicelist_pubsub_error(xmpp::StanzaView(dl_err)));
+    xmpp_stanza_release(dl_err);
 }
 
 TEST_CASE("message_pep and feed helpers")
