@@ -813,6 +813,13 @@ normally without inline display.
 printed synchronously, directly under the message that shared the image. Kitty
 terminals correctly scroll these image cells together with the buffer text.
 
+During **MAM replay**, image URLs are never passed directly to icat (async HTTP
+downloads would land out of order). Instead the plugin resolves each image to a
+local file first — LMDB cache hit, synchronous download, or synchronous ESFS
+decrypt — then invokes icat on that path immediately after the message line.
+Live delivery still uses icat's async URL fetch, but also caches downloaded paths
+for faster MAM replay on reconnect.
+
 **Setup:**
 
 ```sh

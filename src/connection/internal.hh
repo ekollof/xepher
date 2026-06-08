@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -92,6 +93,16 @@ void esfs_start_download(std::string_view cipher_url,
                          weechat::account *account_ptr,
                          std::string_view channel_jid,
                          std::string_view stable_id);
+
+// Synchronous ESFS download/decrypt for MAM replay (blocks until complete).
+[[nodiscard]] std::expected<std::string, std::string>
+esfs_download_sync(std::string_view cipher_url,
+                   std::string_view filename,
+                   std::string_view key_b64,
+                   std::string_view iv_b64,
+                   weechat::account *account_ptr,
+                   std::string_view channel_jid,
+                   std::string_view stable_id);
 
 // ── OG / HTML-title async URL preview fetch ───────────────────────────────────
 // Fetches a URL in a background thread, parses OpenGraph meta tags (and falls

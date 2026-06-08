@@ -31,6 +31,7 @@
 #include "channel.hh"
 #include "buffer.hh"
 #include "util.hh"
+#include "weechat/icat_preview.hh"
 #include "debug.hh"
 
 #include "account/callbacks.inl"

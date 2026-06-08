@@ -34,8 +34,10 @@
 #include <strophe.h>
 
 #include "account.hh"
+#include "config.hh"
 #include "debug.hh"
 #include "util.hh"
+#include "weechat/icat_preview.hh"
 #include "connection/internal.hh"
 
 // ── parse_omemo_device_id ─────────────────────────────────────────────────────
@@ -219,6 +221,130 @@ static size_t esfs_curl_write_cb(char *ptr, size_t size, size_t nmemb, void *use
     return size * nmemb;
 }
 
+[[nodiscard]] static std::string esfs_build_downloads_dir(std::string_view channel_jid)
+{
+    std::string base;
+    const char *xdg = getenv("XDG_DOWNLOAD_DIR");
+    if (xdg && *xdg)
+        base = xdg;
+    else
+    {
+        const char *home = getenv("HOME");
+        base = home ? std::string(home) + "/Downloads" : "/tmp";
+    }
+
+    time_t now = time(nullptr);
+    struct tm tm_now{};
+    localtime_r(&now, &tm_now);
+    const std::string date_buf = fmt::format("{:%Y-%m-%d}", tm_now);
+
+    std::string safe_jid = std::string(channel_jid);
+    std::ranges::for_each(safe_jid, [](char &c){ if (c == '/') c = '_'; });
+
+    return base + "/xmpp/" + safe_jid + "/" + date_buf;
+}
+
+[[nodiscard]] static std::expected<std::string, std::string>
+esfs_run_download_decrypt(esfs_download_ctx &ctx, std::string_view downloads_dir)
+{
+    auto key_bytes = esfs_b64_decode(ctx.key_b64);
+    auto iv_bytes  = esfs_b64_decode(ctx.iv_b64);
+
+    if (!key_bytes || !iv_bytes || key_bytes->size() != 32 || iv_bytes->size() != 12)
+    {
+        return std::unexpected(!key_bytes ? key_bytes.error()
+                             : !iv_bytes  ? iv_bytes.error()
+                             : fmt::format("esfs: invalid key/IV length (key={} IV={})",
+                                           key_bytes->size(), iv_bytes->size()));
+    }
+
+    std::vector<unsigned char> ciphertext;
+    {
+        CURL *curl = curl_easy_init();
+        if (!curl)
+            return std::unexpected("esfs: curl_easy_init failed");
+
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+        curl_easy_setopt(curl, CURLOPT_URL, ctx.cipher_url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, esfs_curl_write_cb);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ciphertext);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        CURLcode res = curl_easy_perform(curl);
+        long http_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        curl_easy_cleanup(curl);
+
+        if (res != CURLE_OK || (http_code != 200 && http_code != 206))
+        {
+            return std::unexpected(fmt::format("esfs: download failed (curl={} http={})",
+                                               curl_easy_strerror(res), http_code));
+        }
+    }
+
+    if (ciphertext.size() < 16)
+        return std::unexpected("esfs: ciphertext too short to contain auth tag");
+
+    size_t ct_len  = ciphertext.size() - 16;
+    unsigned char *ct_data  = ciphertext.data();
+    unsigned char *tag_data = ciphertext.data() + ct_len;
+
+    std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>
+        dec_ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
+
+    if (!dec_ctx
+        || EVP_DecryptInit_ex(dec_ctx.get(), EVP_aes_256_gcm(),
+                              nullptr, nullptr, nullptr) != 1
+        || EVP_CIPHER_CTX_ctrl(dec_ctx.get(), EVP_CTRL_GCM_SET_IVLEN,
+                               12, nullptr) != 1
+        || EVP_DecryptInit_ex(dec_ctx.get(), nullptr,
+                              nullptr, key_bytes->data(), iv_bytes->data()) != 1)
+        return std::unexpected("esfs: EVP decrypt init failed");
+
+    std::vector<unsigned char> plaintext(ct_len + 16);
+    int out_len = 0;
+    if (ct_len > 0
+        && EVP_DecryptUpdate(dec_ctx.get(), plaintext.data(), &out_len,
+                             ct_data, static_cast<int>(ct_len)) != 1)
+        return std::unexpected("esfs: EVP_DecryptUpdate failed");
+    size_t pt_len = static_cast<size_t>(out_len);
+
+    EVP_CIPHER_CTX_ctrl(dec_ctx.get(), EVP_CTRL_GCM_SET_TAG, 16, tag_data);
+
+    int final_len = 0;
+    if (EVP_DecryptFinal_ex(dec_ctx.get(), plaintext.data() + pt_len, &final_len) != 1)
+        return std::unexpected("esfs: GCM tag verification failed (authentication error)");
+    pt_len += static_cast<size_t>(final_len);
+    plaintext.resize(pt_len);
+
+    std::string safe_name = ctx.filename;
+    std::ranges::for_each(safe_name, [](char &c){ if (c == '/' || c == '\0') c = '_'; });
+    if (safe_name.empty()) safe_name = "esfs_file";
+
+    std::string out_path = std::string(downloads_dir) + "/" + safe_name;
+    {
+        std::string candidate = out_path;
+        int suffix = 1;
+        struct stat st{};
+        while (::stat(candidate.c_str(), &st) == 0)
+            candidate = out_path + "." + std::to_string(suffix++);
+        out_path = candidate;
+    }
+
+    std::filesystem::create_directories(downloads_dir);
+
+    {
+        auto file_deleter = [](FILE *f) { if (f) fclose(f); };
+        std::unique_ptr<FILE, decltype(file_deleter)>
+            out_file(fopen(out_path.c_str(), "wb"), file_deleter);
+        if (!out_file)
+            return std::unexpected(fmt::format("esfs: failed to open output file: {}", out_path));
+        if (pt_len > 0)
+            fwrite(plaintext.data(), 1, pt_len, out_file.get());
+    }
+
+    return out_path;
+}
+
 static int esfs_download_cb(const void *pointer, void *data, int fd)
 {
     (void) pointer;
@@ -250,27 +376,22 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
     {
         weechat_printf(ctx.buffer, "%s[ESFS] Saved decrypted file: %s",
                        weechat_prefix("network"), ctx.saved_path.c_str());
-        // Persist the download record to LMDB so MAM replay skips re-downloading.
         if (ctx.account_ptr && !ctx.channel_jid.empty() && !ctx.stable_id.empty())
+        {
             ctx.account_ptr->mam_cache_store_esfs_download(
                 ctx.channel_jid, ctx.stable_id, ctx.saved_path);
+            ctx.account_ptr->mam_cache_store_image_preview(
+                ctx.channel_jid, ctx.stable_id, ctx.saved_path);
+        }
 
-        // weechat-icat: display decrypted image inline via Kitty graphics protocol.
-        // -print_immediately prints placeholder lines synchronously so the preview
-        // appears directly under the message, before any later messages arrive.
-        if (ctx.account_ptr && weechat::config::instance &&
-            weechat_config_boolean(weechat::config::instance->look.icat))
+        if (ctx.account_ptr)
         {
-            std::string_view fname = ctx.filename;
-            if (fname.ends_with(".jpg") || fname.ends_with(".jpeg") || fname.ends_with(".png")
-                || fname.ends_with(".gif") || fname.ends_with(".webp"))
-            {
-                auto [w, h] = read_image_dimensions(ctx.saved_path.c_str());
-                std::string dim_args = icat_dimension_args(w, h);
-                std::string icat_cmd = fmt::format("/icat -print_immediately{} {}",
-                                                   dim_args, ctx.saved_path);
-                weechat_command(ctx.buffer, icat_cmd.c_str());
-            }
+            weechat::icat_preview_request icat_req;
+            icat_req.buffer = ctx.buffer;
+            icat_req.source = ctx.saved_path;
+            icat_req.channel_jid = ctx.channel_jid;
+            icat_req.stable_id = ctx.stable_id;
+            invoke_icat_preview(icat_req, *ctx.account_ptr);
         }
     }
     else
@@ -321,175 +442,65 @@ void esfs_start_download(std::string_view cipher_url,
     ctx.hook = weechat_hook_fd(pipe_fds[0], 1, 0, 0,
                                esfs_download_cb, nullptr, nullptr);
 
-    std::string downloads_dir;
-    {
-        // Determine base downloads directory from XDG or HOME.
-        std::string base;
-        const char *xdg = getenv("XDG_DOWNLOAD_DIR");
-        if (xdg && *xdg)
-        {
-            base = xdg;
-        }
-        else
-        {
-            const char *home = getenv("HOME");
-            base = home ? std::string(home) + "/Downloads" : "/tmp";
-        }
-
-        // Build date subfolder (local wall-clock time at download).
-        time_t now = time(nullptr);
-        struct tm tm_now{};
-        localtime_r(&now, &tm_now);
-        const std::string date_buf = fmt::format("{:%Y-%m-%d}", tm_now);
-
-        // Sanitize JID for use as a directory name: replace '/' with '_'
-        // (bare JIDs don't contain '/' but be defensive; '\0' can't appear).
-        std::string safe_jid = ctx.channel_jid;
-        std::ranges::for_each(safe_jid, [](char &c){ if (c == '/') c = '_'; });
-
-        downloads_dir = base + "/xmpp/" + safe_jid + "/" + date_buf;
-    }
+    const std::string downloads_dir = esfs_build_downloads_dir(ctx.channel_jid);
 
     ctx.worker = std::thread([&ctx, downloads_dir]()
     {
-        auto key_bytes = esfs_b64_decode(ctx.key_b64);
-        auto iv_bytes  = esfs_b64_decode(ctx.iv_b64);
-
-        if (!key_bytes || !iv_bytes || key_bytes->size() != 32 || iv_bytes->size() != 12)
+        if (auto path = esfs_run_download_decrypt(ctx, downloads_dir))
         {
-            ctx.success   = false;
-            ctx.error_msg = !key_bytes ? key_bytes.error()
-                          : !iv_bytes  ? iv_bytes.error()
-                          : fmt::format("esfs: invalid key/IV length (key={} IV={})",
-                                        key_bytes->size(), iv_bytes->size());
-            ::write(ctx.pipe_write_fd, "x", 1);
-            return;
+            ctx.saved_path = std::move(*path);
+            ctx.success = true;
         }
-
-        std::vector<unsigned char> ciphertext;
+        else
         {
-            CURL *curl = curl_easy_init();
-            if (!curl)
-            {
-                ctx.error_msg = "esfs: curl_easy_init failed";
-                ::write(ctx.pipe_write_fd, "x", 1);
-                return;
-            }
-
-            curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-            curl_easy_setopt(curl, CURLOPT_URL, ctx.cipher_url.c_str());
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, esfs_curl_write_cb);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ciphertext);
-            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-            CURLcode res = curl_easy_perform(curl);
-            long http_code = 0;
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-            curl_easy_cleanup(curl);
-
-            if (res != CURLE_OK || (http_code != 200 && http_code != 206))
-            {
-                ctx.success   = false;
-                ctx.error_msg = fmt::format("esfs: download failed (curl={} http={})",
-                                            curl_easy_strerror(res), http_code);
-                ::write(ctx.pipe_write_fd, "x", 1);
-                return;
-            }
+            ctx.success = false;
+            ctx.error_msg = path.error();
         }
-
-        if (ciphertext.size() < 16)
-        {
-            ctx.success   = false;
-            ctx.error_msg = "esfs: ciphertext too short to contain auth tag";
-            ::write(ctx.pipe_write_fd, "x", 1);
-            return;
-        }
-
-        size_t ct_len  = ciphertext.size() - 16;
-        unsigned char *ct_data  = ciphertext.data();
-        unsigned char *tag_data = ciphertext.data() + ct_len;
-
-        std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>
-            dec_ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
-
-        if (!dec_ctx
-            || EVP_DecryptInit_ex(dec_ctx.get(), EVP_aes_256_gcm(),
-                                  nullptr, nullptr, nullptr) != 1
-            || EVP_CIPHER_CTX_ctrl(dec_ctx.get(), EVP_CTRL_GCM_SET_IVLEN,
-                                   12, nullptr) != 1
-            || EVP_DecryptInit_ex(dec_ctx.get(), nullptr,
-                                  nullptr, key_bytes->data(), iv_bytes->data()) != 1)
-        {
-            ctx.success   = false;
-            ctx.error_msg = "esfs: EVP decrypt init failed";
-            ::write(ctx.pipe_write_fd, "x", 1);
-            return;
-        }
-
-        std::vector<unsigned char> plaintext(ct_len + 16);
-        int out_len = 0;
-        if (ct_len > 0
-            && EVP_DecryptUpdate(dec_ctx.get(), plaintext.data(), &out_len,
-                                 ct_data, static_cast<int>(ct_len)) != 1)
-        {
-            ctx.success   = false;
-            ctx.error_msg = "esfs: EVP_DecryptUpdate failed";
-            ::write(ctx.pipe_write_fd, "x", 1);
-            return;
-        }
-        size_t pt_len = static_cast<size_t>(out_len);
-
-        EVP_CIPHER_CTX_ctrl(dec_ctx.get(), EVP_CTRL_GCM_SET_TAG, 16, tag_data);
-
-        int final_len = 0;
-        int final_rc = EVP_DecryptFinal_ex(dec_ctx.get(),
-                                           plaintext.data() + pt_len, &final_len);
-        if (final_rc != 1)
-        {
-            ctx.success   = false;
-            ctx.error_msg = "esfs: GCM tag verification failed (authentication error)";
-            ::write(ctx.pipe_write_fd, "x", 1);
-            return;
-        }
-        pt_len += static_cast<size_t>(final_len);
-        plaintext.resize(pt_len);
-
-        std::string safe_name = ctx.filename;
-        std::ranges::for_each(safe_name, [](char &c){ if (c == '/' || c == '\0') c = '_'; });
-        if (safe_name.empty()) safe_name = "esfs_file";
-
-        std::string out_path = downloads_dir + "/" + safe_name;
-
-        {
-            std::string candidate = out_path;
-            int suffix = 1;
-            struct stat st{};
-            while (::stat(candidate.c_str(), &st) == 0)
-                candidate = out_path + "." + std::to_string(suffix++);
-            out_path = candidate;
-        }
-
-        std::filesystem::create_directories(downloads_dir);
-
-        {
-            auto file_deleter = [](FILE *f) { if (f) fclose(f); };
-            std::unique_ptr<FILE, decltype(file_deleter)>
-                out_file(fopen(out_path.c_str(), "wb"), file_deleter);
-            if (!out_file)
-            {
-                ctx.success   = false;
-                ctx.error_msg = fmt::format("esfs: failed to open output file: {}", out_path);
-                ::write(ctx.pipe_write_fd, "x", 1);
-                return;
-            }
-            if (pt_len > 0)
-                fwrite(plaintext.data(), 1, pt_len, out_file.get());
-        }
-
-        ctx.saved_path = out_path;
-        ctx.success    = true;
         ::write(ctx.pipe_write_fd, "x", 1);
     });
 }
+
+std::expected<std::string, std::string>
+esfs_download_sync(std::string_view cipher_url,
+                   std::string_view filename,
+                   std::string_view key_b64,
+                   std::string_view iv_b64,
+                   weechat::account *account_ptr,
+                   std::string_view channel_jid,
+                   std::string_view stable_id)
+{
+    if (!account_ptr || cipher_url.empty())
+        return std::unexpected("invalid esfs sync args");
+
+    if (!channel_jid.empty() && !stable_id.empty())
+    {
+        if (auto cached = account_ptr->mam_cache_lookup_esfs_download(channel_jid, stable_id))
+            return *cached;
+    }
+
+    esfs_download_ctx ctx;
+    ctx.cipher_url  = std::string(cipher_url);
+    ctx.filename    = std::string(filename);
+    ctx.key_b64     = std::string(key_b64);
+    ctx.iv_b64      = std::string(iv_b64);
+    ctx.account_ptr = account_ptr;
+    ctx.channel_jid = std::string(channel_jid);
+    ctx.stable_id   = std::string(stable_id);
+
+    const std::string downloads_dir = esfs_build_downloads_dir(channel_jid);
+    auto path = esfs_run_download_decrypt(ctx, downloads_dir);
+    if (!path)
+        return std::unexpected(path.error());
+
+    if (!channel_jid.empty() && !stable_id.empty())
+    {
+        account_ptr->mam_cache_store_esfs_download(channel_jid, stable_id, *path);
+        account_ptr->mam_cache_store_image_preview(channel_jid, stable_id, *path);
+    }
+
+    return path;
+}
+
 
 // ── OG / HTML-title async URL preview fetch ───────────────────────────────────
 

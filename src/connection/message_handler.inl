@@ -1593,6 +1593,13 @@ message_handler_after_omemo:
     std::string incoming_image_url;
     std::string incoming_image_mime;
     size_t incoming_image_width = 0, incoming_image_height = 0;
+    struct pending_icat_preview {
+        std::string source;
+        size_t width = 0;
+        size_t height = 0;
+        std::string mime;
+    };
+    std::optional<pending_icat_preview> pending_icat;
 
     // XEP-0066: Out of Band Data - extract URL from <x xmlns='jabber:x:oob'>
     xmpp_stanza_t *oob_x = xmpp_stanza_get_child_by_name_and_ns(stanza, "x", "jabber:x:oob");
@@ -1666,6 +1673,7 @@ message_handler_after_omemo:
             const std::string esfs_channel_jid = channel_id ? std::string(channel_id) : std::string();
 
             bool already_downloaded = false;
+            std::optional<std::string> esfs_local_path;
             if (!esfs_stable_id.empty() && !esfs_channel_jid.empty())
             {
                 if (auto prev = account.mam_cache_lookup_esfs_download(
@@ -1674,27 +1682,47 @@ message_handler_after_omemo:
                     sims_suffix += ::xmpp::format_encrypted_file_saved_suffix(
                         enc.meta.name, *prev);
                     already_downloaded = true;
-
-                    if (weechat::config::instance &&
-                        weechat_config_boolean(weechat::config::instance->look.icat) &&
-                        is_image_mime_type(enc.meta.mime))
-                    {
-                        auto [w, h] = read_image_dimensions(prev->c_str());
-                        const std::string dim_args = icat_dimension_args(w, h);
-                        const std::string icat_cmd = fmt::format(
-                            "/icat -print_immediately{} {}", dim_args, *prev);
-                        weechat_command(channel->buffer, icat_cmd.c_str());
-                    }
+                    esfs_local_path = *prev;
                 }
             }
 
             if (!already_downloaded)
             {
-                esfs_start_download(enc.ciphertext_url, enc.meta.name, enc.key_b64, enc.iv_b64,
-                                    channel ? channel->buffer : account.buffer,
-                                    &account, esfs_channel_jid, esfs_stable_id);
-                sims_suffix += ::xmpp::format_encrypted_file_suffix(
-                    enc.meta.name, enc.meta.size_raw);
+                if (is_mam_replay)
+                {
+                    if (auto path = esfs_download_sync(
+                            enc.ciphertext_url, enc.meta.name, enc.key_b64, enc.iv_b64,
+                            &account, esfs_channel_jid, esfs_stable_id))
+                    {
+                        sims_suffix += ::xmpp::format_encrypted_file_saved_suffix(
+                            enc.meta.name, *path);
+                        already_downloaded = true;
+                        esfs_local_path = std::move(*path);
+                    }
+                    else
+                    {
+                        sims_suffix += ::xmpp::format_encrypted_file_suffix(
+                            enc.meta.name, enc.meta.size_raw);
+                    }
+                }
+                else
+                {
+                    esfs_start_download(enc.ciphertext_url, enc.meta.name, enc.key_b64, enc.iv_b64,
+                                        channel ? channel->buffer : account.buffer,
+                                        &account, esfs_channel_jid, esfs_stable_id);
+                    sims_suffix += ::xmpp::format_encrypted_file_suffix(
+                        enc.meta.name, enc.meta.size_raw);
+                }
+            }
+
+            if (already_downloaded && esfs_local_path && is_image_mime_type(enc.meta.mime))
+            {
+                pending_icat = pending_icat_preview{
+                    *esfs_local_path,
+                    enc.meta.width,
+                    enc.meta.height,
+                    enc.meta.mime,
+                };
             }
             continue;
         }
@@ -1910,17 +1938,36 @@ message_handler_after_omemo:
         weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s", msg.c_str());
     }
 
-    // weechat-icat: display inline image for incoming SFS/SIMS/OOB image URLs.
-    // -print_immediately prints placeholder lines synchronously so the preview
-    // appears directly under the message, before any later messages arrive.
-    if (weechat::config::instance &&
-        weechat_config_boolean(weechat::config::instance->look.icat) &&
-        !incoming_image_url.empty())
+    // weechat-icat: display inline image after the message line (local path during
+    // MAM replay; live delivery may pass HTTP URLs to icat.py directly).
     {
-        std::string dim_args = icat_dimension_args(incoming_image_width, incoming_image_height);
-        std::string icat_cmd = fmt::format("/icat -print_immediately{} {}",
-                                           dim_args, incoming_image_url);
-        weechat_command(channel->buffer, icat_cmd.c_str());
+        const std::string channel_jid_str = channel_id ? std::string(channel_id) : std::string();
+        const std::string stable_id_str = stable_id ? std::string(stable_id) : std::string();
+
+        auto emit_icat = [&](const pending_icat_preview &preview) {
+            weechat::icat_preview_request req;
+            req.buffer = channel->buffer;
+            req.source = preview.source;
+            req.width = preview.width;
+            req.height = preview.height;
+            req.mime = preview.mime;
+            req.mam_replay = is_mam_replay;
+            req.channel_jid = channel_jid_str;
+            req.stable_id = stable_id_str;
+            invoke_icat_preview(req, account);
+        };
+
+        if (pending_icat)
+            emit_icat(*pending_icat);
+        else if (!incoming_image_url.empty())
+        {
+            emit_icat(pending_icat_preview{
+                incoming_image_url,
+                incoming_image_width,
+                incoming_image_height,
+                incoming_image_mime,
+            });
+        }
     }
 
     // XEP-0511: print each collected OG preview as a separate buffer line.

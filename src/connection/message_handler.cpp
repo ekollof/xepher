@@ -61,6 +61,7 @@
 #include "xmpp/message_reply.hh"
 #include "xmpp/message_pep.hh"
 #include "xmpp/message_pep_feed.hh"
+#include "weechat/icat_preview.hh"
 #include "weechat/render_event.hh"
 #include "xmpp/stanza_view.hh"
 #include "weechat/line_store.hh"

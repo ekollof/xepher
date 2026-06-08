@@ -448,18 +448,15 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
                   "%sFile uploaded! Sharing link… %s",
                   weechat_prefix("network"), visible_link.c_str());
 
-    // Inline image display via weechat-icat (Kitty graphics protocol).
-    // -print_immediately prints placeholder lines synchronously so the preview
-    // appears directly under the message, before any later messages arrive.
-    if (weechat::config::instance &&
-        weechat_config_boolean(weechat::config::instance->look.icat) &&
-        is_image_mime_type(ctx->content_type) &&
-        !ctx->local_path.empty())
+    if (!ctx->local_path.empty())
     {
-        std::string dim_args = icat_dimension_args(ctx->image_width, ctx->image_height);
-        std::string icat_cmd = fmt::format("/icat -print_immediately{} {}",
-                                           dim_args, ctx->local_path);
-        weechat_command(status_buf, icat_cmd.c_str());
+        weechat::icat_preview_request req;
+        req.buffer = status_buf;
+        req.source = ctx->local_path;
+        req.width = ctx->image_width;
+        req.height = ctx->image_height;
+        req.mime = ctx->content_type;
+        invoke_icat_preview(req, *ptr_account);
     }
 
     return WEECHAT_RC_OK;

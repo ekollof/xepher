@@ -391,6 +391,7 @@ namespace weechat
             lmdb::dbi cursors = 0;         // RSM cursor persistence for MAM queries
             lmdb::dbi omemo_plaintext = 0; // decrypted OMEMO body cache (keyed channel_jid:msg_id)
             lmdb::dbi esfs_downloads = 0;  // ESFS downloaded file paths (keyed channel_jid:stable_id → saved_path)
+            lmdb::dbi image_previews = 0;  // local image paths for icat MAM replay (keyed channel_jid:stable_id)
             lmdb::dbi og_previews = 0;     // XEP-0511 OG preview cache (keyed by URL)
         } mam_dbi;
         std::string mam_db_path;
@@ -467,6 +468,10 @@ namespace weechat
         void mam_cache_store_esfs_download(std::string_view channel_jid, std::string_view stable_id,
                                            std::string_view saved_path);
         std::expected<std::string, std::string> mam_cache_lookup_esfs_download(std::string_view channel_jid,
+                                                                   std::string_view stable_id);
+        void mam_cache_store_image_preview(std::string_view channel_jid, std::string_view stable_id,
+                                           std::string_view local_path);
+        std::expected<std::string, std::string> mam_cache_lookup_image_preview(std::string_view channel_jid,
                                                                    std::string_view stable_id);
         // PM buffer persistence across restarts (stored in cursors LMDB table)
         void pm_open_register(std::string_view pm_jid);

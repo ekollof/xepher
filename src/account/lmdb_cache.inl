@@ -28,6 +28,7 @@ void weechat::account::mam_cache_init()
         mam_dbi.cursors = lmdb::dbi::open(transaction, "cursors", MDB_CREATE);
         mam_dbi.omemo_plaintext = lmdb::dbi::open(transaction, "omemo_plaintext", MDB_CREATE);
         mam_dbi.esfs_downloads  = lmdb::dbi::open(transaction, "esfs_downloads",  MDB_CREATE);
+        mam_dbi.image_previews  = lmdb::dbi::open(transaction, "image_previews",  MDB_CREATE);
         mam_dbi.og_previews     = lmdb::dbi::open(transaction, "og_previews",     MDB_CREATE);
 
         transaction.commit();
@@ -676,6 +677,57 @@ std::expected<std::string, std::string> weechat::account::mam_cache_lookup_esfs_
             std::string path(static_cast<const char*>(v.mv_data), v.mv_size);
             txn.abort();
             return path;
+        }
+
+        txn.abort();
+    } catch (const lmdb::error&) {
+        // Silently ignore read errors
+    }
+
+    return std::unexpected("not found or db error");
+}
+
+void weechat::account::mam_cache_store_image_preview(std::string_view channel_jid,
+                                                     std::string_view stable_id,
+                                                     std::string_view local_path)
+{
+    if (!mam_db_env || channel_jid.empty() || stable_id.empty() || local_path.empty()) return;
+
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+
+        std::string key = fmt::format("{}:{}", channel_jid, stable_id);
+        MDB_val k = {key.size(), (void*)key.data()};
+        MDB_val v = {local_path.size(), (void*)local_path.data()};
+
+        mdb_put(txn.handle(), mam_dbi.image_previews.handle(), &k, &v, 0);
+        txn.commit();
+    } catch (const lmdb::error&) {
+        // Silently ignore write errors
+    }
+}
+
+std::expected<std::string, std::string> weechat::account::mam_cache_lookup_image_preview(
+    std::string_view channel_jid, std::string_view stable_id)
+{
+    if (!mam_db_env || channel_jid.empty() || stable_id.empty()) return std::unexpected("invalid args");
+
+    try {
+        lmdb::txn parentTransaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
+
+        std::string key = fmt::format("{}:{}", channel_jid, stable_id);
+        MDB_val k = {key.size(), (void*)key.data()};
+        MDB_val v;
+
+        if (mdb_get(txn.handle(), mam_dbi.image_previews.handle(), &k, &v) == 0)
+        {
+            std::string path(static_cast<const char*>(v.mv_data), v.mv_size);
+            txn.abort();
+            if (std::filesystem::is_regular_file(path))
+                return path;
+            return std::unexpected("cached path missing");
         }
 
         txn.abort();
