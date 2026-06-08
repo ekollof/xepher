@@ -3458,22 +3458,7 @@ message_handler_after_omemo:
         xmpp_stanza_t *file_elem = xmpp_stanza_get_child_by_name_and_ns(
             ms, "file", "urn:xmpp:jingle:apps:file-transfer:5");
 
-        std::string sims_name, sims_mime, sims_size_str;
-        size_t sims_width = 0, sims_height = 0;
-        if (file_elem)
-        {
-            xmpp_stanza_t *name_e = xmpp_stanza_get_child_by_name(file_elem, "name");
-            xmpp_stanza_t *mime_e = xmpp_stanza_get_child_by_name(file_elem, "media-type");
-            xmpp_stanza_t *size_e = xmpp_stanza_get_child_by_name(file_elem, "size");
-            xmpp_stanza_t *w_e    = xmpp_stanza_get_child_by_name(file_elem, "width");
-            xmpp_stanza_t *h_e    = xmpp_stanza_get_child_by_name(file_elem, "height");
-
-            if (name_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(name_e)); if (t_g.ptr) sims_name = t_g.ptr; }
-            if (mime_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(mime_e)); if (t_g.ptr) sims_mime = t_g.ptr; }
-            if (size_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(size_e)); if (t_g.ptr) sims_size_str = t_g.ptr; }
-            if (w_e)    { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(w_e));    if (t_g.ptr) sims_width = std::strtoul(t_g.ptr, nullptr, 10); }
-            if (h_e)    { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(h_e));    if (t_g.ptr) sims_height = std::strtoul(t_g.ptr, nullptr, 10); }
-        }
+        const auto sims_meta = parse_file_metadata(file_elem);
 
         // Extract first source URL from <sources>
         xmpp_stanza_t *sources = xmpp_stanza_get_child_by_name(ms, "sources");
@@ -3505,43 +3490,16 @@ message_handler_after_omemo:
         if (!sims_url.empty())
         {
             // Candidate for weechat-icat (SIMS provides MIME type)
-            if (is_image_mime_type(sims_mime))
+            if (is_image_mime_type(sims_meta.mime))
             {
                 incoming_image_url = sims_url;
-                incoming_image_mime = sims_mime;
-                incoming_image_width = sims_width;
-                incoming_image_height = sims_height;
+                incoming_image_mime = sims_meta.mime;
+                incoming_image_width = sims_meta.width;
+                incoming_image_height = sims_meta.height;
             }
 
-            // Build display line: [File: name (mime, size) URL]
-            sims_suffix += std::string("\n") + weechat_color("cyan") + "[File: ";
-            if (!sims_name.empty())
-                sims_suffix += sims_name;
-            else
-                sims_suffix += sims_url;
-
-            if (!sims_mime.empty() || !sims_size_str.empty())
-            {
-                sims_suffix += " (";
-                if (!sims_mime.empty())
-                    sims_suffix += sims_mime;
-                if (!sims_mime.empty() && !sims_size_str.empty())
-                    sims_suffix += ", ";
-                if (!sims_size_str.empty())
-                {
-                    // Human-readable size
-                    long long sz = std::stoll(sims_size_str);
-                    if (sz >= 1024 * 1024)
-                        sims_suffix += fmt::format("{:.1f} MB", sz / 1048576.0);
-                    else if (sz >= 1024)
-                        sims_suffix += fmt::format("{:.1f} KB", sz / 1024.0);
-                    else
-                        sims_suffix += fmt::format("{} B", sz);
-                }
-                sims_suffix += ")";
-            }
-            sims_suffix += " " + sims_url;
-            sims_suffix += "]" + std::string(weechat_color("resetcolor"));
+            sims_suffix += format_file_share_suffix(
+                sims_meta.name, sims_meta.mime, sims_meta.size_raw, sims_url);
 
             // If OOB already shows this same URL, suppress the OOB suffix to avoid duplication
             if (!oob_suffix.empty() && oob_suffix.contains(sims_url))
@@ -3565,22 +3523,7 @@ message_handler_after_omemo:
         xmpp_stanza_t *file_elem = xmpp_stanza_get_child_by_name_and_ns(
             fs, "file", "urn:xmpp:file:metadata:0");
 
-        std::string sfs_name, sfs_mime, sfs_size_str;
-        size_t sfs_width = 0, sfs_height = 0;
-        if (file_elem)
-        {
-            xmpp_stanza_t *name_e = xmpp_stanza_get_child_by_name(file_elem, "name");
-            xmpp_stanza_t *mime_e = xmpp_stanza_get_child_by_name(file_elem, "media-type");
-            xmpp_stanza_t *size_e = xmpp_stanza_get_child_by_name(file_elem, "size");
-            xmpp_stanza_t *w_e    = xmpp_stanza_get_child_by_name(file_elem, "width");
-            xmpp_stanza_t *h_e    = xmpp_stanza_get_child_by_name(file_elem, "height");
-
-            if (name_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(name_e)); if (t_g.ptr) sfs_name = t_g.ptr; }
-            if (mime_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(mime_e)); if (t_g.ptr) sfs_mime = t_g.ptr; }
-            if (size_e) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(size_e)); if (t_g.ptr) sfs_size_str = t_g.ptr; }
-            if (w_e)    { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(w_e));    if (t_g.ptr) sfs_width = std::strtoul(t_g.ptr, nullptr, 10); }
-            if (h_e)    { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(h_e));    if (t_g.ptr) sfs_height = std::strtoul(t_g.ptr, nullptr, 10); }
-        }
+        const auto sfs_meta = parse_file_metadata(file_elem);
 
         // <sources><url-data xmlns='http://jabber.org/protocol/url-data' target='https://...'/>
         xmpp_stanza_t *sources = xmpp_stanza_get_child_by_name(fs, "sources");
@@ -3614,8 +3557,10 @@ message_handler_after_omemo:
                     std::string esfs_key, esfs_iv, esfs_ct_url;
                     xmpp_stanza_t *key_el = xmpp_stanza_get_child_by_name(src, "key");
                     xmpp_stanza_t *iv_el  = xmpp_stanza_get_child_by_name(src, "iv");
-                    if (key_el) { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(key_el)); if (t_g.ptr) esfs_key = t_g.ptr; }
-                    if (iv_el)  { xmpp_string_guard t_g(account.context, xmpp_stanza_get_text(iv_el));  if (t_g.ptr) esfs_iv  = t_g.ptr; }
+                    if (key_el)
+                        esfs_key = stanza_element_text(key_el);
+                    if (iv_el)
+                        esfs_iv = stanza_element_text(iv_el);
 
                     xmpp_stanza_t *inner_sources = xmpp_stanza_get_child_by_name(src, "sources");
                     if (inner_sources)
@@ -3654,7 +3599,7 @@ message_handler_after_omemo:
                                 sfs_url = esfs_ct_url;
                                 sims_suffix += std::string("\n") + weechat_color("cyan")
                                     + "[Encrypted file: "
-                                    + (sfs_name.empty() ? "(unnamed)" : sfs_name)
+                                    + (sfs_meta.name.empty() ? "(unnamed)" : sfs_meta.name)
                                     + " — already saved: " + *prev + "]"
                                     + std::string(weechat_color("resetcolor"));
                                 already_downloaded = true;
@@ -3662,7 +3607,7 @@ message_handler_after_omemo:
                                 // weechat-icat: display already-cached decrypted image inline
                                 if (weechat::config::instance &&
                                     weechat_config_boolean(weechat::config::instance->look.icat) &&
-                                    is_image_mime_type(sfs_mime))
+                                    is_image_mime_type(sfs_meta.mime))
                                 {
                                     auto [w, h] = read_image_dimensions(prev->c_str());
                                     std::string dim_args = icat_dimension_args(w, h);
@@ -3676,7 +3621,7 @@ message_handler_after_omemo:
                         if (!already_downloaded)
                         {
                             // Kick off background download + decrypt.
-                            esfs_start_download(esfs_ct_url, sfs_name, esfs_key, esfs_iv,
+                            esfs_start_download(esfs_ct_url, sfs_meta.name, esfs_key, esfs_iv,
                                                 channel ? channel->buffer : account.buffer,
                                                 &account, esfs_channel_jid, esfs_stable_id);
                             sfs_encrypted = true;
@@ -3715,61 +3660,19 @@ message_handler_after_omemo:
         if (!sfs_url.empty())
         {
             // Candidate for weechat-icat (SFS provides MIME type; skip encrypted — handled in esfs_download_cb)
-            if (!sfs_encrypted && is_image_mime_type(sfs_mime))
+            if (!sfs_encrypted && is_image_mime_type(sfs_meta.mime))
             {
                 incoming_image_url = sfs_url;
-                incoming_image_mime = sfs_mime;
-                incoming_image_width = sfs_width;
-                incoming_image_height = sfs_height;
+                incoming_image_mime = sfs_meta.mime;
+                incoming_image_width = sfs_meta.width;
+                incoming_image_height = sfs_meta.height;
             }
 
             if (sfs_encrypted)
-            {
-                // XEP-0448: show that we're downloading the encrypted file in the background.
-                sims_suffix += std::string("\n") + weechat_color("cyan") + "[Encrypted file: ";
-                sims_suffix += sfs_name.empty() ? "(unnamed)" : sfs_name;
-                if (!sfs_size_str.empty())
-                {
-                    long long sz = std::stoll(sfs_size_str);
-                    if (sz >= 1024 * 1024)
-                        sims_suffix += fmt::format(" ({:.1f} MB)", sz / 1048576.0);
-                    else if (sz >= 1024)
-                        sims_suffix += fmt::format(" ({:.1f} KB)", sz / 1024.0);
-                    else
-                        sims_suffix += fmt::format(" ({} B)", sz);
-                }
-                sims_suffix += " — downloading…]" + std::string(weechat_color("resetcolor"));
-            }
+                sims_suffix += format_encrypted_file_suffix(sfs_meta.name, sfs_meta.size_raw);
             else
-            {
-                sims_suffix += std::string("\n") + weechat_color("cyan") + "[File: ";
-                if (!sfs_name.empty())
-                    sims_suffix += sfs_name;
-                else
-                    sims_suffix += sfs_url;
-
-                if (!sfs_mime.empty() || !sfs_size_str.empty())
-                {
-                    sims_suffix += " (";
-                    if (!sfs_mime.empty())
-                        sims_suffix += sfs_mime;
-                    if (!sfs_mime.empty() && !sfs_size_str.empty())
-                        sims_suffix += ", ";
-                    if (!sfs_size_str.empty())
-                    {
-                        long long sz = std::stoll(sfs_size_str);
-                        if (sz >= 1024 * 1024)
-                            sims_suffix += fmt::format("{:.1f} MB", sz / 1048576.0);
-                        else if (sz >= 1024)
-                            sims_suffix += fmt::format("{:.1f} KB", sz / 1024.0);
-                        else
-                            sims_suffix += fmt::format("{} B", sz);
-                    }
-                    sims_suffix += ")";
-                }
-                sims_suffix += " " + sfs_url;
-                sims_suffix += "]" + std::string(weechat_color("resetcolor"));
-            }
+                sims_suffix += format_file_share_suffix(
+                    sfs_meta.name, sfs_meta.mime, sfs_meta.size_raw, sfs_url);
         }
     }
 
