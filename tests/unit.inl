@@ -40,6 +40,8 @@
 #include "xmpp/message_retract.hh"
 #include "xmpp/message_reactions.hh"
 #include "xmpp/message_reply.hh"
+#include "xmpp/message_pep.hh"
+#include "xmpp/message_pep_feed.hh"
 #include "xmpp/message_ack.hh"
 #include "weechat/line_store.hh"
 #include "weechat/runtime_port.hh"
@@ -1159,6 +1161,58 @@ TEST_CASE("message_reactions and reply helpers")
     xmpp_stanza_release(rxn);
     xmpp_stanza_release(rxn_clear);
     xmpp_stanza_release(reply);
+}
+
+TEST_CASE("message_pep and feed helpers")
+{
+    CHECK(xmpp::pep_node_is_microblog("urn:xmpp:microblog:0"));
+    CHECK(xmpp::pep_node_is_microblog("urn:xmpp:microblog:0:comments/abc"));
+    CHECK_FALSE(xmpp::pep_node_is_microblog("news.example/feed"));
+
+    CHECK(xmpp::pep_node_is_protocol_uri("urn:xmpp:avatar:metadata"));
+    CHECK(xmpp::pep_node_is_protocol_uri("eu.siacs.conversations.axolotl.devicelist"));
+    CHECK_FALSE(xmpp::pep_node_is_protocol_uri("Phoronix"));
+
+    CHECK(xmpp::pep_from_is_self("Alice@Example.org/resource", "alice@example.org"));
+    CHECK_FALSE(xmpp::pep_from_is_self("bob@example.org", "alice@example.org"));
+
+    CHECK(xmpp::pep_node_is_legacy_omemo("eu.siacs.conversations.axolotl.bundles:1"));
+    CHECK(xmpp::pep_node_is_known_protocol_node("urn:xmpp:bookmarks:1"));
+
+    const auto generic = xmpp::classify_generic_pubsub_feed(
+        "Phoronix", "news.movim.eu", "alice@example.org");
+    CHECK(generic.is_generic_feed);
+    CHECK_FALSE(generic.drop_legacy_omemo);
+
+    const auto self_pep = xmpp::classify_generic_pubsub_feed(
+        "mood", "alice@example.org", "alice@example.org");
+    CHECK_FALSE(self_pep.is_generic_feed);
+
+    const auto legacy = xmpp::classify_generic_pubsub_feed(
+        "eu.siacs.conversations.axolotl.devicelist",
+        "alice@example.org",
+        "alice@example.org");
+    CHECK(legacy.drop_legacy_omemo);
+    CHECK_FALSE(legacy.is_generic_feed);
+
+    CHECK(xmpp::feed_alias_prefix(3) == "#3");
+    CHECK(xmpp::feed_alias_prefix(0).empty());
+
+    CHECK(xmpp::feed_item_xmpp_link("news.movim.eu", "Phoronix", "item-1")
+          == "xmpp:news.movim.eu?;node=Phoronix;item=item-1");
+
+    const auto alias_lookup = [](std::string_view uuid) -> int {
+        return uuid == "uuid-42" ? 7 : -1;
+    };
+    CHECK(xmpp::feed_reply_label(
+              "xmpp:news.movim.eu?;node=Phoronix;item=uuid-42",
+              alias_lookup)
+          == "#7");
+    CHECK(xmpp::feed_reply_label(
+              "xmpp:news.movim.eu?;node=Phoronix;item=unknown",
+              alias_lookup)
+          == "unknown");
+    CHECK(xmpp::feed_reply_label("plain-ref", alias_lookup) == "plain-ref");
 }
 
 TEST_CASE("format_inbound_message_body respects unstyled hint")

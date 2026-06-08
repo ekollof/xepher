@@ -71,6 +71,7 @@ namespace weechat {
         bool message_handler(xmpp_stanza_t *stanza, bool top_level = true, bool is_mam_replay = false,
                              std::string_view override_archive_id = {},
                              std::string_view override_delay_stamp = {});
+        void handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::string_view own_jid_str);
         bool iq_handler(xmpp_stanza_t *stanza, bool top_level = true);
         bool sm_handler(xmpp_stanza_t *stanza);
 

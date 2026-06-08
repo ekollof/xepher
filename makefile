@@ -157,6 +157,7 @@ SRCS=src/plugin.cpp \
 	 src/connection/helpers.cpp \
 	 src/connection/presence_handler.cpp \
 	 src/connection/message_handler.cpp \
+	 src/connection/pep_handler.cpp \
 	 src/connection/iq_handler.cpp \
 	 src/connection/session_lifecycle.cpp \
 	 src/account/callbacks.cpp \
@@ -208,6 +209,8 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/message_retract.cpp \
 	 src/xmpp/message_reactions.cpp \
 	 src/xmpp/message_reply.cpp \
+	 src/xmpp/message_pep.cpp \
+	 src/xmpp/message_pep_feed.cpp \
 	 src/weechat/line_store.cpp \
 	 src/xmpp/atom.cpp \
 	 src/xmpp/xhtml.cpp \

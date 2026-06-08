@@ -59,6 +59,8 @@
 #include "xmpp/message_retract.hh"
 #include "xmpp/message_reactions.hh"
 #include "xmpp/message_reply.hh"
+#include "xmpp/message_pep.hh"
+#include "xmpp/message_pep_feed.hh"
 #include "xmpp/stanza_view.hh"
 #include "weechat/line_store.hh"
 #include "xmpp/xhtml.hh"
