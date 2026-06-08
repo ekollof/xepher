@@ -121,8 +121,10 @@ sha256sums="${SHA256}  xepher-${VERSION}.tar.gz"
 
 build() {
     cd "\${srcdir}/xepher-\${pkgver}"
-    make clean
-    make weechat-xmpp
+    # Tarball has no .git; make clean would remove seeded deps/diff/libdiff.a.
+    rm -rf obj
+    rm -f xmpp.so
+    make PACKAGE_BUILD=1 weechat-xmpp
 }
 
 package() {

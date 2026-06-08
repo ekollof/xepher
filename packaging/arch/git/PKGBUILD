@@ -40,7 +40,7 @@ prepare() {
 
 build() {
     cd "$srcdir/xepher"
-    make
+    make PACKAGE_BUILD=1
 }
 
 package() {

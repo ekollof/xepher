@@ -59,7 +59,7 @@ Features include:
 #   tar czf xepher-%%{version}.tar.gz --exclude=.git xepher/
 
 %build
-%make_build weechat-xmpp
+%make_build PACKAGE_BUILD=1 weechat-xmpp
 
 %install
 install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so

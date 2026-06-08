@@ -47,7 +47,7 @@ prepare_source_tree "${BUILD_DIR}/src"
 
 # Build xmpp.so
 cd "${BUILD_DIR}/src"
-make weechat-xmpp
+make PACKAGE_BUILD=1 weechat-xmpp
 
 # Assemble fake destdir for xbps-create
 DESTDIR="${BUILD_DIR}/destdir"

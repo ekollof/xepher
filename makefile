@@ -4,6 +4,11 @@
 UNAME_S := $(shell uname -s)
 IS_CLANG := $(shell $(CXX) --version 2>/dev/null | grep -i clang)
 
+# PACKAGE_BUILD=1 skips embedding the .source ELF section (distribution packages).
+ifneq ($(PACKAGE_BUILD),)
+export PACKAGE_BUILD
+endif
+
 # Parallel compilation: enabled by default; override with `make -j1` when debugging.
 NPROC ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 ifeq ($(filter -j%,$(MAKEFLAGS)),)
@@ -267,7 +272,12 @@ xmpp.so: $(DEPS) $(OBJS) $(HDRS)
 	$(CXX) $(SHARED_FLAG) $(LDFLAGS) -o $@ $(AS_NEEDED) $(OBJS) $(DEPS) $(LDLIBS)
 ifeq ($(UNAME_S),Linux)
 ifneq ($(OBJCOPY),)
-	git ls-files | xargs ls -d | xargs tar cz | $(OBJCOPY) --add-section .source=/dev/stdin xmpp.so
+ifneq ($(PACKAGE_BUILD),1)
+	@files=$$(git ls-files 2>/dev/null); \
+	if [ -n "$$files" ]; then \
+		echo "$$files" | xargs ls -d 2>/dev/null | xargs tar cz | $(OBJCOPY) --add-section .source=/dev/stdin xmpp.so; \
+	fi
+endif
 endif
 endif
 

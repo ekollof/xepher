@@ -8,7 +8,7 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
 override_dh_auto_build:
 	[ -f deps/diff/Makefile ] || git submodule update --init --recursive
-	$(MAKE) weechat-xmpp
+	$(MAKE) PACKAGE_BUILD=1 weechat-xmpp
 
 override_dh_auto_clean:
 	$(MAKE) clean || true

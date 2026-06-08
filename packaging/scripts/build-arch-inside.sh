@@ -70,7 +70,7 @@ sha256sums=('SKIP')
 build() {
     cd "\${srcdir}/xepher-\${pkgver}"
     make clean
-    make weechat-xmpp
+    make PACKAGE_BUILD=1 weechat-xmpp
 }
 
 package() {
