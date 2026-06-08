@@ -9,12 +9,25 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     {
         const char *dbg_id = xmpp_stanza_get_id(stanza);
         const char *dbg_type = xmpp_stanza_get_attribute(stanza, "type");
-        weechat_printf(account.buffer, "%s%s: iq_handler recv id=%s type=%s contains=%d",
+        // ALSO log to a file for reliable capture of early returns
+        {
+            FILE *fp = fopen("/tmp/opencode/iq_handler_trace.log", "a");
+            if (fp) {
+                fprintf(fp, "TOP id=%s type=%s contains=%d map_size=%zu\n",
+                        dbg_id ? dbg_id : "(null)",
+                        dbg_type ? dbg_type : "(null)",
+                        (dbg_id && account.muc_owner_queries.contains(dbg_id)) ? 1 : 0,
+                        account.muc_owner_queries.size());
+                fclose(fp);
+            }
+        }
+        weechat_printf(account.buffer, "%s%s: iq_handler recv id=%s type=%s contains=%d map_size=%zu",
                        weechat_prefix("error"),
                        WEECHAT_XMPP_PLUGIN_NAME,
                        dbg_id ? dbg_id : "(null)",
                        dbg_type ? dbg_type : "(null)",
-                       (dbg_id && account.muc_owner_queries.contains(dbg_id)) ? 1 : 0);
+                       (dbg_id && account.muc_owner_queries.contains(dbg_id)) ? 1 : 0,
+                       account.muc_owner_queries.size());
     }
 
     xmpp_stanza_t *reply, *query, *text, *fin;
@@ -89,8 +102,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             .from(to ? to : "")
             .build(account.context)
             .get());
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L105 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
         return true;
     }
+
     
     // Handle ping responses (XEP-0199 and XEP-0410)
     if (type && (weechat_strcasecmp(type, "result") == 0 || weechat_strcasecmp(type, "error") == 0))
@@ -236,6 +251,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
         }
 
+        { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L253 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
     return true;
 }
     }
@@ -315,8 +331,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             weechat_printf(prefs_buf, "%sMAM preferences updated successfully",
                 weechat_prefix("network"));
         }
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L332 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
         return true;
     }
+
 
     // Handle vCard responses (XEP-0054)
     xmpp_stanza_t *vcard = xmpp_stanza_get_child_by_name_and_ns(
@@ -384,6 +402,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                weechat_prefix("network"), fld.c_str());
 
                 account.setvcard_queries.erase(sv_it);
+                    { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L402 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                 return true;
             }
         }
@@ -508,8 +527,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             u->profile.vcard_fetched = true;
         }
 
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L526 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
         return true;
     }
+
 
     // Handle vCard4 PubSub responses (XEP-0292)
     // Arrives as: <iq type='result'><pubsub xmlns='..pubsub'><items node='urn:xmpp:vcard4'>
@@ -538,8 +559,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         if (vcard4)
                         {
                             XDEBUG("vCard4 auto-fetched for {}", from_jid);
-                            return true;
-                        }
+        { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L557 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
+    return true;
+}
                     }
                 }
             }
@@ -1129,10 +1151,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             .id(uid)
                             .xep0060()
                             .pubsub(sub_ps)
-                            .build(account.context)
-                            .get());
-                        node_count++;
-                    }
+            .build(account.context)
+            .get());
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L1150 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
+        return true;
+    }
                 }
 
                 if (node_count == 0)
@@ -2214,22 +2237,28 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
         }
 
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2233 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
         return true;
     }
+
     
     if (block && type && weechat_strcasecmp(type, "result") == 0)
     {
         weechat_printf(account.buffer, "%sBlock request successful",
                       weechat_prefix("network"));
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2241 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
         return true;
     }
+
     
     if (unblock && type && weechat_strcasecmp(type, "result") == 0)
     {
         weechat_printf(account.buffer, "%sUnblock request successful",
                       weechat_prefix("network"));
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2249 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
         return true;
     }
+
 
     // XEP-0191: server-pushed block/unblock IQ sets (§8.4, §8.5)
     if (block && type && weechat_strcasecmp(type, "set") == 0)
@@ -2251,8 +2280,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             .from(to ? to : "")
             .build(account.context)
             .get());
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2273 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
         return true;
     }
+
 
     if (unblock && type && weechat_strcasecmp(type, "set") == 0)
     {
@@ -2281,8 +2312,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             .from(to ? to : "")
             .build(account.context)
             .get());
+            { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2304 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
         return true;
     }
+
     
     // XEP-0030: Service Discovery - disco#items response
     xmpp_stanza_t *items_query = xmpp_stanza_get_child_by_name_and_ns(
@@ -2330,6 +2363,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     }
                 }
 
+                    { FILE *_fp = fopen("/tmp/opencode/iq_handler_trace.log", "a"); if (_fp) { fprintf(_fp, "RET@L2354 id=%s\n", xmpp_stanza_get_id(stanza)?xmpp_stanza_get_id(stanza):"(null)"); fclose(_fp); } }
                 return true; // occupant list handled; do not mis-treat nicks as upload services
                 }
             }
@@ -2376,11 +2410,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         // changes from /affiliation). All in-flight queries are tracked in
         // account.muc_owner_queries so we can route by kind and room JID.
         const char *owner_stanza_id = xmpp_stanza_get_id(stanza);
-        weechat_printf(account.buffer, "%s%s: pre-muc_owner lookup: id=%s contains=%d",
+        weechat_printf(account.buffer, "%s%s: pre-muc_owner lookup: id=%s contains=%d map_size=%zu",
                        weechat_prefix("error"),
                        WEECHAT_XMPP_PLUGIN_NAME,
                        owner_stanza_id ? owner_stanza_id : "(null)",
-                       (owner_stanza_id && account.muc_owner_queries.contains(owner_stanza_id)) ? 1 : 0);
+                       (owner_stanza_id && account.muc_owner_queries.contains(owner_stanza_id)) ? 1 : 0,
+                       account.muc_owner_queries.size());
         if (owner_stanza_id && account.muc_owner_queries.contains(owner_stanza_id))
         {
             auto info = account.muc_owner_queries[owner_stanza_id];
@@ -2556,8 +2591,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                                "/setmodes diff applied — submit sent",
                                                weechat_prefix("network"),
                                                WEECHAT_XMPP_PLUGIN_NAME);
-                                return true;
-                            }
+    {
+        FILE *fp = fopen("/tmp/opencode/iq_handler_trace.log", "a");
+        if (fp) { fprintf(fp, "END\n"); fclose(fp); }
+    }
+    return true;
+}
 
                             // No pending diff — just cache the form and
                             // tell the user.
@@ -3938,6 +3977,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             .get());
         return true;
     }
+
     
     query = xmpp_stanza_get_child_by_name_and_ns(
         stanza, "query", "jabber:iq:private");
