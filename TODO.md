@@ -250,7 +250,7 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] HTTP upload slot responses — `iq_upload`, `iq_upload_handler` (slot result + error paths)
 - [x] MAM fin / RSM — `iq_mam`, `iq_mam_handler` (fin + error paths)
 - [x] Search / disco / caps — `iq_disco`, `iq_caps`, `iq_disco_handler`
-- [ ] vCard / bookmarks
+- [x] vCard / bookmarks — `iq_vcard`, `iq_bookmarks`, `iq_vcard_handler`
 
 **Shared infrastructure for Wave 2:**
 - [ ] `UiAction` / `RenderEvent` sum type (print, nicklist, line-update-by-tag)

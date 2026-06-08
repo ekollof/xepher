@@ -165,6 +165,7 @@ SRCS=src/plugin.cpp \
 	 src/connection/iq_upload_handler.cpp \
 	 src/connection/iq_mam_handler.cpp \
 	 src/connection/iq_disco_handler.cpp \
+	 src/connection/iq_vcard_handler.cpp \
 	 src/connection/iq_handler.cpp \
 	 src/connection/session_lifecycle.cpp \
 	 src/account/callbacks.cpp \
@@ -209,6 +210,8 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/iq_mam.cpp \
 	 src/xmpp/iq_disco.cpp \
 	 src/xmpp/iq_caps.cpp \
+	 src/xmpp/iq_vcard.cpp \
+	 src/xmpp/iq_bookmarks.cpp \
 	 src/xmpp/message_ack.cpp \
 	 src/xmpp/chat_state.cpp \
 	 src/xmpp/message_forward.cpp \

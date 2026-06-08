@@ -85,6 +85,9 @@ namespace weechat {
         void handle_adhoc_command_iq_event(xmpp_stanza_t *stanza);
         bool handle_channel_search_iq_event(xmpp_stanza_t *stanza);
         bool handle_disco_info_iq_event(xmpp_stanza_t *stanza);
+        bool handle_vcard_iq_event(xmpp_stanza_t *stanza, std::string_view own_jid_str);
+        bool handle_vcard4_pubsub_iq_event(xmpp_stanza_t *stanza, std::string_view own_jid_str);
+        bool handle_bookmarks_iq_event(xmpp_stanza_t *stanza);
         bool iq_handler(xmpp_stanza_t *stanza, bool top_level = true);
         bool sm_handler(xmpp_stanza_t *stanza);
 

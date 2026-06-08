@@ -34,6 +34,8 @@
 #include "xmpp/iq_mam.hh"
 #include "xmpp/iq_disco.hh"
 #include "xmpp/iq_caps.hh"
+#include "xmpp/iq_vcard.hh"
+#include "xmpp/iq_bookmarks.hh"
 #include "xmpp/chat_state.hh"
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_body.hh"
@@ -1225,6 +1227,50 @@ TEST_CASE("message_reactions and reply helpers")
     xmpp_stanza_release(rxn);
     xmpp_stanza_release(rxn_clear);
     xmpp_stanza_release(reply);
+}
+
+TEST_CASE("iq_vcard and iq_bookmarks helpers")
+{
+    CHECK(xmpp::is_vcard4_pubsub_node("urn:xmpp:vcard4"));
+    CHECK_FALSE(xmpp::is_vcard4_pubsub_node("other"));
+
+    CHECK(xmpp::is_bookmark_autojoin_true("true"));
+    CHECK(xmpp::is_bookmark_autojoin_true("1"));
+    CHECK_FALSE(xmpp::is_bookmark_autojoin_true("false"));
+
+    CHECK(xmpp::is_biboumi_gateway_room("room%irc.server@biboumi"));
+    CHECK_FALSE(xmpp::is_biboumi_gateway_room("room@conference.example"));
+
+    CHECK(xmpp::bookmark_enter_command("room@conf", "nick") == "/enter room@conf/nick");
+    CHECK(xmpp::bookmark_enter_command("room@conf", "") == "/enter room@conf");
+
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *vcard = xmpp_stanza_new_from_string(env.ctx,
+        "<vCard xmlns='vcard-temp'>"
+        "<FN>Alice</FN><NICKNAME>ali</NICKNAME>"
+        "<EMAIL><USERID>alice@example</USERID></EMAIL>"
+        "<ADR><STREET>1 Main</STREET><CTRY>SE</CTRY></ADR>"
+        "</vCard>");
+    REQUIRE(vcard != nullptr);
+
+    auto fields = xmpp::vcard_fields_from_stanza(xmpp::StanzaView(vcard));
+    REQUIRE(fields.fn.has_value());
+    CHECK(*fields.fn == "Alice");
+    REQUIRE(fields.nickname.has_value());
+    CHECK(*fields.nickname == "ali");
+    REQUIRE(fields.email.has_value());
+    CHECK(*fields.email == "alice@example");
+
+    CHECK(xmpp::apply_vcard_set_field_override(fields, "nickname", "alice2"));
+    REQUIRE(fields.nickname.has_value());
+    CHECK(*fields.nickname == "alice2");
+
+    const xmpp::StanzaView adr = xmpp::StanzaView(vcard).child("ADR");
+    CHECK(xmpp::format_vcard_temp_adr(adr) == "1 Main, SE");
+
+    xmpp_stanza_release(vcard);
 }
 
 TEST_CASE("iq_disco and iq_caps helpers")
