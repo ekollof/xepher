@@ -45,7 +45,7 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         uint32_t ack_h = 0;
         if (h)
         {
-            ack_h = std::stoul(h);
+            ack_h = parse_uint32(h).value_or(0);
             account.sm_last_ack = ack_h;
             XDEBUG("Stream resumed (h={})", ack_h);
         }
@@ -113,7 +113,7 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         const char *h = xmpp_stanza_get_attribute(stanza, "h");
         if (h)
         {
-            uint32_t ack_count = std::stoul(h);
+            const uint32_t ack_count = parse_uint32(h).value_or(0);
             account.sm_last_ack = ack_count;
 
             // Prune all stanzas the server has confirmed receiving

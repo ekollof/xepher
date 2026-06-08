@@ -21,6 +21,7 @@
 #include <lmdb++.h>
 
 #include "fmt/core.h"
+#include "util.hh"
 #include "strophe.h"
 #include "pgp.hh"
 #include "omemo.hh"
@@ -449,104 +450,110 @@ namespace weechat
         
         void mam_cache_init();
         void mam_cache_cleanup();
-        void mam_cache_message(const std::string& channel_jid, const std::string& message_id,
-                              const std::string& from, time_t timestamp, const std::string& body);
-        void mam_cache_retract_message(const std::string& channel_jid, const std::string& message_id);
-        bool mam_cache_is_retracted(const std::string& channel_jid, const std::string& message_id);
-        void mam_cache_load_messages(const std::string& channel_jid, struct t_gui_buffer *buffer);
-        void mam_cache_clear_messages(const std::string& channel_jid);
-        time_t mam_cache_get_last_timestamp(const std::string& channel_jid);
-        void mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp);
+        void mam_cache_message(std::string_view channel_jid, std::string_view message_id,
+                              std::string_view from, time_t timestamp, std::string_view body);
+        void mam_cache_retract_message(std::string_view channel_jid, std::string_view message_id);
+        bool mam_cache_is_retracted(std::string_view channel_jid, std::string_view message_id);
+        void mam_cache_load_messages(std::string_view channel_jid, struct t_gui_buffer *buffer);
+        void mam_cache_clear_messages(std::string_view channel_jid);
+        time_t mam_cache_get_last_timestamp(std::string_view channel_jid);
+        void mam_cache_set_last_timestamp(std::string_view channel_jid, time_t timestamp);
         // OMEMO plaintext cache: store decrypted body on live delivery; look up on MAM replay
-        void mam_cache_store_omemo_plaintext(const std::string& channel_jid, const std::string& msg_id,
-                                             const std::string& body);
-        std::expected<std::string, std::string> mam_cache_lookup_omemo_plaintext(const std::string& channel_jid,
-                                                                     const std::string& msg_id);
+        void mam_cache_store_omemo_plaintext(std::string_view channel_jid, std::string_view msg_id,
+                                             std::string_view body);
+        std::expected<std::string, std::string> mam_cache_lookup_omemo_plaintext(std::string_view channel_jid,
+                                                                     std::string_view msg_id);
         // ESFS download deduplication: record saved path by stable message ID; look up on MAM replay
-        void mam_cache_store_esfs_download(const std::string& channel_jid, const std::string& stable_id,
-                                           const std::string& saved_path);
-        std::expected<std::string, std::string> mam_cache_lookup_esfs_download(const std::string& channel_jid,
-                                                                   const std::string& stable_id);
+        void mam_cache_store_esfs_download(std::string_view channel_jid, std::string_view stable_id,
+                                           std::string_view saved_path);
+        std::expected<std::string, std::string> mam_cache_lookup_esfs_download(std::string_view channel_jid,
+                                                                   std::string_view stable_id);
         // PM buffer persistence across restarts (stored in cursors LMDB table)
-        void pm_open_register(const std::string& pm_jid);
-        void pm_open_unregister(const std::string& pm_jid);
+        void pm_open_register(std::string_view pm_jid);
+        void pm_open_unregister(std::string_view pm_jid);
         std::vector<std::string> pm_open_list();
-        std::string mam_cursor_get(const std::string& key);
-        void mam_cursor_set(const std::string& key, const std::string& cursor_id);
-        void mam_cursor_clear(const std::string& key);  // delete saved cursor to return to latest page
+        std::string mam_cursor_get(std::string_view key);
+        void mam_cursor_set(std::string_view key, std::string_view cursor_id);
+        void mam_cursor_clear(std::string_view key);  // delete saved cursor to return to latest page
         // Feed item deduplication (stored in cursors LMDB table)
-        bool feed_item_seen(const std::string& feed_key, const std::string& item_id);
-        void feed_item_mark_seen(const std::string& feed_key, const std::string& item_id);
+        bool feed_item_seen(std::string_view feed_key, std::string_view item_id);
+        void feed_item_mark_seen(std::string_view feed_key, std::string_view item_id);
         // Feed buffer persistence across restarts (stored in cursors LMDB table)
-        void feed_open_register(const std::string& feed_key);
-        void feed_open_unregister(const std::string& feed_key);
+        void feed_open_register(std::string_view feed_key);
+        void feed_open_unregister(std::string_view feed_key);
         std::vector<std::string> feed_open_list();
-        void feed_atom_id_set(const std::string& feed_key, const std::string& item_id,
-                              const std::string& atom_id)
+        void feed_atom_id_set(std::string_view feed_key, std::string_view item_id,
+                              std::string_view atom_id)
         {
             if (feed_key.empty() || item_id.empty() || atom_id.empty())
                 return;
-            feed_atom_ids[feed_key + "\n" + item_id] = atom_id;
+            feed_atom_ids[fmt::format("{}\n{}", feed_key, item_id)] = std::string(atom_id);
         }
-        std::string feed_atom_id_get(const std::string& feed_key, const std::string& item_id) const
+        std::string feed_atom_id_get(std::string_view feed_key, std::string_view item_id) const
         {
-            auto it = feed_atom_ids.find(feed_key + "\n" + item_id);
+            auto it = feed_atom_ids.find(fmt::format("{}\n{}", feed_key, item_id));
             return it != feed_atom_ids.end() ? it->second : std::string();
         }
-        void feed_replies_link_set(const std::string& feed_key, const std::string& item_id,
-                                   const std::string& replies_uri)
+        void feed_replies_link_set(std::string_view feed_key, std::string_view item_id,
+                                   std::string_view replies_uri)
         {
             if (feed_key.empty() || item_id.empty() || replies_uri.empty())
                 return;
-            feed_replies_links[feed_key + "\n" + item_id] = replies_uri;
+            feed_replies_links[fmt::format("{}\n{}", feed_key, item_id)] = std::string(replies_uri);
         }
-        std::string feed_replies_link_get(const std::string& feed_key, const std::string& item_id) const
+        std::string feed_replies_link_get(std::string_view feed_key, std::string_view item_id) const
         {
-            auto it = feed_replies_links.find(feed_key + "\n" + item_id);
+            auto it = feed_replies_links.find(fmt::format("{}\n{}", feed_key, item_id));
             return it != feed_replies_links.end() ? it->second : std::string();
         }
         // Assign a short #N alias for an item and return N.
         // If the item already has an alias in this feed, return the existing one.
-        int feed_alias_assign(const std::string& feed_key, const std::string& item_id)
+        int feed_alias_assign(std::string_view feed_key, std::string_view item_id)
         {
             if (feed_key.empty() || item_id.empty()) return -1;
-            auto rev_key = feed_key + "\n" + item_id;
-            auto rev_it = feed_alias_rev.find(rev_key);
-            if (rev_it != feed_alias_rev.end())
-                return std::stoi(rev_it->second);
-            int n = ++feed_alias_ctr[feed_key];
+            const std::string rev_key = fmt::format("{}\n{}", feed_key, item_id);
+            if (auto rev_it = feed_alias_rev.find(rev_key); rev_it != feed_alias_rev.end())
+            {
+                if (auto n = parse_int64(rev_it->second); n)
+                    return static_cast<int>(*n);
+                return -1;
+            }
+            const std::string feed_key_str(feed_key);
+            int n = ++feed_alias_ctr[feed_key_str];
             std::string ns = std::to_string(n);
-            feed_alias_fwd[feed_key + "\n" + ns] = item_id;
+            feed_alias_fwd[fmt::format("{}\n{}", feed_key, ns)] = std::string(item_id);
             feed_alias_rev[rev_key] = ns;
             return n;
         }
         // Resolve a short alias N (as string or "#N") for a feed_key → item_id.
         // Returns empty string if not found.
-        std::string feed_alias_resolve(const std::string& feed_key, std::string_view alias) const
+        std::string feed_alias_resolve(std::string_view feed_key, std::string_view alias) const
         {
             // Strip leading '#' if present.
             if (!alias.empty() && alias[0] == '#')
                 alias.remove_prefix(1);
-            auto it = feed_alias_fwd.find(feed_key + "\n" + std::string(alias));
+            auto it = feed_alias_fwd.find(fmt::format("{}\n{}", feed_key, alias));
             return it != feed_alias_fwd.end() ? it->second : std::string();
         }
         // Reverse lookup: item_id → alias number for a feed_key. Returns -1 if not found.
-        int feed_alias_lookup(const std::string& feed_key, const std::string& item_id) const
+        int feed_alias_lookup(std::string_view feed_key, std::string_view item_id) const
         {
-            auto it = feed_alias_rev.find(feed_key + "\n" + item_id);
+            auto it = feed_alias_rev.find(fmt::format("{}\n{}", feed_key, item_id));
             if (it == feed_alias_rev.end()) return -1;
-            try { return std::stoi(it->second); } catch (...) { return -1; }
+            if (auto n = parse_int64(it->second); n)
+                return static_cast<int>(*n);
+            return -1;
         }
         void send_bookmarks();
         void retract_bookmark(std::string_view jid);
         
         // Capability cache methods (XEP-0115)
         void caps_cache_load();
-        void caps_cache_save(const std::string& verification_hash, const std::vector<std::string>& features);
-        bool caps_cache_get(const std::string& verification_hash, std::vector<std::string>& features);
-        void peer_features_update(const std::string& jid, const std::vector<std::string>& features);
-        bool peer_supports_feature(const std::string& jid, const std::string& feature) const;
-        bool peer_has_legacy_axolotl_only(const std::string& jid) const;
+        void caps_cache_save(std::string_view verification_hash, const std::vector<std::string>& features);
+        bool caps_cache_get(std::string_view verification_hash, std::vector<std::string>& features);
+        void peer_features_update(std::string_view jid, const std::vector<std::string>& features);
+        bool peer_supports_feature(std::string_view jid, std::string_view feature) const;
+        bool peer_has_legacy_axolotl_only(std::string_view jid) const;
 
         // OG preview cache methods (XEP-0511)
         struct og_preview {
@@ -555,8 +562,8 @@ namespace weechat
             std::string url;
             std::string image;
         };
-        void og_cache_store(const std::string& url, const og_preview& preview);
-        std::expected<og_preview, std::string> og_cache_lookup(const std::string& url);
+        void og_cache_store(std::string_view url, const og_preview& preview);
+        std::expected<og_preview, std::string> og_cache_lookup(std::string_view url);
 
         struct t_gui_buffer* create_buffer();
 

@@ -336,7 +336,7 @@ namespace weechat
                                            weechat::user *known_user = nullptr);
         std::optional<member*> member_search(const char *id);
         std::optional<member*> remove_member(const char *id, const char *reason);
-        std::string find_member_by_nick(const std::string& nick) const;
+        std::string find_member_by_nick(std::string_view nick) const;
 
         // For MUC OMEMO: returns true only if every known occupant has a real_jid
         // (i.e., the room is non-anonymous and we have seen their real JID in presence).
@@ -355,8 +355,8 @@ namespace weechat
         bool smart_filter_nick(const char *nick) const;
 
         // XEP-0085 chat state support tracking
-        void mark_chat_state_supported(const std::string& jid);
-        bool is_chat_state_supported(const std::string& jid) const;
+        void mark_chat_state_supported(std::string_view jid);
+        bool is_chat_state_supported(std::string_view jid) const;
 
         int send_message(std::string to, std::string body,
                          std::optional<std::string> oob = {},
@@ -372,14 +372,14 @@ namespace weechat
         // The caller provides the pre-generated saved_id (for origin-id + later cache).
         static stanza::message make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
             std::string_view to, const char *msg_type /*"chat" or "groupchat"*/,
-            const std::string& saved_id,
-            const std::string& body, const std::string& oob_url,
+            std::string_view saved_id,
+            std::string_view body, std::string_view oob_url,
             const file_metadata& meta);
 
-        void queue_pending_omemo_message(const std::string& body);
+        void queue_pending_omemo_message(std::string_view body);
         void flush_pending_omemo_messages();
 
-        void send_link_preview(const std::string& to, const std::string& url);
+        void send_link_preview(std::string_view to, std::string_view url);
 
         void send_reads();
         void send_active(weechat::user *user);

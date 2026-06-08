@@ -614,12 +614,12 @@ bool weechat::channel::smart_filter_nick(const char *nick) const
     return last < threshold;
 }
 
-void weechat::channel::mark_chat_state_supported(const std::string& from_jid)
+void weechat::channel::mark_chat_state_supported(std::string_view from_jid)
 {
-    chat_state_supported.insert(from_jid);
+    chat_state_supported.insert(std::string(from_jid));
 }
 
-bool weechat::channel::is_chat_state_supported(const std::string& to_jid) const
+bool weechat::channel::is_chat_state_supported(std::string_view to_jid) const
 {
     // XEP-0085 §5.1: MUST NOT send chat state notifications to MUC rooms.
     if (type == weechat::channel::chat_type::MUC)
@@ -627,15 +627,14 @@ bool weechat::channel::is_chat_state_supported(const std::string& to_jid) const
 
     // For PM: only send if the contact has previously sent us a chat state,
     // or if the full JID (with resource) or bare JID is in the support set.
-    if (chat_state_supported.contains(to_jid))
+    if (chat_state_supported.contains(std::string(to_jid)))
         return true;
 
     // Also check bare JID
     const auto sep = to_jid.find('/');
-    if (sep != std::string::npos)
+    if (sep != std::string_view::npos)
     {
-        std::string bare = to_jid.substr(0, sep);
-        if (chat_state_supported.contains(bare))
+        if (chat_state_supported.contains(std::string(to_jid.substr(0, sep))))
             return true;
     }
 
@@ -920,14 +919,14 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
     return member_opt;
 }
 
-std::string weechat::channel::find_member_by_nick(const std::string& nick) const
+std::string weechat::channel::find_member_by_nick(std::string_view nick) const
 {
     for (const auto& [id, member_info] : members)
     {
         auto slash = id.rfind('/');
         if (slash != std::string::npos
             && slash + 1 < id.size()
-            && weechat_strcasecmp(id.c_str() + slash + 1, nick.c_str()) == 0)
+            && weechat_strcasecmp(id.c_str() + slash + 1, std::string(nick).c_str()) == 0)
             return id;
     }
     return {};
@@ -984,8 +983,8 @@ std::string weechat::channel::omemo_status() const
 // Omemo wrapping (if any) and local printf are caller responsibility.
 stanza::message weechat::channel::make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
     std::string_view to, const char *msg_type /*"chat" or "groupchat"*/,
-    const std::string& saved_id,
-    const std::string& body, const std::string& oob_url,
+    std::string_view saved_id,
+    std::string_view body, std::string_view oob_url,
     const file_metadata& meta)
 {
     (void)xmpp_ctx;
@@ -1014,12 +1013,12 @@ stanza::message weechat::channel::make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
             if (!meta.esfs->cipher_hash_b64.empty()) e.cipher_hash_sha256(meta.esfs->cipher_hash_b64);
             stanza::xep0447::sources isr;
             stanza::xep0447::url_data ud(oob_url);
-            isr.add(ud);
+            isr.add(std::move(ud));
             e.sources(isr);
             os.add(e);
         } else {
             stanza::xep0447::url_data ud(oob_url);
-            os.add(ud);
+            os.add(std::move(ud));
         }
         fs.sources(os);
 
@@ -1362,7 +1361,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
             if (!options) { return WEECHAT_RC_ERROR; };
             weechat_hashtable_set(options, "header", "1");
             weechat_hashtable_set(options, "nobody", "1");
-            auto command = "url:" + url;
+            const std::string command = fmt::format("url:{}", url);
             const int timeout = 30000;
             struct message_task {
                 weechat::channel& channel;
@@ -1501,11 +1500,11 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     return WEECHAT_RC_OK;
 }
 
-void weechat::channel::queue_pending_omemo_message(const std::string& body)
+void weechat::channel::queue_pending_omemo_message(std::string_view body)
 {
     if (body.empty())
         return;
-    pending_omemo_messages.push_back(body);
+    pending_omemo_messages.push_back(std::string(body));
 }
 
 void weechat::channel::flush_pending_omemo_messages()
@@ -1542,7 +1541,7 @@ void weechat::channel::flush_pending_omemo_messages()
     flushing_pending_omemo = false;
 }
 
-void weechat::channel::send_link_preview(const std::string& to, const std::string& url)
+void weechat::channel::send_link_preview(std::string_view to, std::string_view url)
 {
     struct t_hashtable *options = weechat_hashtable_new(8,
             WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING,
@@ -1558,7 +1557,8 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
         std::string url;
         std::string output;
     };
-    auto task_owned = std::make_unique<link_preview_task>(link_preview_task { *this, to, url });
+    auto task_owned = std::make_unique<link_preview_task>(
+        link_preview_task { *this, std::string(to), std::string(url) });
 
     auto callback = [](const void *pointer, void *,
             const char *, int ret, const char *out, const char * /*err*/) {
@@ -1694,7 +1694,7 @@ void weechat::channel::send_link_preview(const std::string& to, const std::strin
         return WEECHAT_RC_OK;
     };
 
-    auto command = "url:" + url;
+    const std::string command = fmt::format("url:{}", url);
     struct t_hook *process_hook =
         weechat_hook_process_hashtable(command.data(), options, timeout,
                 callback, task_owned.release(), nullptr);

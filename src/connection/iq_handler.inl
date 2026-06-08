@@ -265,12 +265,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 {
                     const char *jn = xmpp_stanza_get_name(jid_el);
                     if (!jn || std::string_view(jn) != "jid") continue;
-                    char *jid_txt = xmpp_stanza_get_text(jid_el);
-                    if (jid_txt)
+                    const std::string jid_txt = stanza_element_text(jid_el);
+                    if (!jid_txt.empty())
                     {
                         if (!jids_str.empty()) jids_str += ", ";
                         jids_str += jid_txt;
-                        xmpp_free(account.context, jid_txt);
                     }
                 }
                 weechat_printf(prefs_buf, "%s  always: %s",
@@ -288,12 +287,11 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 {
                     const char *jn = xmpp_stanza_get_name(jid_el);
                     if (!jn || std::string_view(jn) != "jid") continue;
-                    char *jid_txt = xmpp_stanza_get_text(jid_el);
-                    if (jid_txt)
+                    const std::string jid_txt = stanza_element_text(jid_el);
+                    if (!jid_txt.empty())
                     {
                         if (!jids_str.empty()) jids_str += ", ";
                         jids_str += jid_txt;
-                        xmpp_free(account.context, jid_txt);
                     }
                 }
                 weechat_printf(prefs_buf, "%s  never:  %s",
@@ -578,12 +576,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         if (rsm_set && max_items_req > 0)
                         {
                             xmpp_stanza_t *count_el  = xmpp_stanza_get_child_by_name(rsm_set, "count");
-                            char          *count_text = count_el ? xmpp_stanza_get_text(count_el) : nullptr;
-                            rsm_total_count = count_text ? std::atoi(count_text) : -1;
-                            if (count_text) xmpp_free(account.context, count_text);
+                            const std::string count_text = stanza_element_text(count_el);
+                            if (auto n = parse_int64(count_text); n)
+                                rsm_total_count = static_cast<int>(*n);
+                            else
+                                rsm_total_count = -1;
 
                             xmpp_stanza_t *first_el   = xmpp_stanza_get_child_by_name(rsm_set, "first");
-                            char          *first_text  = first_el ? xmpp_stanza_get_text(first_el) : nullptr;
+                            const std::string first_text = stanza_element_text(first_el);
 
                             // Detect stale page: the server returned the oldest-first page
                             // (index=0) even though there are more items than max_items.
@@ -591,7 +591,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             // than 30 days AND the node has more items than we requested,
                             // this is a stale result (e.g. gadgeteerza-tech-blog on
                             // news.movim.eu which sorts oldest-first).
-                            if (first_text && rsm_total_count > max_items_req)
+                            if (!first_text.empty() && rsm_total_count > max_items_req)
                             {
                                 // Try to parse the item-id as an ISO 8601 timestamp.
                                 // news.movim.eu uses timestamps as item IDs.
@@ -599,7 +599,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                 bool parsed = false;
                                 // Try full timestamp with fractional seconds: 2023-11-09T10:52:18.590034Z
                                 // strptime doesn't handle sub-seconds; truncate at '.'.
-                                std::string id_str(first_text);
+                                std::string id_str = first_text;
                                 auto dot = id_str.find('.');
                                 if (dot != std::string::npos)
                                     id_str.resize(dot);
@@ -624,7 +624,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     const char *index_attr = first_el
                                         ? xmpp_stanza_get_attribute(first_el, "index")
                                         : nullptr;
-                                    int first_index = index_attr ? std::atoi(index_attr) : -1;
+                                    const int first_index = index_attr
+                                        ? static_cast<int>(parse_int64(index_attr).value_or(-1))
+                                        : -1;
                                     if (first_index == 0 && rsm_total_count > max_items_req * 10)
                                         stale_page = true;
                                 }
@@ -660,7 +662,6 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     .get());
                             }
 
-                            if (first_text) xmpp_free(account.context, first_text);
                         }
                     }
 
@@ -2834,13 +2835,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 // Command completed with no form — check for <note>
                 xmpp_stanza_t *note = xmpp_stanza_get_child_by_name(adhoc_command, "note");
-                const char *note_text = note ? xmpp_stanza_get_text_ptr(note) : nullptr;
+                const std::string note_text = stanza_element_text(note);
                 weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
                                          "%s[adhoc] Command %s completed%s%s",
                                          weechat_prefix("network"),
                                          cmd_node ? cmd_node : "",
-                                         note_text ? ": " : "",
-                                         note_text ? note_text : "");
+                                         note_text.empty() ? "" : ": ",
+                                         note_text.empty() ? "" : note_text.c_str());
             }
             else if (cmd_status && std::string_view(cmd_status) == "executing" && !x_form)
             {
@@ -2869,17 +2870,16 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 // Try to extract a human-readable error
                 xmpp_stanza_t *error_el = xmpp_stanza_get_child_by_name(stanza, "error");
-                const char *err_text = nullptr;
+                std::string err_text_str;
                 const char *err_condition = nullptr;
                 if (error_el)
                 {
-                    xmpp_stanza_t *text_el = xmpp_stanza_get_child_by_name(error_el, "text");
-                    if (text_el)
-                        err_text = xmpp_stanza_get_text_ptr(text_el);
+                    if (xmpp_stanza_t *text_el = xmpp_stanza_get_child_by_name(error_el, "text"))
+                        err_text_str = stanza_element_text(text_el);
 
                     // XMPP stanza errors usually encode the condition as a child in
                     // urn:ietf:params:xml:ns:xmpp-stanzas (e.g. <bad-request/>).
-                    if (!err_text)
+                    if (err_text_str.empty())
                     {
                         xmpp_stanza_t *cond = xmpp_stanza_get_children(error_el);
                         while (cond)
@@ -2902,7 +2902,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                          "%s[search] Error from %s: %s",
                                          weechat_prefix("error"),
                                          cs_info.service_jid.c_str(),
-                                         err_text ? err_text
+                                         !err_text_str.empty() ? err_text_str.c_str()
                                                   : (err_condition ? err_condition : "unknown error"));
                 account.channel_search_queries.erase(cs_id);
             }
@@ -3444,16 +3444,16 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             else if (v == "muc#roominfo_logs")        info.logs_url    = txt;
                             else if (v == "muc#roominfo_occupants")
                             {
-                                try { info.occupants = std::stoi(txt); }
-                                catch (...) {}
+                                if (auto n = parse_int64(txt); n)
+                                    info.occupants = static_cast<int>(*n);
                             }
                             else if (v == "muc#roomconfig_maxusers")
                             {
                                 // XEP-0045 §16.5.3: value is "none" or a number.
                                 if (txt != "none")
                                 {
-                                    try { info.max_users = std::stoi(txt); }
-                                    catch (...) {}
+                                    if (auto n = parse_int64(txt); n)
+                                        info.max_users = static_cast<int>(*n);
                                 }
                             }
                             else if (v == "muc#roominfo_subjectmod")

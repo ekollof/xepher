@@ -2295,8 +2295,8 @@ message_handler_after_omemo:
                 ? xmpp_stanza_get_attribute(fb_body, "start") : nullptr;
             if (end_attr)
             {
-                long end   = std::strtol(end_attr,   nullptr, 10);
-                long start = start_attr ? std::strtol(start_attr, nullptr, 10) : 0L;
+                const long end   = parse_int64(end_attr).value_or(0);
+                long start = start_attr ? parse_int64(start_attr).value_or(0) : 0L;
                 if (start < 0) start = 0;
                 std::string_view sv(text);
                 if (end > 0 && static_cast<std::size_t>(end) < sv.size())
@@ -2338,13 +2338,8 @@ message_handler_after_omemo:
     if (ephemeral_elem)
     {
         const char *timer_attr = xmpp_stanza_get_attribute(ephemeral_elem, "timer");
-        if (timer_attr)
-        {
-            char *endp = nullptr;
-            long v = std::strtol(timer_attr, &endp, 10);
-            if (endp && *endp == '\0' && v > 0)
-                ephemeral_timer = v;
-        }
+        if (auto v = parse_int64(timer_attr); v && *v > 0)
+            ephemeral_timer = *v;
     }
 
     if (replace)
@@ -4322,25 +4317,25 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
 {
     if (!x_form || !buf) return;
 
-    xmpp_stanza_t *title_elem = xmpp_stanza_get_child_by_name(x_form, "title");
-    const char *title = title_elem ? xmpp_stanza_get_text_ptr(title_elem) : nullptr;
-    xmpp_stanza_t *instr_elem = xmpp_stanza_get_child_by_name(x_form, "instructions");
-    const char *instr = instr_elem ? xmpp_stanza_get_text_ptr(instr_elem) : nullptr;
+    const std::string title = stanza_element_text(
+        xmpp_stanza_get_child_by_name(x_form, "title"));
+    const std::string instr = stanza_element_text(
+        xmpp_stanza_get_child_by_name(x_form, "instructions"));
 
     weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
                              "%s%s── Ad-Hoc Form%s%s%s ──%s",
                              weechat_prefix("network"),
                              weechat_color("bold"),
-                             title ? ": " : "",
-                             title ? title : "",
-                             title ? "" : "",
+                             title.empty() ? "" : ": ",
+                             title.empty() ? "" : title.c_str(),
+                             title.empty() ? "" : "",
                              weechat_color("-bold"));
-    if (instr)
+    if (!instr.empty())
         weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
                                  "%s  %s%s%s",
                                  weechat_prefix("network"),
                                  weechat_color("italic"),
-                                 instr,
+                                 instr.c_str(),
                                  weechat_color("-italic"));
 
     int field_index = 0;
@@ -4445,8 +4440,8 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
                 const char *oname = xmpp_stanza_get_name(opt);
                 if (!oname || std::string_view(oname) != "option") continue;
 
-                xmpp_stanza_t *oval_elem = xmpp_stanza_get_child_by_name(opt, "value");
-                const char *oval  = oval_elem ? xmpp_stanza_get_text_ptr(oval_elem) : nullptr;
+                const std::string oval = stanza_element_text(
+                    xmpp_stanza_get_child_by_name(opt, "value"));
                 const char *olabel = xmpp_stanza_get_attribute(opt, "label");
 
                 if (!options_str.empty()) options_str += "  ";
@@ -4454,15 +4449,15 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
                 // Is this option currently selected?
                 bool selected = false;
                 for (auto &v : values)
-                    if (oval && v == oval) { selected = true; break; }
+                    if (!oval.empty() && v == oval) { selected = true; break; }
 
                 if (selected)
                     options_str += weechat_color("green");
                 else
                     options_str += weechat_color("darkgray");
 
-                options_str += oval ? oval : "?";
-                if (olabel && oval && std::string_view(olabel) != std::string_view(oval))
+                options_str += oval.empty() ? "?" : oval;
+                if (olabel && !oval.empty() && std::string_view(olabel) != oval)
                 {
                     options_str += '(';
                     options_str += olabel;

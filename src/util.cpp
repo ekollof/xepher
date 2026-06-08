@@ -3,9 +3,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
+#include <expected>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <cstdint>
 #include <stdio.h>
@@ -22,7 +25,35 @@ XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2)
     return *(const char *)p1 == *(const char *)p2;
 }
 
-XMPP_TEST_EXPORT std::string unescape(const std::string& str)
+XMPP_TEST_EXPORT std::expected<std::uint32_t, std::string>
+parse_uint32(std::string_view value)
+{
+    if (value.empty())
+        return std::unexpected("empty");
+    std::uint32_t parsed = 0;
+    const auto *begin = value.data();
+    const auto *end = value.data() + value.size();
+    const auto [ptr, error] = std::from_chars(begin, end, parsed);
+    if (error != std::errc {} || ptr != end)
+        return std::unexpected("invalid uint32");
+    return parsed;
+}
+
+XMPP_TEST_EXPORT std::expected<std::int64_t, std::string>
+parse_int64(std::string_view value)
+{
+    if (value.empty())
+        return std::unexpected("empty");
+    std::int64_t parsed = 0;
+    const auto *begin = value.data();
+    const auto *end = value.data() + value.size();
+    const auto [ptr, error] = std::from_chars(begin, end, parsed);
+    if (error != std::errc {} || ptr != end)
+        return std::unexpected("invalid int64");
+    return parsed;
+}
+
+XMPP_TEST_EXPORT std::string unescape(std::string_view str)
 {
     std::string result;
     result.reserve(str.size());
@@ -36,8 +67,8 @@ XMPP_TEST_EXPORT std::string unescape(const std::string& str)
                 ++j;
             if (j < str.size() && str[j] == ';' && j > i + 2)
             {
-                auto val = std::stoul(str.substr(i + 2, j - (i + 2)));
-                result += static_cast<char>(val);
+                if (auto val = parse_uint32(str.substr(i + 2, j - (i + 2))); val && *val <= 0xffU)
+                    result += static_cast<char>(*val);
                 i = j + 1;
                 continue;
             }

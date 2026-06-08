@@ -39,6 +39,7 @@
 #include "account.hh"
 #include "config.hh"
 #include "debug.hh"
+#include "util.hh"
 #include "gcrypt.hh"
 #include "omemo.hh"
 #include "plugin.hh"

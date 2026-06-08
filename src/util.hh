@@ -4,13 +4,22 @@
 
 #pragma once
 
+#include <cstdint>
+#include <expected>
 #include <string>
+#include <string_view>
 #include <strophe.h>
 #include "test_export.hh"
 
 XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2);
 
-XMPP_TEST_EXPORT std::string unescape(const std::string& str);
+XMPP_TEST_EXPORT std::string unescape(std::string_view str);
+
+[[nodiscard]] XMPP_TEST_EXPORT std::expected<std::uint32_t, std::string>
+parse_uint32(std::string_view value);
+
+[[nodiscard]] XMPP_TEST_EXPORT std::expected<std::int64_t, std::string>
+parse_int64(std::string_view value);
 
 // XEP-0393: Message Styling
 XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text);

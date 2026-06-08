@@ -56,11 +56,11 @@ void weechat::account::mam_cache_cleanup()
     }
 }
 
-void weechat::account::mam_cache_message(const std::string& channel_jid,
-                                         const std::string& message_id,
-                                         const std::string& from,
+void weechat::account::mam_cache_message(std::string_view channel_jid,
+                                         std::string_view message_id,
+                                         std::string_view from,
                                          time_t timestamp,
-                                         const std::string& body)
+                                         std::string_view body)
 {
     if (!mam_db_env) return;
     
@@ -85,7 +85,7 @@ void weechat::account::mam_cache_message(const std::string& channel_jid,
     }
 }
 
-void weechat::account::mam_cache_retract_message(const std::string& channel_jid, const std::string& message_id)
+void weechat::account::mam_cache_retract_message(std::string_view channel_jid, std::string_view message_id)
 {
     if (!mam_db_env || message_id.empty()) return;
     
@@ -110,7 +110,7 @@ void weechat::account::mam_cache_retract_message(const std::string& channel_jid,
     }
 }
 
-bool weechat::account::mam_cache_is_retracted(const std::string& channel_jid, const std::string& message_id)
+bool weechat::account::mam_cache_is_retracted(std::string_view channel_jid, std::string_view message_id)
 {
     if (!mam_db_env || message_id.empty()) return false;
     
@@ -133,7 +133,7 @@ bool weechat::account::mam_cache_is_retracted(const std::string& channel_jid, co
     }
 }
 
-void weechat::account::mam_cache_load_messages(const std::string& channel_jid, struct t_gui_buffer *buffer)
+void weechat::account::mam_cache_load_messages(std::string_view channel_jid, struct t_gui_buffer *buffer)
 {
     if (!mam_db_env || !buffer) return;
     
@@ -147,7 +147,7 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
 
         // Preload retractions for this channel (single cursor scan instead of
         // per-message LMDB transactions — avoids hundreds of txn open/close cycles).
-        std::string retract_prefix = channel_jid + ":";
+        const std::string retract_prefix = fmt::format("{}:", channel_jid);
         MDB_val rk = {retract_prefix.size(), (void*)retract_prefix.data()};
         MDB_val rv;
         MDB_cursor *rcursor_raw = nullptr;
@@ -168,7 +168,7 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
         rcursor.reset();
 
         // Start with channel prefix
-        std::string prefix = channel_jid + ":";
+        const std::string prefix = fmt::format("{}:", channel_jid);
         MDB_val key = {prefix.size(), (void*)prefix.data()};
         MDB_val value;
         
@@ -254,7 +254,7 @@ void weechat::account::mam_cache_load_messages(const std::string& channel_jid, s
     }
 }
 
-void weechat::account::mam_cache_clear_messages(const std::string& channel_jid)
+void weechat::account::mam_cache_clear_messages(std::string_view channel_jid)
 {
     if (!mam_db_env) return;
     
@@ -267,7 +267,7 @@ void weechat::account::mam_cache_clear_messages(const std::string& channel_jid)
         std::unique_ptr<MDB_cursor, decltype(&mdb_cursor_close)> cursor(cursor_raw, &mdb_cursor_close);
 
         // Start with channel prefix
-        std::string prefix = channel_jid + ":";
+        const std::string prefix = fmt::format("{}:", channel_jid);
         MDB_val key = {prefix.size(), (void*)prefix.data()};
         MDB_val value;
         
@@ -295,7 +295,7 @@ void weechat::account::mam_cache_clear_messages(const std::string& channel_jid)
     }
 }
 
-void weechat::account::pm_open_register(const std::string& pm_jid)
+void weechat::account::pm_open_register(std::string_view pm_jid)
 {
     if (!mam_db_env || pm_jid.empty()) return;
 
@@ -313,7 +313,7 @@ void weechat::account::pm_open_register(const std::string& pm_jid)
     } catch (const lmdb::error&) {}
 }
 
-void weechat::account::pm_open_unregister(const std::string& pm_jid)
+void weechat::account::pm_open_unregister(std::string_view pm_jid)
 {
     if (!mam_db_env || pm_jid.empty()) return;
 
@@ -365,7 +365,7 @@ std::vector<std::string> weechat::account::pm_open_list()
     return result;
 }
 
-time_t weechat::account::mam_cache_get_last_timestamp(const std::string& channel_jid)
+time_t weechat::account::mam_cache_get_last_timestamp(std::string_view channel_jid)
 {
     if (!mam_db_env) return 0;
     
@@ -395,7 +395,7 @@ time_t weechat::account::mam_cache_get_last_timestamp(const std::string& channel
     return 0;
 }
 
-void weechat::account::mam_cache_set_last_timestamp(const std::string& channel_jid, time_t timestamp)
+void weechat::account::mam_cache_set_last_timestamp(std::string_view channel_jid, time_t timestamp)
 {
     if (!mam_db_env) return;
     
@@ -414,7 +414,7 @@ void weechat::account::mam_cache_set_last_timestamp(const std::string& channel_j
     }
 }
 
-std::string weechat::account::mam_cursor_get(const std::string& key)
+std::string weechat::account::mam_cursor_get(std::string_view key)
 {
     if (!mam_db_env) return {};
 
@@ -440,7 +440,7 @@ std::string weechat::account::mam_cursor_get(const std::string& key)
     return {};
 }
 
-void weechat::account::mam_cursor_set(const std::string& key, const std::string& cursor_id)
+void weechat::account::mam_cursor_set(std::string_view key, std::string_view cursor_id)
 {
     if (!mam_db_env || cursor_id.empty()) return;
 
@@ -459,7 +459,7 @@ void weechat::account::mam_cursor_set(const std::string& key, const std::string&
     }
 }
 
-void weechat::account::mam_cursor_clear(const std::string& key)
+void weechat::account::mam_cursor_clear(std::string_view key)
 {
     if (!mam_db_env) return;
 
@@ -476,7 +476,7 @@ void weechat::account::mam_cursor_clear(const std::string& key)
     }
 }
 
-bool weechat::account::feed_item_seen(const std::string& feed_key, const std::string& item_id)
+bool weechat::account::feed_item_seen(std::string_view feed_key, std::string_view item_id)
 {
     if (!mam_db_env || item_id.empty()) return false;
 
@@ -494,7 +494,7 @@ bool weechat::account::feed_item_seen(const std::string& feed_key, const std::st
     }
 }
 
-void weechat::account::feed_item_mark_seen(const std::string& feed_key, const std::string& item_id)
+void weechat::account::feed_item_mark_seen(std::string_view feed_key, std::string_view item_id)
 {
     if (!mam_db_env || item_id.empty()) return;
 
@@ -512,7 +512,7 @@ void weechat::account::feed_item_mark_seen(const std::string& feed_key, const st
     }
 }
 
-void weechat::account::feed_open_register(const std::string& feed_key)
+void weechat::account::feed_open_register(std::string_view feed_key)
 {
     if (!mam_db_env || feed_key.empty()) return;
 
@@ -530,7 +530,7 @@ void weechat::account::feed_open_register(const std::string& feed_key)
     }
 }
 
-void weechat::account::feed_open_unregister(const std::string& feed_key)
+void weechat::account::feed_open_unregister(std::string_view feed_key)
 {
     if (!mam_db_env || feed_key.empty()) return;
 
@@ -585,9 +585,9 @@ std::vector<std::string> weechat::account::feed_open_list()
     return result;
 }
 
-void weechat::account::mam_cache_store_omemo_plaintext(const std::string& channel_jid,
-                                                       const std::string& msg_id,
-                                                       const std::string& body)
+void weechat::account::mam_cache_store_omemo_plaintext(std::string_view channel_jid,
+                                                       std::string_view msg_id,
+                                                       std::string_view body)
 {
     if (!mam_db_env || channel_jid.empty() || msg_id.empty() || body.empty()) return;
 
@@ -607,7 +607,7 @@ void weechat::account::mam_cache_store_omemo_plaintext(const std::string& channe
 }
 
 std::expected<std::string, std::string> weechat::account::mam_cache_lookup_omemo_plaintext(
-    const std::string& channel_jid, const std::string& msg_id)
+    std::string_view channel_jid, std::string_view msg_id)
 {
     if (!mam_db_env || channel_jid.empty() || msg_id.empty()) return std::unexpected("invalid args");
 
@@ -634,9 +634,9 @@ std::expected<std::string, std::string> weechat::account::mam_cache_lookup_omemo
     return std::unexpected("not found or db error");
 }
 
-void weechat::account::mam_cache_store_esfs_download(const std::string& channel_jid,
-                                                      const std::string& stable_id,
-                                                      const std::string& saved_path)
+void weechat::account::mam_cache_store_esfs_download(std::string_view channel_jid,
+                                                      std::string_view stable_id,
+                                                      std::string_view saved_path)
 {
     if (!mam_db_env || channel_jid.empty() || stable_id.empty() || saved_path.empty()) return;
 
@@ -656,7 +656,7 @@ void weechat::account::mam_cache_store_esfs_download(const std::string& channel_
 }
 
 std::expected<std::string, std::string> weechat::account::mam_cache_lookup_esfs_download(
-    const std::string& channel_jid, const std::string& stable_id)
+    std::string_view channel_jid, std::string_view stable_id)
 {
     if (!mam_db_env || channel_jid.empty() || stable_id.empty()) return std::unexpected("invalid args");
 
@@ -818,13 +818,13 @@ void weechat::account::caps_cache_load()
     }
 }
 
-void weechat::account::caps_cache_save(const std::string& verification_hash, 
+void weechat::account::caps_cache_save(std::string_view verification_hash, 
                                         const std::vector<std::string>& features)
 {
     if (!mam_db_env) return;
     
     // Store in memory cache
-    caps_cache[verification_hash] = features;
+    caps_cache[std::string(verification_hash)] = features;
     
     try {
         lmdb::txn parentTransaction{nullptr};
@@ -844,10 +844,10 @@ void weechat::account::caps_cache_save(const std::string& verification_hash,
     }
 }
 
-bool weechat::account::caps_cache_get(const std::string& verification_hash,
+bool weechat::account::caps_cache_get(std::string_view verification_hash,
                                        std::vector<std::string>& features)
 {
-    if (auto it = caps_cache.find(verification_hash); it != caps_cache.end())
+    if (auto it = caps_cache.find(std::string(verification_hash)); it != caps_cache.end())
     {
         auto& [_, fs] = *it;
         features = fs;
@@ -856,13 +856,13 @@ bool weechat::account::caps_cache_get(const std::string& verification_hash,
     return false;
 }
 
-void weechat::account::peer_features_update(const std::string& jid,
+void weechat::account::peer_features_update(std::string_view jid,
                                             const std::vector<std::string>& features)
 {
     if (jid.empty() || features.empty())
         return;
 
-    std::string bare = jid;
+    std::string bare(jid);
     if (const auto slash = bare.find('/'); slash != std::string::npos)
         bare.resize(slash);
 
@@ -871,13 +871,13 @@ void weechat::account::peer_features_update(const std::string& jid,
         merged.insert(feature);
 }
 
-bool weechat::account::peer_supports_feature(const std::string& jid,
-                                             const std::string& feature) const
+bool weechat::account::peer_supports_feature(std::string_view jid,
+                                             std::string_view feature) const
 {
     if (jid.empty() || feature.empty())
         return false;
 
-    std::string bare = jid;
+    std::string bare(jid);
     if (const auto slash = bare.find('/'); slash != std::string::npos)
         bare.resize(slash);
 
@@ -886,10 +886,10 @@ bool weechat::account::peer_supports_feature(const std::string& jid,
         return false;
 
     const auto& [_, features] = *it;
-    return features.contains(feature);
+    return features.contains(std::string(feature));
 }
 
-bool weechat::account::peer_has_legacy_axolotl_only(const std::string& jid) const
+bool weechat::account::peer_has_legacy_axolotl_only(std::string_view jid) const
 {
     static const std::string legacy_axolotl = "eu.siacs.conversations.axolotl";
     return peer_supports_feature(jid, legacy_axolotl);
@@ -898,14 +898,14 @@ bool weechat::account::peer_has_legacy_axolotl_only(const std::string& jid) cons
 // OG preview cache (XEP-0511) — keyed by URL, value is TAB-delimited title\tdesc\turl\timage
 // TAB is used as delimiter because OG fields never legitimately contain raw TAB.
 
-void weechat::account::og_cache_store(const std::string& url,
+void weechat::account::og_cache_store(std::string_view url,
                                        const og_preview& preview)
 {
     if (!mam_db_env || url.empty()) return;
     try {
         // Encode: replace any literal \t in field values with a space (safe lossy).
-        auto sanitize = [](const std::string& s) {
-            std::string out = s;
+        auto sanitize = [](std::string_view s) {
+            std::string out(s);
             std::ranges::for_each(out, [](char& c){ if (c == '\t') c = ' '; });
             return out;
         };
@@ -925,7 +925,7 @@ void weechat::account::og_cache_store(const std::string& url,
 }
 
 std::expected<weechat::account::og_preview, std::string>
-weechat::account::og_cache_lookup(const std::string& url)
+weechat::account::og_cache_lookup(std::string_view url)
 {
     if (!mam_db_env || url.empty()) return std::unexpected("no db or empty url");
     try {
