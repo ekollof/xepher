@@ -317,16 +317,7 @@ void store_tofu_trust(omemo &self,
 
 [[nodiscard]] auto stanza_text(xmpp_stanza_t *stanza) -> std::string
 {
-    if (!stanza)
-        return {};
-
-    xmpp_ctx_t *ctx = xmpp_stanza_get_context(stanza);
-    struct ctx_free {
-        xmpp_ctx_t *ctx;
-        void operator()(char *p) const noexcept { if (p && ctx) xmpp_free(ctx, p); }
-    };
-    std::unique_ptr<char, ctx_free> text_ptr { xmpp_stanza_get_text(stanza), ctx_free{ctx} };
-    return (text_ptr && *text_ptr) ? std::string {text_ptr.get()} : std::string {};
+    return stanza_element_text(stanza);
 }
 
 [[nodiscard]] auto base64_encode_raw(std::span<const std::uint8_t> data) -> std::string

@@ -29,6 +29,7 @@
 #include <openssl/buffer.h>
 #include <fmt/core.h>
 #include <fmt/chrono.h>
+#include <fmt/chrono.h>
 #include <weechat/weechat-plugin.h>
 #include <strophe.h>
 
@@ -339,8 +340,7 @@ void esfs_start_download(std::string_view cipher_url,
         time_t now = time(nullptr);
         struct tm tm_now{};
         localtime_r(&now, &tm_now);
-        char date_buf[16];
-        strftime(date_buf, sizeof(date_buf), "%Y-%m-%d", &tm_now);
+        const std::string date_buf = fmt::format("{:%Y-%m-%d}", tm_now);
 
         // Sanitize JID for use as a directory name: replace '/' with '_'
         // (bare JIDs don't contain '/' but be defensive; '\0' can't appear).

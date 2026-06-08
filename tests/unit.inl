@@ -435,10 +435,9 @@ TEST_CASE("MAM PM IQ stanza: <with> field appears inside <query>")
                     xmpp_stanza_t *val = xmpp_stanza_get_child_by_name(field, "value");
                     if (val)
                     {
-                        xmpp_string_guard text_g(env.ctx, xmpp_stanza_get_text(val));
-                        CHECK(text_g.ptr != nullptr);
-                        if (text_g.ptr)
-                            CHECK(std::string_view(text_g.ptr) == "carol@example.org");
+                        const std::string val_text = stanza_element_text(val);
+                        CHECK(!val_text.empty());
+                        CHECK(val_text == "carol@example.org");
                     }
                     found_with_field = true;
                     break;
@@ -491,10 +490,9 @@ TEST_CASE("MAM RSM pagination IQ: <after> element present in <set>")
         CHECK(after_el != nullptr);
         if (after_el)
         {
-            xmpp_string_guard after_text_g(env.ctx, xmpp_stanza_get_text(after_el));
-            CHECK(after_text_g.ptr != nullptr);
-            if (after_text_g.ptr)
-                CHECK(std::string_view(after_text_g.ptr) == "last-seen-uid-xyz");
+            const std::string after_text = stanza_element_text(after_el);
+            CHECK(!after_text.empty());
+            CHECK(after_text == "last-seen-uid-xyz");
         }
     }
 
@@ -593,19 +591,10 @@ static std::optional<std::string> attr_opt(xmpp_stanza_t *el, const char *name)
 // Helper: get text content of first text child
 static std::optional<std::string> text_opt(xmpp_stanza_t *el)
 {
-    xmpp_stanza_t *ch = xmpp_stanza_get_children(el);
-    while (ch) {
-        if (xmpp_stanza_is_text(ch)) {
-            char *t = xmpp_stanza_get_text(ch);
-            if (t) {
-                std::string result(t);
-                xmpp_free(xmpp_stanza_get_context(ch), t);
-                return result;
-            }
-        }
-        ch = xmpp_stanza_get_next(ch);
-    }
-    return std::nullopt;
+    const std::string t = stanza_element_text(el);
+    if (t.empty())
+        return std::nullopt;
+    return t;
 }
 
 TEST_CASE("XEP-0184 receipt request builder")

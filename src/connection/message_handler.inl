@@ -1755,9 +1755,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     const char *act_name = xmpp_stanza_get_name(act);
                     if (!act_name || weechat_strcasecmp(act_name, "activity") != 0)
                         continue;
-                    const char *jid = xmpp_stanza_get_text_ptr(act);
-                    if (!jid || !*jid)
+                    const std::string jid_str = stanza_element_text(act);
+                    if (jid_str.empty())
                         continue;
+                    const char *jid = jid_str.c_str();
 
                     // Look up the room buffer; if it exists, bump hotlist and
                     // print the notification in-context.  Otherwise fall back
@@ -2191,8 +2192,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             }
 
             xmpp_stanza_t *payload = xmpp_stanza_get_child_by_name(encrypted, "payload");
-            const char *payload_text = payload ? xmpp_stanza_get_text_ptr(payload) : nullptr;
-            if (!payload || !payload_text || !*payload_text)
+            if (!payload || stanza_element_text(payload).empty())
                 return 1;
 
             weechat_printf_date_tags(channel->buffer, 0, "notify_none", "%s%s (%s)",

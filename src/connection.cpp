@@ -108,11 +108,13 @@ bool weechat::connection::time_handler(xmpp_stanza_t *stanza)
     XDEBUG("Received time request from {}", xmpp_stanza_get_from(stanza));
 
     time_t now = time(nullptr);
-    struct tm *tm_utc = gmtime(&now);
-    struct tm *tm_local = localtime(&now);
+    struct tm tm_utc {};
+    struct tm tm_local {};
+    gmtime_r(&now, &tm_utc);
+    localtime_r(&now, &tm_local);
 
-    std::string utc_str = fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", *tm_utc);
-    long tz_offset = tm_local->tm_gmtoff;
+    std::string utc_str = fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", tm_utc);
+    long tz_offset = tm_local.tm_gmtoff;
     int tz_hours = tz_offset / 3600;
     int tz_mins = abs((tz_offset % 3600) / 60);
     std::string tzo_str = fmt::format("{:+03d}:{:02d}", tz_hours, tz_mins);

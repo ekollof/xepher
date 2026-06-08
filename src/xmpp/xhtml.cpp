@@ -21,6 +21,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "../plugin.hh"
+#include "node.hh"
 
 // ---------------------------------------------------------------------------
 // css_color_to_weechat
@@ -168,11 +169,10 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
     {
         if (xmpp_stanza_is_text(child))
         {
-            const char *raw = xmpp_stanza_get_text_ptr(child);
-            if (!raw) continue;
+            const std::string txt = get_text(child);
+            if (txt.empty()) continue;
             if (in_blockquote)
             {
-                std::string txt(raw);
                 std::string line;
                 for (char c : txt)
                 {
@@ -197,7 +197,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             }
             else
             {
-                result += raw;
+                result += txt;
             }
             continue;
         }

@@ -8,6 +8,8 @@
 #include <string>
 #include <string_view>
 
+#include "../src/xmpp/node.hh"
+
 namespace {
 
 struct strophe_env {
@@ -44,16 +46,7 @@ auto parse_device_id(const char *value) -> bool
 
 auto has_non_empty_text(xmpp_stanza_t *stanza) -> bool
 {
-    if (!stanza)
-        return false;
-
-    char *text = xmpp_stanza_get_text(stanza);
-    if (!text)
-        return false;
-
-    const bool ok = *text != '\0';
-    xmpp_free(xmpp_stanza_get_context(stanza), text);
-    return ok;
+    return stanza && !stanza_element_text(stanza).empty();
 }
 
 

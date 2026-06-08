@@ -151,12 +151,12 @@ int command__links(COMMAND_ARGS)
     {
         auto cached = ptr_account->og_cache_lookup(e.url);
 
-        char time_buf[16] = "";
+        std::string time_str;
         if (e.date > 0)
         {
             struct tm tm_local = {};
             localtime_r(&e.date, &tm_local);
-            strftime(time_buf, sizeof(time_buf), "%m-%d %H:%M", &tm_local);
+            time_str = fmt::format("{:%m-%d %H:%M}", tm_local);
         }
 
         if (cached && !cached->title.empty())
@@ -164,7 +164,7 @@ int command__links(COMMAND_ARGS)
             weechat_printf(buffer,
                 "%s  %s%s%s  %s%s%s  %s%s%s",
                 pfx,
-                dim, time_buf, rst,
+                dim, time_str.c_str(), rst,
                 cyan, e.url.c_str(), rst,
                 bold, cached->title.c_str(), rst);
         }
@@ -173,7 +173,7 @@ int command__links(COMMAND_ARGS)
             weechat_printf(buffer,
                 "%s  %s%s%s  %s%s%s",
                 pfx,
-                dim, time_buf, rst,
+                dim, time_str.c_str(), rst,
                 cyan, e.url.c_str(), rst);
         }
     }
