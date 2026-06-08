@@ -34,6 +34,7 @@
 #include "buffer.hh"
 #include "message.hh"
 #include "command.hh"
+#include "weechat/ui_port.hh"
 #include "sexp/driver.hh"
 #include "ui/picker.hh"
 

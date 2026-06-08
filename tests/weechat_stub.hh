@@ -23,11 +23,13 @@ public:
 
     std::vector<std::string> lines;
     std::vector<std::string> errors;
+    std::vector<std::string> info;
     std::vector<std::string> network;
     std::vector<dated_line> dated;
 
     void printf(std::string_view msg) override { lines.emplace_back(msg); }
     void printf_error(std::string_view msg) override { errors.emplace_back(msg); }
+    void printf_info(std::string_view msg) override { info.emplace_back(msg); }
     void printf_network(std::string_view msg) override { network.emplace_back(msg); }
     void printf_date_tags(std::time_t date, std::string_view tags, std::string_view msg) override
     {

@@ -11,11 +11,12 @@ int command__omemo(const void *pointer, void *data,
 
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account)
     {
-        weechat_printf(buffer,
-                       _("%s%s: this command must be run in an XMPP account or channel buffer"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("%s: this command must be run in an XMPP account or channel buffer",
+            WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -23,9 +24,8 @@ int command__omemo(const void *pointer, void *data,
     auto require_omemo = [&]() -> bool {
         if (!ptr_account->omemo)
         {
-            weechat_printf(buffer,
-                           _("%s%s: OMEMO not initialized for this account"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            ui->printf_error(fmt::format("%s: OMEMO not initialized for this account",
+                WEECHAT_XMPP_PLUGIN_NAME));
             return false;
         }
         return true;
@@ -57,18 +57,15 @@ int command__omemo(const void *pointer, void *data,
         {
             if (!require_omemo()) return WEECHAT_RC_OK;
 
-            weechat_printf(buffer,
-                           _("%sRepublishing OMEMO devicelist and bundle..."),
-                           weechat_prefix("network"));
+            ui->printf_network(_("Republishing OMEMO devicelist and bundle..."));
 
             // Publish axolotl devicelist
             auto devicelist_stanza = ptr_account->get_devicelist();
             if (devicelist_stanza)
             {
                 ptr_account->connection.send(devicelist_stanza.get());
-                weechat_printf(buffer,
-                               _("%sDevicelist published (device ID: %u)"),
-                               weechat_prefix("network"), ptr_account->omemo.device_id);
+                ui->printf_network(fmt::format("Devicelist published (device ID: {})",
+                    ptr_account->omemo.device_id));
             }
 
             // Publish axolotl bundle
@@ -79,15 +76,13 @@ int command__omemo(const void *pointer, void *data,
             {
                 ptr_account->connection.send(bundle_stanza);
                 xmpp_stanza_release(bundle_stanza);
-                weechat_printf(buffer,
-                               _("%sBundle published for device %u"),
-                               weechat_prefix("network"), ptr_account->omemo.device_id);
+                ui->printf_network(fmt::format("Bundle published for device {}",
+                    ptr_account->omemo.device_id));
             }
             else
             {
-                weechat_printf(buffer,
-                               _("%s%s: failed to generate OMEMO bundle"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                ui->printf_error(fmt::format("%s: failed to generate OMEMO bundle",
+                    WEECHAT_XMPP_PLUGIN_NAME));
             }
 
             return WEECHAT_RC_OK;
@@ -97,9 +92,8 @@ int command__omemo(const void *pointer, void *data,
         {
             if (!require_omemo()) return WEECHAT_RC_OK;
 
-            weechat_printf(buffer,
-                           _("%s%s: Resetting OMEMO key database to force renegotiation"),
-                           weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME);
+            ui->printf_info(fmt::format("%s: Resetting OMEMO key database to force renegotiation",
+                WEECHAT_XMPP_PLUGIN_NAME));
 
             try {
                 // Clear OMEMO database
@@ -108,14 +102,12 @@ int command__omemo(const void *pointer, void *data,
                     lmdb::txn txn = lmdb::txn::begin(ptr_account->omemo.db_env);
                     mdb_drop(txn.handle(), ptr_account->omemo.dbi.omemo, 0);
                     txn.commit();
-                    weechat_printf(buffer,
-                                   _("%s%s: OMEMO key database cleared. Session keys will be renegotiated."),
-                                   weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME);
+                    ui->printf_info(fmt::format("%s: OMEMO key database cleared. Session keys will be renegotiated.",
+                        WEECHAT_XMPP_PLUGIN_NAME));
                 }
             } catch (const lmdb::error& ex) {
-                weechat_printf(buffer,
-                               _("%s%s: Failed to reset OMEMO keys: %s"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, ex.what());
+                ui->printf_error(fmt::format("%s: Failed to reset OMEMO keys: {}",
+                    WEECHAT_XMPP_PLUGIN_NAME, ex.what()));
             }
 
             return WEECHAT_RC_OK;
@@ -148,9 +140,8 @@ int command__omemo(const void *pointer, void *data,
             if (!require_omemo()) return WEECHAT_RC_OK;
             if (argc < 3)
             {
-                weechat_printf(buffer,
-                               _("%s%s: usage: /omemo trust <jid> [<device-id>]"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                ui->printf_error(fmt::format("%s: usage: /omemo trust <jid> [<device-id>]",
+                    WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
             std::optional<std::uint32_t> device_id;
@@ -160,9 +151,8 @@ int command__omemo(const void *pointer, void *data,
                     device_id = *v;
                 else
                 {
-                    weechat_printf(buffer,
-                                   _("%s%s: /omemo trust: device id must be a positive integer"),
-                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                    ui->printf_error(fmt::format("%s: /omemo trust: device id must be a positive integer",
+                        WEECHAT_XMPP_PLUGIN_NAME));
                     return WEECHAT_RC_OK;
                 }
             }
@@ -175,9 +165,8 @@ int command__omemo(const void *pointer, void *data,
             if (!require_omemo()) return WEECHAT_RC_OK;
             if (argc < 3)
             {
-                weechat_printf(buffer,
-                               _("%s%s: usage: /omemo distrust <jid> [<fingerprint>]"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                ui->printf_error(fmt::format("%s: usage: /omemo distrust <jid> [<fingerprint>]",
+                    WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
             std::optional<std::uint32_t> device_id;
@@ -187,9 +176,8 @@ int command__omemo(const void *pointer, void *data,
                     device_id = *v;
                 else
                 {
-                    weechat_printf(buffer,
-                                   _("%s%s: /omemo distrust: device id must be a positive integer"),
-                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                    ui->printf_error(fmt::format("%s: /omemo distrust: device id must be a positive integer",
+                        WEECHAT_XMPP_PLUGIN_NAME));
                     return WEECHAT_RC_OK;
                 }
             }
@@ -208,9 +196,8 @@ int command__omemo(const void *pointer, void *data,
                 jid = ptr_channel->name.data();
             if (!jid)
             {
-                weechat_printf(buffer,
-                               _("%s%s: usage: /omemo devices <jid>  (or run in a channel buffer)"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                ui->printf_error(fmt::format("%s: usage: /omemo devices <jid>  (or run in a channel buffer)",
+                    WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
             ptr_account->omemo.show_devices(buffer, jid);
@@ -229,9 +216,8 @@ int command__omemo(const void *pointer, void *data,
 
             if (!jid)
             {
-                weechat_printf(buffer,
-                               _("%s%s: usage: /omemo fetch [<jid>] [<device-id>]"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                ui->printf_error(fmt::format("%s: usage: /omemo fetch [<jid>] [<device-id>]",
+                    WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
 
@@ -242,9 +228,8 @@ int command__omemo(const void *pointer, void *data,
                     device_id = *parsed;
                 else
                 {
-                    weechat_printf(buffer,
-                                   _("%s%s: invalid device id '%s'"),
-                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[3]);
+                    ui->printf_error(fmt::format("%s: invalid device id '{}'",
+                        WEECHAT_XMPP_PLUGIN_NAME, argv[3]));
                     return WEECHAT_RC_OK;
                 }
             }
@@ -265,9 +250,8 @@ int command__omemo(const void *pointer, void *data,
 
             if (!jid)
             {
-                weechat_printf(buffer,
-                               _("%s%s: usage: /omemo kex [<jid>] [<device-id>]"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                ui->printf_error(fmt::format("%s: usage: /omemo kex [<jid>] [<device-id>]",
+                    WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
 
@@ -278,9 +262,8 @@ int command__omemo(const void *pointer, void *data,
                     device_id = *parsed;
                 else
                 {
-                    weechat_printf(buffer,
-                                   _("%s%s: invalid device id '%s'"),
-                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[3]);
+                    ui->printf_error(fmt::format("%s: invalid device id '{}'",
+                        WEECHAT_XMPP_PLUGIN_NAME, argv[3]));
                     return WEECHAT_RC_OK;
                 }
             }
@@ -295,10 +278,9 @@ int command__omemo(const void *pointer, void *data,
     // Default behavior: enable OMEMO for current channel
     if (!ptr_channel)
     {
-        weechat_printf(
-            buffer,
-            _("%s%s: \"%s\" command requires a channel buffer or use /omemo republish on account buffer"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "omemo");
+        ui->printf_error(fmt::format(
+            "{}: \"{}\" command requires a channel buffer or use /omemo republish on account buffer",
+            WEECHAT_XMPP_PLUGIN_NAME, "omemo"));
         return WEECHAT_RC_OK;
     }
 
@@ -307,10 +289,9 @@ int command__omemo(const void *pointer, void *data,
     if (ptr_channel->type == weechat::channel::chat_type::MUC &&
         !ptr_channel->all_occupants_have_real_jid())
     {
-        weechat_printf(
-            buffer,
-            "%s%s: OMEMO requires a non-anonymous room where real JIDs are visible for all occupants",
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(
+            "{}: OMEMO requires a non-anonymous room where real JIDs are visible for all occupants",
+            WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -324,10 +305,10 @@ int command__omemo(const void *pointer, void *data,
     // docs/planning-muc-omemo.md §6: Surface the blind-trust concern for MUCs.
     if (ptr_channel->type == weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer, "%s",
-            fmt::format("{}: Note: OMEMO in this MUC uses blind trust (BTBV) for all occupants by default. "
-                        "Manually verify important devices with /omemo trust if desired.",
-                        weechat_prefix("network")).c_str());
+        ui->printf_network(fmt::format(
+            "{}: Note: OMEMO in this MUC uses blind trust (BTBV) for all occupants by default. "
+            "Manually verify important devices with /omemo trust if desired.",
+            WEECHAT_XMPP_PLUGIN_NAME));
     }
 
     return WEECHAT_RC_OK;
@@ -351,10 +332,9 @@ int command__pgp(const void *pointer, void *data,
 
     if (!ptr_channel)
     {
-        weechat_printf(
-            ptr_account->buffer,
-            _("%s%s: \"%s\" command can not be executed on a account buffer"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "pgp");
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_error(fmt::format(
+            "{}: \"{}\" command can not be executed on a account buffer",
+            WEECHAT_XMPP_PLUGIN_NAME, "pgp"));
         return WEECHAT_RC_OK;
     }
 
@@ -459,10 +439,9 @@ int command__plain(const void *pointer, void *data,
 
     if (!ptr_channel)
     {
-        weechat_printf(
-            ptr_account->buffer,
-            _("%s%s: \"%s\" command can not be executed on a account buffer"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "plain");
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_error(fmt::format(
+            "{}: \"{}\" command can not be executed on a account buffer",
+            WEECHAT_XMPP_PLUGIN_NAME, "plain"));
         return WEECHAT_RC_OK;
     }
 
@@ -494,9 +473,8 @@ int command__xml(const void *pointer, void *data,
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(buffer)->printf_error(fmt::format("%s: you are not connected to server",
+            WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 

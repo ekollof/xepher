@@ -23,6 +23,7 @@ public:
 
     [[nodiscard]] XMPP_TEST_EXPORT std::string_view name() const;
     [[nodiscard]] XMPP_TEST_EXPORT std::optional<std::string_view> attr(std::string_view name) const;
+    [[nodiscard]] XMPP_TEST_EXPORT std::string attr_string(std::string_view name) const;
     [[nodiscard]] std::optional<std::string_view> from() const { return attr("from"); }
     [[nodiscard]] std::optional<std::string_view> to() const { return attr("to"); }
     [[nodiscard]] std::optional<std::string_view> id() const { return attr("id"); }

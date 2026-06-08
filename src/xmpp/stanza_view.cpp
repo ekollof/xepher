@@ -26,6 +26,13 @@ std::optional<std::string_view> StanzaView::attr(std::string_view name) const
     return std::string_view(v);
 }
 
+std::string StanzaView::attr_string(std::string_view name) const
+{
+    if (auto value = attr(name))
+        return std::string(*value);
+    return {};
+}
+
 StanzaView StanzaView::child(std::string_view name) const
 {
     if (!stanza_)

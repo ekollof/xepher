@@ -15,6 +15,8 @@ int command__mam(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     // XEP-0441: /mam prefs [get | default <always|never|roster> |
     //                        always <jid> | never <jid>]
     if (argc >= 2 && weechat_strcasecmp(argv[1], "prefs") == 0)
@@ -47,9 +49,7 @@ int command__mam(const void *pointer, void *data,
                 && weechat_strcasecmp(defval, "never") != 0
                 && weechat_strcasecmp(defval, "roster") != 0)
             {
-                weechat_printf(buffer,
-                    "%s/mam prefs default: value must be always, never, or roster",
-                    weechat_prefix("error"));
+                ui->printf_error("/mam prefs default: value must be always, never, or roster");
                 return WEECHAT_RC_OK;
             }
             // Empty always/never lists (preserve existing — server keeps them)
@@ -77,10 +77,9 @@ int command__mam(const void *pointer, void *data,
 
     if (!ptr_channel)
     {
-        weechat_printf(
-            ptr_account->buffer,
-            _("%s%s: \"%s\" command can not be executed on a account buffer"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "mam");
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_error(fmt::format(
+            "{}: \"{}\" command can not be executed on a account buffer",
+            WEECHAT_XMPP_PLUGIN_NAME, "mam"));
         return WEECHAT_RC_OK;
     }
 
@@ -91,10 +90,9 @@ int command__mam(const void *pointer, void *data,
             days = static_cast<int>(*n);
         else
         {
-            weechat_printf(
-                ptr_channel->buffer,
-                _("%s%s: \"%s\" is not a valid number of %s for %s"),
-                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[1], "days", "mam");
+            weechat::UiPort::for_buffer(ptr_channel->buffer)->printf_error(fmt::format(
+                "{}: \"{}\" is not a valid number of {} for {}",
+                WEECHAT_XMPP_PLUGIN_NAME, argv[1], "days", "mam"));
             days = MAM_DEFAULT_DAYS;
         }
     }

@@ -19,6 +19,16 @@
 
 #include "plugin.hh"
 #include "pgp.hh"
+#include "weechat/ui_port.hh"
+
+namespace {
+
+void pgp_print(struct t_gui_buffer *buffer, std::string_view msg)
+{
+    weechat::UiPort::for_buffer(buffer)->printf(msg);
+}
+
+}  // namespace
 
 std::string format_key(weechat::xmpp::pgp &pgp, std::string_view keyid)
 {
@@ -75,8 +85,8 @@ weechat::xmpp::pgp::pgp()
 
     err = gpgme_new(&this->gpgme);
     if (err) {
-        weechat_printf(nullptr, "gpg (error): %s - %s",
-                gpgme_strsource(err), gpgme_strerror(err));
+        pgp_print(nullptr, fmt::format("gpg (error): {} - {}",
+                gpgme_strsource(err), gpgme_strerror(err)));
         throw std::runtime_error("gpgme_new failed");
     }
     gpgme_set_armor(this->gpgme, true);
@@ -160,8 +170,8 @@ std::optional<std::string> weechat::xmpp::pgp::encrypt(struct t_gui_buffer *buff
 
 encrypt_finish:
     if (err) {
-        weechat_printf(buffer, "[PGP]\t%s - %s",
-                gpgme_strsource(err), gpgme_strerror(err));
+        pgp_print(buffer, fmt::format("[PGP]\t{} - {}",
+                gpgme_strsource(err), gpgme_strerror(err)));
         return std::nullopt;
     }
     if (encrypted.size() <= kPgpMessageHeader.size() + kPgpMessageFooter.size())
@@ -213,8 +223,8 @@ std::optional<std::string> weechat::xmpp::pgp::decrypt(struct t_gui_buffer *buff
 
 decrypt_finish:
     if (err) {
-        weechat_printf(buffer, "[PGP]\t%s - %s (%s)",
-                gpgme_strsource(err), gpgme_strerror(err), keyids.data());
+        pgp_print(buffer, fmt::format("[PGP]\t{} - {} ({})",
+                gpgme_strsource(err), gpgme_strerror(err), keyids));
         return std::nullopt;
     }
     return decrypted;
@@ -272,8 +282,8 @@ std::optional<std::string> weechat::xmpp::pgp::verify(struct t_gui_buffer *buffe
 
 verify_finish:
     if (err) {
-        weechat_printf(buffer, "[PGP]\t%s - %s",
-                gpgme_strsource(err), gpgme_strerror(err));
+        pgp_print(buffer, fmt::format("[PGP]\t{} - {}",
+                gpgme_strsource(err), gpgme_strerror(err)));
         return std::nullopt;
     }
     return result;
@@ -310,23 +320,23 @@ std::optional<std::string> weechat::xmpp::pgp::sign(struct t_gui_buffer *buffer,
 
     err = gpgme_get_key(this->gpgme, source.data(), &key_g.k, false);
     if (err) {
-        weechat_printf(nullptr, "(gpg) get key fail for %s", source.data());
+        pgp_print(nullptr, fmt::format("(gpg) get key fail for {}", source));
         goto sign_finish;
     }
     err = gpgme_signers_add(this->gpgme, key_g.k);
     if (err) {
-        weechat_printf(nullptr, "(gpg) add key fail for %s", source.data());
+        pgp_print(nullptr, fmt::format("(gpg) add key fail for {}", source));
         goto sign_finish;
     }
 
     err = gpgme_op_sign(this->gpgme, in_g.h, out_g.h, GPGME_SIG_MODE_DETACH);
     if (err) {
-        weechat_printf(nullptr, "(gpg) sign fail for %s", source.data());
+        pgp_print(nullptr, fmt::format("(gpg) sign fail for {}", source));
         goto sign_finish;
     }
     if (gpgme_sign_result_t sgn_result = gpgme_op_sign_result(this->gpgme);
             !sgn_result->signatures)
-        weechat_printf(nullptr, "(gpg) signature fail for %s", source);
+        pgp_print(nullptr, fmt::format("(gpg) signature fail for {}", source));
 
     {
         gpgme_data_seek(out_g.h, 0, SEEK_SET);
@@ -338,8 +348,8 @@ std::optional<std::string> weechat::xmpp::pgp::sign(struct t_gui_buffer *buffer,
 
 sign_finish:
     if (err) {
-        weechat_printf(buffer, "[PGP]\t%s - %s",
-                gpgme_strsource(err), gpgme_strerror(err));
+        pgp_print(buffer, fmt::format("[PGP]\t{} - {}",
+                gpgme_strsource(err), gpgme_strerror(err)));
         return std::nullopt;
     }
     if (signature.size() <= kPgpSignatureHeader.size() + kPgpSignatureFooter.size())

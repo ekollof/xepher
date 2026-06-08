@@ -19,6 +19,7 @@ public:
 
     virtual void printf(std::string_view msg) = 0;
     virtual void printf_error(std::string_view msg) = 0;
+    virtual void printf_info(std::string_view msg) = 0;
     virtual void printf_network(std::string_view msg) = 0;
     virtual void printf_date_tags(std::time_t date, std::string_view tags, std::string_view msg) = 0;
 
@@ -31,6 +32,7 @@ public:
 
     void printf(std::string_view msg) override;
     void printf_error(std::string_view msg) override;
+    void printf_info(std::string_view msg) override;
     void printf_network(std::string_view msg) override;
     void printf_date_tags(std::time_t date, std::string_view tags, std::string_view msg) override;
 

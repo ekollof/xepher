@@ -272,9 +272,9 @@ Thin ports isolate inbound libstrophe reads and WeeChat output from domain logic
 
 | Port | Header | Role |
 |------|--------|------|
-| `xmpp::StanzaView` | `src/xmpp/stanza_view.hh` | Non-owning read-only inbound stanza facade (`from()`, `child()`, `text()`, child range) |
+| `xmpp::StanzaView` | `src/xmpp/stanza_view.hh` | Non-owning read-only inbound stanza facade (`attr_string()`, `child()`, `text()`, child range) |
 | `xmpp::handle_*_iq` | `src/xmpp/iq_handlers.hh` | Pure IQ reply builders (version/time proof); pattern for future handler extraction |
-| `weechat::UiPort` | `src/weechat/ui_port.hh` | Abstract buffer output (`printf_error`, `printf_network`, …); `UiPort::for_buffer()` |
+| `weechat::UiPort` | `src/weechat/ui_port.hh` | Abstract buffer output (`printf_error`, `printf_info`, `printf_network`, …); `UiPort::for_buffer()` |
 | `weechat::RuntimePort` | `src/weechat/runtime_port.hh` | Host queries (`version_string`, `color`); `RuntimePort::default_runtime()` in production |
 
 **C-ABI boundaries (do not try to eliminate):** WeeChat hook/callback signatures; libstrophe

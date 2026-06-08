@@ -219,11 +219,13 @@ See AGENTS.md § Port abstraction for API reference.
 - [x] `tests/weechat_stub.hh` (`CapturingUiPort`, `StubRuntimePort`)
 - [x] Doctests for `StanzaView`, `handle_version_iq`, `handle_time_iq`
 
-### Wave 1 — Low-risk migration (pick up anytime)
-- [ ] Command argv feedback: `encryption.inl`, `archive.inl` → `UiPort`
-- [ ] `encryption.inl` device-id parse errors → `UiPort` (partially done via parse helpers)
-- [ ] Replace ad-hoc `xmpp_stanza_get_from/id` in small handler slices with `StanzaView`
-- [ ] `pgp.cpp` user-facing errors → `UiPort`
+### Wave 1 — Low-risk migration (complete)
+- [x] Command argv feedback: `encryption.inl` (`command__omemo`), `archive.inl`, `presence.inl` (`/ping`) → `UiPort`
+- [x] `encryption.inl` device-id parse errors → `UiPort`
+- [x] `command__pgp` / `command__plain` / `command__xml` account-buffer errors → `UiPort`
+- [x] Replace ad-hoc stanza attrs in XEP-0199 ping reply (`iq_handler.inl`) with `StanzaView`
+- [x] `pgp.cpp` user-facing errors → `UiPort` (`pgp_print` helper)
+- [x] `UiPort::printf_info`; `StanzaView::attr_string`
 
 ### Wave 2 — Handler split (multi-PR; largest long-term win)
 

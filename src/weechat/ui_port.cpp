@@ -21,6 +21,11 @@ void WeechatUiPort::printf_error(std::string_view msg)
     weechat_printf(buffer_, "%s%s", weechat_prefix("error"), std::string(msg).c_str());
 }
 
+void WeechatUiPort::printf_info(std::string_view msg)
+{
+    weechat_printf(buffer_, "%s%s", weechat_prefix("info"), std::string(msg).c_str());
+}
+
 void WeechatUiPort::printf_network(std::string_view msg)
 {
     weechat_printf(buffer_, "%s%s", weechat_prefix("network"), std::string(msg).c_str());

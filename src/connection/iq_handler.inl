@@ -70,12 +70,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         stanza, "ping", "urn:xmpp:ping");
     if (ping && type && weechat_strcasecmp(type, "get") == 0)
     {
-        // Respond with iq result
+        const ::xmpp::StanzaView view(stanza);
         account.connection.send(stanza::iq()
             .type("result")
-            .id(id ? id : "")
-            .to(from ? from : "")
-            .from(to ? to : "")
+            .id(view.attr_string("id"))
+            .to(view.attr_string("from"))
+            .from(view.attr_string("to"))
             .build(account.context)
             .get());
         return true;

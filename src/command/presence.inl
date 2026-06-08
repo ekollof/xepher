@@ -17,8 +17,7 @@ int command__ping(const void *pointer, void *data,
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        weechat::UiPort::for_buffer(buffer)->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
@@ -35,16 +34,11 @@ int command__ping(const void *pointer, void *data,
     // Track ping time for response measurement
     ptr_account->user_ping_queries[id] = time(nullptr);
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
     if (target)
-    {
-        weechat_printf(buffer, "%sSending ping to %s...",
-                       weechat_prefix("network"), target);
-    }
+        ui->printf_network(fmt::format("Sending ping to {}...", target));
     else
-    {
-        weechat_printf(buffer, "%sSending ping to server...",
-                       weechat_prefix("network"));
-    }
+        ui->printf_network("Sending ping to server...");
 
     auto iq = stanza::iq()
         .type("get")
