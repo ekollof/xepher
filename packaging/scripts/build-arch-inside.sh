@@ -8,14 +8,19 @@
 set -e
 
 . /project/packaging/scripts/prepare-source-tree.sh
+. /project/packaging/scripts/install-build-deps.sh
 
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
+DEPS_STAMP=/opt/xepher-build/arch-deps.stamp
 
 echo "=== [Arch] Building xepher ${VERSION} ==="
 
-# Install base-devel and git if not present
-sudo pacman -Sy --needed --noconfirm base-devel git
+xepher_install_arch_deps() {
+    xepher_as_root pacman -Sy --needed --noconfirm base-devel git
+}
+
+xepher_install_build_deps_once xepher_install_arch_deps
 
 # Create a writable build directory
 BUILD_DIR=$(mktemp -d)

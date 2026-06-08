@@ -7,29 +7,34 @@
 set -e
 
 . /project/packaging/scripts/prepare-source-tree.sh
+. /project/packaging/scripts/install-build-deps.sh
 
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
+DEPS_STAMP=/opt/xepher-build/fedora-deps.stamp
 
 echo "=== [Fedora] Building xepher ${VERSION} ==="
 
-# Install build dependencies (running as root — no sudo needed)
-dnf install -y \
-    rpm-build rpmdevtools \
-    gcc-c++ git bison flex \
-    libstrophe-devel \
-    libxml2-devel \
-    lmdb-devel \
-    libsignal-protocol-c-devel \
-    libomemo-c-devel \
-    protobuf-c \
-    protobuf-c-devel \
-    gpgme-devel \
-    libgcrypt-devel \
-    fmt-devel \
-    libcurl-devel \
-    openssl-devel \
-    weechat-devel
+xepher_install_fedora_deps() {
+    xepher_as_root dnf install -y \
+        rpm-build rpmdevtools \
+        gcc-c++ git bison flex \
+        libstrophe-devel \
+        libxml2-devel \
+        lmdb-devel \
+        libsignal-protocol-c-devel \
+        libomemo-c-devel \
+        protobuf-c \
+        protobuf-c-devel \
+        gpgme-devel \
+        libgcrypt-devel \
+        fmt-devel \
+        libcurl-devel \
+        openssl-devel \
+        weechat-devel
+}
+
+xepher_install_build_deps_once xepher_install_fedora_deps
 
 # Setup RPM build tree
 rpmdev-setuptree

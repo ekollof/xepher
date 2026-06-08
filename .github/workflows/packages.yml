@@ -1,0 +1,76 @@
+name: Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (e.g. 0.8.0)'
+        required: true
+        type: string
+
+concurrency:
+  group: packages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build distribution packages (sequential)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Resolve package version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ver="${{ inputs.version }}"
+          else
+            ver="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -z "${ver}" ]; then
+            echo "Could not determine package version" >&2
+            exit 1
+          fi
+          echo "version=${ver}" >> "${GITHUB_OUTPUT}"
+          echo "Package version: ${ver}"
+
+      - name: Build all distro packages (sequential)
+        run: bash packaging/github-build.sh "${{ steps.version.outputs.version }}"
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xepher-packages-${{ steps.version.outputs.version }}
+          if-no-files-found: error
+          path: |
+            packaging/build/*.deb
+            packaging/build/*.rpm
+            packaging/build/*.pkg.tar.zst
+            packaging/build/*.apk
+            packaging/build/*.xbps
+
+      - name: Attach packages to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            packaging/build/*.deb
+            packaging/build/*.rpm
+            packaging/build/*.pkg.tar.zst
+            packaging/build/*.apk
+            packaging/build/*.xbps
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

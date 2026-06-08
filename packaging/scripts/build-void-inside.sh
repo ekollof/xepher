@@ -8,30 +8,35 @@
 set -e
 
 . /project/packaging/scripts/prepare-source-tree.sh
+. /project/packaging/scripts/install-build-deps.sh
 
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
+DEPS_STAMP=/opt/xepher-build/void-deps.stamp
 
 echo "=== [Void] Building xepher ${VERSION} ==="
 
-# Sync and install build deps (xbps must be updated first)
-xbps-install -Syu --yes xbps
-xbps-install -Syu --yes
-xbps-install -y \
-    base-devel \
-    git bison flex make pkg-config \
-    gcc \
-    libstrophe-devel \
-    libxml2-devel \
-    lmdb-devel \
-    libsignal-protocol-c-devel \
-    libomemo-c-devel \
-    libgcrypt-devel \
-    gpgme-devel \
-    fmt-devel \
-    libcurl-devel \
-    openssl-devel \
-    weechat-devel
+xepher_install_void_deps() {
+    xbps-install -Syu --yes xbps
+    xbps-install -Syu --yes
+    xbps-install -y \
+        base-devel \
+        git bison flex make pkg-config \
+        gcc \
+        libstrophe-devel \
+        libxml2-devel \
+        lmdb-devel \
+        libsignal-protocol-c-devel \
+        libomemo-c-devel \
+        libgcrypt-devel \
+        gpgme-devel \
+        fmt-devel \
+        libcurl-devel \
+        openssl-devel \
+        weechat-devel
+}
+
+xepher_install_build_deps_once xepher_install_void_deps
 
 # Create a writable build directory
 BUILD_DIR=$(mktemp -d)

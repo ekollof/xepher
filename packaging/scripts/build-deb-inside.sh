@@ -8,28 +8,33 @@
 set -e
 
 . /project/packaging/scripts/prepare-source-tree.sh
+. /project/packaging/scripts/install-build-deps.sh
 
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
+DEPS_STAMP=/opt/xepher-build/debian-deps.stamp
 
 echo "=== [Debian] Building xepher ${VERSION} ==="
 
-# Install build dependencies
-sudo apt-get update -qq
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    debhelper devscripts build-essential \
-    g++ git bison flex \
-    libstrophe-dev \
-    libxml2-dev \
-    liblmdb-dev \
-    libsignal-protocol-c-dev \
-    libomemo-c-dev \
-    libgcrypt20-dev \
-    libgpgme-dev \
-    libfmt-dev \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    weechat-dev
+xepher_install_debian_deps() {
+    xepher_as_root apt-get update -qq
+    xepher_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        debhelper devscripts build-essential \
+        g++ git bison flex \
+        libstrophe-dev \
+        libxml2-dev \
+        liblmdb-dev \
+        libsignal-protocol-c-dev \
+        libomemo-c-dev \
+        libgcrypt20-dev \
+        libgpgme-dev \
+        libfmt-dev \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        weechat-dev
+}
+
+xepher_install_build_deps_once xepher_install_debian_deps
 
 # Copy the full project source (with submodules already present) to a
 # writable build directory. Use the Debian-required source dir name.

@@ -8,42 +8,50 @@
 set -e
 
 . /project/packaging/scripts/prepare-source-tree.sh
+. /project/packaging/scripts/install-build-deps.sh
 
 VERSION="${1:-0.3.0}"
 OUTPUT_DIR="${2:-/output}"
+DEPS_STAMP=/opt/xepher-build/alpine-deps.stamp
 
 echo "=== [Alpine] Building xepher ${VERSION} ==="
 
-# Enable community repo (needed for libomemo-c, libsignal-protocol-c, weechat-dev)
-echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
-apk update
+xepher_install_alpine_deps() {
+    # Enable community repo (needed for libomemo-c, libsignal-protocol-c, weechat-dev)
+    if ! grep -q 'alpine/edge/community' /etc/apk/repositories 2>/dev/null; then
+        echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
+    fi
+    apk update
+    apk add --no-cache \
+        alpine-sdk \
+        git bison flex flex-dev make pkgconf \
+        g++ \
+        libstrophe-dev \
+        libxml2-dev \
+        lmdb-dev \
+        libsignal-protocol-c-dev \
+        libomemo-c-dev \
+        libgcrypt-dev \
+        gpgme-dev \
+        fmt-dev \
+        curl-dev \
+        openssl-dev \
+        weechat-dev
 
-# Install build tools and dependencies
-apk add --no-cache \
-    alpine-sdk \
-    git bison flex flex-dev make pkgconf \
-    g++ \
-    libstrophe-dev \
-    libxml2-dev \
-    lmdb-dev \
-    libsignal-protocol-c-dev \
-    libomemo-c-dev \
-    libgcrypt-dev \
-    gpgme-dev \
-    fmt-dev \
-    curl-dev \
-    openssl-dev \
-    weechat-dev
+    # abuild must run as a non-root user — idempotent for persistent containers
+    if ! id builder >/dev/null 2>&1; then
+        adduser -D -G abuild builder
+    fi
+    if ! grep -q '^builder ALL=(ALL) NOPASSWD: ALL' /etc/sudoers 2>/dev/null; then
+        echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+    fi
+    if [ ! -f /home/builder/.abuild/abuild.conf ]; then
+        su builder -c 'abuild-keygen -a -n'
+    fi
+    cp /home/builder/.abuild/*.pub /etc/apk/keys/
+}
 
-# abuild must run as a non-root user — create a dedicated build user
-adduser -D -G abuild builder
-# Grant passwordless sudo to builder (for apk calls inside abuild)
-echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-
-# Set up abuild signing key for the builder user and trust it system-wide
-su builder -c 'abuild-keygen -a -n'
-# Copy the public key into /etc/apk/keys so abuild can update the local repo index
-cp /home/builder/.abuild/*.pub /etc/apk/keys/
+xepher_install_build_deps_once xepher_install_alpine_deps
 
 # Create a writable build directory owned by builder
 BUILD_DIR=$(mktemp -d)
