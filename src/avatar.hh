@@ -5,6 +5,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <memory>
 #include <optional>
@@ -36,8 +37,8 @@ namespace weechat
         
         // Render avatar to colored Unicode symbol (deterministic based on image hash)
         // Returns a single colored geometric shape character (●, ★, ◆, etc.)
-        static std::string render_unicode_blocks(const std::vector<uint8_t>& image_data,
-                                                  const std::string& mime_type,
+        static std::string render_unicode_blocks(std::span<const uint8_t> image_data,
+                                                  std::string_view mime_type,
                                                   int target_width = 2,
                                                   int target_height = 2);
         
@@ -48,17 +49,17 @@ namespace weechat
         static std::string get_cache_dir(const account& acc);
         
         // Load avatar from cache
-        static std::expected<data, std::string> load_from_cache(const account& acc, 
-                                                    const std::string& hash);
+        static std::expected<data, std::string> load_from_cache(const account& acc,
+                                                    std::string_view hash);
         
         // Save avatar to cache
         static bool save_to_cache(const account& acc,
-                                  const std::string& hash,
+                                  std::string_view hash,
                                   const data& avatar_data);
         
         // Request avatar from remote JID
         static void request_metadata(account& acc, const char *jid);
-        static void request_data(account& acc, const char *jid, const std::string& hash);
+        static void request_data(account& acc, const char *jid, std::string_view hash);
         
         // Load avatar for user from cache (called on user creation/presence)
         static void load_for_user(account& acc, class user& user);
@@ -68,6 +69,6 @@ namespace weechat
         // and updates the self user's avatar_hash so XEP-0153 presences carry
         // the correct <photo> element.
         // Returns true on success (IQs sent), false on error.
-        static bool publish(account& acc, const std::string& filepath);
+        static bool publish(account& acc, std::string_view filepath);
     };
 }

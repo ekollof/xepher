@@ -1674,7 +1674,7 @@ void weechat::channel::send_link_preview(std::string_view to, std::string_view u
                  {"xmlns:og",  "https://ogp.me/ns#"},
                  {"rdf:about", task->url.data()}});
 
-            auto add_og_child = [&](const char *elem_name, const std::string& text) {
+            auto add_og_child = [&](const char *elem_name, std::string_view text) {
                 if (text.empty()) return;
                 auto child = stanza_text_node(ctx, elem_name, text.data());
                 xmpp_stanza_add_child(rdf.get(), child.get());
@@ -1995,22 +1995,14 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
     // to let the user see which time range is being loaded from the server archive.
     if (!after && buffer)
     {
-        char start_str[32] = "the beginning";
-        char end_str[32]   = "now";
-        if (start)
-        {
-            struct tm *lt = localtime(start);
-            strftime(start_str, sizeof(start_str), "%Y-%m-%d %H:%M", lt);
-        }
-        if (end)
-        {
-            struct tm *lt = localtime(end);
-            strftime(end_str, sizeof(end_str), "%Y-%m-%d %H:%M", lt);
-        }
+        const std::string start_str = start
+            ? format_local_timestamp(*start) : "the beginning";
+        const std::string end_str = end
+            ? format_local_timestamp(*end) : "now";
         weechat_printf_date_tags(buffer, 0, "xmpp_mam_fetch,notify_none,no_log",
                                  "%sFetching history: %s → %s",
                                  weechat_prefix("network"),
-                                 start_str, end_str);
+                                 start_str.c_str(), end_str.c_str());
     }
 
     // XEP-0313: MUC MAM is addressed to the room JID.

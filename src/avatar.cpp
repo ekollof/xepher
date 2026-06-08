@@ -55,13 +55,13 @@ std::string weechat::avatar::get_cache_dir(const account& acc)
 }
 
 std::expected<weechat::avatar::data, std::string> weechat::avatar::load_from_cache(
-    const account& acc, const std::string& hash)
+    const account& acc, std::string_view hash)
 {
     std::string cache_dir = get_cache_dir(acc);
     if (cache_dir.empty())
         return std::unexpected("no cache dir");
     
-    std::string filepath = cache_dir + "/" + hash + ".dat";
+    std::string filepath = fmt::format("{}/{}.dat", cache_dir, hash);
     std::ifstream file(filepath, std::ios::binary);
     if (!file)
         return std::unexpected("open failed");
@@ -78,7 +78,7 @@ std::expected<weechat::avatar::data, std::string> weechat::avatar::load_from_cac
     avatar_data.meta.type.resize(type_len);
     file.read(&avatar_data.meta.type[0], type_len);
     
-    avatar_data.meta.id = hash;
+    avatar_data.meta.id = std::string(hash);
     
     // Read image data
     avatar_data.image_data.resize(avatar_data.meta.bytes);
@@ -88,14 +88,14 @@ std::expected<weechat::avatar::data, std::string> weechat::avatar::load_from_cac
 }
 
 bool weechat::avatar::save_to_cache(const account& acc,
-                                     const std::string& hash,
+                                     std::string_view hash,
                                      const data& avatar_data)
 {
     std::string cache_dir = get_cache_dir(acc);
     if (cache_dir.empty())
         return false;
     
-    std::string filepath = cache_dir + "/" + hash + ".dat";
+    std::string filepath = fmt::format("{}/{}.dat", cache_dir, hash);
     std::ofstream file(filepath, std::ios::binary);
     if (!file)
         return false;
@@ -117,8 +117,8 @@ bool weechat::avatar::save_to_cache(const account& acc,
 }
 
 std::string weechat::avatar::render_unicode_blocks(
-    const std::vector<uint8_t>& image_data,
-    const std::string& mime_type,
+    std::span<const uint8_t> image_data,
+    std::string_view mime_type,
     int target_width,
     int target_height)
 {
@@ -186,7 +186,7 @@ void weechat::avatar::request_metadata(account& /*acc*/, const char * /*jid*/)
 }
 
 void weechat::avatar::request_data(account& acc, const char *jid,
-                                    const std::string& hash)
+                                    std::string_view hash)
 {
     // If we already have this hash cached, load it directly — no network needed.
     if (!hash.empty())
@@ -240,14 +240,16 @@ void weechat::avatar::load_for_user(account& acc, user& user)
     }
 }
 
-bool weechat::avatar::publish(account& acc, const std::string& filepath)
+bool weechat::avatar::publish(account& acc, std::string_view filepath)
 {
+    const std::string filepath_str(filepath);
+
     // Read file bytes
-    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
+    std::ifstream file(filepath_str, std::ios::binary | std::ios::ate);
     if (!file)
     {
         weechat_printf(acc.buffer, "%sxmpp: /setavatar: cannot open file: %s",
-                       weechat_prefix("error"), filepath.c_str());
+                       weechat_prefix("error"), filepath_str.c_str());
         return false;
     }
 
@@ -255,7 +257,7 @@ bool weechat::avatar::publish(account& acc, const std::string& filepath)
     if (file_size <= 0 || file_size > 8 * 1024 * 1024)  // 8 MB sanity limit
     {
         weechat_printf(acc.buffer, "%sxmpp: /setavatar: file too large or empty: %s",
-                       weechat_prefix("error"), filepath.c_str());
+                       weechat_prefix("error"), filepath_str.c_str());
         return false;
     }
     file.seekg(0, std::ios::beg);
@@ -264,7 +266,7 @@ bool weechat::avatar::publish(account& acc, const std::string& filepath)
     if (!file.read(reinterpret_cast<char*>(image_bytes.data()), file_size))
     {
         weechat_printf(acc.buffer, "%sxmpp: /setavatar: failed to read file: %s",
-                       weechat_prefix("error"), filepath.c_str());
+                       weechat_prefix("error"), filepath_str.c_str());
         return false;
     }
 
@@ -272,9 +274,9 @@ bool weechat::avatar::publish(account& acc, const std::string& filepath)
     std::string mime_type = "image/png";
     {
         auto dot = filepath.rfind('.');
-        if (dot != std::string::npos)
+        if (dot != std::string_view::npos)
         {
-            std::string ext = filepath.substr(dot + 1);
+            std::string ext(filepath.substr(dot + 1));
             std::ranges::for_each(ext, [](char &c) { c = static_cast<char>(tolower(static_cast<unsigned char>(c))); });
             if (ext == "jpg" || ext == "jpeg")
                 mime_type = "image/jpeg";

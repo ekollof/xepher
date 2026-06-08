@@ -11,6 +11,8 @@
 #include <string_view>
 #include <vector>
 #include <cstdint>
+#include <ctime>
+#include <fmt/chrono.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,6 +53,14 @@ parse_int64(std::string_view value)
     if (error != std::errc {} || ptr != end)
         return std::unexpected("invalid int64");
     return parsed;
+}
+
+XMPP_TEST_EXPORT std::string format_local_timestamp(std::time_t t)
+{
+    std::tm lt {};
+    if (!localtime_r(&t, &lt))
+        return {};
+    return fmt::format("{:%Y-%m-%d %H:%M}", lt);
 }
 
 XMPP_TEST_EXPORT std::string unescape(std::string_view str)

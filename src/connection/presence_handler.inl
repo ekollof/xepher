@@ -620,14 +620,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         {
             xmpp_stanza_t *old_jid_elem = xmpp_stanza_get_child_by_name(
                 moved_elem, "old-jid");
-            std::string old_jid_str;
-            if (old_jid_elem)
-            {
-                xmpp_string_guard old_jid_g(account.context,
-                                            xmpp_stanza_get_text(old_jid_elem));
-                if (old_jid_g.ptr)
-                    old_jid_str = old_jid_g.ptr;
-            }
+            const std::string old_jid_str = stanza_element_text(old_jid_elem);
             const char *new_jid = binding->from ? binding->from->bare.data() : nullptr;
              if (!old_jid_str.empty() && new_jid)
              {
@@ -656,9 +649,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             xmpp_stanza_t *photo = xmpp_stanza_get_child_by_name(vcard_x, "photo");
             if (photo)
             {
-                xmpp_string_guard photo_hash_g(account.context,
-                                               xmpp_stanza_get_text(photo));
-                std::string_view photo_hash = photo_hash_g.ptr ? photo_hash_g.ptr : "";
+                const std::string photo_hash_str = stanza_element_text(photo);
+                std::string_view photo_hash = photo_hash_str;
                 if (!photo_hash.empty())
                 {
                     // Store the vCard avatar hash if we don't already have one

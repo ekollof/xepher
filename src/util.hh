@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <ctime>
 #include <expected>
 #include <string>
 #include <string_view>
@@ -20,6 +21,9 @@ parse_uint32(std::string_view value);
 
 [[nodiscard]] XMPP_TEST_EXPORT std::expected<std::int64_t, std::string>
 parse_int64(std::string_view value);
+
+// Format a local-time timestamp for MAM banners (YYYY-MM-DD HH:MM).
+[[nodiscard]] XMPP_TEST_EXPORT std::string format_local_timestamp(std::time_t t);
 
 // XEP-0393: Message Styling
 XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text);

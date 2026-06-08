@@ -823,10 +823,11 @@ int command__feed(const void *pointer, void *data,
                                                 acct_domain.empty() ? "xmpp" : acct_domain,
                                                 date_buf, item_uuid);
 
-        // Helper: build <tag>text</tag> with stanza builder
-        auto make_text_el = [&](const char *tag, const char *text_content)
+        auto make_text_el = [&](const char *tag, std::string_view text_sv,
+                                const char *ns = nullptr)
             -> std::shared_ptr<xmpp_stanza_t> {
-            return stanza_text_node(ptr_account->context, tag, text_content);
+            return stanza_text_node(ptr_account->context, tag,
+                                    std::string(text_sv).c_str(), ns);
         };
 
         auto entry = stanza_node(ptr_account->context, "entry",
@@ -834,27 +835,27 @@ int command__feed(const void *pointer, void *data,
 
         // <title>Shared: item-id [— comment]</title>
         {
-            std::string repeat_title = rep_comment.empty()
+            const std::string repeat_title = rep_comment.empty()
                 ? fmt::format("Shared: {}", rep_item_id)
                 : fmt::format("Shared: {} — {}", rep_item_id, rep_comment);
             auto title_el = stanza_node(ptr_account->context, "title", nullptr,
-                                        {{"type", "text"}});
-            auto t = stanza_text_node(ptr_account->context, "", repeat_title.c_str());
+                                          {{"type", "text"}});
+            auto t = make_text_el("", repeat_title);
             xmpp_stanza_add_child(title_el.get(), t.get());
             xmpp_stanza_add_child(entry.get(), title_el.get());
         }
 
-        xmpp_stanza_add_child(entry.get(), make_text_el("id", atom_id.c_str()).get());
-        xmpp_stanza_add_child(entry.get(), make_text_el("published", ts_buf.c_str()).get());
-        xmpp_stanza_add_child(entry.get(), make_text_el("updated", ts_buf.c_str()).get());
+        xmpp_stanza_add_child(entry.get(), make_text_el("id", atom_id).get());
+        xmpp_stanza_add_child(entry.get(), make_text_el("published", ts_buf).get());
+        xmpp_stanza_add_child(entry.get(), make_text_el("updated", ts_buf).get());
 
         // <author>
         {
             const std::string my_bare = ptr_account->jid();
             const std::string xmpp_uri = fmt::format("xmpp:{}", my_bare);
             auto author_el = stanza_node(ptr_account->context, "author");
-            xmpp_stanza_add_child(author_el.get(), make_text_el("name", my_bare.c_str()).get());
-            xmpp_stanza_add_child(author_el.get(), make_text_el("uri", xmpp_uri.c_str()).get());
+            xmpp_stanza_add_child(author_el.get(), make_text_el("name", my_bare).get());
+            xmpp_stanza_add_child(author_el.get(), make_text_el("uri", xmpp_uri).get());
             xmpp_stanza_add_child(entry.get(), author_el.get());
         }
 
@@ -874,7 +875,7 @@ int command__feed(const void *pointer, void *data,
         {
             auto content_el = stanza_node(ptr_account->context, "content", nullptr,
                                           {{"type", "text"}});
-            auto t = stanza_text_node(ptr_account->context, "", rep_comment.c_str());
+            auto t = make_text_el("", rep_comment);
             xmpp_stanza_add_child(content_el.get(), t.get());
             xmpp_stanza_add_child(entry.get(), content_el.get());
         }
@@ -884,7 +885,7 @@ int command__feed(const void *pointer, void *data,
             auto gen_el = stanza_node(ptr_account->context, "generator", nullptr,
                                       {{"uri", "https://github.com/ekollof/xepher"},
                                        {"version", WEECHAT_XMPP_PLUGIN_VERSION}});
-            xmpp_stanza_add_child(gen_el.get(), make_text_el("", "Xepher").get());
+            xmpp_stanza_add_child(gen_el.get(), make_text_el("", std::string_view("Xepher")).get());
             xmpp_stanza_add_child(entry.get(), gen_el.get());
         }
 

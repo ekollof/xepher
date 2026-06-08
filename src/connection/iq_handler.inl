@@ -1335,17 +1335,17 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     auto &c = *ctx_copy;
 
                     // Helper: base64-encode a byte buffer without raw BIO pointers.
-                    auto base64_encode_bytes = [](const unsigned char *data,
-                                                  size_t len) -> std::string {
-                        if (len == 0) return {};
+                    auto base64_encode_bytes = [](std::span<const std::uint8_t> data)
+                        -> std::string {
+                        if (data.empty()) return {};
                         const int encoded_size =
-                            4 * static_cast<int>((len + 2) / 3) + 1;
+                            4 * static_cast<int>((data.size() + 2) / 3) + 1;
                         std::string encoded(
                             static_cast<std::size_t>(encoded_size), '\0');
                         const int written = weechat_string_base_encode(
                             "64",
-                            reinterpret_cast<const char *>(data),
-                            static_cast<int>(len),
+                            reinterpret_cast<const char *>(data.data()),
+                            static_cast<int>(data.size()),
                             encoded.data());
                         if (written <= 0)
                             return {};
@@ -1389,16 +1389,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     {
                         struct stat st;
                         if (stat(filepath_copy.c_str(), &st) == 0)
-                        {
-                            struct tm gmt;
-                            if (gmtime_r(&st.st_mtime, &gmt))
-                            {
-                                char date_buf[32];
-                                if (strftime(date_buf, sizeof(date_buf),
-                                             "%Y-%m-%dT%H:%M:%SZ", &gmt))
-                                    c.file_date = std::string(date_buf);
-                            }
-                        }
+                            c.file_date = fmt::format(
+                                "{:%Y-%m-%dT%H:%M:%SZ}", fmt::gmtime(st.st_mtime));
                     }
 
                     // Rewind so subsequent operations (hash, dims, upload read) use
@@ -1440,13 +1432,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         EVP_DigestFinal_ex(sha256_ctx.get(), hash, &hash_len);
                         c.hashes.push_back(
                             {"sha-256",
-                             base64_encode_bytes(hash, hash_len)});
+                             base64_encode_bytes(std::span<const std::uint8_t>(
+                                 hash, hash_len))});
 
                         // SHA-512
                         EVP_DigestFinal_ex(sha512_ctx.get(), hash, &hash_len);
                         c.hashes.push_back(
                             {"sha-512",
-                             base64_encode_bytes(hash, hash_len)});
+                             base64_encode_bytes(std::span<const std::uint8_t>(
+                                 hash, hash_len))});
                     } // contexts freed here
                     // Note: upload_file is now at EOF; we will rewind before giving
                     // it to curl (plain case) or using it for encrypt pt read.
@@ -1534,10 +1528,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         }
 
                         // Base64-encode key and IV (reuses worker-thread helper).
-                        c.esfs_key_b64 = base64_encode_bytes(
-                            aes_key, sizeof(aes_key));
-                        c.esfs_iv_b64  = base64_encode_bytes(
-                            aes_iv, sizeof(aes_iv));
+                        c.esfs_key_b64 = base64_encode_bytes(aes_key);
+                        c.esfs_iv_b64  = base64_encode_bytes(aes_iv);
 
                         // Build hex(iv_bytes) + hex(key_bytes) for aesgcm:// URL fragment.
                         // Format: 24 hex chars (12-byte IV) + 64 hex chars (32-byte key).
@@ -1671,7 +1663,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         unsigned int  ct_hash_len = 0;
                         EVP_DigestFinal_ex(ct_sha_ctx.get(), ct_hash, &ct_hash_len);
                         c.esfs_cipher_hash_b64 = base64_encode_bytes(
-                            ct_hash, ct_hash_len);
+                            std::span<const std::uint8_t>(ct_hash, ct_hash_len));
 
                         // Flush + close tmp write handle; fopen again for reading.
                         ct_guard.reset(); // closes fdopen'd FILE* (which closes tmp_fd)
@@ -4466,25 +4458,17 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     // printed at the start of fetch_mam().
                     if (ch.buffer)
                     {
-                        char start_str[32] = "the beginning";
-                        char end_str[32]   = "now";
-                        if (mam_query.start)
-                        {
-                            time_t tval = *mam_query.start;
-                            struct tm *lt = localtime(&tval);
-                            strftime(start_str, sizeof(start_str), "%Y-%m-%d %H:%M", lt);
-                        }
-                        if (mam_query.end)
-                        {
-                            time_t tval = *mam_query.end;
-                            struct tm *lt = localtime(&tval);
-                            strftime(end_str, sizeof(end_str), "%Y-%m-%d %H:%M", lt);
-                        }
+                        const std::string start_str = mam_query.start
+                            ? format_local_timestamp(*mam_query.start)
+                            : "the beginning";
+                        const std::string end_str = mam_query.end
+                            ? format_local_timestamp(*mam_query.end)
+                            : "now";
                         weechat_printf_date_tags(ch.buffer, 0,
                                                  "xmpp_mam_fin,notify_none,no_log",
                                                  "%sHistory loaded: %s → %s",
                                                  weechat_prefix("network"),
-                                                 start_str, end_str);
+                                                 start_str.c_str(), end_str.c_str());
                     }
                 }
             }
