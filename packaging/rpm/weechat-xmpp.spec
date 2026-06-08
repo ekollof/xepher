@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        0.8.0
+Version:        0.8.1
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -70,6 +70,10 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Mon Jun 08 2026 Emiel Kollof <emiel@kollof.nl> - 0.8.1-1
+- Update to v0.8.1
+- Fix(packaging): skip .source ELF embed in distribution builds (fixes ~1.3 GB RPM/APK)
+
 * Mon Jun 08 2026 Emiel Kollof <emiel@kollof.nl> - 0.8.0-1
 - Update to v0.8.0
 - Feat(muc): /create command for room creation (XEP-0045)
