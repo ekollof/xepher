@@ -2321,11 +2321,6 @@ int command__setmodes([[maybe_unused]] const void *pointer,
         diff.password = password;
         ptr_channel->set_pending_setmodes(std::move(diff));
 
-        weechat_printf(buffer, "%s%s: stashed pending_setmodes on %s, "
-                              "GET id will follow",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                       ptr_channel->id.data());
-
         send_config_form_get(ptr_account, ptr_channel);
 
         weechat_printf(buffer, "%s%s: no cached config form — fetching…",
