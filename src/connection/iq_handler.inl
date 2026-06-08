@@ -3023,28 +3023,28 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         xmpp_stanza_t *service_type_el = xmpp_stanza_get_child_by_name(item, "service-type");
                         xmpp_stanza_t *anonymity_el = xmpp_stanza_get_child_by_name(item, "anonymity-mode");
 
-                        const char *name_raw    = name_el  ? xmpp_stanza_get_text_ptr(name_el)   : nullptr;
-                        const char *nusers_raw  = nusers_el ? xmpp_stanza_get_text_ptr(nusers_el) : nullptr;
-                        const char *desc_raw    = desc_el  ? xmpp_stanza_get_text_ptr(desc_el)   : nullptr;
-                        const char *language_raw = language_el ? xmpp_stanza_get_text_ptr(language_el) : nullptr;
-                        const char *service_type_raw = service_type_el ? xmpp_stanza_get_text_ptr(service_type_el) : nullptr;
-                        const char *anonymity_raw = anonymity_el ? xmpp_stanza_get_text_ptr(anonymity_el) : nullptr;
+                        const std::string name_raw    = name_el  ? stanza_element_text(name_el)   : std::string {};
+                        const std::string nusers_raw  = nusers_el ? stanza_element_text(nusers_el) : std::string {};
+                        const std::string desc_raw    = desc_el  ? stanza_element_text(desc_el)   : std::string {};
+                        const std::string language_raw = language_el ? stanza_element_text(language_el) : std::string {};
+                        const std::string service_type_raw = service_type_el ? stanza_element_text(service_type_el) : std::string {};
+                        const std::string anonymity_raw = anonymity_el ? stanza_element_text(anonymity_el) : std::string {};
 
                         std::string display = address;
-                        if (name_raw && name_raw[0])
-                            display = std::string(name_raw) + " <" + address + ">";
+                        if (!name_raw.empty())
+                            display = name_raw + " <" + address + ">";
 
                         std::vector<std::string> meta_parts;
-                        if (nusers_raw && nusers_raw[0])
-                            meta_parts.emplace_back(std::string(nusers_raw) + " users");
+                        if (!nusers_raw.empty())
+                            meta_parts.emplace_back(nusers_raw + " users");
 
                         bool is_open = false;
                         if (open_el)
                         {
-                            const char *open_raw = xmpp_stanza_get_text_ptr(open_el);
-                            if (!open_raw || !open_raw[0]
-                                || weechat_strcasecmp(open_raw, "true") == 0
-                                || std::string_view(open_raw) == "1")
+                            const std::string open_raw = stanza_element_text(open_el);
+                            if (open_raw.empty()
+                                || weechat_strcasecmp(open_raw.c_str(), "true") == 0
+                                || open_raw == "1")
                             {
                                 is_open = true;
                             }
@@ -3052,10 +3052,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         if (is_open)
                             meta_parts.emplace_back("open");
 
-                        if (language_raw && language_raw[0])
+                        if (!language_raw.empty())
                             meta_parts.emplace_back(std::string("lang=") + language_raw);
 
-                        if (service_type_raw && service_type_raw[0])
+                        if (!service_type_raw.empty())
                         {
                             std::string st = service_type_raw;
                             if (st == "xep-0045") st = "muc";
@@ -3063,7 +3063,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             meta_parts.emplace_back(std::string("type=") + st);
                         }
 
-                        if (anonymity_raw && anonymity_raw[0])
+                        if (!anonymity_raw.empty())
                             meta_parts.emplace_back(std::string("anon=") + anonymity_raw);
 
                         std::string info_str;
@@ -3086,9 +3086,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             // since picker entries cannot be updated in-place.
                             using picker_t = weechat::ui::picker<std::string>;
                             std::string sublabel = info_str;
-                            if (desc_raw && desc_raw[0])
+                            if (!desc_raw.empty())
                             {
-                                std::string desc(desc_raw);
+                                std::string desc = desc_raw;
                                 if (desc.length() > 60)
                                     desc = desc.substr(0, 57) + "...";
                                 if (!sublabel.empty()) sublabel += "  ";
@@ -3109,9 +3109,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                                      info_bracketed.c_str());
 
                             // Truncate long descriptions
-                            if (desc_raw && desc_raw[0])
+                            if (!desc_raw.empty())
                             {
-                                std::string desc(desc_raw);
+                                std::string desc = desc_raw;
                                 if (desc.length() > 120)
                                     desc = desc.substr(0, 117) + "...";
                                 weechat_printf_date_tags(cs_buf, 0, "xmpp_channel_search,notify_none",
@@ -3120,10 +3120,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
                             // If the directory result is sparse, query room disco#info for
                             // additional metadata (name/description/occupants/language).
-                            if ((!name_raw || !name_raw[0])
-                                || (!desc_raw || !desc_raw[0])
-                                || (!nusers_raw || !nusers_raw[0])
-                                || (!language_raw || !language_raw[0]))
+                            if (name_raw.empty()
+                                || desc_raw.empty()
+                                || nusers_raw.empty()
+                                || language_raw.empty())
                             {
                                 std::string disco_id = stanza::uuid(account.context);
 
@@ -4266,7 +4266,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         const char *items_node;
 
         // Resolve the node owner JID from pending_iq_jid map, then bare `from`,
-        // then bare `to` / own JID. Used by both OMEMO:2 and legacy devicelist handlers.
+        // then bare `to` / own JID. Used by axolotl devicelist/bundle PEP handlers.
         auto resolve_node_owner = [&]() -> std::string {
             std::string owner;
             if (id) {
@@ -4302,7 +4302,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                      && weechat_strcasecmp(items_node,
                                            "eu.siacs.conversations.axolotl.devicelist") == 0)
             {
-                // Recover the correct JID using the same logic as OMEMO:2.
+                // Recover the node-owner JID for this PEP push.
                 std::string node_owner_str = resolve_node_owner();
 
                 const std::string account_bare_s = ::jid(nullptr, account.jid()).bare;

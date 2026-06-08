@@ -29,6 +29,11 @@ XMPP_TEST_EXPORT std::optional<std::string> get_attribute(xmpp_stanza_t *stanza,
 
 XMPP_TEST_EXPORT std::string get_text(xmpp_stanza_t *stanza);
 
+// Text content of an element node (<value>…</value>, <name>…</name>, etc.).
+// xmpp_stanza_get_text_ptr only works on raw text nodes; this uses
+// xmpp_stanza_get_text which concatenates child text (libstrophe allocates).
+[[nodiscard]] XMPP_TEST_EXPORT std::string stanza_element_text(xmpp_stanza_t *stanza);
+
 std::chrono::system_clock::time_point get_time(const std::string& text);
 
 class XMPP_TEST_EXPORT jid {
@@ -291,9 +296,7 @@ namespace stanza {
 
         message& thread(std::string_view s) { stanza::thread t(s); child(t); return *this; }
 
-        // OMEMO:2 encrypted child
-        message& omemo_encrypted(xep0384::encrypted e) { child(e); return *this; }
-        // Legacy axolotl encrypted child
+        // Legacy axolotl encrypted child (sole supported OMEMO namespace)
         message& omemo_axolotl_encrypted(xep0384::axolotl_encrypted e) { child(e); return *this; }
         // XEP-0334 store hint
         message& omemo_store_hint(xep0384::store_hint h) { child(h); return *this; }

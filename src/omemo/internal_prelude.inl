@@ -234,10 +234,7 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
     return fmt::format("axolotl_devicelist:{}", jid);
 }
 
-// Axolotl bundles share the same Signal session store as OMEMO:2 bundles — the
-// Signal crypto is identical.  Only the XMPP stanza wrapping differs.
-// We use a separate LMDB key prefix so we can tell which namespace the bundle
-// came from when deciding which encode path to use.
+// Axolotl bundle LMDB cache key (eu.siacs.conversations.axolotl namespace).
 [[maybe_unused]] [[nodiscard]] auto key_for_axolotl_bundle(std::string_view jid, std::uint32_t device_id) -> std::string
 {
     return fmt::format("axolotl_bundle:{}:{}", jid, device_id);

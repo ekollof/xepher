@@ -302,8 +302,7 @@ private:
                 std::string sub_lc   = e.sublabel;
                 std::ranges::transform(label_lc, label_lc.begin(), ::tolower);
                 std::ranges::transform(sub_lc,   sub_lc.begin(),   ::tolower);
-                if (label_lc.find(filter_lc) != std::string::npos ||
-                    sub_lc.find(filter_lc)   != std::string::npos)
+                if (label_lc.contains(filter_lc) || sub_lc.contains(filter_lc))
                     visible_.push_back(i);
             }
         }

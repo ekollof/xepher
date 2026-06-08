@@ -18,116 +18,6 @@ namespace stanza {
     /* XEP-0384: OMEMO Encryption – stanza builder types */
     struct xep0384 {
 
-        // ── OMEMO:2 (urn:xmpp:omemo:2) ──────────────────────────────────────
-
-        // <key rid='…' [kex='true']>BASE64</key>
-        struct key : virtual public spec {
-            key(std::string_view rid, std::string_view b64, bool kex = false)
-                : spec("key")
-            {
-                attr("rid", rid);
-                if (kex) attr("kex", "true");
-                text(b64);
-            }
-        };
-
-        // <keys jid='…'> … </keys>
-        struct keys : virtual public spec {
-            explicit keys(std::string_view jid) : spec("keys") {
-                attr("jid", jid);
-            }
-
-            keys& add_key(xep0384::key k) { child(k); return *this; }
-        };
-
-        // <header sid='…'> … </header>
-        struct header : virtual public spec {
-            explicit header(std::string_view sid) : spec("header") {
-                attr("sid", sid);
-            }
-
-            header& add_keys(xep0384::keys k) { child(k); return *this; }
-        };
-
-        // <payload>BASE64</payload>
-        struct payload : virtual public spec {
-            explicit payload(std::string_view b64) : spec("payload") {
-                text(b64);
-            }
-        };
-
-        // ── OMEMO:2 (urn:xmpp:omemo:2) — NOT USED, dead code ────────────────
-        // Per coding instructions, OMEMO:2 must never be published or used as a
-        // primary path. Only the axolotl_* types below are instantiated in live code.
-        // These definitions are retained for reference only. Do not use them.
-
-        // <encrypted xmlns='urn:xmpp:omemo:2'> … </encrypted>
-        struct encrypted : virtual public spec {
-            encrypted() : spec("encrypted") {
-                xmlns<urn::xmpp::omemo::_2>();
-            }
-
-            encrypted& add_header(xep0384::header h) { child(h); return *this; }
-            encrypted& add_payload(xep0384::payload p) { child(p); return *this; }
-        };
-
-        // ── OMEMO:2 bundle elements (XEP-0384 §4.3) ──────────────────────────
-
-        // <spk id='…'>BASE64</spk>
-        struct spk : virtual public spec {
-            spk(std::string_view id, std::string_view b64) : spec("spk") {
-                attr("id", id);
-                xmlns<urn::xmpp::omemo::_2>();
-                text(b64);
-            }
-        };
-
-        // <spks>BASE64</spks>
-        struct spks : virtual public spec {
-            explicit spks(std::string_view b64) : spec("spks") {
-                xmlns<urn::xmpp::omemo::_2>();
-                text(b64);
-            }
-        };
-
-        // <ik>BASE64</ik>
-        struct ik : virtual public spec {
-            explicit ik(std::string_view b64) : spec("ik") {
-                xmlns<urn::xmpp::omemo::_2>();
-                text(b64);
-            }
-        };
-
-        // <pk id='…'>BASE64</pk>
-        struct pk : virtual public spec {
-            pk(std::string_view id, std::string_view b64) : spec("pk") {
-                attr("id", id);
-                xmlns<urn::xmpp::omemo::_2>();
-                text(b64);
-            }
-        };
-
-        // <prekeys> … </prekeys>
-        struct prekeys : virtual public spec {
-            prekeys() : spec("prekeys") {
-                xmlns<urn::xmpp::omemo::_2>();
-            }
-
-            prekeys& add_pk(xep0384::pk p) { child(p); return *this; }
-        };
-
-        // <bundle xmlns='urn:xmpp:omemo:2'> <spk/> <spks/> <ik/> <prekeys/> </bundle>
-        struct bundle : virtual public spec {
-            bundle() : spec("bundle") {
-                xmlns<urn::xmpp::omemo::_2>();
-            }
-
-            bundle& add_spk(xep0384::spk s)     { child(s); return *this; }
-            bundle& add_spks(xep0384::spks s)    { child(s); return *this; }
-            bundle& add_ik(xep0384::ik i)        { child(i); return *this; }
-            bundle& add_prekeys(xep0384::prekeys p) { child(p); return *this; }
-        };
-
         // ── Legacy axolotl (eu.siacs.conversations.axolotl) — SOLE SUPPORTED NAMESPACE ─
 
         // <key rid='…' [prekey='true']>BASE64</key>
@@ -170,7 +60,7 @@ namespace stanza {
             axolotl_header& add_iv(xep0384::axolotl_iv iv) { child(iv); return *this; }
         };
 
-        // <payload>BASE64</payload>  (same element name as OMEMO:2)
+        // <payload>BASE64</payload>
         struct axolotl_payload : virtual public spec {
             explicit axolotl_payload(std::string_view b64) : spec("payload") {
                 text(b64);

@@ -9,15 +9,13 @@ void signal_log_emit(int level, const char *message, std::size_t length, void *u
         XDEBUG("omemo: {}", text);
 }
 
-// Parse a legacy OMEMO bundle (<bundle xmlns="eu.siacs.conversations.axolotl">).
-// Conversations element names differ from OMEMO:2 (<spk>/<ik>/<pk>):
+// Parse an axolotl OMEMO bundle (<bundle xmlns="eu.siacs.conversations.axolotl">).
 //   <signedPreKeyPublic signedPreKeyId="N">base64</signedPreKeyPublic>
 //   <signedPreKeySignature>base64</signedPreKeySignature>
 //   <identityKey>base64</identityKey>
 //   <prekeys xmlns="eu.siacs.conversations.axolotl">
 //     <preKeyPublic preKeyId="N">base64</preKeyPublic> ...
 //   </prekeys>
-// Maps to the same bundle_metadata struct used by OMEMO:2.
 [[nodiscard]] auto parse_legacy_bundle(xmpp_stanza_t *bundle)
     -> std::optional<bundle_metadata>
 {

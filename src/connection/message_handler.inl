@@ -4367,8 +4367,7 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         {
             const char *vname = xmpp_stanza_get_name(v);
             if (!vname || std::string_view(vname) != "value") continue;
-            const char *vtext = xmpp_stanza_get_text_ptr(v);
-            if (vtext) values.push_back(vtext);
+            values.push_back(stanza_element_text(v));
         }
 
         // Check if field is required

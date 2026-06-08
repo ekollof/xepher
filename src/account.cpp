@@ -174,7 +174,7 @@ std::shared_ptr<xmpp_stanza_t> weechat::account::get_devicelist()
         }
     };
 
-    // Same 4-field publish-options as the OMEMO:2 devicelist
+    // Standard pubsub publish-options (open access, persistent, max items)
     struct legacy_pub_options : stanza::spec {
         legacy_pub_options() : spec("x") {
             attr("xmlns", "jabber:x:data");

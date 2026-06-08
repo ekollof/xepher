@@ -496,7 +496,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
         if (const auto bundle = extract_legacy_bundle_from_items(items))
         {
             // Store under the legacy key prefix so we know it came from the
-            // axolotl namespace; the Signal session is shared with OMEMO:2.
+            // axolotl namespace bundle for session bootstrap.
             store_string(*this, key_for_axolotl_bundle(bare_jid, remote_device_id),
                          serialize_bundle(*bundle));
             // Also store under the canonical bundle key so establish_session_from_bundle()
@@ -634,8 +634,8 @@ void weechat::xmpp::omemo::process_postponed_key_transports(weechat::account &ac
     postponed_key_transports.clear();
 }
 
-// Publish a single OMEMO:2 + legacy axolotl bundle pair if the republish was
-// deferred during global MAM catchup (bundle_republish_pending == true).
+// Republish the axolotl bundle if deferred during global MAM catchup
+// (bundle_republish_pending == true).
 // Called immediately after process_postponed_key_transports() at every
 // MAM <fin> flush point in iq_handler.inl.
 void weechat::xmpp::omemo::process_postponed_bundle_republish(weechat::account &account)

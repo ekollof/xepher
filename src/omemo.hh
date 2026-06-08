@@ -258,10 +258,6 @@ namespace weechat {
             [[nodiscard]] XMPP_TEST_EXPORT auto has_peer_traffic(xmpp_ctx_t *context,
                                                 std::string_view jid) const -> bool;
 
-            // Determine which OMEMO namespace should be used for outgoing
-            // encryption to a peer. Returns OMEMO:2 when OMEMO:2 devices are
-            // known, legacy when only legacy devices are known, and unknown when
-            // no device metadata is available yet.
             // Drop a cached bundle for a remote device.
             void clear_cached_bundle(std::string_view jid, std::uint32_t device_id);
 

@@ -44,6 +44,14 @@ XMPP_TEST_EXPORT std::string get_text(xmpp_stanza_t *stanza) {
         return {};
 }
 
+XMPP_TEST_EXPORT std::string stanza_element_text(xmpp_stanza_t *stanza)
+{
+    if (!stanza)
+        return {};
+    std::unique_ptr<char, decltype(&free)> text(xmpp_stanza_get_text(stanza), free);
+    return text ? std::string(text.get()) : std::string {};
+}
+
 XMPP_TEST_EXPORT std::chrono::system_clock::time_point get_time(const std::string& text) {
     std::tm tm = {};
     if (strptime(text.data(), "%FT%T%z", &tm)) {
