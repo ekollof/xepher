@@ -40,4 +40,14 @@ private:
     struct t_gui_buffer *buffer_;
 };
 
+// No-op output surface for protocol-only handler tests (no WeeChat buffer required).
+class NullUiPort final : public UiPort {
+public:
+    void printf(std::string_view) override {}
+    void printf_error(std::string_view) override {}
+    void printf_info(std::string_view) override {}
+    void printf_network(std::string_view) override {}
+    void printf_date_tags(std::time_t, std::string_view, std::string_view) override {}
+};
+
 }  // namespace weechat

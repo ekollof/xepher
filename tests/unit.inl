@@ -1249,6 +1249,54 @@ TEST_CASE("render_event ack builders")
     CHECK(weechat::build_incoming_displayed_render_event("", false).empty());
 }
 
+TEST_CASE("NullUiPort discards all output")
+{
+    weechat::NullUiPort ui;
+    ui.printf("plain");
+    ui.printf_error("err");
+    ui.printf_info("info");
+    ui.printf_network("net");
+    ui.printf_date_tags(0, "tag", "dated");
+    CHECK(true);
+}
+
+TEST_CASE("handler test harness applies RenderEvent to capturing ports")
+{
+    test_weechat::HandlerTestHarness harness;
+
+    const auto receipt = weechat::build_incoming_receipt_render_event("msg-1", false);
+    harness.apply(receipt);
+    REQUIRE(harness.line_store.glyph_updates.size() == 1);
+    CHECK(harness.line_store.glyph_updates.front().acked_id == "msg-1");
+    CHECK(harness.line_store.glyph_updates.front().glyph == weechat::k_glyph_delivered);
+    CHECK(harness.ui.lines.empty());
+
+    harness.clear();
+
+    weechat::RenderEvent mixed;
+    mixed.push_back(weechat::PrintAction{weechat::PrintStyle::Error, "upload failed"});
+    mixed.push_back(weechat::NicklistRemoveNickAction{"bob"});
+    harness.apply(mixed);
+
+    REQUIRE(harness.ui.errors.size() == 1);
+    CHECK(harness.ui.errors.front() == "upload failed");
+    REQUIRE(harness.buffer.nicklist_removed.size() == 1);
+    CHECK(harness.buffer.nicklist_removed.front() == "bob");
+}
+
+TEST_CASE("NullUiPort via harness for protocol-only render events")
+{
+    test_weechat::HandlerTestHarness harness;
+    weechat::RenderEvent event;
+    event.push_back(weechat::PrintAction{weechat::PrintStyle::Network, "connected"});
+
+    test_weechat::apply_render_event_to(
+        harness.null_ui, harness.buffer, harness.line_store, event);
+
+    CHECK(harness.ui.lines.empty());
+    CHECK(harness.ui.network.empty());
+}
+
 TEST_CASE("iq_vcard and iq_bookmarks helpers")
 {
     CHECK(xmpp::is_vcard4_pubsub_node("urn:xmpp:vcard4"));

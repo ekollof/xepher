@@ -261,7 +261,7 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] Replace hybrid `stanza_node` + `xmpp_stanza_add_child` in `account.cpp`, `muc_admin.inl`, `channel.cpp` RDF path
 
 ### Wave 4 — Test infrastructure
-- [ ] Extend `tests/weechat_stub.hh` for handler slice tests
-- [ ] `NullUiPort` for no-output protocol tests
+- [x] Extend `tests/weechat_stub.hh` for handler slice tests
+- [x] `NullUiPort` for no-output protocol tests
 
 **Verification:** `CXX="ccache c++" make -j$(nproc)` after each slice; manual WeeChat retest for touched features; no `/plugin reload`.
