@@ -889,88 +889,42 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     const bool         access_open       = post.access_open;
     const bool         is_comment        = !reply_to_id.empty();
 
-    // Build Atom <entry> using stanza builder helpers (dynamic/conditional children require runtime)
-    auto make_sp = [this](const char *tag, const char *ns = nullptr,
-                          std::initializer_list<std::pair<const char*,const char*>> attrs = {})
-        -> std::shared_ptr<xmpp_stanza_t>
+    // Build Atom <entry> via fluent XEP-0277 builder.
+    std::string_view title_text;
+    std::string body_excerpt;
+    if (is_comment)
     {
-        return stanza_node(context, tag, ns, attrs);
-    };
-    auto make_text_el = [this](const char *tag, std::string_view text_sv,
-                               const char *ns = nullptr)
-        -> std::shared_ptr<xmpp_stanza_t>
+        title_text = body;
+    }
+    else if (!post_title.empty())
     {
-        return stanza_text_node(context, tag, std::string(text_sv).c_str(), ns);
-    };
-
-    auto entry = make_sp("entry", "http://www.w3.org/2005/Atom");
-
-    // <title type='text'>
-    // For comments (XEP-0277 §3.2) the body goes into <title> and there is no
-    // <content> element.  For regular posts, use the explicit title when provided,
-    // or fall back to the first 60 characters of the body (RFC 4287 §4.2.14 requires
-    // <title> on every entry).
+        title_text = post_title;
+    }
+    else
     {
-        std::string_view title_text;
-        std::string body_excerpt;
-        if (is_comment)
-        {
-            title_text = body;
-        }
-        else if (!post_title.empty())
-        {
-            title_text = post_title;
-        }
-        else
-        {
-            // Derive title from body: up to first newline or 60 chars
-            std::string_view bv(body);
-            auto nl = bv.find('\n');
-            body_excerpt = std::string(bv.substr(0, std::min(nl == std::string_view::npos
-                                                             ? bv.size() : nl,
-                                                             size_t{60})));
-            title_text = body_excerpt;
-        }
-        auto title_el = make_sp("title", nullptr, {{"type", "text"}});
-        auto t = make_text_el("", std::string(title_text));
-        xmpp_stanza_add_child(title_el.get(), t.get());
-        xmpp_stanza_add_child(entry.get(), title_el.get());
+        // Derive title from body: up to first newline or 60 chars (RFC 4287 §4.2.14).
+        std::string_view bv(body);
+        auto nl = bv.find('\n');
+        body_excerpt = std::string(bv.substr(0, std::min(nl == std::string_view::npos
+                                                         ? bv.size() : nl,
+                                                         size_t{60})));
+        title_text = body_excerpt;
     }
 
-    // <id>
-    {
-        auto id_el = make_text_el("id", atom_id);
-        xmpp_stanza_add_child(entry.get(), id_el.get());
-    }
+    const std::string bare_jid = ::jid(nullptr, jid()).bare;
+    const std::string author_name = bare_jid.empty() ? jid() : bare_jid;
+    const std::string author_uri = fmt::format("xmpp:{}", bare_jid);
 
-    // <published> <updated>
-    {
-        auto pub_el = make_text_el("published", ts_str);
-        xmpp_stanza_add_child(entry.get(), pub_el.get());
-        auto upd_el = make_text_el("updated", ts_str);
-        xmpp_stanza_add_child(entry.get(), upd_el.get());
-    }
-
-    // <author>
-    {
-        const std::string bare_jid = ::jid(nullptr, jid()).bare;
-        auto author_el = make_sp("author");
-        auto name_el = make_text_el("name", bare_jid.empty() ? jid() : bare_jid);
-        xmpp_stanza_add_child(author_el.get(), name_el.get());
-        std::string xmpp_uri = fmt::format("xmpp:{}", bare_jid);
-        auto uri_el = make_text_el("uri", xmpp_uri);
-        xmpp_stanza_add_child(author_el.get(), uri_el.get());
-        xmpp_stanza_add_child(entry.get(), author_el.get());
-    }
+    stanza::xep0277::entry entry_spec;
+    entry_spec.title_text(title_text)
+        .atom_id(atom_id)
+        .published(ts_str)
+        .updated(ts_str)
+        .author(author_name, author_uri);
 
     // <content type='text'> — omitted for comments (body is in <title> per XEP-0277 §3.2)
     if (!is_comment)
-    {
-        auto content_el = make_sp("content", nullptr, {{"type", "text"}});
-        auto ct = make_text_el("", body);
-        xmpp_stanza_add_child(content_el.get(), ct.get());
-        xmpp_stanza_add_child(entry.get(), content_el.get());
-    }
+        entry_spec.content_text(body);
 
     // <file-sharing xmlns='urn:xmpp:sfs:0'> for each embed (XEP-0447)
     for (const auto &emb : post.embeds)
@@ -995,13 +949,10 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
         auto sources_spec = stanza::xep0447::sources()
             .add(stanza::xep0447::url_data(emb.get_url));
 
-        auto fs_spec = stanza::xep0447::file_sharing()
+        entry_spec.file_sharing(stanza::xep0447::file_sharing()
             .disposition(emb.disposition())
             .file(file_spec)
-            .sources(sources_spec);
-
-        auto fs_built = fs_spec.build(context);
-        xmpp_stanza_add_child(entry.get(), fs_built.get());
+            .sources(sources_spec));
     }
 
     // <thr:in-reply-to> for replies
@@ -1016,12 +967,9 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
         const std::string reply_xmpp_uri = fmt::format(
             "xmpp:{}?;node={};item={}", pub_service, reply_ref_node, reply_to_id);
         const std::string reply_atom_id = feed_atom_id_get(reply_feed_key, reply_to_id);
-        auto reply_el = make_sp("thr:in-reply-to", nullptr,
-                                {{"xmlns:thr", "http://purl.org/syndication/thread/1.0"},
-                                 {"ref", reply_atom_id.empty() ? reply_xmpp_uri.c_str()
-                                                               : reply_atom_id.c_str()},
-                                 {"href", reply_xmpp_uri.c_str()}});
-        xmpp_stanza_add_child(entry.get(), reply_el.get());
+        entry_spec.in_reply_to(
+            reply_atom_id.empty() ? reply_xmpp_uri : reply_atom_id,
+            reply_xmpp_uri);
     }
 
     // Determine target service/node
@@ -1039,28 +987,15 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
             fmt::format("urn:xmpp:microblog:0:comments/{}", item_uuid);
         const std::string comments_xmpp_uri = fmt::format(
             "xmpp:{}?;node={}", target_service, comments_node_name);
-        auto replies_el = make_sp("link", nullptr,
-                                  {{"rel",   "replies"},
-                                   {"title", "comments"},
-                                   {"href",  comments_xmpp_uri.c_str()}});
-        xmpp_stanza_add_child(entry.get(), replies_el.get());
+        entry_spec.link("replies", comments_xmpp_uri, "comments");
     }
 
-    // <generator>
-    {
-        auto gen_el = make_sp("generator", nullptr,
-                              {{"uri", "https://github.com/ekollof/xepher"},
-                               {"version", WEECHAT_XMPP_PLUGIN_VERSION}});
-        auto gt = make_text_el("", "Xepher");
-        xmpp_stanza_add_child(gen_el.get(), gt.get());
-        xmpp_stanza_add_child(entry.get(), gen_el.get());
-    }
+    entry_spec.generator("Xepher", "https://github.com/ekollof/xepher",
+                         WEECHAT_XMPP_PLUGIN_VERSION);
 
-    // Wrap in <item id='uuid'><entry/></item> → <publish> → <pubsub> → <iq>
-    // using fluent stanza::spec builders for the wrapper (Atom entry stays raw).
     auto pubsub_el = stanza::xep0060::pubsub()
         .publish(stanza::xep0060::publish(target_node)
-            .item(stanza::xep0060::item().id(item_uuid).payload(entry)));
+            .item(stanza::xep0060::item().id(item_uuid).payload(entry_spec)));
 
     // publish-options (only when access_open)
     if (access_open)

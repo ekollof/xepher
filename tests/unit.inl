@@ -1872,6 +1872,54 @@ TEST_CASE("XEP-0359 origin-id builder")
     xmpp_stanza_release(root);
 }
 
+TEST_CASE("XEP-0277 Atom entry builder")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    stanza::xep0277::entry entry;
+    entry.title_text("Hello world")
+        .atom_id("tag:example.org,2026-06-08;posts/abc")
+        .published("2026-06-08T12:00:00Z")
+        .updated("2026-06-08T12:00:00Z")
+        .author("alice@example.org", "xmpp:alice@example.org")
+        .content_text("Body text")
+        .link("replies", "xmpp:alice@example.org?;node=urn:xmpp:microblog:0:comments/abc",
+              "comments")
+        .generator("Xepher", "https://github.com/ekollof/xepher", "1.0.0");
+
+    auto built = entry.build(env.ctx);
+    std::string xml = stanza_to_xml(env.ctx, built.get());
+
+    CHECK(xml.find("xmlns=\"http://www.w3.org/2005/Atom\"") != std::string::npos);
+    CHECK(xml.find("<title type=\"text\">Hello world</title>") != std::string::npos);
+    CHECK(xml.find("<content type=\"text\">Body text</content>") != std::string::npos);
+    CHECK(xml.find("rel=\"replies\"") != std::string::npos);
+    CHECK(xml.find("<generator uri=\"https://github.com/ekollof/xepher\"") != std::string::npos);
+}
+
+TEST_CASE("XEP-0511 rdf:Description link metadata builder")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    stanza::xep0511::rdf_description rdf("https://example.org/page");
+    rdf.og("og:title", "Example Page")
+       .og("og:url", "https://example.org/page")
+       .og("og:description", "");
+
+    auto built = rdf.build(env.ctx);
+    std::string xml = stanza_to_xml(env.ctx, built.get());
+
+    CHECK(xml.find("rdf:Description") != std::string::npos);
+    CHECK(xml.find("xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"") != std::string::npos);
+    CHECK(xml.find("xmlns:og=\"https://ogp.me/ns#\"") != std::string::npos);
+    CHECK(xml.find("rdf:about=\"https://example.org/page\"") != std::string::npos);
+    CHECK(xml.find("og:title") != std::string::npos);
+    CHECK(xml.find("Example Page") != std::string::npos);
+    CHECK(xml.find("og:description") == std::string::npos);
+}
+
 TEST_CASE("XEP-0085 chatstate active builder")
 {
     unit_strophe_env env;

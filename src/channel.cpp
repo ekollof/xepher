@@ -1661,26 +1661,11 @@ void weechat::channel::send_link_preview(std::string_view to, std::string_view u
                .no_store()
                .no_copy();
 
-            // <rdf:Description xmlns:rdf="..." xmlns:og="..." rdf:about="URL">
-            // NOTE: xmpp_stanza_set_ns() sets the *default* namespace (xmlns=""),
-            // which does NOT bind a prefix.  We must use explicit xmlns:rdf= and
-            // xmlns:og= attributes so that Expat on the receiving end can resolve
-            // the rdf: and og: prefixes used in element/attribute names.
-            auto rdf = stanza_node(ctx, "rdf:Description", nullptr,
-                {{"xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
-                 {"xmlns:og",  "https://ogp.me/ns#"},
-                 {"rdf:about", task->url.data()}});
-
-            auto add_og_child = [&](const char *elem_name, std::string_view text) {
-                if (text.empty()) return;
-                auto child = stanza_text_node(ctx, elem_name, text.data());
-                xmpp_stanza_add_child(rdf.get(), child.get());
-            };
-
-            add_og_child("og:title",       og_title);
-            add_og_child("og:description", og_description);
-            add_og_child("og:url",         og_url);
-            add_og_child("og:image",       og_image);
+            stanza::xep0511::rdf_description rdf(task->url);
+            rdf.og("og:title",       og_title)
+               .og("og:description", og_description)
+               .og("og:url",         og_url)
+               .og("og:image",       og_image);
 
             msg.child(rdf);
 

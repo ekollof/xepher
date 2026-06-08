@@ -232,6 +232,8 @@ namespace stanza {
 #include "xep-0437.inl"
 #include "xep-0444.inl"
 #include "xep-0447.inl"
+#include "xep-0277.inl"
+#include "xep-0511.inl"
 #include "xep-0461.inl"
 #include "xep-0466.inl"
 #include "rfc-6121.inl"

@@ -258,7 +258,7 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] `BufferPort` (v2) — `buffer_port.{hh,cpp}` (search/nicklist); `channel.cpp` adapter
 
 ### Wave 3 — Outbound cleanup
-- [ ] Replace hybrid `stanza_node` + `xmpp_stanza_add_child` in `account.cpp`, `muc_admin.inl`, `channel.cpp` RDF path
+- [x] Replace hybrid `stanza_node` + `xmpp_stanza_add_child` in `account.cpp`, `muc_admin.inl`, `channel.cpp` RDF path
 
 ### Wave 4 — Test infrastructure
 - [ ] Extend `tests/weechat_stub.hh` for handler slice tests
