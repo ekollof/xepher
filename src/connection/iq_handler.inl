@@ -6,6 +6,19 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     (void) top_level;
     append_raw_xml_trace(account, "RECV", stanza);
 
+    {
+        const char *dbg_id = xmpp_stanza_get_id(stanza);
+        const char *dbg_type = xmpp_stanza_get_attribute(stanza, "type");
+        if (dbg_id && dbg_type && weechat_strcasecmp(dbg_type, "result") == 0
+            && account.muc_owner_queries.contains(dbg_id))
+        {
+            weechat_printf(account.buffer, "%s%s: iq_handler received result for "
+                                          "tracked muc_owner id=%s",
+                           weechat_prefix("error"),
+                           WEECHAT_XMPP_PLUGIN_NAME, dbg_id);
+        }
+    }
+
     xmpp_stanza_t *reply, *query, *text, *fin;
     xmpp_stanza_t         *pubsub, *items, *item;
     xmpp_stanza_t         *storage, *conference, *nick;
