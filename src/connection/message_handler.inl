@@ -39,7 +39,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     };
 
     weechat::channel *channel, *parent_channel;
-    xmpp_stanza_t *x, *body, *delay, *topic, *replace, *request, *markable, *composing, *sent, *received, *result, *forwarded, *event, *items, *item, *encrypted;
+    xmpp_stanza_t *x, *body, *delay, *topic, *replace, *composing, *sent, *received, *result, *forwarded, *event, *items, *item, *encrypted;
     const char *type, *from, *nick, *from_bare, *to, *to_bare, *id, *thread, *replace_id, *timestamp;
     const char *text = nullptr;
     std::string intext_storage;
@@ -1602,68 +1602,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             }
         }
 
-        // XEP-0184: Message Delivery Receipts — handle incoming <received> from others
-        // Helper: walk the buffer backwards and update the status glyph on the line
-        // tagged id_<acked_id> (strips any existing glyph suffix, appends new_glyph).
-        auto update_line_glyph = [](weechat::channel *ch,
-                                    const char       *acked_id,
-                                    std::string_view  new_glyph)
+        // XEP-0184 / XEP-0333: inbound delivery receipt or displayed marker
         {
-            void *lines     = weechat_hdata_pointer(hdata_buffer, ch->buffer, "lines");
-            void *last_line = lines ? weechat_hdata_pointer(hdata_lines, lines, "last_line") : nullptr;
-            std::string target_tag = std::string("id_") + acked_id;
-            while (last_line)
+            const auto view = ::xmpp::StanzaView(stanza);
+            if (::xmpp::stanza_is_receipt_ack(view))
             {
-                void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
-                if (line_data)
+                if (auto ack = ::xmpp::parse_incoming_receipt(view))
                 {
-                    int tags_count = weechat_hdata_integer(hdata_line_data, line_data, "tags_count");
-                    bool found = false;
-                    for (int n = 0; n < tags_count && !found; n++)
-                    {
-                        auto str_tag = fmt::format("{}|tags_array", n);
-                        const char *tag = weechat_hdata_string(hdata_line_data, line_data, str_tag.c_str());
-                        if (tag && weechat_strcasecmp(tag, target_tag.c_str()) == 0)
-                            found = true;
-                    }
-                    if (found)
-                    {
-                        const char *cur_msg = weechat_hdata_string(hdata_line_data, line_data, "message");
-                        std::string new_msg = cur_msg ? cur_msg : "";
-                        // Strip any pending/delivered/seen glyph suffix
-                        for (const char *glyph : { " ⌛", " ✓", " ✓✓" })
-                        {
-                            std::string g(glyph);
-                            if (new_msg.size() >= g.size() &&
-                                new_msg.compare(new_msg.size() - g.size(), g.size(), g) == 0)
-                            {
-                                new_msg.erase(new_msg.size() - g.size());
-                                break;
-                            }
-                        }
-                        new_msg += new_glyph;
-                        struct t_hashtable *ht = weechat_hashtable_new(4,
-                            WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING, nullptr, nullptr);
-                        weechat_hashtable_set(ht, "message", new_msg.c_str());
-                        weechat_hdata_update(hdata_line_data, line_data, ht);
-                        weechat_hashtable_free(ht);
-                        break;
-                    }
-                }
-                last_line = weechat_hdata_pointer(hdata_line, last_line, "prev_line");
-            }
-        };
-
-        {
-            xmpp_stanza_t *receipt_received = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "received", "urn:xmpp:receipts");
-            if (receipt_received)
-            {
-                const char *receipt_from = xmpp_stanza_get_from(stanza);
-                const char *acked_id = xmpp_stanza_get_id(receipt_received);
-                if (receipt_from && acked_id)
-                {
-                    std::string bare_s = ::jid(nullptr, receipt_from).bare;
+                    const std::string bare_s = ::jid(nullptr, ack->from.c_str()).bare;
                     weechat::channel *ch = nullptr;
                     if (auto ch_it = account.channels.find(bare_s); ch_it != account.channels.end())
                     {
@@ -1672,26 +1618,17 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     }
                     if (ch && ch->type != weechat::channel::chat_type::MUC)
                     {
-                        // Find the sent message line tagged id_<acked_id> and update glyph ⌛→✓
-                        update_line_glyph(ch, acked_id, " ✓");
+                        (void)weechat::line_store_update_line_glyph_by_tag(
+                            ch->buffer, ack->acked_id, weechat::k_glyph_delivered);
                     }
                 }
                 return 1;
             }
-        }
-
-        // XEP-0333: Chat Markers — handle <displayed> from others (v1.0+; <read> removed)
-        {
-            xmpp_stanza_t *marker_displayed = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "displayed", "urn:xmpp:chat-markers:0");
-            xmpp_stanza_t *marker = marker_displayed;
-            if (marker)
+            if (::xmpp::stanza_is_displayed_ack(view))
             {
-                const char *marker_from = xmpp_stanza_get_from(stanza);
-                const char *acked_id = xmpp_stanza_get_id(marker);
-                if (marker_from && acked_id)
+                if (auto ack = ::xmpp::parse_incoming_displayed(view))
                 {
-                    std::string bare_s = ::jid(nullptr, marker_from).bare;
+                    const std::string bare_s = ::jid(nullptr, ack->from.c_str()).bare;
                     weechat::channel *ch = nullptr;
                     if (auto ch_it = account.channels.find(bare_s); ch_it != account.channels.end())
                     {
@@ -1700,8 +1637,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     }
                     if (ch && ch->type != weechat::channel::chat_type::MUC)
                     {
-                        // Find the sent message line tagged id_<acked_id> and update glyph ⌛/✓→✓✓
-                        update_line_glyph(ch, acked_id, " ✓✓");
+                        (void)weechat::line_store_update_line_glyph_by_tag(
+                            ch->buffer, ack->acked_id, weechat::k_glyph_seen);
                     }
                 }
                 return 1;
@@ -1834,15 +1771,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     replace = xmpp_stanza_get_child_by_name_and_ns(stanza, "replace",
                                                    "urn:xmpp:message-correct:0");
     replace_id = replace ? xmpp_stanza_get_id(replace) : nullptr;
-    request = xmpp_stanza_get_child_by_name_and_ns(stanza, "request",
-                                                   "urn:xmpp:receipts");
-    markable = xmpp_stanza_get_child_by_name_and_ns(stanza, "markable",
-                                                    "urn:xmpp:chat-markers:0");
-
-    // XEP-0203: check for delayed delivery early so we can suppress
-    // receipts/markers for offline-stored messages (see receipt block below).
-    const bool is_delayed_delivery = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "delay", "urn:xmpp:delay") != nullptr;
+    const auto msg_view = ::xmpp::StanzaView(stanza);
+    const bool receipt_requested = ::xmpp::stanza_requests_receipt(msg_view);
+    const bool marker_markable = ::xmpp::stanza_is_marker_markable(msg_view);
+    const bool is_delayed_delivery = ::xmpp::stanza_is_delayed_delivery(msg_view);
 
     const char *channel_id = account.jid() == from_bare ? to_bare : from_bare;
     parent_channel = nullptr;
@@ -1888,40 +1820,38 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // for a stale offline message creates a spurious error→receipt loop when the
     // remote user has no active session on their server.
     const bool is_muc_channel = channel && channel->type == weechat::channel::chat_type::MUC;
-    if (id && (markable || request) && !is_self_outbound_copy && !is_muc_channel && !is_mam_replay && !is_delayed_delivery)
+    if (id)
     {
-        weechat::channel::unread unread_val;
-        unread_val.id = id;
-        unread_val.thread = thread ? std::optional<std::string>(thread) : std::nullopt;
-        // XEP-0490: preserve server stanza-id for correct MDS PEP publish
-        unread_val.stanza_id = stanza_id ? std::optional<std::string>(stanza_id) : std::nullopt;
-        unread_val.stanza_id_by = stanza_id_by ? std::optional<std::string>(stanza_id_by) : std::nullopt;
-        auto unread = &unread_val;
+        ::xmpp::AckReplyInput ack_input;
+        ack_input.message_id = id;
+        ack_input.reply_to = from;
+        ack_input.message_type = type ? type : "chat";
+        ack_input.receipt_requested = receipt_requested;
+        ack_input.marker_markable = marker_markable;
+        if (thread)
+            ack_input.thread = thread;
+        if (stanza_id)
+            ack_input.stanza_id = stanza_id;
+        if (stanza_id_by)
+            ack_input.stanza_id_by = stanza_id_by;
 
-        // XEP-0184 / XEP-0333: reply MUST go to the full JID (from= of the
-        // incoming stanza, which includes the resource).  Sending to the bare
-        // JID causes the server to fan-out to all active resources, so every
-        // other device of the contact sees the receipt/marker.
-        // XEP-0334: receipt/marker replies MUST NOT be stored.
-        // Use the incoming message type so routing is correct.
-        stanza::message msg;
-        msg.to(from).type(type ? type : "chat");
+        ::xmpp::AckReplySuppress suppress;
+        suppress.self_outbound_copy = is_self_outbound_copy;
+        suppress.muc_channel = is_muc_channel;
+        suppress.mam_replay = is_mam_replay;
+        suppress.delayed_delivery = is_delayed_delivery;
 
-        if (request)
-            msg.receipt_received(unread->id);
+        if (auto ack_reply = ::xmpp::build_ack_reply(ack_input, suppress))
+        {
+            account.connection.send(ack_reply->reply.build(account.context).get());
 
-        if (markable)
-            msg.chat_marker_displayed(unread->id);
-
-        if (unread->thread.has_value())
-            msg.thread(*unread->thread);
-
-        // XEP-0334: receipt/marker replies MUST NOT be stored
-        msg.no_store();
-
-        account.connection.send(msg.build(account.context).get());
-
-        channel->unreads.push_back(*unread);
+            weechat::channel::unread unread;
+            unread.id = ack_reply->unread.id;
+            unread.thread = ack_reply->unread.thread;
+            unread.stanza_id = ack_reply->unread.stanza_id;
+            unread.stanza_id_by = ack_reply->unread.stanza_id_by;
+            channel->unreads.push_back(unread);
+        }
     }
 
     // XEP-0249: Direct MUC Invitations

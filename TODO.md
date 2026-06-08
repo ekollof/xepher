@@ -233,7 +233,7 @@ Split inbound handlers into **parse → domain struct → render** so protocol l
 unit-tested without WeeChat. One PR per slice; keep behavior identical.
 
 **`message_handler.inl` slices (in suggested order):**
-- [ ] Receipts / markers (XEP-0184, 0333) — parse with `StanzaView`, render via `UiPort`
+- [x] Receipts / markers (XEP-0184, 0333) — `message_ack.{hh,cpp}` + `line_store.{hh,cpp}`
 - [ ] Chat states / typing (XEP-0085, 0308)
 - [ ] Carbons + MAM replay dispatch (XEP-0280, 0313)
 - [ ] Body + styling (XEP-0393/0394) + SIMS/SFS display
@@ -251,7 +251,7 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 
 **Shared infrastructure for Wave 2:**
 - [ ] `UiAction` / `RenderEvent` sum type (print, nicklist, line-update-by-tag)
-- [ ] `LineStorePort` — wrap `weechat_hdata_*` from `buffer.cpp` / `history.inl`
+- [x] `LineStorePort` — `line_store_update_line_glyph_by_tag` in `src/weechat/line_store.{hh,cpp}`
 - [ ] `BufferPort` (v2) — create/search/nicklist behind interface
 
 ### Wave 3 — Outbound cleanup

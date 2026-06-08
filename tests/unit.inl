@@ -26,6 +26,8 @@
 #include "../src/xmpp/node.hh"
 #include "../src/xmpp/stanza_view.hh"
 #include "../src/xmpp/iq_handlers.hh"
+#include "../src/xmpp/message_ack.hh"
+#include "../src/weechat/line_store.hh"
 #include "../src/weechat/runtime_port.hh"
 #include "weechat_stub.hh"
 
@@ -747,6 +749,113 @@ static std::optional<std::string> text_opt(xmpp_stanza_t *el)
     if (t.empty())
         return std::nullopt;
     return t;
+}
+
+TEST_CASE("parse_incoming_receipt from StanzaView")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message from='bob@example.org/phone' type='chat'>"
+        "<received xmlns='urn:xmpp:receipts' id='msg-42'/>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto view = xmpp::StanzaView(msg);
+    CHECK(xmpp::stanza_is_receipt_ack(view));
+    CHECK_FALSE(xmpp::stanza_is_displayed_ack(view));
+
+    auto ack = xmpp::parse_incoming_receipt(view);
+    REQUIRE(ack.has_value());
+    CHECK(ack->from == "bob@example.org/phone");
+    CHECK(ack->acked_id == "msg-42");
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("parse_incoming_displayed from StanzaView")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message from='bob@example.org/phone' type='chat'>"
+        "<displayed xmlns='urn:xmpp:chat-markers:0' id='orig-7'/>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto view = xmpp::StanzaView(msg);
+    CHECK(xmpp::stanza_is_displayed_ack(view));
+    CHECK_FALSE(xmpp::stanza_is_receipt_ack(view));
+
+    auto ack = xmpp::parse_incoming_displayed(view);
+    REQUIRE(ack.has_value());
+    CHECK(ack->from == "bob@example.org/phone");
+    CHECK(ack->acked_id == "orig-7");
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("build_ack_reply respects suppress policy")
+{
+    xmpp::AckReplyInput input;
+    input.message_id = "m1";
+    input.reply_to = "bob@example.org/phone";
+    input.message_type = "chat";
+    input.receipt_requested = true;
+    input.marker_markable = true;
+
+    xmpp::AckReplySuppress suppress;
+    CHECK(xmpp::build_ack_reply(input, suppress).has_value());
+
+    suppress.muc_channel = true;
+    CHECK_FALSE(xmpp::build_ack_reply(input, suppress).has_value());
+
+    suppress.muc_channel = false;
+    suppress.mam_replay = true;
+    CHECK_FALSE(xmpp::build_ack_reply(input, suppress).has_value());
+
+    suppress.mam_replay = false;
+    suppress.delayed_delivery = true;
+    CHECK_FALSE(xmpp::build_ack_reply(input, suppress).has_value());
+}
+
+TEST_CASE("build_ack_reply builds receipt and displayed children")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp::AckReplyInput input;
+    input.message_id = "m1";
+    input.reply_to = "bob@example.org/phone";
+    input.message_type = "chat";
+    input.receipt_requested = true;
+    input.marker_markable = true;
+    input.thread = "thr-1";
+
+    auto built = xmpp::build_ack_reply(input, {});
+    REQUIRE(built.has_value());
+
+    auto stanza_sp = built->reply.build(env.ctx);
+    const std::string xml = stanza_to_xml(env.ctx, stanza_sp.get());
+
+    CHECK(xml.find("to=\"bob@example.org/phone\"") != std::string::npos);
+    CHECK(xml.find("type=\"chat\"") != std::string::npos);
+    CHECK(xml.find("urn:xmpp:receipts") != std::string::npos);
+    CHECK(xml.find("urn:xmpp:chat-markers:0") != std::string::npos);
+    CHECK(xml.find("no-store") != std::string::npos);
+    CHECK(built->unread.id == "m1");
+    CHECK(built->unread.thread == "thr-1");
+}
+
+TEST_CASE("strip_status_glyph_suffix removes trailing delivery glyphs")
+{
+    CHECK(weechat::strip_status_glyph_suffix("hello") == "hello");
+    CHECK(weechat::strip_status_glyph_suffix("hello ✓") == "hello");
+    CHECK(weechat::strip_status_glyph_suffix("hello ✓✓") == "hello");
+    CHECK(weechat::strip_status_glyph_suffix("hello ⌛") == "hello");
+    CHECK(weechat::strip_status_glyph_suffix("hello ✓") + " ✓✓" == "hello ✓✓");
 }
 
 TEST_CASE("XEP-0184 receipt request builder")
