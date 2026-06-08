@@ -151,6 +151,20 @@ namespace weechat
             time_t fetched_at = 0;
         };
 
+        // XEP-0045 §10.2: when /setmodes --confirm runs without a cached
+        // form, we stash the requested diff here and send a GET. The
+        // config_get result handler picks it up, applies it to the
+        // fetched form, and submits a full read-modify-write. This is the
+        // robust path that preserves all server-side fields per XEP-0004
+        // §3.4 (partial submits are rejected by some servers).
+        struct pending_setmodes_diff {
+            // Index mapping: 0=m, 1=i, 2=k, 3=p, 4=P, 5=N, 6=S
+            bool want_set[7]   = {false, false, false, false, false, false, false};
+            bool want_clear[7] = {false, false, false, false, false, false, false};
+            std::string password;       // only meaningful when want_set[2]
+            time_t queued_at = 0;
+        };
+
     private:
         topic topic;
 
@@ -163,6 +177,12 @@ namespace weechat
         // Populated by the muc#owner IQ result handler; consumed by /setmodes
         // to compute diffs and re-submit.
         std::optional<room_config_form> last_config_form;
+
+        // XEP-0045 §10.2: pending /setmodes --confirm diff waiting for a form
+        // GET to complete. Set by command__setmodes when no form is cached;
+        // consumed by the config_get result handler which applies the diff
+        // and submits a full read-modify-write.
+        std::optional<pending_setmodes_diff> pending_setmodes;
 
         /* mpim */
         std::optional<std::string> creator;
@@ -275,6 +295,23 @@ namespace weechat
         // /setmodes submit (form is now stale — next op re-fetches) and by
         // disconnect cleanup.
         void clear_config_form() { last_config_form.reset(); }
+
+        // XEP-0045 §10.2: stash a /setmodes --confirm diff for the form GET
+        // result handler to apply. Pass the diff by value; the channel
+        // moves it into the optional.
+        void set_pending_setmodes(pending_setmodes_diff d)
+        {
+            d.queued_at = ::time(nullptr);
+            pending_setmodes = std::move(d);
+        }
+
+        // XEP-0045 §10.2: take ownership of the pending diff (if any). The
+        // caller (the config_get result handler) gets the diff and the
+        // channel's optional is reset to nullopt.
+        std::optional<pending_setmodes_diff> take_pending_setmodes()
+        {
+            return std::move(pending_setmodes);
+        }
 
         // XEP-0045: read accessors for room metadata.
         const muc_info& get_muc_info() const { return muc_info_; }

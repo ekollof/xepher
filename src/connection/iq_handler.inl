@@ -2447,6 +2447,97 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                     field = xmpp_stanza_get_next(field);
                                 }
                             }
+
+                            // If /setmodes --confirm is waiting on this form
+                            // (no cached form was available at submit time),
+                            // take the pending diff, apply it to the form,
+                            // and send the submit. Single-shot apply.
+                            auto pending = ch.take_pending_setmodes();
+                            if (pending.has_value())
+                            {
+                                // Apply the diff in place.
+                                for (int i = 0; i < 7; ++i)
+                                {
+                                    if (pending->want_set[i] || pending->want_clear[i])
+                                    {
+                                        // Map index → field var
+                                        static constexpr const char *const vars[7] = {
+                                            "muc#roomconfig_moderatedroom",
+                                            "muc#roomconfig_membersonly",
+                                            "muc#roomconfig_passwordprotectedroom",
+                                            "muc#roomconfig_publicroom",
+                                            "muc#roomconfig_persistentroom",
+                                            "muc#roomconfig_whois",
+                                            "muc#roomconfig_whois",
+                                        };
+                                        std::string val;
+                                        if (i == 5 && pending->want_set[5])       val = "anyone";
+                                        else if (i == 6 && pending->want_set[6])  val = "moderators";
+                                        else if (i == 5 || i == 6)                val = "moderators"; // want_clear
+                                        else                                     val = pending->want_set[i] ? "1" : "0";
+                                        for (auto &fld : form.fields)
+                                        {
+                                            if (fld.var == vars[i])
+                                            {
+                                                fld.values = { val };
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                // +k also sets muc#roomconfig_roomsecret
+                                if (pending->want_set[2])
+                                {
+                                    for (auto &fld : form.fields)
+                                    {
+                                        if (fld.var == "muc#roomconfig_roomsecret")
+                                        {
+                                            fld.values = { pending->password };
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                ch.store_config_form(form);  // cache the mutated form
+
+                                // Build the submit.
+                                stanza::xep0004::form submit("submit");
+                                submit.add_hidden("FORM_TYPE",
+                                    "http://jabber.org/protocol/muc#roomconfig");
+                                for (const auto &fld : form.fields)
+                                {
+                                    stanza::xep0004::field fd(fld.var);
+                                    if (!fld.type.empty()) fd.type(fld.type);
+                                    for (const auto &v : fld.values)
+                                        fd.value(v);
+                                    submit.add_field(fd);
+                                }
+
+                                std::string set_id = stanza::uuid(account.context);
+                                weechat::account::muc_owner_query_info set_info{
+                                    info.room_jid,
+                                    out,
+                                    weechat::account::muc_owner_kind::config_set
+                                };
+                                account.muc_owner_queries[set_id] = set_info;
+
+                                stanza::xep0045::xep0045owner::query q;
+                                q.form(submit);
+                                auto set_iq = stanza::iq().type("set")
+                                                  .to(info.room_jid).id(set_id);
+                                set_iq.muc_owner(q);
+                                account.connection.send(
+                                    set_iq.build(account.context).get());
+
+                                weechat_printf(out, "%s%s: room config form fetched and "
+                                               "/setmodes diff applied — submit sent",
+                                               weechat_prefix("network"),
+                                               WEECHAT_XMPP_PLUGIN_NAME);
+                                return true;
+                            }
+
+                            // No pending diff — just cache the form and
+                            // tell the user.
                             ch.store_config_form(std::move(form));
                             weechat_printf(out, "%s%s: room config form cached for %s — "
                                            "use /setmodes to apply changes",
@@ -2471,7 +2562,21 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                        info.room_jid.c_str());
                         if (auto ch_it = account.channels.find(info.room_jid);
                             ch_it != account.channels.end())
-                            ch_it->second.clear_config_form();
+                        {
+                            auto& ch = ch_it->second;
+                            ch.clear_config_form();
+                            // Refresh disco#info so /modes and the status bar
+                            // show the new state. Drop the idempotency marker
+                            // so the query actually goes out, then send it.
+                            account.muc_modes_fetched.erase(info.room_jid);
+                            std::string disco_id = stanza::uuid(account.context);
+                            account.muc_modes_queries[disco_id] = info.room_jid;
+                            account.connection.send(
+                                stanza::iq().type("get")
+                                    .to(info.room_jid).id(disco_id)
+                                    .xep0030().query()
+                                    .build(account.context).get());
+                        }
                         return true;
                     }
                     case weechat::account::muc_owner_kind::destroy:

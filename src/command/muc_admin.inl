@@ -2238,23 +2238,18 @@ int command__setmodes([[maybe_unused]] const void *pointer,
         return WEECHAT_RC_OK;
     }
 
-    // If a previous /setmodes run already fetched the form, use that
-    // cached state so the submit preserves server-side values (XEP-0004
-    // §3.4 requires the submit to include all original fields). Otherwise
-    // construct a minimal submit with just the changed fields + FORM_TYPE.
-    // This is a partial submit — some servers reject partial submits
-    // (they need a full read-modify-write cycle); when that happens the
-    // user gets the <not-acceptable/> error and can re-run after a
-    // /setmodes GET cycle. The cached-form path is still the recommended
-    // workflow (we'll try to fetch the form in the background after a
-    // successful submit so the next run is full).
-    stanza::xep0004::form submit("submit");
-    submit.add_hidden("FORM_TYPE", "http://jabber.org/protocol/muc#roomconfig");
-
-    bool have_cached = false;
+    // Apply on --confirm. Two paths:
+    //   (a) A form is already cached → mutate the cached form in place
+    //       and submit a full read-modify-write (preserves all server-side
+    //       values per XEP-0004 §3.4).
+    //   (b) No cached form → stash the diff on the channel, send a GET,
+    //       and have the config_get result handler apply the diff and
+    //       submit when the form arrives. This is the correct path for
+    //       the first /setmodes --confirm after join (since the partial
+    //       submit otherwise required by some servers tends to be
+    //       rejected with <not-acceptable/>).
     if (auto f = ptr_channel->get_config_form(); f.has_value())
     {
-        have_cached = true;
         weechat::channel::room_config_form form = std::move(*f);
 
         if (want_set[0] || want_clear[0])
@@ -2283,103 +2278,57 @@ int command__setmodes([[maybe_unused]] const void *pointer,
         else if (want_clear[5] || want_clear[6])
             set_form_field_value(form, "muc#roomconfig_whois", "moderators");
 
-        for (const auto &f : form.fields)
+        stanza::xep0004::form submit("submit");
+        submit.add_hidden("FORM_TYPE", "http://jabber.org/protocol/muc#roomconfig");
+        for (const auto &ff : form.fields)
         {
-            stanza::xep0004::field fd(f.var);
-            if (!f.type.empty()) fd.type(f.type);
-            for (const auto &v : f.values)
+            stanza::xep0004::field fd(ff.var);
+            if (!ff.type.empty()) fd.type(ff.type);
+            for (const auto &v : ff.values)
                 fd.value(v);
             submit.add_field(fd);
         }
+
+        std::string id = stanza::uuid(ptr_account->context);
+        weechat::account::muc_owner_query_info info{
+            ptr_channel->id,
+            ptr_channel->buffer,
+            weechat::account::muc_owner_kind::config_set
+        };
+        ptr_account->muc_owner_queries[id] = info;
+
+        stanza::xep0045::xep0045owner::query q;
+        q.form(submit);
+        auto iq = stanza::iq().type("set").to(ptr_channel->id).id(id);
+        iq.muc_owner(q);
+        ptr_account->connection.send(iq.build(ptr_account->context).get());
+
+        weechat_printf(buffer, "%sSubmitting room config (full form)…",
+                       weechat_prefix("network"));
     }
     else
     {
-        // Partial submit: only the fields the user wants to change.
-        // Most servers accept this; some may require a full form. We add
-        // a type attr per field where the spec mandates it.
-        if (want_set[0] || want_clear[0]) {
-            stanza::xep0004::field f("muc#roomconfig_moderatedroom");
-            f.type("boolean");
-            f.value(want_set[0] ? "1" : "0");
-            submit.add_field(f);
+        // No cached form. Stash the diff on the channel and fetch the
+        // form asynchronously. The config_get result handler will apply
+        // the diff and submit. Single user-facing command invocation;
+        // the apply happens server-roundtrip later.
+        weechat::channel::pending_setmodes_diff diff;
+        for (int i = 0; i < 7; ++i)
+        {
+            diff.want_set[i]   = want_set[i];
+            diff.want_clear[i] = want_clear[i];
         }
-        if (want_set[1] || want_clear[1]) {
-            stanza::xep0004::field f("muc#roomconfig_membersonly");
-            f.type("boolean");
-            f.value(want_set[1] ? "1" : "0");
-            submit.add_field(f);
-        }
-        if (want_set[2] || want_clear[2]) {
-            stanza::xep0004::field f("muc#roomconfig_passwordprotectedroom");
-            f.type("boolean");
-            f.value(want_set[2] ? "1" : "0");
-            submit.add_field(f);
-            if (want_set[2]) {
-                stanza::xep0004::field fs("muc#roomconfig_roomsecret");
-                fs.type("text-private");
-                fs.value(password);
-                submit.add_field(fs);
-            }
-        }
-        if (want_set[3] || want_clear[3]) {
-            stanza::xep0004::field f("muc#roomconfig_publicroom");
-            f.type("boolean");
-            f.value(want_set[3] ? "1" : "0");
-            submit.add_field(f);
-        }
-        if (want_set[4] || want_clear[4]) {
-            stanza::xep0004::field f("muc#roomconfig_persistentroom");
-            f.type("boolean");
-            f.value(want_set[4] ? "1" : "0");
-            submit.add_field(f);
-        }
-        if (want_set[5]) {
-            stanza::xep0004::field f("muc#roomconfig_whois");
-            f.type("list-single");
-            f.value("anyone");
-            submit.add_field(f);
-        }
-        else if (want_set[6]) {
-            stanza::xep0004::field f("muc#roomconfig_whois");
-            f.type("list-single");
-            f.value("moderators");
-            submit.add_field(f);
-        }
-        else if (want_clear[5] || want_clear[6]) {
-            stanza::xep0004::field f("muc#roomconfig_whois");
-            f.type("list-single");
-            f.value("moderators");
-            submit.add_field(f);
-        }
+        diff.password = password;
+        ptr_channel->set_pending_setmodes(std::move(diff));
+
+        send_config_form_get(ptr_account, ptr_channel);
+
+        weechat_printf(buffer, "%s%s: no cached config form — fetching…",
+                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat_printf(buffer, "%s%s: form will arrive in a moment; the "
+                              "diff will be applied automatically",
+                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
     }
-
-    std::string id = stanza::uuid(ptr_account->context);
-    weechat::account::muc_owner_query_info info{
-        ptr_channel->id,
-        ptr_channel->buffer,
-        weechat::account::muc_owner_kind::config_set
-    };
-    ptr_account->muc_owner_queries[id] = info;
-
-    stanza::xep0045::xep0045owner::query q;
-    q.form(submit);
-    auto iq = stanza::iq().type("set").to(ptr_channel->id).id(id);
-    iq.muc_owner(q);
-    ptr_account->connection.send(iq.build(ptr_account->context).get());
-
-    if (have_cached)
-        weechat_printf(buffer, "%sSubmitting room config (full form)…",
-                       weechat_prefix("network"));
-    else
-        weechat_printf(buffer, "%sSubmitting room config (partial — "
-                              "server may reject if it requires full form)…",
-                       weechat_prefix("network"));
-
-    // Background: kick off a form fetch so the next /setmodes --confirm
-    // can do a full read-modify-write. We don't block on the response —
-    // a successful config_set result handler in iq_handler.inl will
-    // clear the cache and a future GET will repopulate it.
-    send_config_form_get(ptr_account, ptr_channel);
 
     return WEECHAT_RC_OK;
 }
