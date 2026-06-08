@@ -32,5 +32,6 @@
 #include "channel.hh"
 #include "buffer.hh"
 #include "debug.hh"
+#include "util.hh"
 
 #include "account/lmdb_cache.inl"

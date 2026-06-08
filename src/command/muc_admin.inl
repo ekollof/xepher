@@ -1685,10 +1685,8 @@ int command__feed(const void *pointer, void *data,
             fetch_latest = true;
         else if (arg == "--limit" && i + 1 < argc)
         {
-            char *end = nullptr;
-            long v = std::strtol(argv[i + 1], &end, 10);
-            if (end && *end == '\0' && v > 0)
-                max_items = static_cast<int>(v);
+            if (auto v = parse_int64(argv[i + 1]); v && *v > 0)
+                max_items = static_cast<int>(*v);
             ++i;   // consume the value token
         }
         else if (arg == "--before" && i + 1 < argc)

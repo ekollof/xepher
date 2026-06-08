@@ -87,10 +87,9 @@ int command__mam(const void *pointer, void *data,
     time_t start, end;
     if (argc > 1)
     {
-        errno = 0;
-        days = strtol(argv[1], nullptr, 10);
-
-        if (errno != 0)
+        if (auto n = parse_int64(argv[1]); n)
+            days = static_cast<int>(*n);
+        else
         {
             weechat_printf(
                 ptr_channel->buffer,

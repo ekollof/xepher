@@ -42,14 +42,14 @@ int command__ephemeral(const void *pointer, void *data,
     }
 
     // Parse timer value
-    char *endp = nullptr;
-    long timer_secs = std::strtol(argv[1], &endp, 10);
-    if (!endp || *endp != '\0' || timer_secs <= 0)
+    const auto timer_parsed = parse_int64(argv[1]);
+    if (!timer_parsed || *timer_parsed <= 0)
     {
         weechat_printf(buffer, "%s%s: /ephemeral: seconds must be a positive integer",
                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
         return WEECHAT_RC_OK;
     }
+    const long timer_secs = *timer_parsed;
 
     const char *text = argv_eol[2];
     const char *msg_type = ptr_channel->type == weechat::channel::chat_type::MUC

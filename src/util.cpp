@@ -63,6 +63,11 @@ XMPP_TEST_EXPORT std::string format_local_timestamp(std::time_t t)
     return fmt::format("{:%Y-%m-%d %H:%M}", lt);
 }
 
+XMPP_TEST_EXPORT std::string format_utc_timestamp(std::time_t t)
+{
+    return fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", fmt::gmtime(t));
+}
+
 XMPP_TEST_EXPORT std::string unescape(std::string_view str)
 {
     std::string result;
@@ -303,9 +308,9 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_te
     auto get_long_attr = [](xmpp_stanza_t *el, const char *attr, long fallback) -> long {
         const char *v = xmpp_stanza_get_attribute(el, attr);
         if (!v) return fallback;
-        char *end = nullptr;
-        long val = std::strtol(v, &end, 10);
-        return (end && end != v) ? val : fallback;
+        if (auto val = parse_int64(v); val)
+            return static_cast<long>(*val);
+        return fallback;
     };
 
     for (xmpp_stanza_t *child = xmpp_stanza_get_children(markup_elem);

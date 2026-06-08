@@ -25,6 +25,9 @@ parse_int64(std::string_view value);
 // Format a local-time timestamp for MAM banners (YYYY-MM-DD HH:MM).
 [[nodiscard]] XMPP_TEST_EXPORT std::string format_local_timestamp(std::time_t t);
 
+// Format a UTC timestamp for MAM filters and XEP-0319 idle (YYYY-MM-DDTHH:MMZ).
+[[nodiscard]] XMPP_TEST_EXPORT std::string format_utc_timestamp(std::time_t t);
+
 // XEP-0393: Message Styling
 XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text);
 

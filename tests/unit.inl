@@ -8,7 +8,8 @@
 // so that gcovr reports non-zero coverage for the exercised source files.
 //
 // Functions under test:
-//   • char_cmp, unescape                   → src/util.cpp
+//   • char_cmp, unescape, parse_uint32, parse_int64,
+//     format_local_timestamp, format_utc_timestamp  → src/util.cpp
 //   • message__htmldecode                  → src/message.cpp
 //   • get_name, get_attribute, get_text    → src/xmpp/node.cpp
 //   • jid::jid, jid::is_bare              → src/xmpp/node.cpp
@@ -26,7 +27,9 @@
 
 // ── stdlib ────────────────────────────────────────────────────────────────────
 #include <cstring>
+#include <ctime>
 #include <string>
+#include <fmt/chrono.h>
 
 // ── libstrophe ────────────────────────────────────────────────────────────────
 #include <strophe.h>
@@ -114,6 +117,80 @@ TEST_CASE("unescape: numeric HTML entity decoding")
     {
         CHECK(unescape("") == "");
     }
+}
+
+TEST_CASE("parse_uint32")
+{
+    SUBCASE("valid decimal")
+    {
+        CHECK(parse_uint32("42") == std::expected<std::uint32_t, std::string>(42));
+    }
+
+    SUBCASE("empty input is invalid")
+    {
+        CHECK_FALSE(parse_uint32(""));
+    }
+
+    SUBCASE("trailing junk is invalid")
+    {
+        CHECK_FALSE(parse_uint32("42x"));
+    }
+
+    SUBCASE("negative is invalid")
+    {
+        CHECK_FALSE(parse_uint32("-1"));
+    }
+}
+
+TEST_CASE("parse_int64")
+{
+    SUBCASE("valid positive")
+    {
+        CHECK(parse_int64("1704067200") == std::expected<std::int64_t, std::string>(1704067200));
+    }
+
+    SUBCASE("valid negative")
+    {
+        CHECK(parse_int64("-5") == std::expected<std::int64_t, std::string>(-5));
+    }
+
+    SUBCASE("empty input is invalid")
+    {
+        CHECK_FALSE(parse_int64(""));
+    }
+
+    SUBCASE("non-numeric is invalid")
+    {
+        CHECK_FALSE(parse_int64("abc"));
+    }
+}
+
+TEST_CASE("format_utc_timestamp")
+{
+    CHECK(format_utc_timestamp(0) == "1970-01-01T00:00:00Z");
+    CHECK(format_utc_timestamp(946684800) == "2000-01-01T00:00:00Z");
+}
+
+TEST_CASE("format_local_timestamp")
+{
+    const std::time_t t = 946684800;
+    std::tm lt {};
+    REQUIRE(localtime_r(&t, &lt));
+    const std::string expected = fmt::format("{:%Y-%m-%d %H:%M}", lt);
+    CHECK(format_local_timestamp(t) == expected);
+}
+
+TEST_CASE("stanza_element_text reads element body")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *el = xmpp_stanza_new_from_string(
+        env.ctx, "<value xmlns='jabber:x:data'>hello world</value>");
+    REQUIRE(el != nullptr);
+    CHECK(stanza_element_text(el) == "hello world");
+    CHECK(stanza_element_text(nullptr).empty());
+    xmpp_stanza_release(el);
 }
 
 TEST_CASE("message__htmldecode")

@@ -156,10 +156,8 @@ int command__omemo(const void *pointer, void *data,
             std::optional<std::uint32_t> device_id;
             if (argc > 3)
             {
-                char *endp = nullptr;
-                unsigned long v = std::strtoul(argv[3], &endp, 10);
-                if (endp && *endp == '\0' && v > 0 && v <= 0x7fffffffU)
-                    device_id = static_cast<std::uint32_t>(v);
+                if (auto v = parse_uint32(argv[3]); v && *v > 0 && *v <= 0x7fffffffU)
+                    device_id = *v;
                 else
                 {
                     weechat_printf(buffer,
@@ -185,10 +183,8 @@ int command__omemo(const void *pointer, void *data,
             std::optional<std::uint32_t> device_id;
             if (argc > 3)
             {
-                char *endp = nullptr;
-                unsigned long v = std::strtoul(argv[3], &endp, 10);
-                if (endp && *endp == '\0' && v > 0 && v <= 0x7fffffffU)
-                    device_id = static_cast<std::uint32_t>(v);
+                if (auto v = parse_uint32(argv[3]); v && *v > 0 && *v <= 0x7fffffffU)
+                    device_id = *v;
                 else
                 {
                     weechat_printf(buffer,
@@ -242,17 +238,15 @@ int command__omemo(const void *pointer, void *data,
             std::optional<std::uint32_t> device_id;
             if (argc > 3)
             {
-                char *end = nullptr;
-                errno = 0;
-                const auto parsed = strtoul(argv[3], &end, 10);
-                if (errno != 0 || !end || *end != '\0' || parsed > UINT32_MAX)
+                if (auto parsed = parse_uint32(argv[3]); parsed)
+                    device_id = *parsed;
+                else
                 {
                     weechat_printf(buffer,
                                    _("%s%s: invalid device id '%s'"),
                                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[3]);
                     return WEECHAT_RC_OK;
                 }
-                device_id = static_cast<std::uint32_t>(parsed);
             }
 
             ptr_account->omemo.force_fetch(*ptr_account, buffer, jid, device_id);
@@ -280,17 +274,15 @@ int command__omemo(const void *pointer, void *data,
             std::optional<std::uint32_t> device_id;
             if (argc > 3)
             {
-                char *end = nullptr;
-                errno = 0;
-                const auto parsed = strtoul(argv[3], &end, 10);
-                if (errno != 0 || !end || *end != '\0' || parsed > UINT32_MAX)
+                if (auto parsed = parse_uint32(argv[3]); parsed)
+                    device_id = *parsed;
+                else
                 {
                     weechat_printf(buffer,
                                    _("%s%s: invalid device id '%s'"),
                                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[3]);
                     return WEECHAT_RC_OK;
                 }
-                device_id = static_cast<std::uint32_t>(parsed);
             }
 
             ptr_account->omemo.force_kex(*ptr_account, buffer, jid, device_id);

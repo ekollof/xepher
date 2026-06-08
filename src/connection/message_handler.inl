@@ -2005,11 +2005,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         const char *sid_str = xmpp_stanza_get_attribute(enc_header, "sid");
         if (!sid_str || !*sid_str)
             return false;
-        char *end = nullptr;
-        unsigned long sid_val = std::strtoul(sid_str, &end, 10);
-        if (end == sid_str || *end != '\0')
-            return false;
-        return static_cast<std::uint32_t>(sid_val) == account.omemo.device_id;
+        if (auto sid_val = parse_uint32(sid_str); sid_val)
+            return *sid_val == account.omemo.device_id;
+        return false;
     }();
     if (encrypted && is_self_outbound_copy && (!is_mam_replay || is_own_device_self_copy))
     {

@@ -208,7 +208,10 @@ void weechat::account::mam_cache_load_messages(std::string_view channel_jid, str
                     std::string from = value_str.substr(0, pos1);
                     std::string timestamp_str = value_str.substr(pos1 + 1, pos2 - pos1 - 1);
                     std::string body = value_str.substr(pos2 + 1);
-                    time_t timestamp = std::stoll(timestamp_str);
+                    const auto ts = parse_int64(timestamp_str);
+                    if (!ts)
+                        continue;
+                    time_t timestamp = static_cast<time_t>(*ts);
 
                     // Display cached message with gray prefix
                     if (is_retracted)

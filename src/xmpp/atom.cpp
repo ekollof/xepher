@@ -7,7 +7,6 @@
 #include "xhtml.hh"
 #include "util.hh"
 
-#include <cstdlib>
 #include <strings.h>  // strcasecmp (POSIX)
 #include <strophe.h>
 
@@ -206,9 +205,8 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
                         thr_count = xmpp_stanza_get_attribute(child, "count");
                     if (thr_count && *thr_count)
                     {
-                        int n = std::atoi(thr_count);
-                        if (n >= 0)
-                            e.comments_count = n;
+                        if (auto n = parse_int64(thr_count); n && *n >= 0)
+                            e.comments_count = static_cast<int>(*n);
                     }
                     const char *thr_updated = xmpp_stanza_get_attribute(child, "thr:updated");
                     if (!thr_updated)
@@ -282,16 +280,16 @@ atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
                 att.media_type = atom_text_child(ctx, file_el, "media-type");
                 {
                     std::string sz = atom_text_child(ctx, file_el, "size");
-                    if (!sz.empty())
-                        att.size = static_cast<uint64_t>(std::strtoull(sz.c_str(), nullptr, 10));
+                    if (auto parsed = parse_int64(sz); parsed && *parsed >= 0)
+                        att.size = static_cast<uint64_t>(*parsed);
                 }
                 {
                     std::string w = atom_text_child(ctx, file_el, "width");
-                    if (!w.empty())
-                        att.width = std::atoi(w.c_str());
+                    if (auto parsed = parse_uint32(w); parsed)
+                        att.width = static_cast<int>(*parsed);
                     std::string h = atom_text_child(ctx, file_el, "height");
-                    if (!h.empty())
-                        att.height = std::atoi(h.c_str());
+                    if (auto parsed = parse_uint32(h); parsed)
+                        att.height = static_cast<int>(*parsed);
                 }
                 // hash: look for <hash algo='sha-256'>
                 for (xmpp_stanza_t *hc = xmpp_stanza_get_children(file_el);

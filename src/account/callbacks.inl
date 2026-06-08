@@ -29,10 +29,7 @@ int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaini
     if (idle_time > 300 && !account->xep0319_idle_sent)
     {
         // Format idle-since as ISO 8601 UTC
-        struct tm *tm_idle = gmtime(&account->last_activity);
-        std::string since_str = fmt::format("{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z",
-            tm_idle->tm_year + 1900, tm_idle->tm_mon + 1, tm_idle->tm_mday,
-            tm_idle->tm_hour, tm_idle->tm_min, tm_idle->tm_sec);
+        std::string since_str = format_utc_timestamp(account->last_activity);
         struct idle_pres_spec : stanza::spec {
             idle_pres_spec(std::string_view from_jid, std::string_view since) : spec("presence") {
                 attr("from", from_jid);

@@ -10,6 +10,7 @@
 #include <vector>
 #include <fmt/core.h>
 
+#include "../util.hh"
 #include "node.hh"
 #pragma GCC visibility push(default)
 #include "ns.hh"
@@ -200,7 +201,8 @@ namespace xml {
                     items.push_back(std::make_unique<item>(child));
                 for (auto& child : node.get_children("status"))
                     if (auto code = child.get().get_attr("code"))
-                        statuses.push_back(std::stoi(*code));
+                        if (auto n = parse_int64(*code); n)
+                            statuses.push_back(static_cast<int>(*n));
             }
 
             std::unique_ptr<std::vector<decline>> declines;

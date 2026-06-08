@@ -34,6 +34,7 @@
 #include "channel.hh"
 #include "buffer.hh"
 #include "debug.hh"
+#include "util.hh"
 
 // Use a pointer that's never freed to prevent destructor running at program exit
 // when plugin is already unloaded. Memory is leaked intentionally; OS reclaims it.
@@ -355,11 +356,8 @@ int weechat::account::process_deferred_mam_page_cb(const void *pointer, void *da
         stanza::xep0313::query next_q;
         if (page.start)
         {
-            time_t tval = *page.start;
-            std::ostringstream time_ss;
-            time_ss << std::put_time(gmtime(&tval), "%Y-%m-%dT%H:%M:%SZ");
             stanza::xep0313::x_filter xf;
-            xf.start(time_ss.str());
+            xf.start(format_utc_timestamp(*page.start));
             next_q.filter(xf);
         }
         stanza::xep0059::set rsm_after;

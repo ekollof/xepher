@@ -426,10 +426,8 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             if (!has_cursor)
             {
                 // No cursor: use a data form with a start-time filter
-                std::ostringstream time_ss;
-                time_ss << std::put_time(gmtime(&start), "%Y-%m-%dT%H:%M:%SZ");
                 stanza::xep0313::x_filter xf;
-                xf.start(time_ss.str());
+                xf.start(format_utc_timestamp(start));
                 mam_query.filter(xf).rsm(rsm_set);
             }
             else

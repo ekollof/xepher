@@ -6,8 +6,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <regex>
-#include <sstream>
-#include <iomanip>
 #include <fmt/core.h>
 #include <optional>
 #include <ranges>
@@ -2031,17 +2029,9 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
     if (type != weechat::channel::chat_type::MUC)
         xf.with(this->id);
     if (start)
-    {
-        std::ostringstream oss;
-        oss << std::put_time(gmtime(start), "%Y-%m-%dT%H:%M:%SZ");
-        xf.start(oss.str());
-    }
+        xf.start(format_utc_timestamp(*start));
     if (end)
-    {
-        std::ostringstream oss;
-        oss << std::put_time(gmtime(end), "%Y-%m-%dT%H:%M:%SZ");
-        xf.end(oss.str());
-    }
+        xf.end(format_utc_timestamp(*end));
 
     stanza::xep0313::query q;
     q.queryid(mam_id).filter(xf);
