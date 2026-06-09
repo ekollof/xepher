@@ -1,7 +1,9 @@
 # tools/Makefile — builds standalone developer tools.
 # Does NOT affect the main xmpp.so build (root Makefile).
 
-CXX      ?= clang++
+ifneq ($(origin CXX),command line)
+CXX := clang++
+endif
 CXXFLAGS  = -std=c++23 -O2 -Wall -Wextra -Wpedantic
 LDFLAGS   =
 LDLIBS    = -llmdb

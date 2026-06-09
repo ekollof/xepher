@@ -2,7 +2,6 @@
 # vim: set noexpandtab:
 
 UNAME_S := $(shell uname -s)
-IS_CLANG := $(shell $(CXX) --version 2>/dev/null | grep -i clang)
 
 # PACKAGE_BUILD=1 skips embedding the .source ELF section (distribution packages).
 ifneq ($(PACKAGE_BUILD),)
@@ -17,21 +16,30 @@ endif
 
 # Default toolchain: Clang/Clang++ (C++23). Matches OpenBSD/FreeBSD CI behaviour and
 # catches Clang-only warnings (e.g. -Wunused-lambda-capture) under -Werror.
-# Override for experiments: CC=gcc CXX=g++ make
+# GNU make predefines CXX=g++ — `?=` does not override that, so assign explicitly
+# unless the user passed CC/CXX on the command line (make CC=... CXX=...).
 ifeq ($(UNAME_S),Darwin)
 HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo /opt/homebrew)
 export PKG_CONFIG_PATH := $(HOMEBREW_PREFIX)/lib/pkgconfig:$(PKG_CONFIG_PATH)
 # bison, flex, and llvm are keg-only — prepend their bin dirs so make recipes
 # and $(shell) calls use the Homebrew versions, not the ancient macOS stubs.
 export PATH := $(HOMEBREW_PREFIX)/opt/bison/bin:$(HOMEBREW_PREFIX)/opt/flex/bin:$(HOMEBREW_PREFIX)/opt/llvm/bin:$(PATH)
-CC  ?= $(HOMEBREW_PREFIX)/opt/llvm/bin/clang
-CXX ?= $(HOMEBREW_PREFIX)/opt/llvm/bin/clang++
+DEFAULT_CC := $(HOMEBREW_PREFIX)/opt/llvm/bin/clang
+DEFAULT_CXX := $(HOMEBREW_PREFIX)/opt/llvm/bin/clang++
 else
-CC  ?= clang
-CXX ?= clang++
+DEFAULT_CC := clang
+DEFAULT_CXX := clang++
+endif
+ifneq ($(origin CC),command line)
+CC := $(DEFAULT_CC)
+endif
+ifneq ($(origin CXX),command line)
+CXX := $(DEFAULT_CXX)
 endif
 export CC
 export CXX
+
+IS_CLANG := $(shell $(CXX) --version 2>/dev/null | grep -i clang)
 
 BISON ?= bison
 FLEX  ?= flex
