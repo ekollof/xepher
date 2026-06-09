@@ -1,4 +1,5 @@
 # prepare-source-tree.sh — shared helper for distrobox/docker build scripts.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 #
 # Copies the read-only /project mount into a writable destination and removes
 # host build artifacts so each container compiles fresh.  Pre-builds deps/diff

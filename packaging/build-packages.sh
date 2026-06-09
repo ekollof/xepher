@@ -1,5 +1,6 @@
 #!/bin/sh
-# Build distribution packages for Xepher
+# Build distribution packages for Xepher.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 
 set -e
 

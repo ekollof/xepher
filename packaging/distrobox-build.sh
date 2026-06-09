@@ -1,5 +1,6 @@
 #!/bin/sh
 # distrobox-build.sh — Build xepher packages for Debian, Fedora, Arch, Alpine, and Void Linux
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 # using persistent distrobox containers (packages stay installed between runs).
 #
 # Usage:
@@ -104,12 +105,16 @@ ensure_container() {
 }
 
 run_in_container() {
-    distrobox enter --name "$1" -- "${@:2}"
+    CONTAINER=$1
+    shift
+    distrobox enter --name "$CONTAINER" -- "$@"
 }
 
 # Alpine/Void package scripts mutate system accounts/repos and need root.
 run_in_container_privileged() {
-    distrobox enter --name "$1" -- sudo sh "${@:2}"
+    CONTAINER=$1
+    shift
+    distrobox enter --name "$CONTAINER" -- sudo sh "$@"
 }
 
 maybe_teardown() {

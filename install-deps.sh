@@ -1,5 +1,6 @@
 #!/bin/sh
-# Install dependencies for weechat-xmpp
+# Install dependencies for weechat-xmpp.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 
 set -e
 

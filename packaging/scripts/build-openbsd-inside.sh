@@ -1,5 +1,6 @@
 #!/bin/sh
 # Native OpenBSD package build via the port skeleton. Run on OpenBSD with ports(7) deps.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 #
 # Usage: packaging/scripts/build-openbsd-inside.sh [version] [output_dir]
 #

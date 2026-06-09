@@ -1,5 +1,6 @@
 #!/bin/sh
 # Runs INSIDE a Debian/Ubuntu distrobox container.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 # Called by packaging/distrobox-build.sh — do not invoke directly.
 #
 # /project is the host repo mounted read-only. We copy it to a writable

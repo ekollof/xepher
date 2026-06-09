@@ -1,5 +1,6 @@
 #!/bin/sh
 # github-build.sh — Build xepher packages for all distros sequentially using Docker.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 # Intended for GitHub Actions (ubuntu-latest) and any host with Docker.
 #
 # Usage:

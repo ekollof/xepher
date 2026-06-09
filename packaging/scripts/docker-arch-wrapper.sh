@@ -1,11 +1,16 @@
 #!/bin/sh
 # Runs INSIDE an Arch Linux docker container as root.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 # Creates a non-root builder account (makepkg refuses root) and delegates to
 # build-arch-inside.sh.  Used by packaging/github-build.sh.
 
 set -e
 
-VERSION="${1:?version required}"
+if [ -z "${1-}" ]; then
+    echo "version required" >&2
+    exit 1
+fi
+VERSION=$1
 OUTPUT_DIR="${2:-/output}"
 
 pacman -Sy --needed --noconfirm base-devel git sudo

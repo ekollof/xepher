@@ -1,5 +1,6 @@
 #!/bin/sh
 # Native FreeBSD binary package build. Run on a FreeBSD host with build deps installed.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 #
 # Usage: packaging/scripts/build-freebsd-inside.sh [version] [output_dir]
 #

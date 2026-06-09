@@ -1,6 +1,7 @@
 #!/bin/sh
 # Correlate WeeChat OMEMO log events with raw XML trace entries by timestamp.
-# POSIX sh — no bash extensions; awk uses only POSIX + gawk-compatible arithmetic.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
+# Awk uses only POSIX + gawk-compatible arithmetic.
 
 usage() {
   cat <<'EOF'

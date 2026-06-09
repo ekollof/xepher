@@ -1,4 +1,5 @@
 # install-build-deps.sh — one-time dependency bootstrap inside persistent build containers.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 # Sourced by build-*-inside.sh scripts.  Uses a stamp under /opt/xepher-build so it
 # survives across runs and is visible whether the build runs as user or via sudo.
 #

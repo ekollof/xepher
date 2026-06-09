@@ -1,5 +1,6 @@
 #!/bin/sh
 # Runs INSIDE an Alpine Linux docker container as root.
+# POSIX sh — compatible with OpenBSD pdksh (oksh).
 # Called by packaging/distrobox-build.sh — do not invoke directly.
 #
 # /project is the host repo mounted read-only.
