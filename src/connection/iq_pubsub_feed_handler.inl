@@ -180,8 +180,7 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                             // strptime needed. This is server-order-independent:
                             // it doesn't matter whether the server returns
                             // oldest-first or newest-first.
-                            xmpp_ctx_t *ctx = account.context;
-                            auto item_pubdate = [ctx](xmpp_stanza_t *item) -> std::string {
+                            auto item_pubdate = [](xmpp_stanza_t *item) -> std::string {
                                 xmpp_stanza_t *entry =
                                     xmpp_stanza_get_child_by_name_and_ns(
                                         item, "entry", "http://www.w3.org/2005/Atom");
