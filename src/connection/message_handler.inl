@@ -603,18 +603,30 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     if (::xmpp::stanza_is_error_message(::xmpp::StanzaView(stanza)))
         return 1;
     from = xmpp_stanza_get_from(stanza);
+    to = xmpp_stanza_get_to(stanza);
     if (from == nullptr)
-        return 1;
+    {
+        // XEP-0280 sent carbons: inner copy may omit from=; peer is in to=.
+        if (is_carbon_copy && to)
+        {
+            const std::string inferred_to_bare = ::jid(nullptr, to).bare;
+            if (!inferred_to_bare.empty()
+                && !::xmpp::bare_jid_iequals(inferred_to_bare, own_jid_str))
+                from = own_jid_str.c_str();
+        }
+        if (from == nullptr)
+            return 1;
+    }
     from_bare_main_storage = ::jid(nullptr, from).bare;
     from_bare = from_bare_main_storage.c_str();
-    to = xmpp_stanza_get_to(stanza);
     if (to == nullptr)
         to = own_jid_str.c_str();
     to_bare_main_storage = to ? ::jid(nullptr, to).bare : std::string{};
     to_bare = !to_bare_main_storage.empty() ? to_bare_main_storage.c_str() : nullptr;
-    const bool is_self_outbound_copy = from_bare && to_bare
-        && weechat_strcasecmp(from_bare, account.jid().data()) == 0
-        && weechat_strcasecmp(to_bare, account.jid().data()) != 0;
+    const bool from_is_account = from_bare
+        && ::xmpp::bare_jid_iequals(from_bare, own_jid_str);
+    const bool is_self_outbound_copy = from_is_account && to_bare
+        && !::xmpp::bare_jid_iequals(to_bare, own_jid_str);
     id = xmpp_stanza_get_id(stanza);
     bool was_omemo_cached = false;  // set when plaintext came from omemo_plaintext cache
     thread = xmpp_stanza_get_attribute(stanza, "thread");
@@ -648,14 +660,27 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     const bool marker_markable = ::xmpp::stanza_is_marker_markable(msg_view);
     const bool is_delayed_delivery = ::xmpp::stanza_is_delayed_delivery(msg_view);
 
-    const char *channel_id = account.jid() == from_bare ? to_bare : from_bare;
+    std::string channel_id_storage;
+    if (auto channel_jid = ::xmpp::conversation_channel_jid(
+            from_bare ? std::string_view(from_bare) : std::string_view{},
+            to_bare ? std::string_view(to_bare) : std::string_view{},
+            own_jid_str))
+        channel_id_storage = std::move(*channel_jid);
+    else if (from_bare)
+        channel_id_storage = from_bare;
+    else if (to_bare)
+        channel_id_storage = to_bare;
+    const char *channel_id = channel_id_storage.empty() ? nullptr : channel_id_storage.c_str();
     parent_channel = nullptr;
-    if (auto parent_ch_it = account.channels.find(channel_id); parent_ch_it != account.channels.end())
+    if (channel_id)
     {
-        auto& [_, ch] = *parent_ch_it;
-        parent_channel = &ch;
+        if (auto parent_ch_it = account.channels.find(channel_id); parent_ch_it != account.channels.end())
+        {
+            auto& [_, ch] = *parent_ch_it;
+            parent_channel = &ch;
+        }
     }
-    const char *pm_id = account.jid() == from_bare ? to : from;
+    const char *pm_id = from_is_account ? to : from;
     channel = parent_channel;
     if (!channel)
     {
@@ -1090,7 +1115,7 @@ message_handler_after_omemo:
             || !::xmpp::should_accept_moderation_from_sender(from_bare, channel->id))
             return 1;
 
-        const char *moderation_channel_id = account.jid() == from_bare ? to_bare : from_bare;
+        const char *moderation_channel_id = channel_id;
         account.mam_cache_retract_message(moderation_channel_id, moderation->target_id.c_str());
 
         std::optional<std::string_view> moderate_reason_view;
@@ -1161,7 +1186,7 @@ message_handler_after_omemo:
             }
         }
 
-        const char *retraction_channel_id = account.jid() == from_bare ? to_bare : from_bare;
+        const char *retraction_channel_id = channel_id;
         account.mam_cache_retract_message(retraction_channel_id, retraction->target_id.c_str());
 
         const auto retraction_lookup = weechat::line_store_tombstone_retraction_by_id(

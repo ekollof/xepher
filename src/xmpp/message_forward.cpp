@@ -4,7 +4,10 @@
 
 #include "message_forward.hh"
 
+#include <algorithm>
+#include <cctype>
 #include <ctime>
+#include <ranges>
 
 #include "xmpp/node.hh"
 
@@ -24,10 +27,18 @@ namespace {
 {
     if (full_jid.empty() || bare_jid.empty())
         return false;
-    return ::jid(nullptr, std::string(full_jid).c_str()).bare == bare_jid;
+    return bare_jid_iequals(::jid(nullptr, std::string(full_jid).c_str()).bare, bare_jid);
 }
 
 }  // namespace
+
+bool bare_jid_iequals(std::string_view a, std::string_view b)
+{
+    return a.size() == b.size()
+        && std::ranges::equal(a, b, [](unsigned char x, unsigned char y) {
+            return std::tolower(x) == std::tolower(y);
+        });
+}
 
 bool stanza_has_user_message_payload(StanzaView msg)
 {
@@ -125,9 +136,22 @@ std::optional<std::string> mam_conversation_partner_jid(std::string_view from_ba
                                                         std::string_view to_bare,
                                                         std::string_view account_bare_jid)
 {
-    if (!from_bare.empty() && from_bare != account_bare_jid)
+    if (!from_bare.empty() && !bare_jid_iequals(from_bare, account_bare_jid))
         return std::string(from_bare);
-    if (!to_bare.empty() && to_bare != account_bare_jid)
+    if (!to_bare.empty() && !bare_jid_iequals(to_bare, account_bare_jid))
+        return std::string(to_bare);
+    return std::nullopt;
+}
+
+std::optional<std::string> conversation_channel_jid(std::string_view from_bare,
+                                                    std::string_view to_bare,
+                                                    std::string_view account_bare_jid)
+{
+    if (!from_bare.empty() && bare_jid_iequals(from_bare, account_bare_jid))
+        return to_bare.empty() ? std::nullopt : std::optional(std::string(to_bare));
+    if (!from_bare.empty())
+        return std::string(from_bare);
+    if (!to_bare.empty() && !bare_jid_iequals(to_bare, account_bare_jid))
         return std::string(to_bare);
     return std::nullopt;
 }

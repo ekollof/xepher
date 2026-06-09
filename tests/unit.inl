@@ -1588,6 +1588,47 @@ TEST_CASE("parse_carbon_inner_message unwraps forwarded stanza")
     xmpp_stanza_release(msg);
 }
 
+TEST_CASE("bare_jid_iequals and conversation_channel_jid are case-insensitive")
+{
+    CHECK(xmpp::bare_jid_iequals("Alice@Example.org", "alice@example.org"));
+    CHECK_FALSE(xmpp::bare_jid_iequals("bob@example.org", "alice@example.org"));
+
+    const auto sent_carbon_channel = xmpp::conversation_channel_jid(
+        "Alice@Example.org", "bob@example.org", "alice@example.org");
+    REQUIRE(sent_carbon_channel.has_value());
+    CHECK(*sent_carbon_channel == "bob@example.org");
+
+    const auto inbound_channel = xmpp::conversation_channel_jid(
+        "Bob@Example.org", "alice@example.org", "alice@example.org");
+    REQUIRE(inbound_channel.has_value());
+    CHECK(*inbound_channel == "Bob@Example.org");
+}
+
+TEST_CASE("parse_carbon_inner_message accepts mixed-case envelope from")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message from='Alice@Example.org' to='alice@example.org/phone'>"
+        "<received xmlns='urn:xmpp:carbons:2'>"
+        "<forwarded xmlns='urn:xmpp:forward:0'>"
+        "<message xmlns='jabber:client' from='bob@example.org' to='alice@example.org' type='chat'>"
+        "<body>hi</body>"
+        "</message>"
+        "</forwarded>"
+        "</received>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto view = xmpp::StanzaView(msg);
+    auto inner = xmpp::parse_carbon_inner_message(view, "alice@example.org");
+    REQUIRE(inner.has_value());
+    CHECK(xmpp::stanza_has_user_message_payload(xmpp::StanzaView(*inner)));
+
+    xmpp_stanza_release(msg);
+}
+
 TEST_CASE("parse_carbon_inner_message unwraps sent carbon")
 {
     unit_strophe_env env;
@@ -1609,6 +1650,31 @@ TEST_CASE("parse_carbon_inner_message unwraps sent carbon")
     const auto view = xmpp::StanzaView(msg);
     CHECK(xmpp::stanza_is_carbon(view));
 
+    auto inner = xmpp::parse_carbon_inner_message(view, "alice@example.org");
+    REQUIRE(inner.has_value());
+    CHECK(xmpp::stanza_has_user_message_payload(xmpp::StanzaView(*inner)));
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("parse_carbon_inner_message unwraps sent carbon without inner from")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message from='alice@example.org' to='alice@example.org/desktop'>"
+        "<sent xmlns='urn:xmpp:carbons:2'>"
+        "<forwarded xmlns='urn:xmpp:forward:0'>"
+        "<message xmlns='jabber:client' to='bob@example.org' type='chat'>"
+        "<body>hello from phone</body>"
+        "</message>"
+        "</forwarded>"
+        "</sent>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto view = xmpp::StanzaView(msg);
     auto inner = xmpp::parse_carbon_inner_message(view, "alice@example.org");
     REQUIRE(inner.has_value());
     CHECK(xmpp::stanza_has_user_message_payload(xmpp::StanzaView(*inner)));

@@ -42,6 +42,8 @@ struct MamPmDiscoveryPolicy {
 
 [[nodiscard]] XMPP_TEST_EXPORT bool stanza_has_user_message_payload(StanzaView msg);
 
+[[nodiscard]] XMPP_TEST_EXPORT bool bare_jid_iequals(std::string_view a, std::string_view b);
+
 [[nodiscard]] XMPP_TEST_EXPORT bool stanza_is_carbon(StanzaView msg);
 [[nodiscard]] XMPP_TEST_EXPORT bool carbon_sender_is_account(StanzaView envelope,
                                                              std::string_view account_bare_jid);
@@ -58,6 +60,11 @@ parse_mam_forwarded_dispatch(StanzaView envelope);
 mam_conversation_partner_jid(std::string_view from_bare,
                              std::string_view to_bare,
                              std::string_view account_bare_jid);
+
+[[nodiscard]] XMPP_TEST_EXPORT std::optional<std::string>
+conversation_channel_jid(std::string_view from_bare,
+                         std::string_view to_bare,
+                         std::string_view account_bare_jid);
 
 [[nodiscard]] XMPP_TEST_EXPORT std::optional<std::string>
 mam_channel_jid_for_addresses(std::string_view from_bare,
