@@ -62,10 +62,15 @@ OmemoSelfCopyAdvice evaluate_omemo_self_copy_advice(
     bool has_encrypted,
     bool is_self_outbound_copy,
     bool is_mam_replay,
-    bool is_own_device_self_copy)
+    bool is_own_device_self_copy,
+    bool is_carbon_copy)
 {
     OmemoSelfCopyAdvice advice;
     if (!has_encrypted || !is_self_outbound_copy)
+        return advice;
+
+    // Live carbons from another device must be decrypted/displayed here.
+    if (is_carbon_copy && !is_mam_replay && !is_own_device_self_copy)
         return advice;
 
     if (!is_mam_replay || is_own_device_self_copy)
@@ -121,6 +126,8 @@ std::vector<std::string> omemo_plaintext_cache_ids(const OmemoPlaintextCacheIds 
 OmemoDecryptFailureDisposition disposition_for_omemo_decrypt_failure(
     const OmemoDecryptFailureInput &in)
 {
+    if (in.is_self_outbound_copy && in.is_carbon_copy)
+        return OmemoDecryptFailureDisposition::ShowUndecryptablePlaceholder;
     if (in.is_self_outbound_copy)
         return OmemoDecryptFailureDisposition::ContinueAfterOmemo;
     if (in.is_mam_replay)
@@ -142,8 +149,11 @@ bool should_skip_display_after_omemo(
     bool has_encrypted,
     bool has_cleartext,
     bool is_self_outbound_copy,
-    bool is_mam_replay)
+    bool is_mam_replay,
+    bool is_carbon_copy)
 {
+    if (is_carbon_copy && !is_mam_replay)
+        return false;
     return has_encrypted && !has_cleartext && (is_self_outbound_copy || is_mam_replay);
 }
 

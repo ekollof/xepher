@@ -1,12 +1,24 @@
 bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level, bool is_mam_replay,
                                           std::string_view override_archive_id,
-                                          std::string_view override_delay_stamp)
+                                          std::string_view override_delay_stamp,
+                                          bool is_carbon_copy)
 {
     // SM counter incremented in libstrophe wrapper, not here
     // top_level parameter kept for nested/recursive calls
 
     (void) top_level;
     append_raw_xml_trace(account, "RECV", stanza);
+
+    // XEP-0280: unwrap carbons before any payloadless early-return paths.
+    {
+        const auto view = ::xmpp::StanzaView(stanza);
+        if (::xmpp::stanza_is_carbon(view))
+        {
+            if (auto inner = ::xmpp::parse_carbon_inner_message(view, account.jid()))
+                return message_handler(*inner, false, false, {}, {}, true);
+            return 1;
+        }
+    }
 
     // Cache hdata handles — stable for the process lifetime, resolved once.
     static struct t_hdata *hdata_line      = weechat_hdata_get("line");
@@ -151,17 +163,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     channel->add_typing(user);
                 else
                     channel->remove_typing(user);
-            }
-        }
-
-        // XEP-0280: Message Carbons — unwrap and recurse into inner message
-        {
-            const auto view = ::xmpp::StanzaView(stanza);
-            if (::xmpp::stanza_is_carbon(view))
-            {
-                if (auto inner = ::xmpp::parse_carbon_inner_message(view, account.jid()))
-                    return message_handler(*inner, false);
-                return 1;
             }
         }
 
@@ -795,7 +796,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             encrypted != nullptr,
             is_self_outbound_copy,
             is_mam_replay,
-            is_own_device_self_copy);
+            is_own_device_self_copy,
+            is_carbon_copy);
         self_copy_advice.apply_advice)
     {
         intext_storage = OMEMO_ADVICE;
@@ -961,6 +963,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             const auto failure = ::xmpp::disposition_for_omemo_decrypt_failure({
                 is_self_outbound_copy,
                 is_mam_replay,
+                is_carbon_copy,
                 ::xmpp::axolotl_payload_is_empty(::xmpp::StanzaView(encrypted))});
 
             switch (failure)
@@ -1010,7 +1013,8 @@ message_handler_after_omemo:
     // set intext=[undecryptable] and clear |encrypted|, so they bypass this check
     // and display the placeholder.
     if (::xmpp::should_skip_display_after_omemo(
-            encrypted != nullptr, cleartext != nullptr, is_self_outbound_copy, is_mam_replay))
+            encrypted != nullptr, cleartext != nullptr, is_self_outbound_copy, is_mam_replay,
+            is_carbon_copy))
         return 1;
 
     if (x)

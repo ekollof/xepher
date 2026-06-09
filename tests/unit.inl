@@ -942,6 +942,10 @@ TEST_CASE("message_omemo stable id and self-copy policy")
     CHECK(live_own_copy.apply_advice);
     CHECK_FALSE(live_own_copy.clear_encrypted_on_mam);
 
+    const auto live_carbon_other_device = xmpp::evaluate_omemo_self_copy_advice(
+        true, true, false, false, true);
+    CHECK_FALSE(live_carbon_other_device.apply_advice);
+
     const auto mam_other_device = xmpp::evaluate_omemo_self_copy_advice(
         true, true, true, false);
     CHECK_FALSE(mam_other_device.apply_advice);
@@ -992,6 +996,10 @@ TEST_CASE("message_omemo decrypt failure disposition")
               OmemoDecryptFailureInput{.is_self_outbound_copy = true})
           == OmemoDecryptFailureDisposition::ContinueAfterOmemo);
     CHECK(xmpp::disposition_for_omemo_decrypt_failure(
+              OmemoDecryptFailureInput{
+                  .is_self_outbound_copy = true, .is_carbon_copy = true})
+          == OmemoDecryptFailureDisposition::ShowUndecryptablePlaceholder);
+    CHECK(xmpp::disposition_for_omemo_decrypt_failure(
               OmemoDecryptFailureInput{.is_mam_replay = true})
           == OmemoDecryptFailureDisposition::ShowUndecryptablePlaceholder);
     CHECK(xmpp::disposition_for_omemo_decrypt_failure(
@@ -1012,6 +1020,7 @@ TEST_CASE("message_omemo decrypt failure disposition")
     CHECK(cache_ids[1] == "origin");
 
     CHECK(xmpp::should_skip_display_after_omemo(true, false, true, false));
+    CHECK_FALSE(xmpp::should_skip_display_after_omemo(true, false, true, false, true));
     CHECK_FALSE(xmpp::should_skip_display_after_omemo(false, false, true, false));
 }
 
@@ -1575,6 +1584,34 @@ TEST_CASE("parse_carbon_inner_message unwraps forwarded stanza")
     CHECK(xmpp::stanza_has_user_message_payload(xmpp::StanzaView(*inner)));
 
     CHECK_FALSE(xmpp::parse_carbon_inner_message(view, "eve@example.org").has_value());
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("parse_carbon_inner_message unwraps sent carbon")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message from='alice@example.org' to='alice@example.org/desktop'>"
+        "<sent xmlns='urn:xmpp:carbons:2'>"
+        "<forwarded xmlns='urn:xmpp:forward:0'>"
+        "<message xmlns='jabber:client' from='alice@example.org/phone' "
+        "to='bob@example.org' type='chat'>"
+        "<body>hello from phone</body>"
+        "</message>"
+        "</forwarded>"
+        "</sent>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto view = xmpp::StanzaView(msg);
+    CHECK(xmpp::stanza_is_carbon(view));
+
+    auto inner = xmpp::parse_carbon_inner_message(view, "alice@example.org");
+    REQUIRE(inner.has_value());
+    CHECK(xmpp::stanza_has_user_message_payload(xmpp::StanzaView(*inner)));
 
     xmpp_stanza_release(msg);
 }

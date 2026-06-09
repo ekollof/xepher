@@ -45,7 +45,8 @@ struct OmemoSelfCopyAdvice {
     bool has_encrypted,
     bool is_self_outbound_copy,
     bool is_mam_replay,
-    bool is_own_device_self_copy);
+    bool is_own_device_self_copy,
+    bool is_carbon_copy = false);
 
 [[nodiscard]] XMPP_TEST_EXPORT bool should_note_omemo_peer_traffic(
     bool has_encrypted,
@@ -81,6 +82,7 @@ enum class OmemoDecryptFailureDisposition {
 struct OmemoDecryptFailureInput {
     bool is_self_outbound_copy = false;
     bool is_mam_replay = false;
+    bool is_carbon_copy = false;
     bool payload_missing_or_empty = false;
 };
 
@@ -93,6 +95,7 @@ disposition_for_omemo_decrypt_failure(const OmemoDecryptFailureInput &in);
     bool has_encrypted,
     bool has_cleartext,
     bool is_self_outbound_copy,
-    bool is_mam_replay);
+    bool is_mam_replay,
+    bool is_carbon_copy = false);
 
 }  // namespace xmpp
