@@ -176,8 +176,8 @@ check_git_state() {
 
 check_build() {
     root=$(repo_root)
-    log "running make (doctests)..."
-    run make -C "$root"
+    log "running make DEBUG=1 (doctests)..."
+    run make -C "$root" DEBUG=1
     log "build OK"
 }
 

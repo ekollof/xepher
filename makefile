@@ -279,7 +279,11 @@ include depend.mk
 .PHONY: all
 all: depend
 	+$(MAKE) weechat-xmpp
+ifneq ($(DEBUG),)
 	+$(MAKE) test
+else
+	@echo ">>> Skipping doctests (DEBUG=1 or make test)."
+endif
 
 .PHONY: weechat-xmpp
 weechat-xmpp: $(DEPS) xmpp.so

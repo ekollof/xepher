@@ -102,15 +102,17 @@ platforms are **not routinely tested**. Known considerations:
 git clone --depth 1 git@github.com:ekollof/xepher.git
 cd xepher
 make install-deps   # installs system packages (requires sudo)
-make
-make test           # 109 doctests (handler slices, StanzaView, IQ builders, …)
+make                # optimized plugin (no doctests)
+make DEBUG=1        # dev build + 109 doctests
+make test           # doctests only (handler slices, StanzaView, IQ builders, …)
 make install        # installs to ~/.local/share/weechat/plugins/ — do NOT run as root
 ```
 
 On BSD, replace `make` with `gmake` throughout.
 
-Doctest is vendored under `deps/doctest/` (v2.5.2), so `gmake` / `make test` runs
-the full 109 handler-slice tests on every supported platform without a system package.
+Doctest is vendored under `deps/doctest/` (v2.5.2). `make DEBUG=1` or `make test`
+runs the full 109 handler-slice tests on every supported platform without a system package.
+Plain `make` skips doctests.
 
 To build a distribution-style plugin locally (no `.source` embed, same as packages):
 
@@ -1092,7 +1094,7 @@ Pull requests and issues are welcome. See the
   `stanza::spec` builders for outbound stanzas, and `weechat::UiPort` /
   `BufferPort` / `LineStorePort` for WeeChat output. Raw `xmpp_stanza_get_*`
   and `weechat_printf` belong only in hook/adapter glue.
-- **Tests** — run `make` (109 doctests) after changes; manual WeeChat testing
+- **Tests** — run `make DEBUG=1` or `make test` (109 doctests) after changes; manual WeeChat testing
   for integration behaviour.
 - **Releases** — see [Releasing wiki](https://github.com/ekollof/xepher/wiki/Releasing);
   pushing a `v*` tag triggers GitHub Actions to build and attach packages.

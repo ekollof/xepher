@@ -51,15 +51,15 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 - **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick)
 - **Output**: `xmpp.so` (WeeChat plugin)
 - **Dependencies**: Managed via git submodules in `deps/`
-- Always build after code changes (109 doctests run automatically at the end; doctest is vendored in `deps/doctest/`)
+- Always build after code changes; **doctests run automatically only with `DEBUG=1`** (vendored in `deps/doctest/`). Plain `make` skips them — use `make test` to run tests without a full debug rebuild.
 - **Includes**: use `-Isrc` paths (`plugin.hh`, `xmpp/stanza_view.hh`) — never `../` relative includes in `src/`
 
 **Build profiles** (agents: use **`DEBUG=1`** for iterative development):
 
 | Profile | Command | Flags | When |
 |---------|---------|-------|------|
-| Dev (default for agents) | `make DEBUG=1` | `-O0 -DDEBUG -g` | Day-to-day coding, fast rebuilds, assertions on |
-| Optimized | `make` | `-O2 -DNDEBUG -g` | Pre-release smoke test, performance checks |
+| Dev (default for agents) | `make DEBUG=1` | `-O0 -DDEBUG -g` | Day-to-day coding, fast rebuilds, assertions on; **runs 109 doctests** |
+| Optimized | `make` | `-O2 -DNDEBUG -g` | Pre-release smoke test, performance checks; skips doctests |
 | ASan | `make DEBUG=1 ASAN=1` | dev + `-fsanitize=address` | Memory debugging (Linux: links `libasan`) |
 
 Combine with ccache: `CXX="ccache clang++" make DEBUG=1`. Switching between `DEBUG=1` and a plain `make` rebuilds objects — that is expected.
@@ -421,7 +421,7 @@ Xepher follows **semantic versioning** (MAJOR.MINOR.PATCH):
 
 ### Release checklist
 
-1. **All commits pushed** and 109 doctests passing (`make` — optimized build).
+1. **All commits pushed**, 109 doctests passing (`make DEBUG=1`), and optimized build OK (`make`).
 2. **Bump version** in the three packaging files (all must match):
    - `packaging/arch/PKGBUILD` — `pkgver=X.Y.Z`
    - `packaging/rpm/weechat-xmpp.spec` — `Version: X.Y.Z` + new `%changelog` entry
@@ -539,7 +539,7 @@ Skip autojoin for IRC gateway rooms (causes connection issues):
 
 ### Testing Limitations
 
-- **109 doctests** cover handler slices, `StanzaView`, IQ builders, and port stubs (`make` runs them automatically) — extend these when adding protocol logic
+- **109 doctests** cover handler slices, `StanzaView`, IQ builders, and port stubs (`make DEBUG=1` runs them automatically; `make test` anytime) — extend these when adding protocol logic
 - Full WeeChat integration still requires manual testing in a live instance
 - Use `/debug dump` for troubleshooting
 - Check logs: `/set xmpp.look.debug_level 2`
