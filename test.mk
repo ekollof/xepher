@@ -29,7 +29,8 @@ endif
 tests/xmpp.cov.so: $(COVS) $(DEPS) $(HDRS)
 	$(CXX) --coverage $(SHARED_FLAG) $(LDFLAGS) -o tests/xmpp.cov.so $(AS_NEEDED) $(COVS) $(DEPS) $(LDLIBS)
 
-TEST_CPPFLAGS := $(subst -Ideps/lmdbxx,-I../deps/lmdbxx,$(subst -Isrc,-I../src,$(CPPFLAGS)))
+# tests/run is built from tests/; rewrite repo-root -I paths (incl. vendored doctest).
+TEST_CPPFLAGS := $(subst -Ideps,-I../deps,$(subst -Isrc,-I../src,$(subst -Ilibstrophe,-I../libstrophe,$(CPPFLAGS))))
 
 tests/run: $(COVS) tests/main.cc tests/xmpp.cov.so $(wildcard tests/*.inl)
 	cd tests && $(CXX) $(TEST_CPPFLAGS) $(LDFLAGS) -o run main.cc $(patsubst %,../%,$(DEPS)) $(LDLIBS) \
