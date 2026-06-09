@@ -47,12 +47,22 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 ### Local development
 
-- **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Default toolchain is **Clang** (`CC=clang`, `CXX=clang++`; Homebrew LLVM on macOS). The makefile assigns these explicitly (GNU make predefines `CXX=g++`, so `?=` does not work). Combine with ccache: `CXX="ccache clang++" make`
+- **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Default toolchain is **Clang** (`CC=clang`, `CXX=clang++`; Homebrew LLVM on macOS). The makefile assigns these explicitly (GNU make predefines `CXX=g++`, so `?=` does not work). On BSD use `gmake` instead of `make`.
 - **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick)
 - **Output**: `xmpp.so` (WeeChat plugin)
 - **Dependencies**: Managed via git submodules in `deps/`
-- Always run `make` after code changes (109 doctests run automatically at the end; doctest is vendored in `deps/doctest/`)
+- Always build after code changes (109 doctests run automatically at the end; doctest is vendored in `deps/doctest/`)
 - **Includes**: use `-Isrc` paths (`plugin.hh`, `xmpp/stanza_view.hh`) — never `../` relative includes in `src/`
+
+**Build profiles** (agents: use **`DEBUG=1`** for iterative development):
+
+| Profile | Command | Flags | When |
+|---------|---------|-------|------|
+| Dev (default for agents) | `make DEBUG=1` | `-O0 -DDEBUG -g` | Day-to-day coding, fast rebuilds, assertions on |
+| Optimized | `make` | `-O2 -DNDEBUG -g` | Pre-release smoke test, performance checks |
+| ASan | `make DEBUG=1 ASAN=1` | dev + `-fsanitize=address` | Memory debugging (Linux: links `libasan`) |
+
+Combine with ccache: `CXX="ccache clang++" make DEBUG=1`. Switching between `DEBUG=1` and a plain `make` rebuilds objects — that is expected.
 
 ### Distribution / CI builds
 
@@ -158,7 +168,7 @@ Output lands in `packaging/build/` (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`, `.xb
   ```
 - **General**: Prefer `std::ranges::sort` / `unique` / `for_each` / `copy_if` etc. over raw loops or `<algorithm>`. Zero classical `<algorithm>` calls remain in src (except commented). Update this section when adding new patterns (e.g. more `views`).
 
-**Build note**: Use parallel + ccache during iterative work: `CXX="ccache clang++" make` (parallel `-j` is on by default; see Build System). Run `make` (not clean) after every logical group of changes; verify doctests pass.
+**Build note**: Use parallel + ccache during iterative work: `CXX="ccache clang++" make DEBUG=1` (parallel `-j` is on by default; see Build System). Run `make DEBUG=1` (not clean) after every logical group of changes; verify doctests pass.
 
 (Concrete examples of these patterns are visible throughout `src/` — e.g. OMEMO helpers, account/channel map handling, connection data-form/OG parsing, and avatar/ base64 paths. Extend them surgically.)
 
@@ -411,7 +421,7 @@ Xepher follows **semantic versioning** (MAJOR.MINOR.PATCH):
 
 ### Release checklist
 
-1. **All commits pushed** and 109 doctests passing (`make`).
+1. **All commits pushed** and 109 doctests passing (`make` — optimized build).
 2. **Bump version** in the three packaging files (all must match):
    - `packaging/arch/PKGBUILD` — `pkgver=X.Y.Z`
    - `packaging/rpm/weechat-xmpp.spec` — `Version: X.Y.Z` + new `%changelog` entry
@@ -696,7 +706,7 @@ Prefer the debug socket for all other interactions.
 1. **Understand the request** - ask clarifying questions if needed
 2. **Explore existing code** - find similar handler slices and port usage (match `StanzaView`/`UiPort` patterns in nearby files)
 3. **Make minimal changes** - surgical fixes, don't refactor unnecessarily
-4. **Build and test**: `make && <test in WeeChat>`
+4. **Build and test**: `make DEBUG=1 && <test in WeeChat>` (run plain `make` before release to verify the optimized build)
 5. **Update documentation** - README.md, DOAP.xml if applicable
 6. **Commit with clear message** - follow conventions above
 7. **Push to repository** - backup work regularly
@@ -730,7 +740,7 @@ After implementing features, manually verify in WeeChat:
 When implementing a new feature:
 
 - [ ] Code implementation in appropriate files
-- [ ] Build succeeds (`make`)
+- [ ] Build succeeds (`make DEBUG=1`; plain `make` before release)
 - [ ] Manual testing in WeeChat (see Manual Testing Checklist)
 - [ ] README.md updated (feature list, commands, TODOs)
 - [ ] DOAP.xml updated (if XEP-related)
@@ -764,17 +774,23 @@ When updating documentation:
 ## Useful Commands
 
 ```bash
-# Build (parallel by default; NPROC overrides core count)
-make
-CXX="ccache clang++" make
+# Dev build (agents: use this while coding)
+make DEBUG=1
+CXX="ccache clang++" make DEBUG=1
 
-# Serial build (debugging only)
-make -j1
+# Optimized build (pre-release / matches installed plugin performance)
+make
+
+# AddressSanitizer (combine with DEBUG=1; Linux links libasan)
+make DEBUG=1 ASAN=1
+
+# Serial build (debugging makefile ordering only)
+make -j1 DEBUG=1
 
 # Clean build (avoid; prefer ccache incremental)
-make clean && make
+make clean && make DEBUG=1
 
-# Distribution build (no .source embed — matches packaging)
+# Distribution build (no .source embed — matches packaging; optimized)
 make PACKAGE_BUILD=1 weechat-xmpp
 
 # Package all distros via Docker (same script as CI)
@@ -808,7 +824,7 @@ git push
 - **Re-read `AGENTS.md`** if the thread was compacted or you are continuing from a summary
 - **Follow existing patterns** in the codebase (ports + stanza builders + modernized `ranges`/`string_view`/`fmt` in touched areas)
 - **Make minimal changes** - don't refactor working code; migrate raw `weechat_*` / `xmpp_stanza_*` only in code you are already editing
-- **Test incrementally** - build after each logical change
+- **Test incrementally** - `make DEBUG=1` after each logical change
 - **Document as you go** - don't leave docs for later
 - **Ask before major changes** - discuss architecture decisions
 - **Never create loose summary/planning documents** - only update README.md, DOAP.xml, or code comments
