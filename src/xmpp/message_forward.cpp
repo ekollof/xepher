@@ -156,6 +156,26 @@ std::optional<std::string> conversation_channel_jid(std::string_view from_bare,
     return std::nullopt;
 }
 
+std::optional<std::string> conversation_channel_jid_from_message(
+    std::string_view from_full,
+    std::string_view to_full,
+    std::string_view account_bare_jid)
+{
+    std::string from_bare;
+    if (!from_full.empty())
+        from_bare = ::jid(nullptr, std::string(from_full).c_str()).bare;
+
+    const std::string to_bare = to_full.empty()
+        ? std::string{}
+        : ::jid(nullptr, std::string(to_full).c_str()).bare;
+
+    if (from_bare.empty() && !to_bare.empty()
+        && !bare_jid_iequals(to_bare, account_bare_jid))
+        from_bare = std::string(account_bare_jid);
+
+    return conversation_channel_jid(from_bare, to_bare, account_bare_jid);
+}
+
 std::optional<std::string> mam_channel_jid_for_addresses(std::string_view from_bare,
                                                            std::string_view to_bare,
                                                            std::string_view account_bare_jid)

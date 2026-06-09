@@ -1604,6 +1604,24 @@ TEST_CASE("bare_jid_iequals and conversation_channel_jid are case-insensitive")
     CHECK(*inbound_channel == "Bob@Example.org");
 }
 
+TEST_CASE("conversation_channel_jid_from_message routes sent carbon payloads")
+{
+    const auto sent_receipt = xmpp::conversation_channel_jid_from_message(
+        "alice@example.org/phone", "bob@example.org", "alice@example.org");
+    REQUIRE(sent_receipt.has_value());
+    CHECK(*sent_receipt == "bob@example.org");
+
+    const auto sent_without_from = xmpp::conversation_channel_jid_from_message(
+        "", "bob@example.org", "alice@example.org");
+    REQUIRE(sent_without_from.has_value());
+    CHECK(*sent_without_from == "bob@example.org");
+
+    const auto inbound = xmpp::conversation_channel_jid_from_message(
+        "bob@example.org/mobile", "alice@example.org/desktop", "alice@example.org");
+    REQUIRE(inbound.has_value());
+    CHECK(*inbound == "bob@example.org");
+}
+
 TEST_CASE("parse_carbon_inner_message accepts mixed-case envelope from")
 {
     unit_strophe_env env;

@@ -308,6 +308,9 @@ namespace weechat
         // Maps IQ id → buffer to print result into.
         std::unordered_map<std::string, struct t_gui_buffer *> mam_prefs_queries;
 
+        // XEP-0280: pending carbons enable IQ id (connect-time negotiation).
+        std::optional<std::string> pending_carbons_enable_iq_;
+
         // XEP-0060: pending publish IQs (/feed post, /feed reply, /feed retract).
         // Maps IQ id → context used to report errors to the user.
         struct pubsub_publish_context {

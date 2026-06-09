@@ -67,6 +67,11 @@ conversation_channel_jid(std::string_view from_bare,
                          std::string_view account_bare_jid);
 
 [[nodiscard]] XMPP_TEST_EXPORT std::optional<std::string>
+conversation_channel_jid_from_message(std::string_view from_full,
+                                      std::string_view to_full,
+                                      std::string_view account_bare_jid);
+
+[[nodiscard]] XMPP_TEST_EXPORT std::optional<std::string>
 mam_channel_jid_for_addresses(std::string_view from_bare,
                               std::string_view to_bare,
                               std::string_view account_bare_jid);

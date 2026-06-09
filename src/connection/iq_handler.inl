@@ -66,6 +66,31 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     if (handle_ping_iq_event(stanza, own_jid))
         return true;
 
+    // XEP-0280: carbons enable IQ result/error
+    if (id && account.pending_carbons_enable_iq_
+        && *account.pending_carbons_enable_iq_ == id)
+    {
+        account.pending_carbons_enable_iq_.reset();
+        if (type && weechat_strcasecmp(type, "error") == 0)
+        {
+            const auto err_detail = ::xmpp::iq_error_text(
+                ::xmpp::StanzaView(stanza).child("error"));
+            XDEBUG("Message carbons enable rejected: {}", err_detail);
+            weechat_printf(account.buffer,
+                           "%sMessage carbons: server rejected enable (%s)",
+                           weechat_prefix("error"),
+                           err_detail.c_str());
+        }
+        else
+        {
+            XDEBUG("Message carbons enabled");
+            weechat_printf(account.buffer,
+                           "%sMessage carbons enabled",
+                           weechat_prefix("network"));
+        }
+        return true;
+    }
+
     // XEP-0441: MAM Preferences — handle <prefs xmlns='urn:xmpp:mam:2'> result/error
     if (id && account.mam_prefs_queries.contains(id))
     {

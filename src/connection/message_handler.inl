@@ -51,6 +51,46 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // Cache own JID for use when stanza 'from' is absent (e.g. self-messages).
     // account.jid() returns a temporary; taking .data() on it is a dangling pointer.
     const std::string own_jid_str = account.jid();
+
+    const auto canonical_channel_key = [&](std::string_view partner_bare) -> std::string {
+        if (partner_bare.empty())
+            return {};
+        const std::string partner(partner_bare);
+        if (account.channels.contains(partner))
+            return partner;
+        for (const auto &[key, _] : account.channels)
+        {
+            if (::xmpp::bare_jid_iequals(key, partner_bare))
+                return key;
+        }
+        return partner;
+    };
+
+    const auto find_channel_for_partner = [&](std::string_view partner_bare)
+        -> weechat::channel *
+    {
+        const std::string key = canonical_channel_key(partner_bare);
+        if (key.empty())
+            return nullptr;
+        if (auto it = account.channels.find(key); it != account.channels.end())
+            return &it->second;
+        return nullptr;
+    };
+
+    const auto partner_channel_from_message = [&](xmpp_stanza_t *msg)
+        -> weechat::channel *
+    {
+        const char *msg_from = xmpp_stanza_get_from(msg);
+        const char *msg_to = xmpp_stanza_get_to(msg);
+        const auto partner = ::xmpp::conversation_channel_jid_from_message(
+            msg_from ? std::string_view(msg_from) : std::string_view{},
+            msg_to ? std::string_view(msg_to) : std::string_view{},
+            own_jid_str);
+        if (!partner)
+            return nullptr;
+        return find_channel_for_partner(*partner);
+    };
+
      std::string omemo_cleartext_storage; // owns OMEMO-decrypted text
      std::string pgp_cleartext_storage; // owns PGP-decrypted text (avoids strdup)
      char *cleartext = nullptr;
@@ -133,12 +173,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 const std::string cs_nick_s = ::jid(nullptr, chat_state->from.c_str()).resource;
                 from_bare = cs_from_bare_s.c_str();
                 nick = cs_nick_s.c_str();
-                channel = nullptr;
-                if (auto it = account.channels.find(cs_from_bare_s); it != account.channels.end())
-                {
-                    auto& [_, ch] = *it;
-                    channel = &ch;
-                }
+                channel = partner_channel_from_message(stanza);
                 if (!channel)
                     return 1;
 
@@ -479,15 +514,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             {
                 if (auto ack = ::xmpp::parse_incoming_receipt(view))
                 {
-                    const std::string bare_s = ::jid(nullptr, ack->from.c_str()).bare;
-                    if (auto ch_it = account.channels.find(bare_s); ch_it != account.channels.end())
+                    if (weechat::channel *ch = partner_channel_from_message(stanza))
                     {
-                        auto& [_, ch] = *ch_it;
                         const bool muc_channel =
-                            ch.type == weechat::channel::chat_type::MUC;
+                            ch->type == weechat::channel::chat_type::MUC;
                         const auto event = weechat::build_incoming_receipt_render_event(
                             ack->acked_id, muc_channel);
-                        weechat::apply_render_event(ch.buffer, event);
+                        weechat::apply_render_event(ch->buffer, event);
                     }
                 }
                 return 1;
@@ -496,15 +529,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             {
                 if (auto ack = ::xmpp::parse_incoming_displayed(view))
                 {
-                    const std::string bare_s = ::jid(nullptr, ack->from.c_str()).bare;
-                    if (auto ch_it = account.channels.find(bare_s); ch_it != account.channels.end())
+                    if (weechat::channel *ch = partner_channel_from_message(stanza))
                     {
-                        auto& [_, ch] = *ch_it;
                         const bool muc_channel =
-                            ch.type == weechat::channel::chat_type::MUC;
+                            ch->type == weechat::channel::chat_type::MUC;
                         const auto event = weechat::build_incoming_displayed_render_event(
                             ack->acked_id, muc_channel);
-                        weechat::apply_render_event(ch.buffer, event);
+                        weechat::apply_render_event(ch->buffer, event);
                     }
                 }
                 return 1;
@@ -597,6 +628,82 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             }
         }
 
+        // XEP-0444 / XEP-0424: payloadless messages (e.g. carbon-copied reactions)
+        {
+            const auto payloadless_view = ::xmpp::StanzaView(stanza);
+            if (auto reactions = ::xmpp::parse_message_reactions(payloadless_view))
+            {
+                if (weechat::channel *rx_ch = partner_channel_from_message(stanza))
+                {
+                    if (rx_ch->buffer)
+                    {
+                        [[maybe_unused]] const bool reactions_applied =
+                            weechat::line_store_apply_reactions_by_id(
+                                rx_ch->buffer, reactions->target_id, reactions->emojis);
+                    }
+                }
+                return 1;
+            }
+            if (auto retraction = ::xmpp::parse_message_retraction(payloadless_view))
+            {
+                const char *rx_from = xmpp_stanza_get_from(stanza);
+                const char *rx_to = xmpp_stanza_get_to(stanza);
+                if (!rx_from && rx_to)
+                {
+                    const std::string rx_to_bare = ::jid(nullptr, rx_to).bare;
+                    if (!rx_to_bare.empty()
+                        && !::xmpp::bare_jid_iequals(rx_to_bare, own_jid_str))
+                        rx_from = own_jid_str.c_str();
+                }
+                if (weechat::channel *rx_ch = partner_channel_from_message(stanza))
+                {
+                    const auto partner_jid = ::xmpp::conversation_channel_jid_from_message(
+                        rx_from ? std::string_view(rx_from) : std::string_view{},
+                        rx_to ? std::string_view(rx_to) : std::string_view{},
+                        own_jid_str);
+                    if (partner_jid)
+                    {
+                        account.mam_cache_retract_message(
+                            partner_jid->c_str(), retraction->target_id.c_str());
+                    }
+
+                    const bool is_muc_for_retraction =
+                        rx_ch->type == weechat::channel::chat_type::MUC;
+                    const std::string rx_from_bare = rx_from
+                        ? ::jid(nullptr, rx_from).bare : std::string{};
+                    const std::string retraction_sender = ::xmpp::retraction_sender_key(
+                        rx_from, rx_from_bare.c_str(), is_muc_for_retraction);
+
+                    const auto retraction_lookup =
+                        weechat::line_store_tombstone_retraction_by_id(
+                            rx_ch->buffer,
+                            retraction->target_id,
+                            ::xmpp::format_retraction_tombstone(),
+                            "xmpp_retracted,notify_none",
+                            retraction_sender,
+                            {},
+                            false);
+
+                    if (retraction_lookup == weechat::LineStoreLookupResult::Found)
+                    {
+                        weechat_printf_date_tags(rx_ch->buffer, 0, "notify_none",
+                            "%s%s retracted a message",
+                            weechat_prefix("network"),
+                            rx_from_bare.empty() ? own_jid_str.c_str() : rx_from_bare.c_str());
+                    }
+                    else if (retraction_lookup
+                             != weechat::LineStoreLookupResult::SenderRejected)
+                    {
+                        weechat_printf_date_tags(rx_ch->buffer, 0, "notify_none",
+                            "%s%s retracted a message (not found in buffer)",
+                            weechat_prefix("network"),
+                            rx_from_bare.empty() ? own_jid_str.c_str() : rx_from_bare.c_str());
+                    }
+                }
+                return 1;
+            }
+        }
+
         return 1;
     }
     type = xmpp_stanza_get_type(stanza);
@@ -665,21 +772,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             from_bare ? std::string_view(from_bare) : std::string_view{},
             to_bare ? std::string_view(to_bare) : std::string_view{},
             own_jid_str))
-        channel_id_storage = std::move(*channel_jid);
+        channel_id_storage = canonical_channel_key(*channel_jid);
     else if (from_bare)
-        channel_id_storage = from_bare;
+        channel_id_storage = canonical_channel_key(from_bare);
     else if (to_bare)
-        channel_id_storage = to_bare;
+        channel_id_storage = canonical_channel_key(to_bare);
     const char *channel_id = channel_id_storage.empty() ? nullptr : channel_id_storage.c_str();
-    parent_channel = nullptr;
-    if (channel_id)
-    {
-        if (auto parent_ch_it = account.channels.find(channel_id); parent_ch_it != account.channels.end())
-        {
-            auto& [_, ch] = *parent_ch_it;
-            parent_channel = &ch;
-        }
-    }
+    parent_channel = channel_id ? find_channel_for_partner(channel_id) : nullptr;
     const char *pm_id = from_is_account ? to : from;
     channel = parent_channel;
     if (!channel)

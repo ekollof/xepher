@@ -271,14 +271,18 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             }
         }
 
-        this->send(stanza::iq()
-                    .from(account.jid())
-                    .type("set")
-                    .id(stanza::uuid(account.context))
-                    .xep0280()
-                    .enable()
-                    .build(account.context)
-                    .get());
+        {
+            const std::string carbons_enable_id = stanza::uuid(account.context);
+            account.pending_carbons_enable_iq_ = carbons_enable_id;
+            this->send(stanza::iq()
+                        .from(account.jid())
+                        .type("set")
+                        .id(carbons_enable_id)
+                        .xep0280()
+                        .enable()
+                        .build(account.context)
+                        .get());
+        }
 
         this->send(stanza::iq()
                     .from(account.jid())
@@ -647,6 +651,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
     else
     {
         account.jid_bare_cache_.clear();
+        account.pending_carbons_enable_iq_.reset();
 
         const char *status_text = status == event::disconnect ? "disconnect" :
                                   status == event::fail ? "fail" :
