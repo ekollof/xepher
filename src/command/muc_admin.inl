@@ -655,6 +655,35 @@ int command__feed(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
+    // ── /feed close ───────────────────────────────────────────────────────────
+    // Close every open FEED buffer without unsubscribing from PubSub nodes.
+    if (subcmd == "close")
+    {
+        std::vector<struct t_gui_buffer *> to_close;
+        to_close.reserve(ptr_account->channels.size());
+        for (auto& [_, ch] : ptr_account->channels)
+        {
+            if (ch.type == weechat::channel::chat_type::FEED && ch.buffer)
+                to_close.push_back(ch.buffer);
+        }
+
+        if (to_close.empty())
+        {
+            weechat_printf(buffer,
+                           _("%s%s: no open feed buffers"),
+                           weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+            return WEECHAT_RC_OK;
+        }
+
+        weechat_printf(buffer,
+                       _("%sClosing %zu feed buffer(s)…"),
+                       weechat_prefix("network"), to_close.size());
+        for (auto *buf : to_close)
+            weechat_buffer_close(buf);
+
+        return WEECHAT_RC_OK;
+    }
+
     // ── /feed subscribe <service> <node> ────────────────────────────────────
     if (subcmd == "subscribe" || subcmd == "unsubscribe")
     {

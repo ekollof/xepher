@@ -785,6 +785,7 @@ void command__init()
         N_("fetch and interact with PubSub feeds (XEP-0060 / XEP-0472 microblogging)"),
          N_("[<service-jid> [--all | <node>] [--limit N] [--before <id>] [--latest]]\n"
            "  discover [--all]\n"
+           "  close\n"
            "  post <service-jid> <node> [--open] [--title <title>] <text>\n"
            "  post [--open] [--title <title>] <text>  (from a feed buffer)\n"
            "  post [--edit]                           (compose in $EDITOR)\n"
@@ -816,12 +817,14 @@ void command__init()
            "your subscribed nodes from each one.\n\n"
            "/feed discover: list PubSub services found on your server at connect time.\n"
            "  /feed discover --all  fetches every node from every discovered service.\n\n"
+           "/feed close: close all open feed buffers (does not unsubscribe).\n\n"
            "After a fetch the feed buffer shows a '/feed ... --before <id>' hint for\n"
            "paging to older entries. Use --latest to go back to the newest page.\n\n"
            "Examples:\n"
            "  /feed                                          (auto-discover and fetch subscriptions)\n"
            "  /feed discover                                 (list known pubsub services)\n"
            "  /feed discover --all                           (fetch all nodes from all services)\n"
+           "  /feed close                                    (close all feed buffers)\n"
            "  /feed news.movim.eu                            (fetch subscribed nodes)\n"
            "  /feed news.movim.eu --all                      (fetch all discovered nodes)\n"
            "  /feed news.movim.eu --all --limit 50           (up to 50 items per node)\n"
@@ -846,7 +849,7 @@ void command__init()
            "  /feed subscribe news.movim.eu Phoronix         (subscribe to node)\n"
            "  /feed unsubscribe news.movim.eu Phoronix       (unsubscribe from node)\n"
            "  /feed subscriptions news.movim.eu              (list subscriptions)"),
-        "discover||post||reply||comments||repeat||retract||subscribe||unsubscribe||subscriptions",
+        "discover||close||post||reply||comments||repeat||retract||subscribe||unsubscribe||subscriptions",
         &command__feed, nullptr, nullptr);
     if (!hook)
         weechat_printf(nullptr, "Failed to setup command /feed");
