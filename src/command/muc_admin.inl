@@ -1632,6 +1632,15 @@ int command__feed(const void *pointer, void *data,
 
     std::string service_jid = argv[1];
 
+    // Remember PubSub service hosts so /feed (no args) can include external services.
+    if (::xmpp::is_pubsub_component_jid(
+            service_jid, std::span<const std::string>{ptr_account->known_pubsub_services}))
+    {
+        auto &kps = ptr_account->known_pubsub_services;
+        if (!std::ranges::contains(kps, service_jid))
+            kps.push_back(service_jid);
+    }
+
     // Check for --all, --limit N, --before <id>, --latest anywhere in args after service-jid
     bool fetch_all = false;
     bool fetch_latest = false;  // --latest: clear saved RSM cursor and fetch newest page
@@ -1660,9 +1669,12 @@ int command__feed(const void *pointer, void *data,
             node_name = argv[i];
     }
 
-    // If no node was given and the service looks like a user JID (contains '@'),
+    // If no node was given and the target is a user JID (not a PubSub component),
     // default to the PEP microblog node — so "/feed user@example.org" just works.
-    if (node_name.empty() && !fetch_all && service_jid.contains('@'))
+    // Service JIDs such as feed@ussr.win must use subscriptions/disco, not PEP.
+    if (node_name.empty() && !fetch_all
+        && ::xmpp::should_default_pep_microblog_node(
+            service_jid, std::span<const std::string>{ptr_account->known_pubsub_services}))
         node_name = "urn:xmpp:microblog:0";
 
     if (!node_name.empty())

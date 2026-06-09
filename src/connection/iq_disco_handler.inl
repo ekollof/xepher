@@ -1206,19 +1206,20 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                     }
                 }
 
-                // XEP-0060: record pubsub service components discovered at
-                // connect time so /feed discover can list them without the
-                // user having to know the service JID in advance.
-                if (upload_disco && category == "pubsub")
+                // XEP-0060: record pubsub service components so /feed discover
+                // can list them without the user having to know the JID in advance.
+                if (category == "pubsub")
                 {
-                    const std::string &svc_jid = upload_service_jid.empty()
-                        ? (from ? std::string(from) : std::string{})
-                        : upload_service_jid;
-                    if (!svc_jid.empty())
+                    const std::string &svc_jid = upload_disco && !upload_service_jid.empty()
+                        ? upload_service_jid
+                        : (from ? std::string(from) : std::string{});
+                    const std::string svc_bare = ::jid(nullptr, svc_jid).bare;
+                    const std::string own_bare = ::jid(nullptr, account.jid()).bare;
+                    if (!svc_bare.empty() && svc_bare != own_bare)
                     {
                         auto &kps = account.known_pubsub_services;
-                        if (!std::ranges::contains(kps, svc_jid))
-                            kps.push_back(svc_jid);
+                        if (!std::ranges::contains(kps, svc_bare))
+                            kps.push_back(svc_bare);
                     }
                 }
                 // Legacy OMEMO devicelist fetch via hard-coded IQ id ("fetch2")

@@ -364,6 +364,12 @@ void store_tofu_trust(omemo &self,
 void request_axolotl_devicelist(weechat::account &account, std::string_view jid)
 {
     const std::string target_jid = normalize_bare_jid(account.context, jid);
+    if (::xmpp::is_pubsub_component_jid(
+            target_jid, std::span<const std::string>{account.known_pubsub_services}))
+    {
+        XDEBUG("omemo: skipping devicelist for pubsub service JID {}", target_jid);
+        return;
+    }
     if (account.omemo.missing_axolotl_devicelist.contains(target_jid))
         return;
     account.omemo.missing_axolotl_devicelist.insert(target_jid);

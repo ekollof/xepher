@@ -46,6 +46,7 @@
 #include "weechat/ui_port.hh"
 #include "strophe.hh"
 #include "xmpp/node.hh"
+#include "xmpp/iq_pubsub_feed.hh"
 #include "xmpp/ns.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/xep-0060.inl"

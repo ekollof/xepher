@@ -25,6 +25,7 @@
 #include "plugin.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/node.hh"
+#include "xmpp/iq_pubsub_feed.hh"
 #include "xmpp/xep-0054.inl"
 #include "xmpp/xep-0292.inl"
 #include "account.hh"

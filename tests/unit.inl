@@ -1469,6 +1469,15 @@ TEST_CASE("iq_pubsub and omemo pubsub helpers")
     CHECK(xmpp::is_microblog_comments_node("urn:xmpp:microblog:0:comments/abc"));
     CHECK_FALSE(xmpp::is_microblog_comments_node("urn:xmpp:microblog:0"));
 
+    CHECK(xmpp::is_pubsub_component_jid("news.movim.eu"));
+    CHECK(xmpp::is_pubsub_component_jid("feed@ussr.win"));
+    CHECK(xmpp::is_pubsub_component_jid("pubsub.example.org"));
+    CHECK_FALSE(xmpp::is_pubsub_component_jid("alice@example.org"));
+
+    CHECK(xmpp::should_default_pep_microblog_node("alice@example.org"));
+    CHECK_FALSE(xmpp::should_default_pep_microblog_node("feed@ussr.win"));
+    CHECK_FALSE(xmpp::should_default_pep_microblog_node("news.movim.eu"));
+
     CHECK(xmpp::is_legacy_devicelist_pubsub_node(
               "eu.siacs.conversations.axolotl.devicelist"));
     CHECK(xmpp::is_legacy_bundle_pubsub_node(
