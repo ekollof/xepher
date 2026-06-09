@@ -49,20 +49,24 @@ After installing, restart WeeChat (or run `/plugin load xmpp.so` on first instal
 
 ### Dependencies
 
-| Library | Type | Linux | macOS (Homebrew) |
-|---------|------|-------|-----------------|
-| libstrophe | runtime | ✅ package | ✅ `brew install libstrophe` |
-| libxml2 | runtime | ✅ package | ✅ `brew install libxml2` |
-| lmdb | runtime | ✅ package | ✅ `brew install lmdb` |
-| libomemo-c | runtime | ✅ package | ⚠️ build from source |
-| libsignal-protocol-c | runtime | ✅ package | ⚠️ build from source |
-| gpgme | runtime | ✅ package | ✅ `brew install gpgme` |
-| libfmt | runtime | ✅ package | ✅ `brew install fmt` |
-| g++ >= GCC 12 / clang >= 15 (Linux/macOS); clang >= 13 (BSD) | build | ✅ | ✅ `brew install llvm` |
-| bison | build | ✅ package | ✅ `brew install bison` |
-| flex | build | ✅ package | ✅ `brew install flex` |
-| doctest | test | ✅ | ✅ |
-| WeeChat >= 3.0 | runtime | ✅ package | ✅ `brew install weechat` |
+| Library | Type | Linux | FreeBSD | OpenBSD | macOS (Homebrew) |
+|---------|------|-------|---------|---------|-----------------|
+| libstrophe | runtime | ✅ package | ✅ `pkg install libstrophe` | ✅ `pkg_add libstrophe` | ✅ `brew install libstrophe` |
+| libxml2 | runtime | ✅ package | ✅ `pkg install libxml2` | ✅ `pkg_add libxml` | ✅ `brew install libxml2` |
+| lmdb | runtime | ✅ package | ✅ `pkg install lmdb` | ✅ `pkg_add lmdb` | ✅ `brew install lmdb` |
+| libomemo-c | runtime | ✅ package | ✅ `pkg install libomemo-c` | ✅ `pkg_add libomemo-c` | ⚠️ build from source |
+| libsignal-protocol-c | runtime | ✅ package | ✅ `pkg install libsignal-protocol-c` | ✅ `pkg_add libsignal-protocol-c` | ⚠️ build from source |
+| gpgme | runtime | ✅ package | ✅ `pkg install gpgme` | ✅ `pkg_add gpgme` | ✅ `brew install gpgme` |
+| libfmt | runtime | ✅ package | ✅ `pkg install libfmt` | ✅ `pkg_add fmt` | ✅ `brew install fmt` |
+| g++ / clang (C++23; clang ≥ 13 on BSD) | build | ✅ package | ✅ `pkg install gcc` | ✅ base-clang / `pkg_add gcc` | ✅ `brew install llvm` |
+| gmake | build | — (GNU make default) | ✅ `pkg install gmake` | ✅ `pkg_add gmake` | ✅ `brew install make` |
+| bison | build | ✅ package | ✅ `pkg install bison` | ✅ `pkg_add bison` | ✅ `brew install bison` |
+| flex | build | ✅ package | ✅ `pkg install flex` | ✅ `pkg_add flex` | ✅ `brew install flex` |
+| doctest | test | ✅ | ⚠️ optional | ⚠️ optional | ✅ |
+| WeeChat >= 3.0 | runtime | ✅ package | ✅ `pkg install weechat` | ✅ `pkg_add weechat` | ✅ `brew install weechat` |
+
+On FreeBSD and OpenBSD, run `./install-deps.sh` (or build from the port skeletons in
+`packaging/freebsd/` and `packaging/openbsd/`). Use `gmake` instead of `make`.
 
 ### Supported platforms
 
@@ -84,8 +88,8 @@ platforms are **not routinely tested**. Known considerations:
   FreeBSD 13+/14 and OpenBSD 7.x ship Clang 14–17 and are fine. NetBSD 9.x
   ships Clang 7 and **cannot build this plugin** — upgrade to NetBSD 10.x
   (ships Clang 13+) or install a newer Clang from pkgsrc.
-- `libsignal-protocol-c` and `libomemo-c` are not available in base package
-  repositories on OpenBSD/NetBSD and must be built from ports/pkgsrc source.
+- `libsignal-protocol-c` and `libomemo-c` are packaged on FreeBSD and OpenBSD;
+  on NetBSD they may still need to be built from pkgsrc source.
 - The `DEBUG=1` address-sanitizer flags (`-lasan -lrt`) are Linux-only and are
   automatically skipped on other platforms.
 - The `.source` ELF section embedding step (`objcopy --add-section`) is
