@@ -16,6 +16,9 @@ void weechat::connection::handle_pubsub_mam_disco_iq_error(xmpp_stanza_t *stanza
                 const int max_items = 20;
                 for (const auto &feed_key : deferred)
                 {
+                    if (!account.feed_is_open(feed_key))
+                        continue;
+
                     auto slash = feed_key.find('/');
                     if (slash == std::string::npos) continue;
                     std::string node_name = feed_key.substr(slash + 1);
@@ -1091,13 +1094,16 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                 {
                     auto& [_, deferred] = *def_it;
                     const int max_items = 20;
-                    for (const auto &feed_key : deferred)
-                    {
-                        auto slash = feed_key.find('/');
-                        if (slash == std::string::npos) continue;
-                        std::string node_name = feed_key.substr(slash + 1);
+                for (const auto &feed_key : deferred)
+                {
+                    if (!account.feed_is_open(feed_key))
+                        continue;
 
-                        if (has_mam)
+                    auto slash = feed_key.find('/');
+                    if (slash == std::string::npos) continue;
+                    std::string node_name = feed_key.substr(slash + 1);
+
+                    if (has_mam)
                         {
                             // XEP-0442 + XEP-0413: MAM query with Order-By
                             std::string uid = stanza::uuid(account.context);

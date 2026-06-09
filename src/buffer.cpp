@@ -253,8 +253,8 @@ int buffer__close_cb(const void *pointer, void *data,
                     break;
                 }
                 case weechat::channel::chat_type::FEED:
-                    // Remove from LMDB feed-open registry so it is not restored on reconnect
-                    ptr_account->feed_open_unregister(std::string(ptr_channel->name));
+                    // Drop feed-open state and cancel pending pubsub/MAM fetches.
+                    ptr_account->feed_dismiss(ptr_channel->name);
                     break;
             }
         }

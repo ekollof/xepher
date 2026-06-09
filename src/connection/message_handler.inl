@@ -306,6 +306,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 std::string node_name    = pq.node;
                 std::string feed_key     = fmt::format("{}/{}", feed_service, node_name);
 
+                if (!account.feed_is_open(feed_key))
+                    return 1;
+
                 auto [ch_it, inserted] = account.channels.try_emplace(
                     feed_key,
                     account, weechat::channel::chat_type::FEED,

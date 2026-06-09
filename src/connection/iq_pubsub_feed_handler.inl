@@ -56,10 +56,13 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                     std::string node_name       = fi.node;
                     std::string before_cursor   = fi.before_cursor;
                     int         max_items_req   = fi.max_items;
+                    std::string feed_key = fmt::format("{}/{}", feed_service, node_name);
                     account.pubsub_fetch_ids.erase(fetch_it);
                     handled = true;
 
-                    std::string feed_key = fmt::format("{}/{}", feed_service, node_name);
+                    if (!account.feed_is_open(feed_key))
+                        return handled;
+
                     auto [ch_it, inserted] = account.channels.try_emplace(
                         feed_key,
                         account,

@@ -35,6 +35,7 @@ void weechat::account::mam_cache_init()
         
         // Load capability cache from database
         caps_cache_load();
+        feed_open_sync_from_cache();
     } catch (const lmdb::error& ex) {
         weechat_printf(nullptr, "%sxmpp: MAM cache init failed - %s",
                       weechat_prefix("error"), ex.what());
@@ -518,7 +519,11 @@ void weechat::account::feed_item_mark_seen(std::string_view feed_key, std::strin
 
 void weechat::account::feed_open_register(std::string_view feed_key)
 {
-    if (!mam_db_env || feed_key.empty()) return;
+    if (feed_key.empty()) return;
+
+    feed_open_keys_.insert(std::string(feed_key));
+
+    if (!mam_db_env) return;
 
     std::string key = fmt::format("feed_open:{}", feed_key);
     static const char *val_str = "1";
@@ -536,7 +541,11 @@ void weechat::account::feed_open_register(std::string_view feed_key)
 
 void weechat::account::feed_open_unregister(std::string_view feed_key)
 {
-    if (!mam_db_env || feed_key.empty()) return;
+    if (feed_key.empty()) return;
+
+    feed_open_keys_.erase(std::string(feed_key));
+
+    if (!mam_db_env) return;
 
     std::string key = fmt::format("feed_open:{}", feed_key);
     try {
@@ -547,6 +556,58 @@ void weechat::account::feed_open_unregister(std::string_view feed_key)
         txn.commit();
     } catch (const lmdb::error&) {
         // Silently ignore delete errors
+    }
+}
+
+bool weechat::account::feed_is_open(const std::string_view feed_key) const
+{
+    return !feed_key.empty() && feed_open_keys_.contains(std::string(feed_key));
+}
+
+void weechat::account::feed_open_sync_from_cache()
+{
+    feed_open_keys_.clear();
+    for (const auto &feed_key : feed_open_list())
+        feed_open_keys_.insert(feed_key);
+}
+
+void weechat::account::feed_dismiss(std::string_view feed_key)
+{
+    if (feed_key.empty()) return;
+
+    feed_open_unregister(feed_key);
+
+    const auto slash = feed_key.find('/');
+    if (slash == std::string_view::npos) return;
+
+    const std::string service{feed_key.substr(0, slash)};
+    const std::string node{feed_key.substr(slash + 1)};
+
+    if (auto def_it = pubsub_mam_deferred_feeds.find(service);
+        def_it != pubsub_mam_deferred_feeds.end())
+    {
+        auto &deferred = def_it->second;
+        std::erase(deferred, std::string(feed_key));
+        if (deferred.empty())
+            pubsub_mam_deferred_feeds.erase(def_it);
+    }
+
+    for (auto it = pubsub_mam_queries.begin(); it != pubsub_mam_queries.end();)
+    {
+        const auto &[_, pq] = *it;
+        if (pq.service == service && pq.node == node)
+            it = pubsub_mam_queries.erase(it);
+        else
+            ++it;
+    }
+
+    for (auto it = pubsub_fetch_ids.begin(); it != pubsub_fetch_ids.end();)
+    {
+        const auto &[_, fi] = *it;
+        if (fi.service == service && fi.node == node)
+            it = pubsub_fetch_ids.erase(it);
+        else
+            ++it;
     }
 }
 

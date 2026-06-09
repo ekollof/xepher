@@ -507,7 +507,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         // the disco#info response for the service arrives.
         auto restore_feed = [&](std::string_view feed_key)
         {
-            if (feed_key.empty()) return;
+            if (feed_key.empty() || !account.feed_is_open(feed_key)) return;
 
             // Re-create the in-memory channel object if it was lost on disconnect
             account.channels.try_emplace(

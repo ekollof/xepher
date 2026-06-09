@@ -378,6 +378,10 @@ if (event)
             // Buffer key: "service/node", e.g. "news.movim.eu/Phoronix"
             std::string feed_key = fmt::format("{}/{}", feed_service_sv, node_sv);
 
+            // Ignore pushes for feeds the user closed (/feed close or /close).
+            if (!account.feed_is_open(feed_key))
+                return;
+
             // Ensure a FEED buffer exists for this node
             auto [ch_it, inserted] = account.channels.try_emplace(
                 feed_key,

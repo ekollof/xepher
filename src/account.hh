@@ -349,6 +349,10 @@ namespace weechat
         // identity category='pubsub'. Used by /feed discover and /feed (no args).
         std::vector<std::string> known_pubsub_services;
 
+        // In-memory mirror of LMDB feed_open:* keys for fast gate checks on
+        // live pubsub pushes and MAM replay (synced on register/unregister).
+        std::unordered_set<std::string> feed_open_keys_;
+
         // Runtime cache: map "feed_key + item_id" to Atom entry IDs so /feed reply
         // can reference the target entry's real atom:id in thr:in-reply-to@ref.
         std::unordered_map<std::string, std::string> feed_atom_ids;
@@ -489,6 +493,9 @@ namespace weechat
         // Feed buffer persistence across restarts (stored in cursors LMDB table)
         void feed_open_register(std::string_view feed_key);
         void feed_open_unregister(std::string_view feed_key);
+        [[nodiscard]] bool feed_is_open(std::string_view feed_key) const;
+        void feed_open_sync_from_cache();
+        void feed_dismiss(std::string_view feed_key);
         std::vector<std::string> feed_open_list();
         void feed_atom_id_set(std::string_view feed_key, std::string_view item_id,
                               std::string_view atom_id)
