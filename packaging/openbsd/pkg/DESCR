@@ -1,0 +1,11 @@
+Xepher is a WeeChat plugin for XMPP/Jabber protocol support.
+
+Features include multi-user chat (MUC), Message Archive Management (MAM),
+OMEMO and PGP encryption, service discovery, avatars, HTTP file upload,
+message carbons, typing indicators, and MUC bookmarks.
+
+After installation, load the plugin in WeeChat:
+
+	/plugin load xmpp
+
+WWW: https://github.com/ekollof/xepher

@@ -173,7 +173,6 @@ case "$OS" in
     openbsd)
         echo "Installing dependencies for OpenBSD..."
         doas pkg_add \
-            gcc \
             gmake \
             git \
             bison \
@@ -181,10 +180,12 @@ case "$OS" in
             libstrophe \
             libxml \
             lmdb \
+            libsignal-protocol-c \
+            libomemo-c \
+            fmt \
             gpgme \
             curl \
             weechat
-        echo "Note: libsignal-protocol-c and libfmt may need to be built from source on OpenBSD."
         ;;
 
     netbsd)

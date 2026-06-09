@@ -7,6 +7,10 @@ This directory contains packaging infrastructure for building distribution packa
 - **Debian/Ubuntu** (.deb packages)
 - **Fedora/RHEL/CentOS** (.rpm packages)
 - **Arch Linux** (.pkg.tar.zst packages)
+- **Alpine Linux** (.apk packages)
+- **Void Linux** (.xbps packages)
+- **FreeBSD** (.pkg packages — port skeleton in `packaging/freebsd/`)
+- **OpenBSD** (.tgz packages — port skeleton in `packaging/openbsd/`)
 
 ## Quick Start
 
@@ -75,6 +79,44 @@ makepkg -sf
 sudo pacman -U xepher-*.pkg.tar.zst
 ```
 
+#### FreeBSD
+
+Port skeleton: `packaging/freebsd/`. All dependencies are in the official ports tree.
+
+```sh
+# Install dependencies (or use install-deps.sh on FreeBSD)
+sudo pkg install gmake git bison flex libstrophe libxml2 lmdb \
+    libsignal-protocol-c libomemo-c libfmt gpgme curl weechat
+
+# Copy into a ports tree and build
+sudo cp -R packaging/freebsd /usr/ports/net-im/xepher
+cd /usr/ports/net-im/xepher
+make makesum
+make package
+
+# Or build a .pkg from the repo without the ports framework
+sh packaging/scripts/build-freebsd-inside.sh 0.8.1 ./packaging/build
+```
+
+#### OpenBSD
+
+Port skeleton: `packaging/openbsd/`. All dependencies are in the official ports tree.
+
+```sh
+# Install dependencies (or use install-deps.sh on OpenBSD)
+doas pkg_add gmake git bison flex libstrophe libxml lmdb \
+    libsignal-protocol-c libomemo-c fmt gpgme curl weechat
+
+# Copy into a ports tree and build
+doas cp packaging/openbsd/Makefile /usr/ports/net/xepher/
+doas cp packaging/openbsd/pkg/* /usr/ports/net/xepher/pkg/
+cd /usr/ports/net/xepher
+make package
+
+# Or use the helper script from the repo root on OpenBSD
+sh packaging/scripts/build-openbsd-inside.sh 0.8.1 ./packaging/build
+```
+
 ## Updating Package Versions
 
 When releasing a new version, update these files:
@@ -91,12 +133,19 @@ When releasing a new version, update these files:
    - Update `pkgrel=` (reset to 1 for new version)
    - Update checksums if needed
 
+4. **FreeBSD**: `packaging/freebsd/Makefile`
+   - Update `PORTVERSION=`
+   - Run `make makesum` in the ports tree
+
+5. **OpenBSD**: `packaging/openbsd/Makefile`
+   - Update `V=` and `GH_TAGNAME=`
+
 ## Package Contents
 
 All packages install:
-- Plugin binary: `/usr/lib/weechat/plugins/xmpp.so`
-- Documentation: `/usr/share/doc/xepher/`
-- License: `/usr/share/licenses/xepher/` (Arch) or `/usr/share/doc/xepher/` (Debian/RPM)
+- Plugin binary: `*/lib/weechat/plugins/xmpp.so` (`/usr/lib` on Linux, `/usr/local/lib` on BSD)
+- Documentation: `*/share/doc/xepher/`
+- License: `*/share/licenses/xepher/` (Arch, FreeBSD) or `*/share/doc/xepher/` (Debian/RPM, OpenBSD)
 
 ## Dependencies
 
