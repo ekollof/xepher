@@ -84,17 +84,20 @@ OmemoSelfCopyAdvice evaluate_omemo_self_copy_advice(
 bool should_note_omemo_peer_traffic(
     bool has_encrypted,
     bool is_self_outbound_copy,
-    bool is_pm_channel)
+    bool is_pm_channel,
+    bool is_mam_replay)
 {
-    return has_encrypted && !is_self_outbound_copy && is_pm_channel;
+    return has_encrypted && !is_self_outbound_copy && is_pm_channel && !is_mam_replay;
 }
 
 bool should_auto_enable_channel_omemo(
     bool has_encrypted,
     bool is_self_outbound_copy,
-    bool channel_omemo_enabled)
+    bool channel_omemo_enabled,
+    bool is_mam_replay)
 {
-    return has_encrypted && !is_self_outbound_copy && !channel_omemo_enabled;
+    return has_encrypted && !is_self_outbound_copy && !channel_omemo_enabled
+        && !is_mam_replay;
 }
 
 std::string resolve_omemo_decode_jid(

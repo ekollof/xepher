@@ -51,12 +51,14 @@ struct OmemoSelfCopyAdvice {
 [[nodiscard]] XMPP_TEST_EXPORT bool should_note_omemo_peer_traffic(
     bool has_encrypted,
     bool is_self_outbound_copy,
-    bool is_pm_channel);
+    bool is_pm_channel,
+    bool is_mam_replay);
 
 [[nodiscard]] XMPP_TEST_EXPORT bool should_auto_enable_channel_omemo(
     bool has_encrypted,
     bool is_self_outbound_copy,
-    bool channel_omemo_enabled);
+    bool channel_omemo_enabled,
+    bool is_mam_replay);
 
 [[nodiscard]] XMPP_TEST_EXPORT std::string resolve_omemo_decode_jid(
     std::string_view from_bare,

@@ -592,19 +592,8 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
         if (auto ch_it = account->channels.find(bare_jid); ch_it != account->channels.end())
         {
             auto& [_, ch] = *ch_it;
-            if (ch.type == weechat::channel::chat_type::PM)
-            {
-                if (!ch.omemo.enabled
-                    && ch.transport == weechat::channel::transport::PLAIN)
-                {
-                    weechat_printf(ch.buffer,
-                                   "%sAuto-enabling OMEMO (legacy session established with %s)",
-                                   weechat_prefix("network"), bare_jid.c_str());
-                    ch.omemo.enabled = 1;
-                    ch.set_transport(weechat::channel::transport::OMEMO, 0);
-                }
+            if (ch.type == weechat::channel::chat_type::PM && ch.omemo.enabled)
                 ch.flush_pending_omemo_messages();
-            }
         }
     }
 }

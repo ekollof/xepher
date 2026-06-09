@@ -886,7 +886,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         && ::xmpp::should_note_omemo_peer_traffic(
             encrypted != nullptr,
             is_self_outbound_copy,
-            channel && channel->type == weechat::channel::chat_type::PM))
+            channel && channel->type == weechat::channel::chat_type::PM,
+            is_mam_replay))
     {
         account.omemo.note_peer_traffic(account.context, channel->id);
     }
@@ -976,7 +977,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // MUC auto-enable is now safe because we have real-JID tracking + bundle readiness checks.
     if (channel
         && ::xmpp::should_auto_enable_channel_omemo(
-            encrypted != nullptr, is_self_outbound_copy, channel->omemo.enabled))
+            encrypted != nullptr, is_self_outbound_copy, channel->omemo.enabled,
+            is_mam_replay))
     {
         weechat_printf(channel->buffer, "%s", fmt::format("{}Auto-enabling OMEMO (received encrypted message)",
                        weechat_prefix("network")).c_str());
