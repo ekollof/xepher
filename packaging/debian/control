@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 Maintainer: Emiel Kollof <emiel@kollof.nl>
 Build-Depends: debhelper-compat (= 13),
-               g++ (>= 12),
+               clang (>= 14),
                git,
                bison,
                flex,

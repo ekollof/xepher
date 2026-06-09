@@ -17,7 +17,7 @@ echo "Detected OS: $OS"
 
 # Common packages across distros
 # Runtime deps: libstrophe, libxml2, lmdb, libomemo-c (libsignal-protocol-c), gpgme, libfmt, libcurl, libssl/libcrypto (OpenSSL)
-# Build deps: g++, bison, flex, git
+# Build deps: clang/clang++, bison, flex, git
 
 case "$OS" in
     ubuntu|debian|linuxmint|pop)
@@ -25,7 +25,7 @@ case "$OS" in
         sudo apt-get update
         sudo apt-get install -y \
             build-essential \
-            g++ \
+            clang \
             git \
             bison \
             flex \
@@ -44,7 +44,7 @@ case "$OS" in
     fedora|rhel|centos|rocky|almalinux)
         echo "Installing dependencies for Fedora/RHEL-based system..."
         sudo dnf install -y \
-            gcc-c++ \
+            clang \
             git \
             bison \
             flex \
@@ -63,7 +63,7 @@ case "$OS" in
     arch|manjaro)
         echo "Installing dependencies for Arch-based system..."
         sudo pacman -Sy --needed --noconfirm \
-            gcc \
+            clang \
             git \
             bison \
             flex \
@@ -81,7 +81,7 @@ case "$OS" in
     opensuse*|suse)
         echo "Installing dependencies for openSUSE..."
         sudo zypper install -y \
-            gcc-c++ \
+            clang \
             git \
             bison \
             flex \
@@ -100,7 +100,7 @@ case "$OS" in
     void)
         echo "Installing dependencies for Void Linux..."
         sudo xbps-install -Sy \
-            gcc \
+            clang \
             git \
             bison \
             flex \
@@ -118,7 +118,7 @@ case "$OS" in
     alpine)
         echo "Installing dependencies for Alpine Linux..."
         sudo apk add --no-cache \
-            g++ \
+            clang \
             git \
             bison \
             flex \
@@ -136,7 +136,7 @@ case "$OS" in
     gentoo)
         echo "Installing dependencies for Gentoo..."
         sudo emerge --ask=n \
-            sys-devel/gcc \
+            llvm-core/clang \
             dev-vcs/git \
             sys-devel/bison \
             sys-devel/flex \
@@ -154,7 +154,7 @@ case "$OS" in
     freebsd)
         echo "Installing dependencies for FreeBSD..."
         sudo pkg install -y \
-            gcc \
+            llvm \
             gmake \
             git \
             bison \
@@ -192,7 +192,7 @@ case "$OS" in
     netbsd)
         echo "Installing dependencies for NetBSD..."
         sudo pkgin install \
-            gcc \
+            clang \
             gmake \
             git \
             bison \
@@ -238,7 +238,7 @@ case "$OS" in
         echo ""
         echo "Please install the following packages manually:"
         echo "  Runtime: libstrophe, libxml2, lmdb, libsignal-protocol-c, gpgme, libfmt, libcurl, openssl, weechat"
-        echo "  Build: g++ (>= GCC12), bison, flex, git"
+        echo "  Build: clang/clang++ (>= 13), bison, flex, git"
         exit 1
         ;;
 esac

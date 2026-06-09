@@ -26,7 +26,7 @@ xepher_install_alpine_deps() {
     apk add --no-cache \
         alpine-sdk \
         git bison flex flex-dev make pkgconf \
-        g++ \
+        clang \
         libstrophe-dev \
         libxml2-dev \
         lmdb-dev \
@@ -99,7 +99,7 @@ depends="
     libgcrypt
 "
 makedepends="
-    g++
+    clang
     bison
     flex
     make

@@ -19,7 +19,7 @@ echo "=== [Fedora] Building xepher ${VERSION} ==="
 xepher_install_fedora_deps() {
     xepher_as_root dnf install -y \
         rpm-build rpmdevtools \
-        gcc-c++ git bison flex \
+        clang git bison flex \
         libstrophe-devel \
         libxml2-devel \
         lmdb-devel \

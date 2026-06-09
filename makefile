@@ -15,16 +15,23 @@ ifeq ($(filter -j%,$(MAKEFLAGS)),)
 	MAKEFLAGS += -j$(NPROC)
 endif
 
+# Default toolchain: Clang/Clang++ (C++23). Matches OpenBSD/FreeBSD CI behaviour and
+# catches Clang-only warnings (e.g. -Wunused-lambda-capture) under -Werror.
+# Override for experiments: CC=gcc CXX=g++ make
 ifeq ($(UNAME_S),Darwin)
 HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo /opt/homebrew)
 export PKG_CONFIG_PATH := $(HOMEBREW_PREFIX)/lib/pkgconfig:$(PKG_CONFIG_PATH)
 # bison, flex, and llvm are keg-only — prepend their bin dirs so make recipes
 # and $(shell) calls use the Homebrew versions, not the ancient macOS stubs.
 export PATH := $(HOMEBREW_PREFIX)/opt/bison/bin:$(HOMEBREW_PREFIX)/opt/flex/bin:$(HOMEBREW_PREFIX)/opt/llvm/bin:$(PATH)
-# Use Homebrew clang/clang++ by default on macOS (overridable: CC=... make)
 CC  ?= $(HOMEBREW_PREFIX)/opt/llvm/bin/clang
 CXX ?= $(HOMEBREW_PREFIX)/opt/llvm/bin/clang++
+else
+CC  ?= clang
+CXX ?= clang++
 endif
+export CC
+export CXX
 
 BISON ?= bison
 FLEX  ?= flex
@@ -36,8 +43,6 @@ ifeq ($(UNAME_S),Linux)
 endif
 endif
 
-CC ?= cc
-CXX ?= c++
 SHELL = /bin/sh
 RM ?= rm -f
 FIND ?= find
@@ -69,11 +74,6 @@ CFLAGS+=$(DBGCFLAGS) \
 ifeq ($(UNAME_S),Linux)
 CFLAGS+=-D_XOPEN_SOURCE=700
 endif
-ifeq ($(CC),clang)
-	CFLAGS+=
-else
-	CFLAGS+=
-endif
 CPPFLAGS+=$(DBGCFLAGS) \
 	  -fno-omit-frame-pointer -fPIC \
 	  -fvisibility=hidden -fvisibility-inlines-hidden \
@@ -85,11 +85,6 @@ CPPFLAGS+=$(DBGCFLAGS) \
 # -DDOCTEST_CONFIG_DISABLE
 ifneq ($(IS_CLANG),)
 	CPPFLAGS+=-Wno-gnu-zero-variadic-macro-arguments
-endif
-ifeq ($(CXX),clang)
-	CPPFLAGS+=
-else
-	CPPFLAGS+=
 endif
 	 #-fuse-ld=mold
 LDFLAGS+=$(DBGLDFLAGS) \
@@ -315,6 +310,6 @@ obj/%.cov.o: src/%.cpp
 deps/diff/libdiff.a:
 	git submodule update --init --recursive deps/diff
 	echo "HAVE___PROGNAME=1" > deps/diff/configure.local
-	cd deps/diff && env -u MAKEFLAGS ./configure
-	$(MAKE) -C deps/diff CFLAGS=-fPIC
+	cd deps/diff && env -u MAKEFLAGS CC="$(CC)" ./configure
+	$(MAKE) -C deps/diff CC="$(CC)" CFLAGS=-fPIC
 diff: deps/diff/libdiff.a

@@ -129,7 +129,7 @@ VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
 - Stanza emission: Raw `xmpp_stanza_new()` / manual trees forbidden in `.cpp`/`.inl`. Use fluent `stanza::spec` / `stanza::message()` + mixins from `src/xmpp/node.hh` + `xep-*.inl` exclusively. `stanza_node`/`stanza_text_node` helpers are approved only because implemented inside node.hh via spec.
 - Read `.cpp` wrappers first (never `.inl` for logic); use dedicated grep tool for searches.
 - OMEMO special: legacy `eu.siacs.conversations.axolotl` **only** (see section above + committed xep-0384.txt); no omemo:2.
-- Surgical/minimal changes; ccache `CXX="ccache c++" make` + 27/27+286/286 after groups; manual WeeChat retest (full restart); update README/DOAP/AGENTS/TODO in same commit as relevant work; chore:/fix: commits.
+- Surgical/minimal changes; ccache `CXX="ccache clang++" make` + 27/27+286/286 after groups; manual WeeChat retest (full restart); update README/DOAP/AGENTS/TODO in same commit as relevant work; chore:/fix: commits.
 - No loose planning docs in repo.
 
 **Discovery summary** (read-only, AGENTS-compliant): Re-read AGENTS + old plan + this TODO + DOAP.xml + README (sampled) + all relevant `docs/specs/*.txt`; list_dir src/ + src/xmpp/ + docs/specs/ (50+ specs + many builders); read_file on all key `.cpp`/`.hh` wrappers (channel.cpp, account.cpp, account/callbacks.cpp, command/rooms.cpp, connection/*.cpp, xmpp/node.{hh,cpp}, ns.hh, strophe.hh, atom.hh etc. — never .inl for logic); extensive grep tool calls (path=src/ glob=*.cpp for "xmpp_stanza_new|...|add_child|make_child|stanza::|XEP-|urn:xmpp:" + specific elems; also glob=*.inl for builder discovery only); cross-ref to node.hh mixins (e.g. xep0447, xep0184, xep0428, xep0085, xep0333, xep0359) and ns.hh; read spec excerpts for MUST/examples/reqs (0184,0085,0334,0363,0447/8/6,0300,0060,0280,0198,0313,0115,0384 etc.).
@@ -154,7 +154,7 @@ VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
 - [x] Full discovery (wrappers, grep, specs, DOAP, AGENTS re-read).
 - [x] Create/enhance this TODO.md section + table (no .cpp changes).
 - [x] Surgical stale DOAP OMEMO note update (removed ATM ref; matches current BTBV/legacy per AGENTS + OMEMO section).
-- [x] `CXX="ccache c++" make` (noop pass); commit + push (docs/chore: message referencing this audit/plan).
+- [x] `CXX="ccache clang++" make` (noop pass); commit + push (docs/chore: message referencing this audit/plan).
 
 **Phase 1 — High Priority (Core Emission + Builders; daily interop)**
 - [x] Complete 0184 builder (request) + migrate channel sends (regular + file).
@@ -264,4 +264,4 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] Extend `tests/weechat_stub.hh` for handler slice tests
 - [x] `NullUiPort` for no-output protocol tests
 
-**Verification:** `CXX="ccache c++" make -j$(nproc)` after each slice; manual WeeChat retest for touched features; no `/plugin reload`.
+**Verification:** `CXX="ccache clang++" make -j$(nproc)` after each slice; manual WeeChat retest for touched features; no `/plugin reload`.

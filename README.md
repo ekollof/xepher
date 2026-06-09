@@ -58,7 +58,7 @@ After installing, restart WeeChat (or run `/plugin load xmpp.so` on first instal
 | libsignal-protocol-c | runtime | ✅ package | ✅ `pkg install libsignal-protocol-c` | ✅ `pkg_add libsignal-protocol-c` | ⚠️ build from source |
 | gpgme | runtime | ✅ package | ✅ `pkg install gpgme` | ✅ `pkg_add gpgme` | ✅ `brew install gpgme` |
 | libfmt | runtime | ✅ package | ✅ `pkg install libfmt` | ✅ `pkg_add fmt` | ✅ `brew install fmt` |
-| g++ / clang (C++23; clang ≥ 13 on BSD) | build | ✅ package | ✅ `pkg install gcc` | ✅ base-clang / `pkg_add gcc` | ✅ `brew install llvm` |
+| clang/clang++ (C++23; ≥ 13) | build | ✅ package | ✅ `pkg install llvm` | ✅ base system / `pkg_add` | ✅ `brew install llvm` |
 | gmake | build | — (GNU make default) | ✅ `pkg install gmake` | ✅ `pkg_add gmake` | ✅ `brew install make` |
 | bison | build | ✅ package | ✅ `pkg install bison` | ✅ `pkg_add bison` | ✅ `brew install bison` |
 | flex | build | ✅ package | ✅ `pkg install flex` | ✅ `pkg_add flex` | ✅ `brew install flex` |
@@ -83,11 +83,11 @@ and scripts have been ported to POSIX sh and BSD-compatible make, but these
 platforms are **not routinely tested**. Known considerations:
 
 - Use `gmake` instead of `make` on BSD (BSD make has different syntax).
-- **Minimum compiler: Clang ≥ 13.** The codebase uses C++23 mode with C++20
-  features (`std::ranges`, `std::span`, abbreviated function templates).
-  FreeBSD 13+/14 and OpenBSD 7.x ship Clang 14–17 and are fine. NetBSD 9.x
-  ships Clang 7 and **cannot build this plugin** — upgrade to NetBSD 10.x
-  (ships Clang 13+) or install a newer Clang from pkgsrc.
+- **Default toolchain: Clang/Clang++ (≥ 13).** The makefile sets `CC=clang`
+  and `CXX=clang++` on all platforms (Homebrew LLVM on macOS). This matches
+  OpenBSD/FreeBSD and catches Clang-only warnings under `-Werror`. NetBSD 9.x
+  ships Clang 7 and **cannot build** — use NetBSD 10.x+ or a newer Clang from
+  pkgsrc. Override with `CC=gcc CXX=g++ gmake` only for experiments.
 - `libsignal-protocol-c` and `libomemo-c` are packaged on FreeBSD and OpenBSD;
   on NetBSD they may still need to be built from pkgsrc source.
 - The `DEBUG=1` address-sanitizer flags (`-lasan -lrt`) are Linux-only and are
@@ -167,14 +167,8 @@ make install
 ```
 
 The build system uses `-dynamiclib` instead of `-shared` and plain `-g` instead
-of `-gdwarf-4` on macOS automatically. No extra flags are needed.
-
-**Compiler note:** The system Apple clang ships with Xcode is supported. For
-faster builds you can use `brew install llvm` and point `CXX` at it:
-
-```sh
-CXX=$(brew --prefix llvm)/bin/clang++ make
-```
+of `-gdwarf-4` on macOS automatically. `install-deps.sh` installs Homebrew
+`llvm`; the makefile defaults to that Clang. No extra `CXX=` flags are needed.
 
 **Debugger:** On macOS the `make debug` target uses `lldb` with
 `DYLD_INSERT_LIBRARIES` instead of `gdb`/`LD_PRELOAD`.

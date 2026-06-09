@@ -47,7 +47,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 ### Local development
 
-- **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Combine with ccache: `CXX="ccache c++" make`
+- **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Default toolchain is **Clang** (`CC=clang`, `CXX=clang++`; Homebrew LLVM on macOS). Combine with ccache: `CXX="ccache clang++" make`
 - **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick)
 - **Output**: `xmpp.so` (WeeChat plugin)
 - **Dependencies**: Managed via git submodules in `deps/`
@@ -158,7 +158,7 @@ Output lands in `packaging/build/` (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`, `.xb
   ```
 - **General**: Prefer `std::ranges::sort` / `unique` / `for_each` / `copy_if` etc. over raw loops or `<algorithm>`. Zero classical `<algorithm>` calls remain in src (except commented). Update this section when adding new patterns (e.g. more `views`).
 
-**Build note**: Use parallel + ccache during iterative work: `CXX="ccache c++" make` (parallel `-j` is on by default; see Build System). Run `make` (not clean) after every logical group of changes; verify doctests pass.
+**Build note**: Use parallel + ccache during iterative work: `CXX="ccache clang++" make` (parallel `-j` is on by default; see Build System). Run `make` (not clean) after every logical group of changes; verify doctests pass.
 
 (Concrete examples of these patterns are visible throughout `src/` — e.g. OMEMO helpers, account/channel map handling, connection data-form/OG parsing, and avatar/ base64 paths. Extend them surgically.)
 
@@ -766,7 +766,7 @@ When updating documentation:
 ```bash
 # Build (parallel by default; NPROC overrides core count)
 make
-CXX="ccache c++" make
+CXX="ccache clang++" make
 
 # Serial build (debugging only)
 make -j1

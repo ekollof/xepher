@@ -162,7 +162,7 @@ All packages install:
 - openssl
 
 ### Build Dependencies
-- g++ (>= 12) or clang++ with C++23 support
+- clang/clang++ (>= 14) with C++23 support
 - git
 - bison
 - flex

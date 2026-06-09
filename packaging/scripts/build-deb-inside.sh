@@ -21,7 +21,7 @@ xepher_install_debian_deps() {
     xepher_as_root apt-get update -qq
     xepher_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
         debhelper devscripts build-essential \
-        g++ git bison flex \
+        clang git bison flex \
         libstrophe-dev \
         libxml2-dev \
         liblmdb-dev \

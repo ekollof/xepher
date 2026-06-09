@@ -60,7 +60,7 @@ depends=(
     'openssl'
 )
 makedepends=(
-    'gcc'
+    'clang'
     'git'
     'bison'
     'flex'

@@ -9,7 +9,7 @@ License:        MPL-2.0
 URL:            https://github.com/ekollof/xepher
 Source0:        %{name}-%{version}.tar.gz
 
-BuildRequires:  gcc-c++ >= 12
+BuildRequires:  clang >= 14
 BuildRequires:  git
 BuildRequires:  bison
 BuildRequires:  flex
