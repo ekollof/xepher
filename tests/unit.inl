@@ -430,6 +430,14 @@ TEST_CASE("JID parser")
         jid j(env.ctx, "alice@example.org/res with spaces");
         CHECK(j.resource == "res with spaces");
     }
+
+    SUBCASE("MUC nick with apostrophe is captured")
+    {
+        jid j(env.ctx, "gajim@conference.gajim.org/don't mention me");
+        CHECK(j.bare == "gajim@conference.gajim.org");
+        CHECK(j.resource == "don't mention me");
+        CHECK(j.is_bare() == false);
+    }
 }
 
 TEST_CASE("presence show/status extraction")

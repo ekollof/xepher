@@ -61,8 +61,11 @@ XMPP_TEST_EXPORT std::chrono::system_clock::time_point get_time(const std::strin
     }
 }
 
+// Resource is [^/]* — RFC 6122 uses the first '/' as the separator; MUC nicks may
+// contain apostrophes, spaces, etc. (excluding ' from the resource class broke
+// routing for occupants like "don't mention me").
 const std::regex jid::pattern(
-    "^((?:([^@/<>'\"]+)@)?([^@/<>'\"]+))(?:/([^<>'\"]*))?$");
+    R"(^((?:([^@/<>'"]+)@)?([^@/<>'"]+))(?:/([^/]*))?$)");
 
 jid::jid(xmpp_ctx_t *, std::string s) : full(s) {
     std::smatch match;
@@ -79,6 +82,21 @@ jid::jid(xmpp_ctx_t *, std::string s) : full(s) {
         local = as_sv(match[2]);
         domain = as_sv(match[3]);
         resource = as_sv(match[4]);
+    }
+    else if (const auto slash = full.find('/'); slash != std::string::npos)
+    {
+        bare = full.substr(0, slash);
+        resource = full.substr(slash + 1);
+        const auto at = bare.find('@');
+        if (at != std::string::npos)
+        {
+            local = bare.substr(0, at);
+            domain = bare.substr(at + 1);
+        }
+        else
+        {
+            domain = bare;
+        }
     }
     else
     {
