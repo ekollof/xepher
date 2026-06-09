@@ -44,10 +44,24 @@ IS_CLANG := $(shell $(CXX) --version 2>/dev/null | grep -i clang)
 BISON ?= bison
 FLEX  ?= flex
 
-ifdef DEBUG
-	DBGCFLAGS=-DDEBUG -fno-omit-frame-pointer -fsanitize=address #-fsanitize=undefined -fsanitize=leak
+# Build profiles (combine ASAN=1 with DEBUG=1 for instrumented dev builds):
+#   default  — -O2 -DNDEBUG
+#   DEBUG=1  — -O0 -DDEBUG (assertions on, fast rebuilds)
+#   ASAN=1   — -fsanitize=address (Linux: links libasan)
+ifneq ($(DEBUG),)
+OPTFLAGS := -O0
+CPPDEFINES := -DDEBUG
+else
+OPTFLAGS := -O2
+CPPDEFINES := -DNDEBUG
+endif
+
+SANFLAGS :=
+SANLDFLAGS :=
+ifneq ($(ASAN),)
+SANFLAGS := -fsanitize=address
 ifeq ($(UNAME_S),Linux)
-	DBGLDFLAGS=-lasan -lrt -lasan #-lubsan -llsan
+SANLDFLAGS := -lasan -lrt
 endif
 endif
 
@@ -70,7 +84,7 @@ else
 DWARF_FLAG := -gdwarf-4
 endif
 
-CFLAGS+=$(DBGCFLAGS) \
+CFLAGS+=$(OPTFLAGS) $(CPPDEFINES) $(SANFLAGS) \
 	-fno-omit-frame-pointer -fPIC \
 	-fvisibility=hidden -fvisibility-inlines-hidden \
 	-fdebug-prefix-map=.=$(CURDIR) \
@@ -82,7 +96,7 @@ CFLAGS+=$(DBGCFLAGS) \
 ifeq ($(UNAME_S),Linux)
 CFLAGS+=-D_XOPEN_SOURCE=700
 endif
-CPPFLAGS+=$(DBGCFLAGS) \
+CPPFLAGS+=$(OPTFLAGS) $(CPPDEFINES) $(SANFLAGS) \
 	  -fno-omit-frame-pointer -fPIC \
 	  -fvisibility=hidden -fvisibility-inlines-hidden \
 	  -std=c++23 $(DWARF_FLAG) \
@@ -95,9 +109,8 @@ ifneq ($(IS_CLANG),)
 	CPPFLAGS+=-Wno-gnu-zero-variadic-macro-arguments
 endif
 	 #-fuse-ld=mold
-LDFLAGS+=$(DBGLDFLAGS) \
-	 -std=c++23 $(DWARF_FLAG) \
-	 $(DBGCFLAGS)
+LDFLAGS+=$(SANLDFLAGS) $(SANFLAGS) \
+	 -std=c++23 $(DWARF_FLAG)
 LDLIBS=$(shell pkg-config --libs libstrophe) \
 	   -lpthread \
 	   $(shell pkg-config --libs libcurl) \

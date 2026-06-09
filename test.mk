@@ -14,15 +14,15 @@ endif
 ifeq ($(UNAME_S),Darwin)
 debug: xmpp.so
 	@echo "debug target: use lldb on macOS"
-	env DYLD_INSERT_LIBRARIES=$(DEBUG) lldb -- \
+	lldb -- \
 		weechat -a -P 'alias,buflist,exec,irc,relay' -r '/plugin load ./xmpp.so'
 else ifneq (,$(filter $(UNAME_S),FreeBSD OpenBSD NetBSD))
 debug: xmpp.so
-	env LD_PRELOAD=$(DEBUG) lldb -- \
+	lldb -- \
 		weechat -a -P 'alias,buflist,exec,irc,relay' -r '/plugin load ./xmpp.so'
 else
 debug: xmpp.so
-	env LD_PRELOAD=$(DEBUG) gdb -ex "handle SIGPIPE nostop noprint pass" --args \
+	gdb -ex "handle SIGPIPE nostop noprint pass" --args \
 		weechat -a -P 'alias,buflist,exec,irc,relay' -r '/plugin load ./xmpp.so'
 endif
 

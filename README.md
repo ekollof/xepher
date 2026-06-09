@@ -90,8 +90,9 @@ platforms are **not routinely tested**. Known considerations:
   pkgsrc. Override with `CC=gcc CXX=g++ gmake` only for experiments.
 - `libsignal-protocol-c` and `libomemo-c` are packaged on FreeBSD and OpenBSD;
   on NetBSD they may still need to be built from pkgsrc source.
-- The `DEBUG=1` address-sanitizer flags (`-lasan -lrt`) are Linux-only and are
-  automatically skipped on other platforms.
+- Default builds use `-O2 -DNDEBUG`. Use `DEBUG=1` for unoptimized dev builds
+  (`-O0 -DDEBUG`). Use `ASAN=1` for AddressSanitizer (`-fsanitize=address`;
+  `-lasan -lrt` on Linux only). Combine: `gmake DEBUG=1 ASAN=1`.
 - The `.source` ELF section embedding step (`objcopy --add-section`) is
   Linux-only, skipped on BSD, and **skipped in distribution builds** (`PACKAGE_BUILD=1`).
 
