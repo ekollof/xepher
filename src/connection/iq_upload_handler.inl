@@ -144,10 +144,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
 
                 ctx->worker = std::thread([ctx_copy, filepath_copy,
                                            put_url_copy, get_url_copy,
-                                           put_headers_copy, content_type_copy,
-                                           ctx_ptr = static_cast<xmpp_ctx_t*>(
-                                               account.context),
-                                           conn_ptr = &account.connection]()
+                                           put_headers_copy, content_type_copy]()
                 {
                     // No XDEBUG here: this runs in the upload worker thread. XDEBUG
                     // (and xmpp_debug_is_on) call WeeChat APIs which are not safe
