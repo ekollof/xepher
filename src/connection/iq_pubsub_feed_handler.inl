@@ -332,7 +332,7 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
             {
                 if (auto subs_it = account.pubsub_subscriptions_queries.find(id); subs_it != account.pubsub_subscriptions_queries.end())
                 {
-                    auto& [_, feed_service] = *subs_it;
+                    const std::string feed_service = subs_it->second;
                     account.pubsub_subscriptions_queries.erase(subs_it);
                     handled = true;
 
@@ -369,8 +369,8 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                                 weechat::channel::chat_type::FEED,
                                 feed_key,
                                 feed_key);
-                            if (sub_inserted)
-                                account.feed_open_register(feed_key);
+                            (void)sub_inserted;
+                            account.feed_open_register(feed_key);
     
                             // Fetch items for this subscribed node using only max_items (XEP-0060 §6.5.7).
                             // RSM <before/> is omitted: news.movim.eu ignores empty <before/> last-page
