@@ -61,48 +61,27 @@ XMPP_TEST_EXPORT std::chrono::system_clock::time_point get_time(const std::strin
     }
 }
 
-// Resource is [^/]* — RFC 6122 uses the first '/' as the separator; MUC nicks may
-// contain apostrophes, spaces, etc. (excluding ' from the resource class broke
-// routing for occupants like "don't mention me").
-const std::regex jid::pattern(
-    R"(^((?:([^@/<>'"]+)@)?([^@/<>'"]+))(?:/([^/]*))?$)");
+jid::jid(xmpp_ctx_t *, std::string s) : full(std::move(s)) {
+    // RFC 6122 / XMPP addressing: split on the first '/' (resource), then the
+    // first '@' in the bare portion (local@domain).  No regex — nicks may contain
+    // apostrophes, spaces, Unicode, etc.
+    std::string_view view = full;
 
-jid::jid(xmpp_ctx_t *, std::string s) : full(s) {
-    std::smatch match;
-
-    if (std::regex_search(full, match, pattern))
+    if (const auto slash = view.find('/'); slash != std::string_view::npos)
     {
-        auto as_sv = [&](std::ssub_match m) {
-            if(!m.matched) return std::string_view();
-            size_t offset = &*m.first - &*match[0].first;
-            return std::string_view{full.data() + offset, static_cast<size_t>(m.length())};
-        };
-
-        bare = as_sv(match[1]);
-        local = as_sv(match[2]);
-        domain = as_sv(match[3]);
-        resource = as_sv(match[4]);
+        resource.assign(view.substr(slash + 1));
+        view = view.substr(0, slash);
     }
-    else if (const auto slash = full.find('/'); slash != std::string::npos)
+
+    bare.assign(view);
+
+    if (const auto at = view.find('@'); at != std::string_view::npos)
     {
-        bare = full.substr(0, slash);
-        resource = full.substr(slash + 1);
-        const auto at = bare.find('@');
-        if (at != std::string::npos)
-        {
-            local = bare.substr(0, at);
-            domain = bare.substr(at + 1);
-        }
-        else
-        {
-            domain = bare;
-        }
+        local.assign(view.substr(0, at));
+        domain.assign(view.substr(at + 1));
     }
     else
-    {
-        bare = full;
         domain = bare;
-    }
 }
 
 bool jid::is_bare() const {

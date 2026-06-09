@@ -12,7 +12,6 @@
 #include <memory>
 #include <optional>
 #include <ranges>
-#include <regex>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -37,9 +36,6 @@ XMPP_TEST_EXPORT std::string get_text(xmpp_stanza_t *stanza);
 std::chrono::system_clock::time_point get_time(const std::string& text);
 
 class XMPP_TEST_EXPORT jid {
-private:
-    static const std::regex pattern;
-
 public:
     jid(xmpp_ctx_t *context, std::string s);
 
