@@ -13,6 +13,7 @@
 #include "account.hh"
 #include "channel.hh"
 #include "plugin.hh"
+#include "xmpp/iq_pubsub_feed.hh"
 
 namespace xmpp {
 
@@ -141,6 +142,91 @@ std::string feed_alias_prefix(int item_alias)
     if (item_alias > 0)
         return fmt::format("#{}", item_alias);
     return {};
+}
+
+std::string feed_node_display_label(std::string_view service_jid, std::string_view node)
+{
+    if (is_microblog_comments_node(node))
+        return "comments";
+
+    if (node == "urn:xmpp:microblog:0")
+    {
+        std::string_view local = service_jid;
+        if (const auto at = service_jid.find('@'); at != std::string_view::npos)
+            local = service_jid.substr(0, at);
+        return std::string(local);
+    }
+
+    if (!node.contains(':'))
+        return std::string(node);
+
+    const auto colon = node.rfind(':');
+    return std::string(node.substr(colon + 1));
+}
+
+std::string feed_parent_display_label(std::string_view parent_service,
+                                      std::string_view parent_node)
+{
+    if (parent_node == "urn:xmpp:microblog:0")
+    {
+        std::string_view local = parent_service;
+        if (const auto at = parent_service.find('@'); at != std::string_view::npos)
+            local = parent_service.substr(0, at);
+        return fmt::format("{} (blog)", local);
+    }
+
+    if (!parent_node.contains(':'))
+        return std::string(parent_node);
+
+    std::string_view local = parent_service;
+    if (const auto at = parent_service.find('@'); at != std::string_view::npos)
+        local = parent_service.substr(0, at);
+    const auto colon = parent_node.rfind(':');
+    return fmt::format("{} ({})", local, parent_node.substr(colon + 1));
+}
+
+std::string feed_buffer_short_name(std::string_view feed_key)
+{
+    const auto slash = feed_key.find('/');
+    const std::string_view service =
+        (slash != std::string_view::npos) ? feed_key.substr(0, slash) : feed_key;
+    const std::string_view node =
+        (slash != std::string_view::npos) ? feed_key.substr(slash + 1) : feed_key;
+
+    if (is_microblog_comments_node(node))
+    {
+        std::string_view local = service;
+        if (const auto at = service.find('@'); at != std::string_view::npos)
+            local = service.substr(0, at);
+        return fmt::format("={} (comments)", local);
+    }
+
+    if (node == "urn:xmpp:microblog:0")
+    {
+        std::string_view local = service;
+        if (const auto at = service.find('@'); at != std::string_view::npos)
+            local = service.substr(0, at);
+        return fmt::format("={} (blog)", local);
+    }
+
+    if (!node.contains(':'))
+        return fmt::format("={}", node);
+
+    std::string_view local = service;
+    if (const auto at = service.find('@'); at != std::string_view::npos)
+        local = service.substr(0, at);
+    return fmt::format("={} ({})", local, feed_node_display_label(service, node));
+}
+
+std::string feed_comments_buffer_short_name(std::string_view parent_label, int item_alias)
+{
+    if (parent_label.empty())
+        return item_alias > 0 ? fmt::format("=(#{} comments)", item_alias) : "=comments";
+
+    if (item_alias > 0)
+        return fmt::format("={} (#{} comments)", parent_label, item_alias);
+
+    return fmt::format("={} (comments)", parent_label);
 }
 
 std::string feed_item_xmpp_link(

@@ -1044,13 +1044,36 @@ int command__feed(const void *pointer, void *data,
         }
 
         std::string comments_feed_key = fmt::format("{}/{}", comments_service, comments_node);
-        ptr_account->channels.try_emplace(
+        auto [comments_it, _comments_inserted] = ptr_account->channels.try_emplace(
             comments_feed_key,
             *ptr_account,
             weechat::channel::chat_type::FEED,
             comments_feed_key,
             comments_feed_key);
+        auto &comments_ch = comments_it->second;
         ptr_account->feed_open_register(comments_feed_key);
+
+        std::string parent_label;
+        if (short_form && ptr_channel && ptr_channel->buffer)
+        {
+            if (const char *parent_sn = weechat_buffer_get_string(ptr_channel->buffer, "short_name");
+                parent_sn && parent_sn[0] == '=' && parent_sn[1])
+            {
+                parent_label = parent_sn + 1;
+            }
+            else if (parent_sn && parent_sn[0])
+            {
+                parent_label = parent_sn;
+            }
+        }
+        if (parent_label.empty())
+            parent_label = xmpp::feed_parent_display_label(service_jid, node_name);
+
+        const int item_alias = ptr_account->feed_alias_lookup(feed_key, item_id);
+        const std::string comments_short =
+            xmpp::feed_comments_buffer_short_name(parent_label, item_alias);
+        weechat_buffer_set(comments_ch.buffer, "short_name", comments_short.c_str());
+        weechat_buffer_set(comments_ch.buffer, "short_name_is_set", "1");
 
         {
             std::string uid = stanza::uuid(ptr_account->context);

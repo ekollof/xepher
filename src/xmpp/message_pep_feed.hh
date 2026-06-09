@@ -20,6 +20,24 @@ namespace xmpp {
 
 [[nodiscard]] XMPP_TEST_EXPORT std::string feed_alias_prefix(int item_alias);
 
+// Human-readable node label (no leading '='); e.g. "Phoronix", "blog", "comments".
+[[nodiscard]] XMPP_TEST_EXPORT std::string feed_node_display_label(
+    std::string_view service_jid,
+    std::string_view node);
+
+// Parent feed label for comments buffers (no leading '=').
+[[nodiscard]] XMPP_TEST_EXPORT std::string feed_parent_display_label(
+    std::string_view parent_service,
+    std::string_view parent_node);
+
+// Buffer short_name for a feed_key ("service/node"), including leading '='.
+[[nodiscard]] XMPP_TEST_EXPORT std::string feed_buffer_short_name(std::string_view feed_key);
+
+// Comments buffer short_name from a resolved parent label and optional item alias.
+[[nodiscard]] XMPP_TEST_EXPORT std::string feed_comments_buffer_short_name(
+    std::string_view parent_label,
+    int item_alias);
+
 [[nodiscard]] XMPP_TEST_EXPORT std::string feed_item_xmpp_link(
     std::string_view feed_service,
     std::string_view node,

@@ -33,6 +33,7 @@
 #include "message.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
+#include "xmpp/message_pep_feed.hh"
 
 namespace {
 std::string channel_short_name(weechat::channel::chat_type type, std::string_view name)
@@ -40,35 +41,8 @@ std::string channel_short_name(weechat::channel::chat_type type, std::string_vie
     if (name.empty())
         return {};
 
-    // FEED buffers: derive a human-readable short name from the feed_key
-    // which has the form "<service_jid>/<node>".
     if (type == weechat::channel::chat_type::FEED)
-    {
-        // Split into service_jid and node at the first '/'.
-        auto slash = name.find('/');
-        std::string_view service = (slash != std::string_view::npos) ? name.substr(0, slash) : name;
-        std::string_view node    = (slash != std::string_view::npos) ? name.substr(slash + 1) : name;
-
-        // Extract the local part of the service JID (everything before '@',
-        // or the full string if there is no '@').
-        std::string_view local = service;
-        auto at = service.find('@');
-        if (at != std::string_view::npos)
-            local = service.substr(0, at);
-
-        // Well-known PEP node → append a readable hint.
-        if (node == "urn:xmpp:microblog:0")
-            return fmt::format("={} (blog)", local);
-
-        // Named node (no ':' in it, e.g. "lunduke") → use the node name directly.
-        if (!node.contains(':'))
-            return fmt::format("={}", node);
-
-        // Generic URN node → use the last ':'-delimited segment.
-        auto colon = node.rfind(':');
-        std::string_view suffix = node.substr(colon + 1);
-        return fmt::format("={} ({})", local, suffix);
-    }
+        return xmpp::feed_buffer_short_name(name);
 
     const char prefix =
         (type == weechat::channel::chat_type::MUC) ? '#' : '@';

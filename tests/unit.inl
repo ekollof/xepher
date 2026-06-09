@@ -1016,10 +1016,12 @@ TEST_CASE("message_omemo decrypt failure disposition")
     CHECK(xmpp::disposition_for_omemo_decrypt_failure({})
           == OmemoDecryptFailureDisposition::ShowDecryptionError);
 
-    CHECK(xmpp::should_note_omemo_peer_traffic(true, false, true));
-    CHECK_FALSE(xmpp::should_note_omemo_peer_traffic(true, true, true));
-    CHECK(xmpp::should_auto_enable_channel_omemo(true, false, false));
-    CHECK_FALSE(xmpp::should_auto_enable_channel_omemo(true, false, true));
+    CHECK(xmpp::should_note_omemo_peer_traffic(true, false, true, false));
+    CHECK_FALSE(xmpp::should_note_omemo_peer_traffic(true, true, true, false));
+    CHECK_FALSE(xmpp::should_note_omemo_peer_traffic(true, false, true, true));
+    CHECK(xmpp::should_auto_enable_channel_omemo(true, false, false, false));
+    CHECK_FALSE(xmpp::should_auto_enable_channel_omemo(true, false, true, false));
+    CHECK_FALSE(xmpp::should_auto_enable_channel_omemo(true, false, false, true));
 
     const auto cache_ids = xmpp::omemo_plaintext_cache_ids({
         "sid", "origin", "sid"});
@@ -1540,6 +1542,28 @@ TEST_CASE("message_pep and feed helpers")
 
     CHECK(xmpp::feed_alias_prefix(3) == "#3");
     CHECK(xmpp::feed_alias_prefix(0).empty());
+
+    CHECK(xmpp::feed_node_display_label("pubsub.hackerheaven.org", "Phoronix") == "Phoronix");
+    CHECK(xmpp::feed_node_display_label("alice@example.org", "urn:xmpp:microblog:0") == "alice");
+    CHECK(xmpp::feed_node_display_label(
+              "pubsub.hackerheaven.org",
+              "urn:xmpp:microblog:0:comments/58118fb5-5321-4eb5-9194-d5ea36c3488c")
+          == "comments");
+
+    CHECK(xmpp::feed_parent_display_label("pubsub.hackerheaven.org", "Phoronix") == "Phoronix");
+    CHECK(xmpp::feed_parent_display_label("alice@example.org", "urn:xmpp:microblog:0")
+          == "alice (blog)");
+
+    CHECK(xmpp::feed_buffer_short_name("pubsub.hackerheaven.org/Phoronix") == "=Phoronix");
+    CHECK(xmpp::feed_buffer_short_name("alice@example.org/urn:xmpp:microblog:0")
+          == "=alice (blog)");
+    CHECK(xmpp::feed_buffer_short_name(
+              "pubsub.hackerheaven.org/urn:xmpp:microblog:0:comments/abc-uuid")
+          == "=pubsub.hackerheaven.org (comments)");
+
+    CHECK(xmpp::feed_comments_buffer_short_name("Phoronix", 1) == "=Phoronix (#1 comments)");
+    CHECK(xmpp::feed_comments_buffer_short_name("Phoronix", -1) == "=Phoronix (comments)");
+    CHECK(xmpp::feed_comments_buffer_short_name("alice (blog)", 3) == "=alice (blog) (#3 comments)");
 
     CHECK(xmpp::feed_item_xmpp_link("news.movim.eu", "Phoronix", "item-1")
           == "xmpp:news.movim.eu?;node=Phoronix;item=item-1");
