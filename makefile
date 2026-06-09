@@ -3,15 +3,6 @@
 
 UNAME_S := $(shell uname -s)
 
-# Doctest is header-only and not packaged on OpenBSD. Skip the coverage test
-# binary unless explicitly requested (see README — vendoring deps/doctest/ is an
-# alternative for running tests off Linux/CI).
-ifeq ($(UNAME_S),OpenBSD)
-SKIP_DOCTEST ?= 1
-else
-SKIP_DOCTEST ?= 0
-endif
-
 # PACKAGE_BUILD=1 skips embedding the .source ELF section (distribution packages).
 ifneq ($(PACKAGE_BUILD),)
 export PACKAGE_BUILD
@@ -275,11 +266,7 @@ include depend.mk
 .PHONY: all
 all: depend
 	+$(MAKE) weechat-xmpp
-ifeq ($(SKIP_DOCTEST),0)
 	+$(MAKE) test
-else
-	@echo ">>> Skipping doctests (SKIP_DOCTEST=1; see README for OpenBSD)"
-endif
 
 .PHONY: weechat-xmpp
 weechat-xmpp: $(DEPS) xmpp.so

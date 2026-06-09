@@ -51,7 +51,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 - **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick)
 - **Output**: `xmpp.so` (WeeChat plugin)
 - **Dependencies**: Managed via git submodules in `deps/`
-- Always run `make` after code changes (109 doctests run automatically at the end on Linux/macOS; **skipped on OpenBSD** by default — see README)
+- Always run `make` after code changes (109 doctests run automatically at the end; doctest is vendored in `deps/doctest/`)
 - **Includes**: use `-Isrc` paths (`plugin.hh`, `xmpp/stanza_view.hh`) — never `../` relative includes in `src/`
 
 ### Distribution / CI builds
