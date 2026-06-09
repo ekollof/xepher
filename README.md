@@ -15,6 +15,38 @@ Archive Management, HTTP file upload, microblogging via PubSub, and more.
 
 ## Installation
 
+### Pre-built packages
+
+Binary packages for **v0.8.1** and later are published on
+[GitHub Releases](https://github.com/ekollof/xepher/releases). Pick the file for
+your distribution:
+
+| Platform | Package |
+|----------|---------|
+| Debian / Ubuntu | `xepher_*_amd64.deb` |
+| Fedora / RHEL | `xepher-*-fc*.x86_64.rpm` |
+| Arch Linux | `xepher-*-x86_64.pkg.tar.zst` |
+| Void Linux | `xepher-*_x86_64.xbps` |
+| Alpine Linux | `xepher-*-r0.apk` |
+
+> **Note:** Avoid the v0.8.0 Fedora RPM and Alpine APK — they were built with a
+> packaging bug that produced ~1 GB artifacts. Use **v0.8.1** or newer.
+
+Install examples:
+
+```sh
+# Debian/Ubuntu
+sudo dpkg -i xepher_0.8.1-1_amd64.deb
+
+# Fedora
+sudo dnf install ./xepher-0.8.1-1.fc44.x86_64.rpm
+
+# Arch (as root or with sudo)
+sudo pacman -U xepher-0.8.1-1-x86_64.pkg.tar.zst
+```
+
+After installing, restart WeeChat (or run `/plugin load xmpp.so` on first install).
+
 ### Dependencies
 
 | Library | Type | Linux | macOS (Homebrew) |
@@ -34,7 +66,9 @@ Archive Management, HTTP file upload, microblogging via PubSub, and more.
 
 ### Supported platforms
 
-The plugin is developed and tested on **Linux** (Arch, Debian/Ubuntu, Fedora).
+The plugin is developed and tested on **Linux** (Arch, Debian/Ubuntu, Fedora,
+Void, Alpine). CI builds packages for all five via GitHub Actions on each
+release tag.
 
 **macOS** (Apple Silicon and Intel) receives best-effort support via Homebrew.
 The build system auto-detects the Homebrew prefix and sets `PKG_CONFIG_PATH`
@@ -55,20 +89,26 @@ platforms are **not routinely tested**. Known considerations:
 - The `DEBUG=1` address-sanitizer flags (`-lasan -lrt`) are Linux-only and are
   automatically skipped on other platforms.
 - The `.source` ELF section embedding step (`objcopy --add-section`) is
-  Linux-only and is automatically skipped on BSD.
+  Linux-only, skipped on BSD, and **skipped in distribution builds** (`PACKAGE_BUILD=1`).
 
-### Build
+### Build from source
 
 ```sh
 git clone --depth 1 git@github.com:ekollof/xepher.git
 cd xepher
 make install-deps   # installs system packages (requires sudo)
 make
-make test
+make test           # 109 doctests (handler slices, StanzaView, IQ builders, …)
 make install        # installs to ~/.local/share/weechat/plugins/ — do NOT run as root
 ```
 
 On BSD, replace `make` with `gmake` throughout.
+
+To build a distribution-style plugin locally (no `.source` embed, same as packages):
+
+```sh
+make PACKAGE_BUILD=1 weechat-xmpp
+```
 
 `make install-deps` automatically detects your distribution (Debian/Ubuntu,
 Fedora/RHEL, Arch, openSUSE, Void, Alpine, Gentoo, FreeBSD, OpenBSD, NetBSD,
@@ -1041,8 +1081,19 @@ cp scripts/icat.py ~/.local/share/weechat/python/autoload/
 
 ## Contributing
 
-Pull requests and issues are welcome.  
-Please keep to the existing indentation style (C++23). clang-format is recommended for contributors but not enforced via a repo config file (match nearby code).
+Pull requests and issues are welcome. See the
+[Contributing wiki page](https://github.com/ekollof/xepher/wiki/Contributing) and
+[`AGENTS.md`](AGENTS.md) for architecture and style guidance.
+
+- **C++23** throughout — match existing style in the file you edit.
+- **Port abstraction** — use `xmpp::StanzaView` for inbound stanzas, fluent
+  `stanza::spec` builders for outbound stanzas, and `weechat::UiPort` /
+  `BufferPort` / `LineStorePort` for WeeChat output. Raw `xmpp_stanza_get_*`
+  and `weechat_printf` belong only in hook/adapter glue.
+- **Tests** — run `make` (109 doctests) after changes; manual WeeChat testing
+  for integration behaviour.
+- **Releases** — see [Releasing wiki](https://github.com/ekollof/xepher/wiki/Releasing);
+  pushing a `v*` tag triggers GitHub Actions to build and attach packages.
 
 ---
 
