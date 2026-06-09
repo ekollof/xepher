@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <fmt/core.h>
+#include <fmt/ranges.h>
 #include <ranges>
+#include <vector>
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
@@ -26,12 +28,14 @@ std::optional<MessageReactions> parse_message_reactions(StanzaView msg)
 
     MessageReactions parsed;
     parsed.target_id = target_id;
-    parsed.emojis = reactions
-        | std::views::filter([](const StanzaView &child) { return child.name() == "reaction"; })
-        | std::views::transform([](const StanzaView &child) { return child.text(); })
-        | std::views::filter([](const std::string &emoji) { return !emoji.empty(); })
-        | std::views::join_with(' ')
-        | std::ranges::to<std::string>();
+    std::vector<std::string> emojis;
+    std::ranges::copy(
+        reactions
+            | std::views::filter([](const StanzaView &child) { return child.name() == "reaction"; })
+            | std::views::transform([](const StanzaView &child) { return child.text(); })
+            | std::views::filter([](const std::string &emoji) { return !emoji.empty(); }),
+        std::back_inserter(emojis));
+    parsed.emojis = fmt::format("{}", fmt::join(emojis, " "));
     return parsed;
 }
 

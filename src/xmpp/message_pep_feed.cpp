@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <fmt/core.h>
+#include <fmt/ranges.h>
 #include <ranges>
 #include <weechat/weechat-plugin.h>
 
@@ -234,9 +235,7 @@ void render_atom_entry_to_feed(
 
     if (!ae.categories.empty())
     {
-        const std::string tags = std::views::all(ae.categories)
-            | std::views::join_with(std::string_view(", "))
-            | std::ranges::to<std::string>();
+        const std::string tags = fmt::format("{}", fmt::join(ae.categories, ", "));
         weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
                                  "  %sTags:%s %s", c.dim, c.rst, tags.c_str());
     }
