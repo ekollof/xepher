@@ -45,12 +45,44 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 ## Build System
 
-- **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Combine with ccache for fast incremental builds: `CXX="ccache c++" make`
+### Local development
+
+- **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Combine with ccache: `CXX="ccache c++" make`
 - **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick)
 - **Output**: `xmpp.so` (WeeChat plugin)
 - **Dependencies**: Managed via git submodules in `deps/`
-- Always run `make` after code changes to verify compilation (doctests run automatically at end)
+- Always run `make` after code changes (109 doctests run automatically at the end)
 - **Includes**: use `-Isrc` paths (`plugin.hh`, `xmpp/stanza_view.hh`) — never `../` relative includes in `src/`
+
+### Distribution / CI builds
+
+- **`PACKAGE_BUILD=1`**: all packaging scripts and specs pass this to `make`. It skips the dev-only `.source` ELF section (`objcopy --add-section`). Without it, tarball builds lacking `.git` can archive the entire build tree and produce gigabyte RPM/APK packages.
+- **`.source` embed** (Linux dev builds only): after link, tracked sources are tarred into `xmpp.so` for the `make release` workflow. Runs only when `PACKAGE_BUILD` is unset, `git ls-files` succeeds, and the file list is non-empty.
+- **`make clean`** removes `xmpp.so` and `obj/` (`clean.mk`) so container builds never reuse a host-built plugin.
+
+### Packaging infrastructure
+
+**Primary path — GitHub Actions** (`.github/workflows/packages.yml`):
+- On `v*` tag push: builds all five distros **sequentially** in fresh Docker containers, uploads artifacts, and attaches them to the GitHub Release.
+- `workflow_dispatch` with a version builds packages without creating a release.
+- CI entry point: `packaging/github-build.sh <version>` (same script for local Docker verification).
+
+**Local package verification** (requires Docker):
+```sh
+bash packaging/github-build.sh X.Y.Z              # all distros
+bash packaging/github-build.sh X.Y.Z --fedora   # single distro
+```
+
+**Optional — persistent distrobox containers** (`packaging/distrobox-build.sh`):
+- Reuses containers; stamps installed deps under `/opt/xepher-build/`. Uses the same `build-*-inside.sh` scripts as CI.
+- Alpine and Void invoke `docker run` directly inside the script.
+
+**Shared helpers** (`packaging/scripts/`):
+- `prepare-source-tree.sh` — copy `/project` to a writable dir, `make clean`, seed `deps/diff/libdiff.a` while `.git` exists, set `safe.directory` for submodule steps.
+- `build-{deb,rpm,arch,alpine,void}-inside.sh` — per-distro logic; all pass `PACKAGE_BUILD=1`.
+- `docker-arch-wrapper.sh` — Arch `makepkg` runs as non-root `builder`; chowns `/output` for artifact copy.
+
+Output lands in `packaging/build/` (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`, `.xbps`).
 
 ## Coding Style & Practices
 
@@ -82,7 +114,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 - **Move semantics**: Use `std::move` to avoid unnecessary copies
 - **Structured bindings**: `auto [key, value] = map.find(...)` for cleaner code
 
-**Modernization Patterns** (non-negotiable for all new and modified code — not optional follow-up work. Established via surgical updates; agents **must** use these in new code, refactors, and list/string/error handling in `.cpp`/`.inl` files. Follow "surgical/minimal" rule — only apply where it simplifies without touching C ABI boundaries like LMDB cursors, libstrophe child iteration, or WeeChat hooks. Match local style exactly by opening a nearby file first. Always `#include <ranges>` / `<expected>` / `<span>` / `<algorithm>` (for `std::ranges::`) in the thin `.cpp` wrapper before `#include`ing the `.inl`. Use `fmt::format` for string assembly; `-Isrc` includes (`plugin.hh`, `xmpp/foo.hh`) — never `../` relative paths.)
+**Modernization Patterns** (non-negotiable for all new and modified code — not optional follow-up work. Established via surgical updates; agents **must** use these in new code, refactors, and list/string/error handling in `.cpp`/`.inl` files. Follow "surgical/minimal" rule — only apply where it simplifies without touching C ABI boundaries like LMDB cursors or WeeChat hook signatures. Use `StanzaView` for inbound stanza traversal (not raw libstrophe child iteration). Match local style exactly by opening a nearby file first. Always `#include <ranges>` / `<expected>` / `<span>` / `<algorithm>` (for `std::ranges::`) in the thin `.cpp` wrapper before `#include`ing the `.inl`. Use `fmt::format` for string assembly; `-Isrc` includes (`plugin.hh`, `xmpp/foo.hh`) — never `../` relative paths.)
 
 - **std::string_view for read-only params**: Replace `const std::string& s` (and `const char*`) with `std::string_view s`. Only `std::string(...)` cast when storing or returning ownership.
 - **std::span for byte buffers**: Use for owned data passed to C APIs, e.g.:
@@ -132,16 +164,19 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 ### WeeChat Plugin Conventions
 
-- All WeeChat API calls start with `weechat_`
-- Use `weechat_prefix()` for message coloring
-- Hook functions must match WeeChat signatures exactly
+- **Output and buffer operations**: use `UiPort`, `BufferPort`, `LineStorePort`, and `RenderEvent` in handler/command logic — not raw `weechat_printf` / `weechat_buffer_*` (see Port abstraction). Direct `weechat_*` calls belong only in port adapters and hook registration glue.
+- Hook/callback **function signatures** must match WeeChat exactly (`weechat_*` types at the C boundary).
+- Use `weechat_prefix()` (or `RuntimePort::color()`) when building formatted strings passed to `UiPort`.
 - Buffer display values: `"1"` (don't auto-switch), `"auto"` (auto-switch)
 - Never reload plugin - always restart WeeChat (race condition with timer hooks)
 
-### Stanza Construction
+### Stanza Construction & Inbound Parsing
 
 **Raw `xmpp_stanza_new()` calls are forbidden in all new code and all `.inl` / `.cpp` files.**
-Use the fluent stanza builder system exclusively.
+Use the fluent stanza builder system for **outbound** stanzas.
+
+**Raw `xmpp_stanza_get_*` / manual child-pointer walks are forbidden in handler and domain logic.**
+Use `xmpp::StanzaView` for **inbound** reads — wrap at the handler edge (`StanzaView view{stanza};`), then use `attr_string()`, `child()`, `text()`, and range-for over `children()`.
 
 #### The stanza builder (`src/xmpp/node.hh` + XEP `.inl` files)
 
@@ -253,8 +288,12 @@ which sets up all necessary includes and then `#include`s the `.inl`.**
 
 - **src/connection/helpers.cpp** — anonymous-namespace helpers shared by connection TUs
 - **src/connection/presence_handler.cpp** — XMPP presence stanza handler
-- **src/connection/message_handler.cpp** — XMPP message stanza handler (includes `render_data_form`)
-- **src/connection/iq_handler.cpp** — XMPP IQ stanza handler (HTTP upload, MAM, pubsub, caps, OMEMO keys)
+- **src/connection/message_handler.cpp** — thin adapter; delegates to `src/xmpp/message_*.cpp` slices
+- **src/connection/iq_handler.cpp** — thin adapter; delegates to `src/xmpp/iq_*.cpp` slices and `iq_handlers.cpp`
+- **src/xmpp/stanza_view.cpp** — inbound stanza reads (`StanzaView`)
+- **src/xmpp/iq_handlers.cpp** — pure IQ reply builders (version, time, ping)
+- **src/xmpp/message_*.cpp**, **src/xmpp/iq_*.cpp** — protocol parse/render slices (prefer extending these over raw strophe in handlers)
+- **src/weechat/ui_port.cpp**, **buffer_port.cpp**, **line_store.cpp**, **render_event.cpp** — WeeChat port implementations
 - **src/connection/session_lifecycle.cpp** — stream management + connect/disconnect lifecycle
 - **src/connection/internal.hh** — declarations shared across connection TUs
 - **src/account/callbacks.cpp** — WeeChat hook callbacks (fd, timer, input, etc.)
@@ -268,23 +307,46 @@ which sets up all necessary includes and then `#include`s the `.inl`.**
 - **src/omemo/api.cpp** — Full OMEMO implementation (replaces the old `src/omemo.cpp`)
 - **src/pgp.cpp** — PGP encryption support
 
-### Port abstraction (Strophe + WeeChat)
+### Port abstraction (Strophe + WeeChat) — required for new code
 
 Thin ports isolate inbound libstrophe reads and WeeChat output from domain logic.
-**New code must use these; migrate old code only when touching that area.**
+**All new and touched code must use ports and stanza builders — not raw `weechat_*` or `xmpp_stanza_*` in handler/command/domain logic.** Migrate legacy calls surgically when editing that code path (same PR, no drive-by rewrites).
+
+#### Inbound XMPP (libstrophe)
+
+| Prefer | Instead of |
+|--------|------------|
+| `xmpp::StanzaView` (`src/xmpp/stanza_view.hh`) | `xmpp_stanza_get_name`, `xmpp_stanza_get_attribute`, `xmpp_stanza_get_children`, manual child-pointer walks |
+| `stanza::spec` builders (`src/xmpp/node.hh`, XEP `.inl` files) | `xmpp_stanza_new`, `xmpp_stanza_add_child`, `xmpp_stanza_set_*` |
+| `xmpp::handle_*_iq` (`src/xmpp/iq_handlers.hh`) | Inline IQ reply construction in connection handlers |
+
+Handler slices follow **parse → domain struct → render** (`src/xmpp/message_*.cpp`, `src/xmpp/iq_*.cpp`, `src/connection/*_handler.cpp`). Add new protocol features by extending or mirroring these slices — not by growing monolithic `.inl` files with raw API calls.
+
+Connection TUs register thin C adapters: receive `xmpp_stanza_t*`, wrap into `StanzaView`, delegate to pure functions.
+
+#### WeeChat output and host queries
 
 | Port | Header | Role |
 |------|--------|------|
-| `xmpp::StanzaView` | `src/xmpp/stanza_view.hh` | Non-owning read-only inbound stanza facade (`attr_string()`, `child()`, `text()`, child range) |
-| `xmpp::handle_*_iq` | `src/xmpp/iq_handlers.hh` | Pure IQ reply builders (version/time proof); pattern for future handler extraction |
-| `weechat::UiPort` | `src/weechat/ui_port.hh` | Abstract buffer output (`printf_error`, `printf_info`, `printf_network`, …); `UiPort::for_buffer()` |
-| `weechat::RuntimePort` | `src/weechat/runtime_port.hh` | Host queries (`version_string`, `color`); `RuntimePort::default_runtime()` in production |
+| `weechat::UiPort` | `src/weechat/ui_port.hh` | Buffer output (`printf`, `printf_error`, `printf_info`, `printf_network`, `printf_date_tags`); `UiPort::for_buffer()` |
+| `weechat::RuntimePort` | `src/weechat/runtime_port.hh` | Host queries (`version_string`, `color`); `RuntimePort::default_runtime()` |
+| `weechat::BufferPort` | `src/weechat/buffer_port.hh` | Buffer search + nicklist mutations |
+| `weechat::LineStorePort` | `src/weechat/line_store.hh` | Line updates by message tag (receipts, retractions, reactions, tombstones) |
+| `RenderEvent` / `UiAction` | `src/weechat/render_event.hh` | Sum type for the handler render step (print, nicklist, line glyph updates) |
 
-**C-ABI boundaries (do not try to eliminate):** WeeChat hook/callback signatures; libstrophe
-`xmpp_handler` registration. Adapters at the edge wrap raw pointers into ports.
+Commands and handlers take or create `UiPort` (or return `RenderEvent`s) — not `weechat_printf` / `weechat_buffer_*` in `.inl` logic.
 
-**Tests:** `tests/weechat_stub.hh` provides `CapturingUiPort` and `StubRuntimePort`.
-Handler-split migration tracker: `TODO.md` § Port Abstraction → Wave 2.
+#### C-ABI boundaries (keep at the edge only)
+
+- WeeChat hook/callback registrations (`weechat_*` in `callbacks.cpp` and similar).
+- libstrophe `xmpp_handler_add` registrations — handlers receive `xmpp_stanza_t*`, wrap into `StanzaView` on entry.
+- LMDB cursors, gcrypt, libsignal handles.
+
+#### Tests
+
+`tests/weechat_stub.hh` provides `CapturingUiPort`, `NullUiPort`, and `StubRuntimePort`. Handler-slice doctests exercise `StanzaView` + `NullUiPort` without a live WeeChat instance.
+
+Migration history: `TODO.md` § Port Abstraction (Waves 1–4 complete).
 
 ### Channel Types
 
@@ -349,7 +411,7 @@ Xepher follows **semantic versioning** (MAJOR.MINOR.PATCH):
 
 ### Release checklist
 
-1. **All commits pushed** and 15 unit tests passing (`make`).
+1. **All commits pushed** and 109 doctests passing (`make`).
 2. **Bump version** in the three packaging files (all must match):
    - `packaging/arch/PKGBUILD` — `pkgver=X.Y.Z`
    - `packaging/rpm/weechat-xmpp.spec` — `Version: X.Y.Z` + new `%changelog` entry
@@ -357,34 +419,30 @@ Xepher follows **semantic versioning** (MAJOR.MINOR.PATCH):
 3. **Commit** the version bump: `chore: bump packaging to vX.Y.Z`
 4. **Tag** the release: `git tag -a vX.Y.Z -m "vX.Y.Z — <one-line summary>"`
 5. **Push** commits and tag: `git push && git push origin vX.Y.Z`
-6. **Build packages** (see below).
-7. **Create GitHub release** and attach binaries (see below).
+6. **Push the tag** — GitHub Actions (`.github/workflows/packages.yml`) builds all five distro packages sequentially and attaches them to the release automatically.
+7. **Edit the release** on GitHub if needed (title, notes) — `gh release edit vX.Y.Z`.
 
 ### Building packages
 
-Use the distrobox build script — it spins up isolated containers for each
-distro, builds, then tears them down:
+**CI (default for releases):** push `vX.Y.Z` tag → Actions runs `packaging/github-build.sh X.Y.Z` → artifacts attached to the release. Monitor with `gh run watch`.
 
+**Local verification before tagging** (requires Docker):
 ```sh
-# Build all five formats (Debian, Fedora, Arch, Void, Alpine)
-bash packaging/distrobox-build.sh X.Y.Z
-
-# Build a single format
-bash packaging/distrobox-build.sh X.Y.Z --debian
-bash packaging/distrobox-build.sh X.Y.Z --fedora
-bash packaging/distrobox-build.sh X.Y.Z --arch
-bash packaging/distrobox-build.sh X.Y.Z --void
-bash packaging/distrobox-build.sh X.Y.Z --alpine
+bash packaging/github-build.sh X.Y.Z              # all distros
+bash packaging/github-build.sh X.Y.Z --debian     # single distro
 ```
 
-Output lands in `packaging/build/`. Prerequisites: `distrobox` + `docker` or
-`podman` installed and accessible to the current user.
+**Optional — persistent distrobox containers** (faster iterative local builds):
+```sh
+bash packaging/distrobox-build.sh X.Y.Z
+bash packaging/distrobox-build.sh X.Y.Z --fedora
+```
 
-The Alpine and Void builds use `docker run` directly (no distrobox container)
-and must run as root inside the container — this is handled automatically.
+Output lands in `packaging/build/`. All packaging paths pass `PACKAGE_BUILD=1` to `make`.
 
-### Creating the GitHub release
+### Manual release fallback
 
+If CI is unavailable, build locally then:
 ```sh
 gh release create vX.Y.Z \
   --title "vX.Y.Z — <summary>" \
@@ -471,8 +529,8 @@ Skip autojoin for IRC gateway rooms (causes connection issues):
 
 ### Testing Limitations
 
-- No automated test suite for WeeChat plugins
-- Manual testing required in WeeChat
+- **109 doctests** cover handler slices, `StanzaView`, IQ builders, and port stubs (`make` runs them automatically) — extend these when adding protocol logic
+- Full WeeChat integration still requires manual testing in a live instance
 - Use `/debug dump` for troubleshooting
 - Check logs: `/set xmpp.look.debug_level 2`
 
@@ -636,7 +694,7 @@ Prefer the debug socket for all other interactions.
 
 0. **Read `AGENTS.md`** — full file at session start and again after any context compaction before continuing
 1. **Understand the request** - ask clarifying questions if needed
-2. **Explore existing code** - find similar patterns to follow (match modern C++23 patterns in nearby files)
+2. **Explore existing code** - find similar handler slices and port usage (match `StanzaView`/`UiPort` patterns in nearby files)
 3. **Make minimal changes** - surgical fixes, don't refactor unnecessarily
 4. **Build and test**: `make && <test in WeeChat>`
 5. **Update documentation** - README.md, DOAP.xml if applicable
@@ -716,6 +774,19 @@ make -j1
 # Clean build (avoid; prefer ccache incremental)
 make clean && make
 
+# Distribution build (no .source embed — matches packaging)
+make PACKAGE_BUILD=1 weechat-xmpp
+
+# Package all distros via Docker (same script as CI)
+bash packaging/github-build.sh X.Y.Z
+bash packaging/github-build.sh X.Y.Z --fedora
+
+# Optional: persistent distrobox package builds
+bash packaging/distrobox-build.sh X.Y.Z
+
+# Watch CI package build after tagging
+gh run watch --repo ekollof/xepher
+
 # Check git status
 git status
 
@@ -735,8 +806,8 @@ git push
 ## When in Doubt
 
 - **Re-read `AGENTS.md`** if the thread was compacted or you are continuing from a summary
-- **Follow existing patterns** in the codebase (prefer the modernized `ranges`/`string_view`/`fmt` style in touched areas)
-- **Make minimal changes** - don't refactor working code
+- **Follow existing patterns** in the codebase (ports + stanza builders + modernized `ranges`/`string_view`/`fmt` in touched areas)
+- **Make minimal changes** - don't refactor working code; migrate raw `weechat_*` / `xmpp_stanza_*` only in code you are already editing
 - **Test incrementally** - build after each logical change
 - **Document as you go** - don't leave docs for later
 - **Ask before major changes** - discuss architecture decisions
