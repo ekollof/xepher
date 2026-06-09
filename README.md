@@ -62,7 +62,7 @@ After installing, restart WeeChat (or run `/plugin load xmpp.so` on first instal
 | gmake | build | — (GNU make default) | ✅ `pkg install gmake` | ✅ `pkg_add gmake` | ✅ `brew install make` |
 | bison | build | ✅ package | ✅ `pkg install bison` | ✅ `pkg_add bison` | ✅ `brew install bison` |
 | flex | build | ✅ package | ✅ `pkg install flex` | ✅ `pkg_add flex` | ✅ `brew install flex` |
-| doctest | test | ✅ | ⚠️ optional | ⚠️ optional | ✅ |
+| doctest (header-only) | test | ✅ package | ⚠️ optional | ❌ not packaged (tests skipped) | ✅ |
 | WeeChat >= 3.0 | runtime | ✅ package | ✅ `pkg install weechat` | ✅ `pkg_add weechat` | ✅ `brew install weechat` |
 
 On FreeBSD and OpenBSD, run `./install-deps.sh` (or build from the port skeletons in
@@ -107,6 +107,18 @@ make install        # installs to ~/.local/share/weechat/plugins/ — do NOT run
 ```
 
 On BSD, replace `make` with `gmake` throughout.
+
+On **OpenBSD**, `gmake` / `gmake weechat-xmpp` skips doctests automatically
+(`SKIP_DOCTEST=1`) because the `doctest` headers are not in ports. The 109
+handler-slice tests still run on Linux and in CI. To run them on OpenBSD anyway,
+vendor the header-only library (same layout as the system package):
+
+```sh
+mkdir -p deps/doctest
+curl -fsSL -o deps/doctest/doctest.h \
+  https://raw.githubusercontent.com/doctest/doctest/v2.5.2/doctest/doctest.h
+gmake SKIP_DOCTEST=0 test
+```
 
 To build a distribution-style plugin locally (no `.source` embed, same as packages):
 

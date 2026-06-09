@@ -39,12 +39,23 @@ tests/run: $(COVS) tests/main.cc tests/xmpp.cov.so $(wildcard tests/*.inl)
 TEST_RUN_TIMEOUT ?= 120
 
 .PHONY: test
+ifeq ($(SKIP_DOCTEST),1)
+test:
+	@echo ">>> Doctests skipped (SKIP_DOCTEST=1)."
+	@echo ">>> Run on Linux/CI, or vendor doctest headers under deps/doctest/ and: gmake SKIP_DOCTEST=0 test"
+else
 test: tests/run
 	cd tests && timeout --kill-after=5 $(TEST_RUN_TIMEOUT) ./run -sm
+endif
 
 .PHONY: coverage
+ifeq ($(SKIP_DOCTEST),1)
+coverage:
+	@echo ">>> Coverage skipped (doctests disabled; SKIP_DOCTEST=1)"
+else
 coverage: tests/run
 	gcovr --txt -s --merge-mode-functions=separate
+endif
 
 .PHONY: check
 check:
