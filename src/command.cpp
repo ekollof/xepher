@@ -86,7 +86,8 @@ void command__init()
         "enter",
         N_("enter an xmpp multi-user-chat (muc)"),
         N_("<jid>"),
-        N_("jid: muc to enter"),
+        N_("jid: muc to enter\n"
+           "--no-switch: join without switching to the room buffer (bookmark autojoin)"),
         nullptr, &command__enter, nullptr, nullptr);
     if (!hook)
         weechat_printf(nullptr, "Failed to setup command /enter");

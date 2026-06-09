@@ -930,6 +930,9 @@ Also requires Python `PIL`/`Pillow` (`pip install Pillow` or `python-pillow` pac
 | `/bookmark del <jid>` | Remove a bookmark |
 | `/bookmark autojoin <jid> <on\|off>` | Toggle autojoin |
 
+Rooms with autojoin enabled are joined in the background on connect (no buffer
+switch). Use `/enter` or `/join` manually to join and switch to the room buffer.
+
 ### Network & status
 
 | Command | Description |

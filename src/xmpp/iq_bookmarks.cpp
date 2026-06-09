@@ -35,9 +35,10 @@ bool is_biboumi_gateway_room(const std::string_view jid)
 
 std::string bookmark_enter_command(const std::string_view jid, const std::string_view nick)
 {
+    // --no-switch: bookmark autojoin must not steal focus from the account buffer.
     if (nick.empty())
-        return fmt::format("/enter {}", jid);
-    return fmt::format("/enter {}/{}", jid, nick);
+        return fmt::format("/enter {} --no-switch", jid);
+    return fmt::format("/enter {}/{} --no-switch", jid, nick);
 }
 
 }  // namespace xmpp

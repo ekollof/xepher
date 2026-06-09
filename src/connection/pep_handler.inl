@@ -240,10 +240,8 @@ if (event)
                      if (!is_biboumi && !already_joined)
                      {
                          const auto& bookmark = account.bookmarks[item_id];
-                         std::string cmd = fmt::format("/enter {}{}{}",
-                                                       item_id,
-                                                       !bookmark.nick.empty() ? "/" : "",
-                                                       bookmark.nick);
+                         const std::string cmd =
+                             ::xmpp::bookmark_enter_command(item_id, bookmark.nick);
                          weechat_command(account.buffer, cmd.c_str());
                      }
                     else if (is_biboumi)

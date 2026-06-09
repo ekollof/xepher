@@ -1309,8 +1309,10 @@ TEST_CASE("iq_vcard and iq_bookmarks helpers")
     CHECK(xmpp::is_biboumi_gateway_room("room%irc.server@biboumi"));
     CHECK_FALSE(xmpp::is_biboumi_gateway_room("room@conference.example"));
 
-    CHECK(xmpp::bookmark_enter_command("room@conf", "nick") == "/enter room@conf/nick");
-    CHECK(xmpp::bookmark_enter_command("room@conf", "") == "/enter room@conf");
+    CHECK(xmpp::bookmark_enter_command("room@conf", "nick")
+        == "/enter room@conf/nick --no-switch");
+    CHECK(xmpp::bookmark_enter_command("room@conf", "")
+        == "/enter room@conf --no-switch");
 
     unit_strophe_env env;
     REQUIRE(env.ctx != nullptr);

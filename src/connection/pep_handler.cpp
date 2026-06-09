@@ -22,6 +22,7 @@
 #include "xmpp/atom.hh"
 #include "xmpp/message_pep.hh"
 #include "xmpp/message_pep_feed.hh"
+#include "xmpp/iq_bookmarks.hh"
 #include "xmpp/xep-0060.inl"
 
 #pragma GCC diagnostic push

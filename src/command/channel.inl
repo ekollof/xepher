@@ -32,36 +32,45 @@ int command__enter([[maybe_unused]] const void *pointer,
         return WEECHAT_RC_OK;
     }
 
-    // Parse --password <secret> / -k <secret> from the trailing args. Used to
-    // join password-protected MUCs (XEP-0045 §7.1.4). The password is sent
-    // as a <password> child of the <x xmlns='...muc'/> join presence.
+    // Parse flags and positionals. --no-switch: join without /buffer (bookmark autoconnect).
+    // --password / -k: join password-protected MUCs (XEP-0045 §7.1.4).
     std::string room_password;
-    int pos_arg_offset = -1;  // argv index of the first non-flag positional
-    for (int i = 2; i < argc; ++i)
+    bool no_switch = false;
+    int jid_arg_index = -1;     // argv index of the room JID (may be comma-separated)
+    int pos_arg_offset = -1;  // argv index of optional first message to send
+    for (int i = 1; i < argc; ++i)
     {
         std::string_view a = argv[i];
+        if (a == "--no-switch")
+        {
+            no_switch = true;
+            continue;
+        }
         if ((a == "--password" || a == "-k") && i + 1 < argc)
         {
             room_password = argv[++i];
+            continue;
         }
-        else if (a.starts_with("--password="))
+        if (a.starts_with("--password="))
         {
             room_password = std::string(a.substr(std::strlen("--password=")));
+            continue;
         }
-        else if (a.starts_with("-k="))
+        if (a.starts_with("-k="))
         {
             room_password = std::string(a.substr(3));
+            continue;
         }
+        if (jid_arg_index < 0)
+            jid_arg_index = i;
         else if (pos_arg_offset < 0)
-        {
             pos_arg_offset = i;
-        }
     }
 
-    if (argc > 1)
+    if (jid_arg_index >= 0)
     {
         int n_jid = 0;
-        char **jids = weechat_string_split(argv[1], ",", nullptr, 0, 0, &n_jid);
+        char **jids = weechat_string_split(argv[jid_arg_index], ",", nullptr, 0, 0, &n_jid);
         for (int i = 0; i < n_jid; i++)
         {
             ::jid jid_parsed(nullptr, jids[i]);
@@ -127,9 +136,12 @@ int command__enter([[maybe_unused]] const void *pointer,
                 ptr_channel->send_message(jid, text);
             }
 
-            int num = weechat_buffer_get_integer(ptr_channel->buffer, "number");
-            auto buf = fmt::format("/buffer {}", num);
-            weechat_command(ptr_account->buffer, buf.c_str());
+            if (!no_switch)
+            {
+                int num = weechat_buffer_get_integer(ptr_channel->buffer, "number");
+                auto buf = fmt::format("/buffer {}", num);
+                weechat_command(ptr_account->buffer, buf.c_str());
+            }
         }
         weechat_string_free_split(jids);
     }
