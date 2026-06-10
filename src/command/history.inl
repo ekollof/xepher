@@ -92,6 +92,108 @@ resolve_msg_id(const msg_entry &m, const weechat::channel *ch)
     return m.id;
 }
 
+// XEP-0461 §3.1: <reply to='…'> must be the original sender's JID.
+static std::string
+resolve_reply_to_jid(const weechat::channel *ch, std::string_view sender_nick)
+{
+    if (ch->type == weechat::channel::chat_type::MUC && !sender_nick.empty())
+        return fmt::format("{}/{}", ch->name, sender_nick);
+    return ch->name;
+}
+
+static std::string
+reply_display_prefix(weechat::account *account, const weechat::channel *channel)
+{
+    if (channel->type == weechat::channel::chat_type::MUC)
+    {
+        const std::string_view nick = account->nickname();
+        if (nick.empty())
+            return account->jid();
+
+        const std::string occupant = fmt::format("{}/{}", channel->name, nick);
+        if (auto *display_user = weechat::user::search(account, occupant.c_str()))
+        {
+            std::string pfx;
+            if (!display_user->profile.avatar_rendered.empty())
+                pfx = display_user->profile.avatar_rendered + " ";
+            pfx += weechat::user::as_prefix_raw(nick);
+            return pfx;
+        }
+        return weechat::user::as_prefix_raw(nick);
+    }
+
+    auto *self_user = weechat::user::search(account, account->jid().data());
+    return self_user ? std::string(self_user->as_prefix_raw()) : account->jid();
+}
+
+// Servers do not carbon-copy self-sent replies; echo locally like PM send_message.
+static void
+echo_outgoing_reply(weechat::account *account,
+                    weechat::channel *channel,
+                    struct t_gui_buffer *buffer,
+                    std::string_view target_id,
+                    std::string_view reply_text,
+                    std::string_view origin_id)
+{
+    auto ui = weechat::UiPort::for_buffer(buffer);
+    const std::string prefix = reply_display_prefix(account, channel);
+
+    if (auto quote = weechat::line_store_lookup_reply_quote(buffer, target_id))
+    {
+        const std::string quote_line =
+            xmpp::format_reply_quote_body(quote->quote_nick, quote->excerpt);
+        ui->printf_date_tags(0, "notify_none,no_log,xmpp_reply_quote",
+                             fmt::format("{}\t{}", prefix, quote_line));
+    }
+
+    std::string tags;
+    if (channel->type == weechat::channel::chat_type::MUC)
+    {
+        const std::string_view nick = account->nickname();
+        tags = fmt::format("xmpp_message,message,nick_{},notify_none,self_msg,log1,id_{}",
+                           nick, origin_id);
+    }
+    else
+    {
+        tags = fmt::format("xmpp_message,message,private,notify_none,self_msg,log1,id_{}",
+                           origin_id);
+    }
+
+    ui->printf_date_tags(0, tags.c_str(), fmt::format("{}\t{}", prefix, reply_text));
+}
+
+static void
+send_reply_message(weechat::account *account,
+                   weechat::channel *channel,
+                   struct t_gui_buffer *buffer,
+                   std::string_view target_id,
+                   std::string_view reply_to_jid,
+                   std::string_view reply_text)
+{
+    const char *type = (channel->type == weechat::channel::chat_type::MUC)
+                       ? "groupchat" : "chat";
+
+    const std::string uuid = stanza::uuid(account->context);
+    const std::string origin_uuid = stanza::uuid(account->context);
+
+    stanza::xep0461::reply reply_el(target_id, reply_to_jid);
+    stanza::xep0428::fallback fallback_el("urn:xmpp:reply:0");
+    stanza::xep0359::origin_id oid(origin_uuid);
+
+    auto msg_s = stanza::message()
+        .type(type)
+        .to(channel->name)
+        .id(uuid)
+        .body(reply_text);
+    msg_s.reply(reply_el);
+    msg_s.fallback(fallback_el);
+    msg_s.store();
+    msg_s.origin_id(oid);
+
+    account->connection.send(msg_s.build(account->context).get());
+    echo_outgoing_reply(account, channel, buffer, target_id, reply_text, origin_uuid);
+}
+
 // Return up to `max` own, non-retracted messages from the buffer (newest first).
 static std::vector<msg_entry>
 collect_own_messages(struct t_gui_buffer *buffer, int max = 20)
@@ -652,45 +754,14 @@ int command__reply(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    std::string target_id_str     = resolve_msg_id(*target, ptr_channel);
-    std::string target_sender_nick = target->nick;
+    const std::string target_id_str = resolve_msg_id(*target, ptr_channel);
+    const std::string reply_to_jid =
+        resolve_reply_to_jid(ptr_channel, target->nick);
 
-    // Send the reply using XEP-0461
-    // The message goes to the channel/peer JID (routing destination)
-    const char *to = ptr_channel->name.c_str();
-    const char *type = (ptr_channel->type == weechat::channel::chat_type::MUC) 
-                        ? "groupchat" : "chat";
+    send_reply_message(ptr_account, ptr_channel, buffer,
+                       target_id_str, reply_to_jid, reply_text);
 
-    // XEP-0461 §3.1: <reply to='...'> MUST be the JID of the original sender,
-    // not the room/channel JID.
-    // For MUC: room_jid/nick (full JID of the occupant)
-    // For PM: the peer's bare JID (which is the channel name)
-    std::string reply_to_jid;
-    if (ptr_channel->type == weechat::channel::chat_type::MUC && !target_sender_nick.empty())
-        reply_to_jid = ptr_channel->name + "/" + target_sender_nick;
-    else
-        reply_to_jid = ptr_channel->name;
-
-    std::string uuid = stanza::uuid(ptr_account->context);
-    std::string origin_uuid = stanza::uuid(ptr_account->context);
-
-    stanza::xep0461::reply reply_el(target_id_str, reply_to_jid);
-    stanza::xep0428::fallback fallback_el("urn:xmpp:reply:0");
-    stanza::xep0359::origin_id oid(origin_uuid);
-
-    auto msg_s = stanza::message()
-        .type(type)
-        .to(to)
-        .id(uuid)
-        .body(reply_text);
-    msg_s.reply(reply_el);
-    msg_s.fallback(fallback_el);
-    msg_s.store();
-    msg_s.origin_id(oid);
-
-    ptr_account->connection.send(msg_s.build(ptr_account->context).get());
-
-        ui->printf_network("xmpp: reply sent");
+    ui->printf_network("xmpp: reply sent");
 
     return WEECHAT_RC_OK;
 }
@@ -731,37 +802,23 @@ int command__reply_to(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    const char *target_id   = argv[1];
-    const char *reply_text  = argv_eol[2];
+    const char *target_id  = argv[1];
+    const char *reply_text = argv_eol[2];
 
-    // Build reply-to JID: for PM it's the peer bare JID; for MUC we don't know
-    // the exact occupant JID from the ID alone, so use the room JID as fallback.
     std::string reply_to_jid = ptr_channel->name;
+    for (auto &m : collect_buffer_messages(buffer, 500))
+    {
+        if (resolve_msg_id(m, ptr_channel) == target_id)
+        {
+            reply_to_jid = resolve_reply_to_jid(ptr_channel, m.nick);
+            break;
+        }
+    }
 
-    const char *to   = ptr_channel->name.c_str();
-    const char *type = (ptr_channel->type == weechat::channel::chat_type::MUC)
-                        ? "groupchat" : "chat";
+    send_reply_message(ptr_account, ptr_channel, buffer,
+                       target_id, reply_to_jid, reply_text);
 
-    std::string uuid_s = stanza::uuid(ptr_account->context);
-    std::string origin_uuid_s = stanza::uuid(ptr_account->context);
-
-    stanza::xep0461::reply reply_el(target_id, reply_to_jid);
-    stanza::xep0428::fallback fallback_el("urn:xmpp:reply:0");
-    stanza::xep0359::origin_id oid_el(origin_uuid_s);
-
-    auto msg_s = stanza::message()
-        .type(type)
-        .to(to)
-        .id(uuid_s)
-        .body(reply_text);
-    msg_s.reply(reply_el);
-    msg_s.fallback(fallback_el);
-    msg_s.store();
-    msg_s.origin_id(oid_el);
-
-    ptr_account->connection.send(msg_s.build(ptr_account->context).get());
-
-        ui->printf_network("xmpp: reply sent");
+    ui->printf_network("xmpp: reply sent");
     return WEECHAT_RC_OK;
 }
 

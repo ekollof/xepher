@@ -2042,12 +2042,21 @@ message_handler_after_omemo:
 
     std::string final_text; // used by spoiler / ephemeral / oob suffix blocks below
 
+    // /reply local echo already tagged id_<origin-id>; skip the server echo dup.
+    bool skip_live_self_render = false;
+    if (!date && is_from_self && stable_id && channel && channel->buffer)
+    {
+        const std::string id_needle = fmt::format("id_{}", stable_id);
+        skip_live_self_render = weechat::line_store_buffer_contains_any_tag(
+            channel->buffer, {id_needle});
+    }
+
     // XEP-0461: emit reply context as a separate quote line above the message.
     // Nick column shows the replying user (same as the message line below it).
     // Body shows  │ quotedNick: excerpt  in dim/cyan so it reads as a quote block.
     // notify_none,no_log: no highlight, no duplicate log entry.
     auto ch_ui = weechat::UiPort::for_buffer(channel->buffer);
-    if (!reply_prefix.empty())
+    if (!skip_live_self_render && !reply_prefix.empty())
     {
         const std::string quote_line =
             ::xmpp::format_reply_quote_body(reply_quote_nick, reply_prefix);
@@ -2101,30 +2110,33 @@ message_handler_after_omemo:
 
     const char *encrypted_glyph = (encrypted || x || was_omemo_cached) ? "🔒 " : "";
 
-    if (channel_id == from_bare && to == channel->id)
+    if (!skip_live_self_render)
     {
-        std::string msg = fmt::format("{}\t{}[to {}]: {}{}",
-                                      display_prefix,
-                                      edit, to, encrypted_glyph,
-                                      display_text ? display_text : "");
-        ch_ui->printf_date_tags(date, *dyn_tags, msg);
-    }
-    else if (weechat_string_match(text, "/me *", 0))
-    {
-        std::string msg = fmt::format("{}\t{}{}{} {}",
-                                      weechat::RuntimePort::default_runtime().prefix("action"),
-                                      edit, display_prefix,
-                                      encrypted_glyph,
-                                      display_text ? display_text+4 : "");
-        ch_ui->printf_date_tags(date, *dyn_tags, msg);
-    }
-    else
-    {
-        std::string msg = fmt::format("{}\t{}{}{}",
-                                      display_prefix,
-                                      edit, encrypted_glyph,
-                                      display_text ? display_text : "");
-        ch_ui->printf_date_tags(date, *dyn_tags, msg);
+        if (channel_id == from_bare && to == channel->id)
+        {
+            std::string msg = fmt::format("{}\t{}[to {}]: {}{}",
+                                          display_prefix,
+                                          edit, to, encrypted_glyph,
+                                          display_text ? display_text : "");
+            ch_ui->printf_date_tags(date, *dyn_tags, msg);
+        }
+        else if (weechat_string_match(text, "/me *", 0))
+        {
+            std::string msg = fmt::format("{}\t{}{}{} {}",
+                                          weechat::RuntimePort::default_runtime().prefix("action"),
+                                          edit, display_prefix,
+                                          encrypted_glyph,
+                                          display_text ? display_text+4 : "");
+            ch_ui->printf_date_tags(date, *dyn_tags, msg);
+        }
+        else
+        {
+            std::string msg = fmt::format("{}\t{}{}{}",
+                                          display_prefix,
+                                          edit, encrypted_glyph,
+                                          display_text ? display_text : "");
+            ch_ui->printf_date_tags(date, *dyn_tags, msg);
+        }
     }
 
     // weechat-icat: display inline image after the message line (local path during
