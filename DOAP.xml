@@ -81,7 +81,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0045.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.35.5</xmpp:version>
-        <xmpp:note xml:lang='en'>Multi-User Chat (MUC) - join/leave, send/receive, IRC-style admin (/kick, /ban, /voice, /devoice, /op, /deop), owner config (/setmodes, /affiliation, /destroy), registration (/mucregister), direct and mediated invites; history maxstanzas='0' on join (MAM catch-up); no interactive full roomconfig UI</xmpp:note>
+        <xmpp:note xml:lang='en'>Multi-User Chat (MUC) - join/leave, send/receive, IRC-style admin (/kick, /ban, /voice, /devoice, /op, /deop), owner config (/setmodes, /affiliation list|set, /destroy), registration (/mucregister), direct and mediated invites (/invite, /decline); history maxstanzas='0' on join (MAM catch-up); no interactive full roomconfig UI</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

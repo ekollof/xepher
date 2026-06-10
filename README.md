@@ -103,7 +103,7 @@ git clone --depth 1 git@github.com:ekollof/xepher.git
 cd xepher
 make install-deps   # installs system packages (requires sudo)
 make                # optimized plugin (no doctests)
-make DEBUG=1        # dev build + 118 doctests
+make DEBUG=1        # dev build + 123 doctests
 make test           # doctests only (handler slices, StanzaView, IQ builders, …)
 make install        # installs to ~/.local/share/weechat/plugins/ — do NOT run as root
 ```
@@ -719,7 +719,8 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 | `/me <text>` | Send a `/me` action (XEP-0245) |
 | `/ephemeral <seconds> <text>` | Send an ephemeral message that disappears after N seconds (XEP-0466) |
 | `/notify [<jid>] [always\|on-mention\|never]` | Get or set per-chat notification preference (XEP-0492) |
-| `/invite <jid> [reason]` | Invite a user to the current MUC (XEP-0249) |
+| `/invite [--mediated] <jid> [reason]` | Invite a user to the current MUC (XEP-0249 direct by default; `--mediated` for XEP-0045 §7.8.2) |
+| `/decline [room inviter [reason]]` | Decline a pending mediated MUC invitation (XEP-0045 §7.8.2; account buffer) |
 | `/selfping` | Verify MUC membership (XEP-0410) |
 | `/edit` | Picker: choose a sent message to correct (XEP-0308) |
 | `/edit-to <id> <text>` | Correct a specific message by ID — used by the `/edit` picker |
@@ -758,6 +759,8 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 | `/nick [newnick]` | Change your nickname in the current MUC |
 | `/names` | List all known occupants in the current MUC with IRC-style role/affiliation prefixes (same symbols as the nicklist; sorted by rank then nick) |
 | `/modes` | Display the MUC room modes and metadata (XEP-0045 §6.4/6.5). The mode flags alone also appear in the buffer's status-bar `modes` slot IRC-style (e.g. `+miP` for a moderated, members-only, persistent room) — automatically updated on join and on status-104 config-change notifications |
+| `/setmodes [+/-][m][i][k][p][P][N][S] [secret] [--confirm]` | Set/clear room mode flags (XEP-0045 §10.2, owner-only). Without `--confirm` prints the planned diff |
+| `/destroy [<reason> [<alt-jid> [<alt-password>]]] [--confirm]` | Destroy the current MUC room (XEP-0045 §10.7, owner-only). Irreversible — use `--confirm` to apply |
 
 ### MUC nicklist prefixes
 
@@ -1125,7 +1128,7 @@ Pull requests and issues are welcome. See the
   `stanza::spec` builders for outbound stanzas, and `weechat::UiPort` /
   `BufferPort` / `LineStorePort` for WeeChat output. Raw `xmpp_stanza_get_*`
   and `weechat_printf` belong only in hook/adapter glue.
-- **Tests** — run `make DEBUG=1` or `make test` (118 doctests) after changes; manual WeeChat testing
+- **Tests** — run `make DEBUG=1` or `make test` (123 doctests) after changes; manual WeeChat testing
   for integration behaviour.
 - **Releases** — see [Releasing wiki](https://github.com/ekollof/xepher/wiki/Releasing);
   pushing a `v*` tag triggers GitHub Actions to build and attach packages.
@@ -1157,7 +1160,7 @@ the JID above.
 ### Core IM
 
 - ✅ XEP-0030: Service Discovery
-- ✅ XEP-0045: Multi-User Chat (core features)
+- ✅ XEP-0045: Multi-User Chat — `/create`, IRC-style admin (`/kick`, `/ban`, `/voice`, `/devoice`, `/op`, `/deop`), owner config (`/setmodes`, `/affiliation`, `/destroy`), registration (`/mucregister`), direct and mediated invites (`/invite`, `/decline`); no full interactive roomconfig UI
 - ✅ XEP-0054: vcard-temp (retrieval via `/whois`, publishing via `/setvcard`)
 - ✅ XEP-0077: In-Band Registration (`/account register`, `unregister`, `password`)
 - ✅ XEP-0115: Entity Capabilities (persistent caching)
