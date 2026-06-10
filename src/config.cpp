@@ -212,7 +212,7 @@ weechat::config::config()
                 {}, {}, {}},
             .emoticons{file, section_look, "emoticons", "boolean",
                 "replace text emoticons like :) ;) :D <3 with their Unicode emoji "
-                "equivalents (😊 😉 😀 ❤️) in incoming and outgoing messages",
+                "equivalents (😊 😉 😀 ❤️) in incoming messages and outgoing message bodies",
                 nullptr, 0, 0,
                 "on", nullptr, false,
                 {}, {}, {}},

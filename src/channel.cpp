@@ -1236,6 +1236,11 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
 
     std::string to_str(to);
     std::string body_str(body);
+    if (weechat::config::instance
+        && weechat::config::instance->look.emoticons.boolean())
+    {
+        body_str = replace_emoticons(body_str);
+    }
 
     std::string saved_id = stanza::uuid(account.context);
 
@@ -1505,10 +1510,6 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
             is_action ? "action," : "", saved_id);
         bool encrypted = (transport == weechat::channel::transport::OMEMO ||
                           transport == weechat::channel::transport::PGP);
-        std::string display_body = weechat::config::instance
-            && weechat::config::instance->look.emoticons.boolean()
-            ? replace_emoticons(body_str)
-            : body_str;
         if (is_action)
         {
             weechat_printf_date_tags(buffer, 0,
@@ -1517,7 +1518,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                                      weechat_prefix("action"),
                                      prefix.data(),
                                      encrypted ? "🔒 " : "",
-                                     display_body.c_str() + 4);
+                                     body_str.c_str() + 4);
         }
         else
         {
@@ -1526,7 +1527,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                                      "%s\t%s%s ⌛",
                                      prefix.data(),
                                      encrypted ? "🔒 " : "",
-                                     display_body.c_str());
+                                     body_str.c_str());
         }
     }
 
