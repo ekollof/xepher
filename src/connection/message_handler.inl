@@ -1780,6 +1780,31 @@ message_handler_after_omemo:
     // XEP-0385 / XEP-0447 / XEP-0448: SIMS and SFS display suffixes
     std::string sims_suffix;
     const auto media_view = ::xmpp::StanzaView(stanza);
+    const bool icat_enabled = weechat::config::instance
+        && weechat::config::instance->look.icat.boolean();
+    const bool is_sticker = icat_enabled && ::xmpp::stanza_has_sticker(media_view);
+    const auto emoji_hash_keys = icat_enabled
+        ? ::xmpp::collect_emoji_markup_hash_keys(media_view)
+        : std::unordered_set<std::string>{};
+    const auto custom_emoji_previews = icat_enabled
+        ? ::xmpp::collect_custom_emoji_previews(media_view)
+        : std::vector<::xmpp::CustomEmojiPreview>{};
+    const auto skip_inline_file_suffix =
+        [&](const ::xmpp::FileMetadata &meta) -> bool {
+            if (!icat_enabled || !is_image_mime_type(meta.mime))
+                return false;
+            if (is_sticker)
+                return true;
+            if (emoji_hash_keys.empty())
+                return false;
+            return std::ranges::any_of(
+                meta.hashes,
+                [&](const ::xmpp::FileHash &hash) {
+                    return emoji_hash_keys.contains(
+                        ::xmpp::file_hash_key(hash.algo, hash.value_b64));
+                });
+        };
+
     for (const auto &share : ::xmpp::collect_sims_shares(media_view))
     {
         if (is_image_mime_type(share.meta.mime))
@@ -1790,8 +1815,11 @@ message_handler_after_omemo:
             incoming_image_height = share.meta.height;
         }
 
-        sims_suffix += ::xmpp::format_file_share_suffix(
-            share.meta.name, share.meta.mime, share.meta.size_raw, share.url);
+        if (!skip_inline_file_suffix(share.meta))
+        {
+            sims_suffix += ::xmpp::format_file_share_suffix(
+                share.meta.name, share.meta.mime, share.meta.size_raw, share.url);
+        }
 
         if (!oob_suffix.empty() && oob_suffix.contains(share.url))
             oob_suffix.clear();
@@ -1877,8 +1905,11 @@ message_handler_after_omemo:
             incoming_image_height = sfs.meta.height;
         }
 
-        sims_suffix += ::xmpp::format_file_share_suffix(
-            sfs.meta.name, sfs.meta.mime, sfs.meta.size_raw, sfs_url);
+        if (!skip_inline_file_suffix(sfs.meta))
+        {
+            sims_suffix += ::xmpp::format_file_share_suffix(
+                sfs.meta.name, sfs.meta.mime, sfs.meta.size_raw, sfs_url);
+        }
     }
 
     // XEP-0511: Link Metadata — parse <rdf:Description> containing OpenGraph metadata.
@@ -2090,8 +2121,22 @@ message_handler_after_omemo:
             invoke_icat_preview(req, account);
         };
 
-        if (pending_icat)
+        if (!custom_emoji_previews.empty())
+        {
+            for (const auto &emoji : custom_emoji_previews)
+            {
+                emit_icat(pending_icat_preview{
+                    emoji.url,
+                    emoji.width,
+                    emoji.height,
+                    emoji.mime,
+                });
+            }
+        }
+        else if (pending_icat)
+        {
             emit_icat(*pending_icat);
+        }
         else if (!incoming_image_url.empty())
         {
             emit_icat(pending_icat_preview{

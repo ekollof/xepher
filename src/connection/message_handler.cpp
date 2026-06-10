@@ -49,6 +49,7 @@
 #include "xmpp/message_body.hh"
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_media.hh"
+#include "xmpp/message_sticker_emoji.hh"
 #include "xmpp/message_omemo.hh"
 #include "xmpp/message_invite.hh"
 #include "xmpp/message_ephemeral.hh"

@@ -467,6 +467,28 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0449.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.2.0</xmpp:version>
+        <xmpp:note
+                    xml:lang='en'
+                >Stickers (receive) — detects &lt;sticker xmlns='urn:xmpp:stickers:0'/&gt; with SFS image payloads; displays inline via weechat-icat when xmpp.look.icat is enabled (Movim-compatible); sticker pack pubsub not implemented</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0514.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>0.1.0</xmpp:version>
+        <xmpp:note
+                    xml:lang='en'
+                >Emoji Markup (receive) — resolves &lt;emoji xmlns='urn:xmpp:markup:emoji:0'/&gt; spans in XEP-0394 markup against sibling SFS/SIMS hashes; displays custom emoji images inline via weechat-icat when xmpp.look.icat is enabled; body fallback text retained</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0392.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.0.1</xmpp:version>

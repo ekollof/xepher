@@ -242,6 +242,7 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/message_forward.cpp \
 	 src/xmpp/message_body.cpp \
 	 src/xmpp/message_media.cpp \
+	 src/xmpp/message_sticker_emoji.cpp \
 	 src/xmpp/message_omemo.cpp \
 	 src/xmpp/message_invite.cpp \
 	 src/xmpp/message_ephemeral.cpp \

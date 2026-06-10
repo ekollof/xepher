@@ -86,6 +86,17 @@ FileMetadata parse_file_metadata(StanzaView file_elem)
     if (auto h = parse_uint32(file_elem.child("height").text()); h)
         meta.height = *h;
 
+    for (StanzaView child : file_elem)
+    {
+        if (!element_is(child, "hash", k_hashes_ns))
+            continue;
+        FileHash hash;
+        hash.algo = child.attr_string("algo");
+        hash.value_b64 = child.text();
+        if (!hash.algo.empty() && !hash.value_b64.empty())
+            meta.hashes.push_back(std::move(hash));
+    }
+
     return meta;
 }
 

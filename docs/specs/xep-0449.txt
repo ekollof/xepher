@@ -1,0 +1,244 @@
+<!DOCTYPE html SYSTEM "about:legacy-compat">
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><title>XEP-0449: Stickers</title><style type="text/css">
+/* don't mind this hack */
+nav#toc h2:before {
+display: none;
+content: "XEP-0449";
+}
+        </style><link rel="stylesheet" type="text/css" href="xmpp.css"><link href="prettify.css" type="text/css" rel="stylesheet"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico"><script type="text/javascript" src="prettify.js"></script><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="title" content="XEP-0449: Stickers"><meta name="description" content="This specification provides a protocol to send stickers and to create and share sticker packs."><meta name="DC.Title" content="Stickers"><meta name="DC.Creator" content="Marvin Wißfeld"><meta name="DC.Description" content="This specification provides a protocol to send stickers and to create and share sticker packs."><meta name="DC.Publisher" content="XMPP Standards Foundation"><meta name="DC.Contributor" content="XMPP Extensions Editor"><meta name="DC.Date" content="2026-05-01"><meta name="DC.Type" content="XMPP Extension Protocol"><meta name="DC.Format" content="XHTML"><meta name="DC.Identifier" content="XEP-0449"><meta name="DC.Language" content="en"><meta name="DC.Rights" content="This XMPP Extension Protocol is copyright © 1999 – 2024 by the XMPP Standards Foundation (XSF)."><meta property="og:type" content="website"><meta property="og:url" content="https://xmpp.org/extensions/xep-0449.html"><meta property="og:title" content="XEP-0449: Stickers"><meta property="og:description" content="This specification provides a protocol to send stickers and to create and share sticker packs."><meta property="og:image" content="https://xmpp.org/images/logos/xmpp-logo-text-banner.jpg"><meta property="og:image:alt" content="XMPP (Extensible Messaging and Presence Protocol) Logo"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary"><meta name="twitter:url" content="https://xmpp.org/extensions/xep-0449.html"><meta name="twitter:title" content="XEP-0449: Stickers"><meta name="twitter:description" content="This specification provides a protocol to send stickers and to create and share sticker packs."><meta name="twitter:image" content="https://xmpp.org/images/logos/xmpp-logo-text-banner.jpg"></head><body onload="prettyPrint()"><h1>XEP-0449: Stickers</h1><div class="docmeta-wrap"><dl id="docmeta" class="compact"><dt>Abstract</dt><dd>This specification provides a protocol to send stickers and to create and share sticker packs.</dd><dt>Author</dt><dd>Marvin Wißfeld</dd><dt>Copyright</dt><dd>© 2020 – 2026 XMPP Standards Foundation. <a href="#appendix-legal">SEE LEGAL NOTICES</a>.</dd><dt>Status</dt><dd><p>Experimental</p><div id="status-notice" class="experimental standards track">WARNING: This Standards-Track document is Experimental. Publication as an XMPP Extension Protocol does not imply approval of this proposal by the XMPP Standards Foundation. Implementation of the protocol described herein is encouraged in exploratory implementations, but production systems are advised to carefully consider whether it is appropriate to deploy implementations of this protocol before it advances to a status of Draft.</div></dd><dt>Type</dt><dd>Standards Track</dd><dt>Version</dt><dd>0.2.0 (2026-05-01)</dd></dl><div class="timeline-wrap"><div class="timeline-head">Document Lifecycle</div><ol class="timeline"><li class="current">Experimental</li><li>Proposed</li><li>Stable</li><li>Final</li></ol></div></div><nav id="toc"><a href="#top"><h2>Table of Contents</h2></a><ol class="toc"><li><a href="#intro">Introduction</a></li><li><a href="#reqs">Requirements</a></li><li><a href="#glossary">Glossary</a></li><li><a href="#usecases">Use Cases</a><ol><li><a href="#send">Sending a sticker</a></li><li><a href="#receive">Receiving a sticker</a></li><li><a href="#create">Creating a sticker pack</a><ol><li><a href="#pubsub-item">Sticker pack pubsub item</a></li><li><a href="#pack-hash">Sticker pack hash calculation</a></li></ol></li><li><a href="#send-from-pack">Sending a sticker from a sticker pack</a></li><li><a href="#import">Importing a sticker pack</a></li><li><a href="#share">Sharing a sticker pack</a></li></ol></li><li><a href="#access">Accessibility Considerations</a></li><li><a href="#security">Security Considerations</a></li><li><a href="#iana">IANA Considerations</a></li><li><a href="#registrar">XMPP Registrar Considerations</a><ol><li><a href="#ns">Protocol Namespaces</a></li></ol></li></ol><h6><a href="#appendices">Appendices</a></h6><ol class="toc-appendices"><li><a href="#appendix-docinfo">Document Information</a></li><li><a href="#appendix-authorinfo">Author Information</a></li><li><a href="#appendix-legal">Legal Notices</a></li><li><a href="#appendix-xmpp">Relation to XMPP</a></li><li><a href="#appendix-discuss">Discussion Venue</a></li><li><a href="#appendix-conformance">Requirements Conformance</a></li><li><a href="#appendix-notes">Notes</a></li><li><a href="#appendix-revs">Revision History</a></li><li><a href="#appendix-biblatex">Bib(La)Tex Entry</a></li></ol></nav><h2 id="intro">1.
+       Introduction<a class="anchor-link" href="#intro"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">Stickers [<a href="#nt-idm46811556331104">1</a>] are images or short animations that often represent an emoticon or an action. They are increasingly used in private messaging in the last years, especially on mobile phone apps. Stickers can be more nuanced and expressive than emoticons. They can be used to convey emotions or tell stories in a fun and easy way.</p>
+  <p class="" style="">Recently, demand to implement stickers, including their social feature of sharing sticker packs arised within the XMPP community. This specification is to fulfill this demand.</p>
+<h2 id="reqs">2.
+       Requirements<a class="anchor-link" href="#reqs"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <ul class="" style="">
+    <li class="" style="">Do not require additional server components for easier deployment</li>
+    <li class="" style="">Compatibility with non-graphical user interfaces (terminals, etc)</li>
+  </ul>
+<h2 id="glossary">3.
+       Glossary<a class="anchor-link" href="#glossary"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <div class="indent"><dl>
+    <dt><strong>Sticker</strong></dt><dd>Emoticon-like picture</dd>
+    <dt><strong>Sticker pack</strong></dt><dd>Collection of stickers, typically devoted to a specific theme or with all stickers created by the same author</dd>
+  </dl></div>
+<h2 id="usecases">4.
+       Use Cases<a class="anchor-link" href="#usecases"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <div class="indent"><h3 id="send">4.1 Sending a sticker<a class="anchor-link" href="#send"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">The sending entity uses <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0447.html">Stateless file sharing (XEP-0447)</a></span>  [<a href="#nt-idm46811555129792">2</a>] to send the image file of the sticker. Additionally, the sending entity adds a <code>&lt;sticker/&gt;</code> element to the message.</p>
+    <p class="" style="">The sending entity MAY use a suitable fallback content as the message body.</p>
+    <figure class="code-example" id="example-1"><figcaption><strong>Example 1.</strong> Sending a sticker<a class="anchor-link" href="#example-1"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;message to='juliet@shakespeare.lit' from='romeo@montague.lit/pda' id='sharing-a-file'&gt;
+  &lt;body&gt;😘&lt;/body&gt;
+  &lt;sticker xmlns='urn:xmpp:stickers:0' /&gt;
+  &lt;file-sharing xmlns='urn:xmpp:sfs:0'&gt;
+    &lt;file xmlns='urn:xmpp:file:metadata:0'&gt;
+      &lt;media-type&gt;image/png&lt;/media-type&gt;
+      &lt;size&gt;67016&lt;/size&gt;
+      &lt;dimensions&gt;512x512&lt;/dimensions&gt;
+      &lt;hash xmlns='urn:xmpp:hashes:2' algo='sha-256'&gt;gw+6xdCgOcvCYSKuQNrXH33lV9NMzuDf/s0huByCDsY=&lt;/hash&gt;
+    &lt;/file&gt;
+    &lt;sources&gt;
+      &lt;url-data xmlns='http://jabber.org/protocol/url-data' target='https://download.montague.lit/51078299-d071-46e1-b6d3-3de4a8ab67d6/sticker_marsey_kiss.png' /&gt;
+    &lt;/sources&gt;
+  &lt;/file-sharing&gt;
+&lt;/message&gt;
+</pre></figure>
+  </div>
+  <div class="indent"><h3 id="receive">4.2 Receiving a sticker<a class="anchor-link" href="#receive"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">When receiving a message with a <code>&lt;sticker/&gt;</code> element, the receiving entity SHOULD consider the message and the <code>&lt;file-sharing/&gt;</code> element as a sticker.</p>
+    <p class="" style="">When receiving a sticker, the receiving entity may display the stickers image file inline or display the textual representation in the <code>&lt;desc/&gt;</code> element. The receiving entity SHOULD NOT display the received sticker only as a downloadable file.</p>
+  </div>
+  <div class="indent"><h3 id="create">4.3 Creating a sticker pack<a class="anchor-link" href="#create"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">
+      Sticker packs are stored on pubsub nodes.
+      They SHOULD be located at a personal eventing (PEP) node named "urn:xmpp:stickers:0" but MAY be located at a generic publish-subscribe node that is not attached to a user's IM account.
+      The pubsub node's access model SHOULD be set to 'open', so that other users can fetch sticker packs.
+    </p>
+    <div class="indent"><h4 id="pubsub-item">4.3.1 Sticker pack pubsub item<a class="anchor-link" href="#pubsub-item"><abbr title="Link to this point in the document">¶</abbr></a></h4>
+      <p class="" style="">
+        Each sticker pack is one item on the pubsub node consisting of a <code>&lt;pack/&gt;</code> element.
+      </p>
+      <p class="" style="">
+        The <code>&lt;pack/&gt;</code> element includes elements <code>&lt;name/&gt;</code> and <code>&lt;summary/&gt;</code> to announce a name and summary of the sticker pack that can be displayed to users, respectively.
+        The summary MAY contain copyright and license information in user-readable format.
+        Multiple <code>&lt;name/&gt;</code> and <code>&lt;summary/&gt;</code> elements MAY be included given that no two elements of same name specify the same <code>xml:lang</code>.
+      </p>
+      <p class="" style="">
+        The <code>&lt;pack/&gt;</code> element MAY include a <code>&lt;restricted/&gt;</code> element to indicate that this sticker pack may not be used or imported by other users.
+      </p>
+      <p class="" style="">
+        The <code>&lt;pack/&gt;</code> element contains one or more <code>&lt;item/&gt;</code> elements that include details on the stickers in the pack. Each <code>&lt;item/&gt;</code> element has <code>&lt;file/&gt;</code> element as described in <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0446.html">File metadata element (XEP-0446)</a></span>  [<a href="#nt-idm46811555106832">3</a>]. The metadata MUST include one or multiple <code>&lt;hash/&gt;</code> elements as described in <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0300.html">Use of Cryptographic Hash Functions in XMPP (XEP-0300)</a></span>  [<a href="#nt-idm46811555097200">4</a>]. All stickers in a pack MUST use the same algorithm for their <code>&lt;hash/&gt;</code> elements. The metadata MUST include one <code>&lt;desc/&gt;</code> element that is not qualified by a <code>xml:lang</code> attribute and describes the textual fallback (often an emoji or a sequence of emojis) of the sticker. Each <code>&lt;item/&gt;</code> element further has a <code>&lt;sources/&gt;</code> element as described in <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0447.html">Stateless file sharing (XEP-0447)</a></span>  [<a href="#nt-idm46811555129792">2</a>] describing how to retrieve the image file of the sticker. Each <code>&lt;item/&gt;</code> element MAY include one or more <code>&lt;suggest/&gt;</code> elements that include a text that clients may replace with the sticker. <code>&lt;suggest/&gt;</code> elements MAY have an <code>xml:lang</code> attribute.
+      </p>
+      <p class="" style="">
+        Finally, the <code>&lt;pack/&gt;</code> element includes a single <code>&lt;hash/&gt;</code> element as described in <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0300.html">Use of Cryptographic Hash Functions in XMPP (XEP-0300)</a></span>  [<a href="#nt-idm46811555097200">4</a>], specifying the hash of the sticker pack. See <a href="#pack-hash">next section</a> on how such hash is generated.
+      </p>
+    </div>
+    <div class="indent"><h4 id="pack-hash">4.3.2 Sticker pack hash calculation<a class="anchor-link" href="#pack-hash"><abbr title="Link to this point in the document">¶</abbr></a></h4>
+      <p class="" style="">Each sticker pack has a unique ID, which is used as the pubsub item's id. This ID is derived from a hash of significant information from a <code>&lt;pack/&gt;</code> element as outlined in this section.</p>
+      <ol start="" class="" style="">
+        <li class="" style=""><p class="" style="">Processing <code>&lt;name/&gt;</code> and <code>&lt;summary/&gt;</code> elements:</p>
+          <ol start="" class="" style="">
+            <li class="" style=""><p class="" style="">For each <code>&lt;name/&gt;</code> or <code>&lt;summary/&gt;</code> element:</p>
+              <ol start="" class="" style="">
+                <li class="" style="">Encode the character data of element name (<code>name</code> or <code>summary</code>), <code>xml:lang</code> attribute value and content.</li>
+                <li class="" style="">Append an octet of value 0x1f (ASCII Unit Separator) to each resulting octet string.</li>
+                <li class="" style="">Join the resulting octet strings together, in the order of element name, <code>xml:lang</code> attribute and content, resulting in a single octet string for the <code>&lt;name/&gt;</code> or <code>&lt;summary/&gt;</code> element.</li>
+                <li class="" style="">Append an octet of value 0x1e (ASCII Record Separator).</li>
+              </ol>
+            </li>
+            <li class="" style="">Join the resulting octet strings together, ordered from lesser to greater.</li>
+            <li class="" style="">Append an octet of value 0x1c (ASCII File Separator).</li>
+          </ol>
+          <p class="" style="">The result of this step is referenced as <em>Meta string</em> later.</p>
+        </li>
+        <li class="" style=""><p class="" style="">Processing <code>&lt;item/&gt;</code> elements:</p>
+          <ol start="" class="" style="">
+            <li class="" style=""><p class="" style="">For each <code>&lt;item/&gt;</code> element:</p>
+              <ol start="" class="" style="">
+                <li class="" style="">Encode the character data of <code>&lt;file/&gt;</code>'s <code>&lt;desc/&gt;</code> content.</li>
+                <li class="" style="">Append an octet of value 0x1e (ASCII Record Separator) to the resulting octet string.</li>
+                <li class="" style=""><p class="" style="">For each of <code>&lt;hash/&gt;</code> element in <code>&lt;file/&gt;</code>:</p>
+                  <ol start="" class="" style="">
+                    <li class="" style="">Encode the character data of <code>algo</code> attribute and content.</li>
+                    <li class="" style="">Append an octet of value 0x1f (ASCII Unit Separator) to the resulting octet strings.</li>
+                    <li class="" style="">Join the resulting octet strings together, in the order of <code>algo</code> attribute and content, resulting in a single octet string for the <code>&lt;hash/&gt;</code> element.</li>
+                    <li class="" style="">Append an octet of value 0x1e (ASCII Record Separator).</li>
+                  </ol>
+                </li>
+                <li class="" style="">Join the resulting octet strings together, in the order of <code>&lt;file/&gt;</code>'s <code>&lt;desc/&gt;</code> content first and then all <code>&lt;hash/&gt;</code> elements ordered from lesser to greater.</li>
+                <li class="" style="">Append an octet of value 0x1d (ASCII Group Separator).</li>
+              </ol>
+            </li>
+            <li class="" style="">Join the resulting octet strings together, ordered from lesser to greater.</li>
+            <li class="" style="">Append an octet of value 0x1c (ASCII File Separator).</li>
+          </ol>
+          <p class="" style="">The result of this step is referenced as <em>Stickers string</em> later.</p>
+        </li>
+        <li class="" style="">Join the <em>Meta String</em> and <em>Stickers String</em> together, in this order.</li>
+        <li class="" style="">Hash the resulting string using the algorithm choosen for the sticker pack.</li>
+      </ol>
+      <p class="" style="">The ID of the sticker pack is dervied by taking the first 144 bit of the hash and encode it using Base64. This is equivalent to the first 24 characters of the Base64 encoded content of the <code>&lt;hash/&gt;</code> element.</p>
+    </div>
+    <figure class="code-example" id="example-2"><figcaption><strong>Example 2.</strong> Publish a new sticker pack<a class="anchor-link" href="#example-2"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;iq from='romeo@montague.lit/pda'
+    id='pub1'
+    to='romeo@montague.lit'
+    type='set'&gt;
+  &lt;pubsub xmlns='http://jabber.org/protocol/pubsub'&gt;
+    &lt;publish node='urn:xmpp:stickers:0'&gt;
+      &lt;item id='EpRv28DHHzFrE4zd+xaNpVb4'&gt;
+        &lt;pack xmlns='urn:xmpp:stickers:0'&gt;
+          &lt;name&gt;Marsey the Cat&lt;/name&gt;
+          &lt;summary&gt;Be cute or be cynical, this little kitten works both ways.&lt;/summary&gt;
+          &lt;item&gt;
+            &lt;file xmlns='urn:xmpp:file:metadata:0'&gt;
+              &lt;media-type&gt;image/png&lt;/media-type&gt;
+              &lt;desc&gt;👍&lt;/desc&gt;
+              &lt;size&gt;71045&lt;/size&gt;
+              &lt;dimensions&gt;512x512&lt;/dimensions&gt;
+              &lt;hash xmlns='urn:xmpp:hashes:2' algo='sha-256'&gt;0AdP8lJOWJrugSKOIAqfEKqFatIpG5JBCjjxY253ojQ=&lt;/hash&gt;
+            &lt;/file&gt;
+            &lt;sources xmlns='urn:xmpp:sfs:0'&gt;
+              &lt;url-data xmlns='http://jabber.org/protocol/url-data' target='https://download.montague.lit/51078299-d071-46e1-b6d3-3de4a8ab67d6/sticker_marsey_thumbs_up.png' /&gt;
+            &lt;/sources&gt;
+            &lt;suggest&gt;+1&lt;/suggest&gt;
+          &lt;/item&gt;
+          &lt;item&gt;
+            &lt;file xmlns='urn:xmpp:file:metadata:0'&gt;
+              &lt;media-type&gt;image/png&lt;/media-type&gt;
+              &lt;desc&gt;😘&lt;/desc&gt;
+              &lt;size&gt;67016&lt;/size&gt;
+              &lt;dimensions&gt;512x512&lt;/dimensions&gt;
+              &lt;hash xmlns='urn:xmpp:hashes:2' algo='sha-256'&gt;gw+6xdCgOcvCYSKuQNrXH33lV9NMzuDf/s0huByCDsY=&lt;/hash&gt;
+            &lt;/file&gt;
+            &lt;sources xmlns='urn:xmpp:sfs:0'&gt;
+              &lt;url-data xmlns='http://jabber.org/protocol/url-data' target='https://download.montague.lit/51078299-d071-46e1-b6d3-3de4a8ab67d6/sticker_marsey_kiss.png' /&gt;
+            &lt;/sources&gt;
+          &lt;/item&gt;
+          &lt;!-- ... --&gt;
+          &lt;hash xmlns='urn:xmpp:hashes:2' algo='sha-256'&gt;EpRv28DHHzFrE4zd+xaNpVb4jbu4s74XtioExNjQzZ0=&lt;/hash&gt;
+        &lt;/pack&gt;
+      &lt;/item&gt;
+    &lt;/publish&gt;
+  &lt;/pubsub&gt;
+&lt;/iq&gt;
+</pre></figure>    
+  </div>
+  <div class="indent"><h3 id="send-from-pack">4.4 Sending a sticker from a sticker pack<a class="anchor-link" href="#send-from-pack"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">When sending a sticker from a sticker pack, the protocol for sending stickers (as specified <a href="#send">above</a>) is used. The <code>&lt;item/&gt;</code>'s <code>&lt;file/&gt;</code> and <code>&lt;sources/&gt;</code> elements from the sticker pack are used as a template. The sending entity MAY add additional <code>&lt;hash/&gt;</code> elements or sources.</p>
+    <p class="" style="">Additionally, the <code>&lt;sticker/&gt;</code> element MAY carry an attribute <code>pack</code> referring to the id of the pubsub item carrying the sticker pack. If the sticker pack resides on a pubsub item other than the senders personal eventing (PEP) node named "urn:xmpp:stickers:0", the sending entity SHOULD then also add additional attributes <code>jid</code> and <code>node</code> to the <code>&lt;sticker/&gt;</code> element, referring to the jid of the pubsub node and the name of the node, respectively.</p>
+    <p class="" style="">The sending entity SHOULD use the <code>&lt;file/&gt;</code>'s <code>&lt;desc/&gt;</code> content as the message body, except if the sticker was selected based on a suggestion, in which case the content of the corresponding <code>&lt;suggest/&gt;</code> SHOULD be used.</p>
+    <figure class="code-example" id="example-3"><figcaption><strong>Example 3.</strong> Sending a sticker<a class="anchor-link" href="#example-3"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;message to='juliet@shakespeare.lit' from='romeo@montague.lit/pda' id='sharing-a-file'&gt;
+  &lt;body&gt;😘&lt;/body&gt;
+  &lt;sticker xmlns='urn:xmpp:stickers:0' pack='EpRv28DHHzFrE4zd+xaNpVb4' /&gt;
+  &lt;file-sharing xmlns='urn:xmpp:sfs:0'&gt;
+    &lt;file xmlns='urn:xmpp:file:metadata:0'&gt;
+      &lt;media-type&gt;image/png&lt;/media-type&gt;
+      &lt;desc&gt;😘&lt;/desc&gt;
+      &lt;size&gt;67016&lt;/size&gt;
+      &lt;dimensions&gt;512x512&lt;/dimensions&gt;
+      &lt;hash xmlns='urn:xmpp:hashes:2' algo='sha-256'&gt;gw+6xdCgOcvCYSKuQNrXH33lV9NMzuDf/s0huByCDsY=&lt;/hash&gt;
+    &lt;/file&gt;
+    &lt;sources&gt;
+      &lt;url-data xmlns='http://jabber.org/protocol/url-data' target='https://download.montague.lit/51078299-d071-46e1-b6d3-3de4a8ab67d6/sticker_marsey_kiss.png' /&gt;
+    &lt;/sources&gt;
+  &lt;/file-sharing&gt;
+&lt;/message&gt;
+</pre></figure>
+  </div>
+  <div class="indent"><h3 id="import">4.5 Importing a sticker pack<a class="anchor-link" href="#import"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">When receiving a sticker or any other reference to a sticker pack, the receiving entity may allow the user to import such sticker pack. The receiving entity SHOULD NOT offer to import a sticker pack that has a <code>&lt;restricted/&gt;</code> element.</p>
+    <p class="" style="">When importing a sticker pack, the entity SHOULD make all files that are part of the sticker pack locally available. The entity SHOULD duplicate the pubsub item from its original source to the users personal eventing (PEP) node named "urn:xmpp:stickers:0", preserving the pack id. The entity MAY remove any of the sources provided, and MAY make an effort to make the files available at additional sources, e.g. by using <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0363.html">HTTP File Upload (XEP-0363)</a></span>  [<a href="#nt-idm46811555010496">5</a>].</p>
+  </div>
+  <div class="indent"><h3 id="share">4.6 Sharing a sticker pack<a class="anchor-link" href="#share"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">After creating or importing a sticker pack, it can be shared using an <code>xmpp:</code>-uri as described in <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0060.html">Publish-Subscribe (XEP-0060)</a></span>  [<a href="#nt-idm46811555004672">6</a>].</p>
+    <p class="" style="">When handling this URI, the entity SHOULD display a preview of the sticker pack and allow importing it as described above.</p>
+    <figure class="code-example" id="example-4"><figcaption><strong>Example 4.</strong> Sticker pack URI<a class="anchor-link" href="#example-4"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">xmpp:romeo@montague.lit?pubsub;action=retrieve;node=urn:xmpp:stickers:0;item=EpRv28DHHzFrE4zd%2BxaNpVb4</pre></figure>
+  </div>
+<h2 id="access">5.
+       Accessibility Considerations<a class="anchor-link" href="#access"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">Flickering, flashing or blinking stickers can induce seizures or other incapacitating physical reactions. It is RECOMMENDED that clients that support stickers have an option to disable animations and/or stickers entirely.</p>
+<h2 id="security">6.
+       Security Considerations<a class="anchor-link" href="#security"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">
+    The security considerations of <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0447.html">Stateless file sharing (XEP-0447)</a></span>  [<a href="#nt-idm46811555129792">2</a>] apply.
+  </p>
+<h2 id="iana">7.
+       IANA Considerations<a class="anchor-link" href="#iana"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">This document requires no interaction with the <span class="ref" style=""><a href="http://www.iana.org/">Internet Assigned Numbers Authority (IANA)</a></span>  [<a href="#nt-idm46811554988672">7</a>].</p>
+<h2 id="registrar">8.
+       XMPP Registrar Considerations<a class="anchor-link" href="#registrar"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <div class="indent"><h3 id="ns">8.1 Protocol Namespaces<a class="anchor-link" href="#ns"><abbr title="Link to this point in the document">¶</abbr></a></h3>
+    <p class="" style="">The <span class="ref" style=""><a href="https://xmpp.org/registrar/">XMPP Registrar</a></span>  [<a href="#nt-idm46811554981264">8</a>] includes 'urn:xmpp:stickers:0' in its registry of protocol namespaces (see &lt;<a href="https://xmpp.org/registrar/namespaces.html">https://xmpp.org/registrar/namespaces.html</a>&gt;).</p>
+    <ul class="" style="">
+      <li class="" style="">urn:xmpp:stickers:0</li>
+    </ul>
+  </div>
+<hr><a name="appendices"></a><h2>Appendices</h2><h3 id="appendix-docinfo">Appendix A: Document Information<a class="anchor-link" href="#appendix-docinfo"><abbr title="Link to this point in the document">¶</abbr></a></h3><dl class="compact"><dt>Series</dt><dd><a href="https://xmpp.org/extensions/">XEP</a></dd><dt>Number</dt><dd>0449</dd><dt>Publisher</dt><dd><a href="/xsf/">XMPP Standards Foundation</a></dd><dt>Status</dt><dd><a href="https://xmpp.org/extensions/xep-0001.html#states-Experimental">Experimental</a></dd><dt>Type</dt><dd><a href="https://xmpp.org/extensions/xep-0001.html#types-Standards%20Track">Standards Track</a></dd><dt>Version</dt><dd>0.2.0</dd><dt>Last Updated</dt><dd>2026-05-01</dd><dt>Approving Body</dt><dd><a href="https://xmpp.org/council/">XMPP Council</a></dd><dt>Dependencies</dt><dd>XMPP Core, <a href="xep-0001.html">XEP-0001</a></dd><dt>Supersedes</dt><dd>None</dd><dt>Superseded By</dt><dd>None</dd><dt>Short Name</dt><dd>stickers</dd><dt>Source Control</dt><dd><a class="standardsButton" href="https://github.com/xsf/xeps/blob/master/xep-0449.xml">HTML</a></dd></dl><p>
+          This document in other formats:
+          <a class="standardsButton" href="https://xmpp.org/extensions/xep-0449.xml">XML</a> 
+          <a class="standardsButton" href="https://xmpp.org/extensions/xep-0449.pdf">PDF</a></p><h3 id="appendix-authorinfo">Appendix B: Author Information<a class="anchor-link" href="#appendix-authorinfo"><abbr title="Link to this point in the document">¶</abbr></a></h3><h5>Marvin Wißfeld</h5><dl class="compact"><dt>Email</dt><dd><a href="mailto:xmpp@larma.de">xmpp@larma.de</a></dd><dt>JabberID</dt><dd><a href="xmpp:jabber@larma.de">jabber@larma.de</a></dd></dl><h3 id="appendix-legal">Appendix C: Legal Notices<a class="anchor-link" href="#appendix-legal"><abbr title="Link to this point in the document">¶</abbr></a></h3><div class="indent"><h4>Copyright</h4><p>This XMPP Extension Protocol is copyright © 1999 – 2024 by the <a href="https://xmpp.org/">XMPP Standards Foundation</a> (XSF).</p><h4>Permissions</h4><p>Permission is hereby granted, free of charge, to any person obtaining a copy of this specification (the "Specification"), to make use of the Specification without restriction, including without limitation the rights to implement the Specification in a software program, deploy the Specification in a network service, and copy, modify, merge, publish, translate, distribute, sublicense, or sell copies of the Specification, and to permit persons to whom the Specification is furnished to do so, subject to the condition that the foregoing copyright notice and this permission notice shall be included in all copies or substantial portions of the Specification. Unless separate permission is granted, modified works that are redistributed shall not contain misleading information regarding the authors, title, number, or publisher of the Specification, and shall not claim endorsement of the modified works by the authors, any organization or project to which the authors belong, or the XMPP Standards Foundation.</p><h4>Disclaimer of Warranty</h4><p class="box info">## NOTE WELL: This Specification is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. ##</p><h4>Limitation of Liability</h4><p>In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall the XMPP Standards Foundation or any author of this Specification be liable for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising from, out of, or in connection with the Specification or the implementation, deployment, or other use of the Specification (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if the XMPP Standards Foundation or such author has been advised of the possibility of such damages.</p><h4>IPR Conformance</h4><p>This XMPP Extension Protocol has been contributed in full conformance with the XSF's Intellectual Property Rights Policy (a copy of which can be found at &lt;<a href="https://xmpp.org/about/xsf/ipr-policy">https://xmpp.org/about/xsf/ipr-policy</a>&gt; or obtained by writing to XMPP Standards Foundation, P.O. Box 787, Parker, CO 80134 USA).</p><h4>Visual Presentation</h4><p>The HTML representation (you are looking at) is maintained by the XSF. It is based on the <a href="http://yaml.de">YAML CSS Framework</a>, which is licensed under the terms of the <a href="https://creativecommons.org/licenses/by/2.0/">CC-BY-SA 2.0</a> license.</p></div><h3 id="appendix-xmpp">Appendix D: Relation to XMPP<a class="anchor-link" href="#appendix-xmpp"><abbr title="Link to this point in the document">¶</abbr></a></h3><p class="indent">The Extensible Messaging and Presence Protocol (XMPP) is defined in the XMPP Core (RFC 6120) and XMPP IM (RFC 6121) specifications contributed by the XMPP Standards Foundation to the Internet Standards Process, which is managed by the Internet Engineering Task Force in accordance with RFC 2026. Any protocol defined in this document has been developed outside the Internet Standards Process and is to be understood as an extension to XMPP rather than as an evolution, development, or modification of XMPP itself.</p><h3 id="appendix-discuss">Appendix E: Discussion Venue<a class="anchor-link" href="#appendix-discuss"><abbr title="Link to this point in the document">¶</abbr></a></h3><p class="indent">The primary venue for discussion of XMPP Extension Protocols is the &lt;<a href="https://mail.jabber.org/mailman/listinfo/standards">standards@xmpp.org</a>&gt; discussion list.</p><p class="indent">Discussion on other xmpp.org discussion lists might also be appropriate; see &lt;<a href="https://xmpp.org/community/">https://xmpp.org/community/</a>&gt; for a complete list.</p><p class="indent">Errata can be sent to &lt;<a href="mailto:editor@xmpp.org">editor@xmpp.org</a>&gt;.</p><h3 id="appendix-conformance">Appendix F: Requirements Conformance<a class="anchor-link" href="#appendix-conformance"><abbr title="Link to this point in the document">¶</abbr></a></h3><p class="indent">
+          The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+          "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED",
+          "MAY", and "OPTIONAL" in this document are to be interpreted as
+          described in <a href="https://tools.ietf.org/rfc/bcp/bcp14.txt">BCP 14</a>
+          [<a href="https://www.ietf.org/rfc/rfc2119.txt">RFC2119</a>]
+          [<a href="https://tools.ietf.org/rfc/rfc8174.txt">RFC8174</a>] when,
+          and only when, they appear in all capitals, as shown here.
+        </p><h3 id="appendix-notes">Appendix G: Notes<a class="anchor-link" href="#appendix-notes"><abbr title="Link to this point in the document">¶</abbr></a></h3><div class="indent"><p><a name="nt-idm46811556331104">1</a>. <em>Sticker (messaging)</em> on Wikipedia &lt;<a href="https://en.wikipedia.org/wiki/Sticker_(messaging)">https://en.wikipedia.org/wiki/Sticker_(messaging)</a>&gt;.</p><p><a name="nt-idm46811555129792">2</a>. XEP-0447: Stateless file sharing &lt;<a href="https://xmpp.org/extensions/xep-0447.html">https://xmpp.org/extensions/xep-0447.html</a>&gt;.</p><p><a name="nt-idm46811555106832">3</a>. XEP-0446: File metadata element &lt;<a href="https://xmpp.org/extensions/xep-0446.html">https://xmpp.org/extensions/xep-0446.html</a>&gt;.</p><p><a name="nt-idm46811555097200">4</a>. XEP-0300: Use of Cryptographic Hash Functions in XMPP &lt;<a href="https://xmpp.org/extensions/xep-0300.html">https://xmpp.org/extensions/xep-0300.html</a>&gt;.</p><p><a name="nt-idm46811555010496">5</a>. XEP-0363: HTTP File Upload &lt;<a href="https://xmpp.org/extensions/xep-0363.html">https://xmpp.org/extensions/xep-0363.html</a>&gt;.</p><p><a name="nt-idm46811555004672">6</a>. XEP-0060: Publish-Subscribe &lt;<a href="https://xmpp.org/extensions/xep-0060.html">https://xmpp.org/extensions/xep-0060.html</a>&gt;.</p><p><a name="nt-idm46811554988672">7</a>. The Internet Assigned Numbers Authority (IANA) is the central coordinator for the assignment of unique parameter values for Internet protocols, such as port numbers and URI schemes. For further information, see &lt;<a href="http://www.iana.org/">http://www.iana.org/</a>&gt;.</p><p><a name="nt-idm46811554981264">8</a>. The XMPP Registrar maintains a list of reserved protocol namespaces as well as registries of parameters used in the context of XMPP extension protocols approved by the XMPP Standards Foundation. For further information, see &lt;<a href="https://xmpp.org/registrar/">https://xmpp.org/registrar/</a>&gt;.</p></div><h3 id="appendix-revs">Appendix H: Revision History<a class="anchor-link" href="#appendix-revs"><abbr title="Link to this point in the document">¶</abbr></a></h3><p>Note: Older versions of this specification might be available at <a href="https://xmpp.org/extensions/attic/">https://xmpp.org/extensions/attic/</a></p><ol class="revision-history"><li id="revision-history-v0.2.0"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0449-0.2.0.html">0.2.0</a> (2026-05-01)<a class="anchor-link" href="#revision-history-v0.2.0"><abbr title="Link to this point in the document">¶</abbr></a></div>Make pack attribute explicitly a MAY. Add more details about sending/receiving stickers without a sticker pack.<div class="revision-author">lmw</div></li><li id="revision-history-v0.1.1"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0449-0.1.1.html">0.1.1</a> (2022-02-10)<a class="anchor-link" href="#revision-history-v0.1.1"><abbr title="Link to this point in the document">¶</abbr></a></div>
+      <ul class="" style="">
+        <li class="" style="">Replace ProtoXEP references with actual XEP references.</li>
+        <li class="" style="">Use XEP-0446’s <code>&lt;descriptions/&gt;</code> instead of the typo’d <code>&lt;description/&gt;</code>.</li>
+      </ul>
+    <div class="revision-author">egp</div></li><li id="revision-history-v0.1.0"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0449-0.1.0.html">0.1.0</a> (2020-11-24)<a class="anchor-link" href="#revision-history-v0.1.0"><abbr title="Link to this point in the document">¶</abbr></a></div>Accepted by vote of Council on 2020-11-18.<div class="revision-author">XEP Editor (jsc)</div></li><li id="revision-history-v0.0.1"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0449-0.0.1.html">0.0.1</a> (2020-11-03)<a class="anchor-link" href="#revision-history-v0.0.1"><abbr title="Link to this point in the document">¶</abbr></a></div><p class="" style="">First draft.</p><div class="revision-author">lmw</div></li></ol><h3 id="appendix-biblatex">Appendix I: Bib(La)TeX Entry</h3><pre>
+@report{wißfeld2020stickers,
+  title = {Stickers},
+  author = {Wißfeld, Marvin},
+  type = {XEP},
+  number = {0449},
+  version = {0.2.0},
+  institution = {XMPP Standards Foundation},
+  url = {https://xmpp.org/extensions/xep-0449.html},
+  date = {2020-11-03/2026-05-01},
+}</pre><p>END</p></body></html>

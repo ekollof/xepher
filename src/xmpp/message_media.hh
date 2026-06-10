@@ -21,8 +21,16 @@ inline constexpr std::string_view k_sfs_ns = "urn:xmpp:sfs:0";
 inline constexpr std::string_view k_jingle_file_ns = "urn:xmpp:jingle:apps:file-transfer:5";
 inline constexpr std::string_view k_file_metadata_ns = "urn:xmpp:file:metadata:0";
 inline constexpr std::string_view k_esfs_ns = "urn:xmpp:esfs:0";
+inline constexpr std::string_view k_hashes_ns = "urn:xmpp:hashes:2";
+inline constexpr std::string_view k_stickers_ns = "urn:xmpp:stickers:0";
+inline constexpr std::string_view k_emoji_markup_ns = "urn:xmpp:markup:emoji:0";
 inline constexpr std::string_view k_aes_gcm_cipher =
     "urn:xmpp:ciphers:aes-256-gcm-nopadding:0";
+
+struct FileHash {
+    std::string algo;
+    std::string value_b64;
+};
 
 struct FileMetadata {
     std::string name;
@@ -30,6 +38,7 @@ struct FileMetadata {
     std::string size_raw;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    std::vector<FileHash> hashes;
 };
 
 struct PlainMediaShare {

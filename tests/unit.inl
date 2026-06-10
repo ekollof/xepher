@@ -41,6 +41,7 @@
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_body.hh"
 #include "xmpp/message_media.hh"
+#include "xmpp/message_sticker_emoji.hh"
 #include "xmpp/message_omemo.hh"
 #include "xmpp/message_invite.hh"
 #include "xmpp/message_ephemeral.hh"
@@ -888,6 +889,73 @@ TEST_CASE("collect_sims_shares parses XEP-0385 reference")
     CHECK(shares[0].meta.name == "pic.png");
     CHECK(shares[0].meta.mime == "image/png");
     CHECK(shares[0].url == "https://ex/img.png");
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("stanza_has_sticker detects XEP-0449 sticker element")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<sticker xmlns='urn:xmpp:stickers:0'/>"
+        "<file-sharing xmlns='urn:xmpp:sfs:0'>"
+        "<file xmlns='urn:xmpp:file:metadata:0'>"
+        "<media-type>image/png</media-type>"
+        "</file>"
+        "<sources><url-data target='https://ex/sticker.png'/></sources>"
+        "</file-sharing>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+    CHECK(xmpp::stanza_has_sticker(xmpp::StanzaView(msg)));
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("collect_custom_emoji_previews resolves XEP-0514 emoji markup")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<body>To be, or not to be 🤔</body>"
+        "<markup xmlns='urn:xmpp:markup:0'>"
+        "<span start='42' end='43'>"
+        "<emoji xmlns='urn:xmpp:markup:emoji:0' name='pondering'>"
+        "<hash xmlns='urn:xmpp:hashes:2' algo='sha3-256'>"
+        "ENeyvkxcfv8dmL4HBrF3JU1OX1BfpNV3YbhlEb20ReU="
+        "</hash>"
+        "</emoji>"
+        "</span>"
+        "</markup>"
+        "<file-sharing xmlns='urn:xmpp:sfs:0'>"
+        "<file xmlns='urn:xmpp:file:metadata:0'>"
+        "<media-type>image/png</media-type>"
+        "<name>pondering</name>"
+        "<width>64</width><height>64</height>"
+        "<hash xmlns='urn:xmpp:hashes:2' algo='sha3-256'>"
+        "ENeyvkxcfv8dmL4HBrF3JU1OX1BfpNV3YbhlEb20ReU="
+        "</hash>"
+        "</file>"
+        "<sources>"
+        "<url-data target='https://download.example/pondering.png'/>"
+        "</sources>"
+        "</file-sharing>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto previews = xmpp::collect_custom_emoji_previews(xmpp::StanzaView(msg));
+    REQUIRE(previews.size() == 1);
+    CHECK(previews[0].url == "https://download.example/pondering.png");
+    CHECK(previews[0].mime == "image/png");
+    CHECK(previews[0].width == 64);
+    CHECK(previews[0].height == 64);
+    CHECK(previews[0].name == "pondering");
+
+    const auto keys = xmpp::collect_emoji_markup_hash_keys(xmpp::StanzaView(msg));
+    CHECK(keys.contains("sha3-256:ENeyvkxcfv8dmL4HBrF3JU1OX1BfpNV3YbhlEb20ReU="));
 
     xmpp_stanza_release(msg);
 }
