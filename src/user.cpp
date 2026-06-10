@@ -145,6 +145,72 @@ weechat::user *weechat::user::search(weechat::account *account,
     return nullptr;
 }
 
+char weechat::user::muc_nicklist_prefix(
+    std::optional<std::string_view> role,
+    std::optional<std::string_view> affiliation)
+{
+    char group = '.';
+    if (affiliation && *affiliation == "outcast")
+        group = '!';
+    if (role && *role == "visitor")
+        group = '?';
+    if (role && *role == "participant")
+        group = '+';
+    if (affiliation && *affiliation == "member")
+        group = '%';
+    if (role && *role == "moderator")
+        group = '@';
+    if (affiliation && *affiliation == "admin")
+        group = '&';
+    if (affiliation && *affiliation == "owner")
+        group = '~';
+    return group;
+}
+
+int weechat::user::muc_nicklist_prefix_rank(char prefix)
+{
+    switch (prefix)
+    {
+        case '~': return 0;
+        case '&': return 1;
+        case '@': return 2;
+        case '%': return 3;
+        case '+': return 4;
+        case '?': return 5;
+        case '!': return 6;
+        default:  return 7;
+    }
+}
+
+char weechat::user::muc_nicklist_prefix() const
+{
+    return muc_nicklist_prefix(profile.role, profile.affiliation);
+}
+
+std::string weechat::user::muc_display_nick(
+    weechat::channel *channel, std::string_view member_id, const user *occupant)
+{
+    if (occupant)
+    {
+        const char *name = occupant->profile.display_name.c_str();
+        std::string resource_buf;
+        std::string name_bare = channel ? jid(nullptr, name).bare : std::string{};
+        if (channel && !name_bare.empty()
+            && weechat_strcasecmp(name_bare.c_str(), channel->id.data()) == 0)
+        {
+            resource_buf = jid(nullptr, name).resource;
+            if (!resource_buf.empty())
+                return resource_buf;
+        }
+        return occupant->profile.display_name;
+    }
+
+    auto slash = member_id.rfind('/');
+    if (slash != std::string::npos && slash + 1 < member_id.size())
+        return std::string(member_id.substr(slash + 1));
+    return std::string(member_id);
+}
+
 void weechat::user::nicklist_add(weechat::account *account,
                                  weechat::channel *channel)
 {
@@ -172,29 +238,15 @@ void weechat::user::nicklist_add(weechat::account *account,
 
     ptr_buffer = channel ? channel->buffer : account->buffer;
 
-    const char *group = ".";
-    if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "outcast")
-        group = "!";
-    if (this->profile.role.has_value() && this->profile.role.value() == "visitor")
-        group = "?";
-    if (this->profile.role.has_value() && this->profile.role.value() == "participant")
-        group = "+";
-    if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "member")
-        group = "%";
-    if (this->profile.role.has_value() && this->profile.role.value() == "moderator")
-        group = "@";
-    if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "admin")
-        group = "&";
-    if (this->profile.affiliation.has_value() && this->profile.affiliation.value() == "owner")
-        group = "~";
-    ptr_group = weechat_nicklist_search_group(ptr_buffer, nullptr, group);
+    char group_buf[2] = { muc_nicklist_prefix(), '\0' };
+    ptr_group = weechat_nicklist_search_group(ptr_buffer, nullptr, group_buf);
     auto colour = get_colour_for_nicklist();
     weechat_nicklist_add_nick(ptr_buffer, ptr_group,
                               name,
                               this->is_away ?
                               "weechat.color.nicklist_away" :
                               (colour.empty() ? nullptr : colour.c_str()),
-                              group,
+                              group_buf,
                               "bar_fg",
                               1);
 }

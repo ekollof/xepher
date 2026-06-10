@@ -746,6 +746,7 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 | `/ban <jid> [reason]` | Ban a user by JID (requires admin/owner role) |
 | `/topic [text]` | Set or clear the room topic |
 | `/nick [newnick]` | Change your nickname in the current MUC |
+| `/names` | List all known occupants in the current MUC with IRC-style role/affiliation prefixes (same symbols as the nicklist; sorted by rank then nick) |
 | `/modes` | Display the MUC room modes and metadata (XEP-0045 §6.4/6.5). The mode flags alone also appear in the buffer's status-bar `modes` slot IRC-style (e.g. `+miP` for a moderated, members-only, persistent room) — automatically updated on join and on status-104 config-change notifications |
 
 ### MUC nicklist prefixes

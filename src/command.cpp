@@ -705,6 +705,19 @@ void command__init()
         weechat_printf(nullptr, "Failed to setup command /nick");
 
     hook = weechat_hook_command(
+        "names",
+        N_("list all occupants in the current MUC room (IRC-style /names)"),
+        N_(""),
+        N_("Prints every known occupant with IRC-style role/affiliation prefixes "
+           "(~ owner, & admin, @ moderator, % member, + participant, ? visitor, "
+           "! outcast). Occupants are sorted by prefix rank, then nick.\n\n"
+           "Examples:\n"
+           "  /names"),
+        nullptr, &command__names, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /names");
+
+    hook = weechat_hook_command(
         "modes",
         N_("display the current MUC room modes and metadata (XEP-0045)"),
         N_(""),

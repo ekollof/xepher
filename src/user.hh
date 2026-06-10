@@ -83,6 +83,16 @@ namespace weechat
         static weechat::user *bot_search(weechat::account *account, std::string_view pgp_id);
         static weechat::user *search(weechat::account *account, std::string_view id);
 
+        // XEP-0045 MUC nicklist prefix (IRC-style). Affiliation overrides role
+        // when both apply; owner wins over all (matches nicklist_add).
+        [[nodiscard]] static char muc_nicklist_prefix(
+            std::optional<std::string_view> role,
+            std::optional<std::string_view> affiliation);
+        [[nodiscard]] static int muc_nicklist_prefix_rank(char prefix);
+        [[nodiscard]] char muc_nicklist_prefix() const;
+        [[nodiscard]] static std::string muc_display_nick(
+            weechat::channel *channel, std::string_view member_id, const user *occupant);
+
         void nicklist_add(weechat::account *account, weechat::channel *channel);
         void nicklist_remove(weechat::account *account, weechat::channel *channel);
         void nicklist_set_color(weechat::account *account, weechat::channel *channel);

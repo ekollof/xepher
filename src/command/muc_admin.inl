@@ -1821,6 +1821,131 @@ int command__feed(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+// IRC-style /names: list all known MUC occupants with role/affiliation prefixes.
+int command__names(const void *pointer, void *data,
+                   struct t_gui_buffer *buffer, int argc,
+                   char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    (void) pointer;
+    (void) data;
+    (void) argc;
+    (void) argv;
+    (void) argv_eol;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "names");
+        return WEECHAT_RC_OK;
+    }
+
+    struct name_entry
+    {
+        int rank;
+        std::string label;
+        std::string sort_nick;
+    };
+
+    std::vector<name_entry> entries;
+    entries.reserve(ptr_channel->members.size());
+
+    for (const auto& [_, member] : ptr_channel->members)
+    {
+        weechat::user *occupant = weechat::user::search(ptr_account, member.id);
+        std::optional<std::string_view> role;
+        std::optional<std::string_view> affiliation;
+        if (occupant)
+        {
+            if (occupant->profile.role)
+                role = *occupant->profile.role;
+            if (occupant->profile.affiliation)
+                affiliation = *occupant->profile.affiliation;
+        }
+        else
+        {
+            if (member.role)
+                role = *member.role;
+            if (member.affiliation)
+                affiliation = *member.affiliation;
+        }
+
+        const char prefix = weechat::user::muc_nicklist_prefix(role, affiliation);
+        std::string nick = weechat::user::muc_display_nick(ptr_channel, member.id, occupant);
+        std::string label = (prefix == '.')
+            ? nick
+            : fmt::format("{}{}", prefix, nick);
+        entries.push_back({
+            weechat::user::muc_nicklist_prefix_rank(prefix),
+            std::move(label),
+            std::move(nick),
+        });
+    }
+
+    std::ranges::sort(entries, [](const name_entry& a, const name_entry& b) {
+        if (a.rank != b.rank)
+            return a.rank < b.rank;
+        return weechat_strcasecmp(a.sort_nick.c_str(), b.sort_nick.c_str()) < 0;
+    });
+
+    const char *net_prefix = weechat_prefix("network");
+    const char *key_clr = weechat_color("chat_nick");
+    const char *val_clr = weechat_color("chat_value");
+    const char *rst = weechat_color("reset");
+    const std::string& room_label = ptr_channel->name.empty()
+        ? ptr_channel->id
+        : ptr_channel->name;
+
+    weechat_printf(buffer, "");
+    if (entries.empty())
+    {
+        weechat_printf(buffer,
+                       "%s%sNo occupants known in %s%s%s yet "
+                       "(join presence or disco#items may still be in flight).%s",
+                       net_prefix, key_clr, val_clr, room_label.c_str(), key_clr, rst);
+        weechat_printf(buffer, "%sEnd of /NAMES list.%s", net_prefix, rst);
+        return WEECHAT_RC_OK;
+    }
+
+    weechat_printf(buffer, "%s%sNames in %s%s%s (%zu):%s",
+                   net_prefix, key_clr, val_clr, room_label.c_str(), key_clr,
+                   entries.size(), rst);
+
+    std::string line = fmt::format("= {} :", room_label);
+    constexpr std::size_t wrap_at = 76;
+
+    auto flush_line = [&]() {
+        if (line.size() > 2)
+            weechat_printf(buffer, "%s%s%s", net_prefix, line.c_str(), rst);
+        line = fmt::format("= {} :", room_label);
+    };
+
+    for (const auto& entry : entries)
+    {
+        const std::size_t extra = (line.back() == ':' ? 1 : 0) + entry.label.size()
+            + (line.back() == ':' ? 0 : 1);
+        if (line.size() + extra > wrap_at && line.back() != ':')
+            flush_line();
+
+        if (line.back() == ':')
+            line += entry.label;
+        else
+            line += fmt::format(" {}", entry.label);
+    }
+    flush_line();
+
+    weechat_printf(buffer, "%sEnd of /NAMES list.%s", net_prefix, rst);
+    return WEECHAT_RC_OK;
+}
+
 // XEP-0045 §6.4 / §6.5: print the full MUC room metadata (mode flags +
 // muc#roominfo x-data fields) to the current buffer. The mode flags alone
 // are also rendered in the buffer's "modes" property by update_modes().
