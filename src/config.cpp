@@ -218,7 +218,8 @@ weechat::config::config()
                 {}, {}, {}},
             .icat{file, section_look, "icat", "boolean",
                 "display shared images inline using weechat-icat (Kitty graphics protocol), "
-                "including XEP-0449 stickers and XEP-0514 custom emoji markup; "
+                "including XEP-0449 stickers, XEP-0514 custom emoji markup, "
+                "and XEP-0231 BoB images (Movim XHTML-IM cid stickers); "
                 "requires the icat.py script to be loaded in WeeChat",
                 nullptr, 0, 0,
                 "off", nullptr, false,

@@ -472,7 +472,18 @@
         <xmpp:version>0.2.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >Stickers (receive) — detects &lt;sticker xmlns='urn:xmpp:stickers:0'/&gt; with SFS image payloads; displays inline via weechat-icat when xmpp.look.icat is enabled (Movim-compatible); sticker pack pubsub not implemented</xmpp:note>
+                >Stickers (receive) — detects &lt;sticker xmlns='urn:xmpp:stickers:0'/&gt; with SFS image payloads; displays inline via weechat-icat when xmpp.look.icat is enabled; Movim stickers without &lt;sticker/&gt; are handled via XEP-0231 BoB (see below); sticker pack pubsub not implemented</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0231.html' />
+        <xmpp:status>partial</xmpp:status>
+        <xmpp:version>1.1</xmpp:version>
+        <xmpp:note
+                    xml:lang='en'
+                >Bits of Binary (receive) — resolves XHTML-IM &lt;img src='cid:…@bob.xmpp.org'/&gt; references and inline &lt;data xmlns='urn:xmpp:bob'/&gt;; IQ-fetches uncached payloads from the sender, caches locally, displays inline via weechat-icat when xmpp.look.icat is enabled (Movim sticker interop); publishing not implemented</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -838,6 +849,16 @@
         <xmpp:note xml:lang='en'>In-Band Registration — §3.1 /account register &lt;name&gt; &lt;jid&gt; &lt;password&gt;: new account registration before authentication; supports username/password flat fields, already-registered detection, OOB-redirect, and x:data form detection with helpful abort message. §3.2 /account unregister &lt;account&gt;: cancels the account on the server while authenticated. §3.3 /account password &lt;account&gt; &lt;new-password&gt;: in-band password change while authenticated (TLS required). §10: advertises jabber:iq:register in disco#info.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
+
+    <release>
+      <Version>
+        <revision>0.9.0</revision>
+        <created>2026-06-10</created>
+        <xmpp:note
+                    xml:lang='en'
+                >XEP-0449 sticker and XEP-0514 custom emoji inline display via weechat-icat; XEP-0231 BoB fetch for Movim XHTML-IM cid stickers; outgoing emoticon-to-emoji conversion on the wire (xmpp.look.emoticons)</xmpp:note>
+      </Version>
+    </release>
 
     <release>
       <Version>

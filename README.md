@@ -103,7 +103,7 @@ git clone --depth 1 git@github.com:ekollof/xepher.git
 cd xepher
 make install-deps   # installs system packages (requires sudo)
 make                # optimized plugin (no doctests)
-make DEBUG=1        # dev build + 109 doctests
+make DEBUG=1        # dev build + 118 doctests
 make test           # doctests only (handler slices, StanzaView, IQ builders, …)
 make install        # installs to ~/.local/share/weechat/plugins/ — do NOT run as root
 ```
@@ -849,6 +849,14 @@ protocol:
   when the message is received (including MAM replay).
 - **Incoming encrypted uploads (XEP-0448 ESFS)** — after the file is decrypted and
   saved to `~/Downloads/xmpp/<jid>/<date>/`, `/icat` is invoked on the local path.
+- **XEP-0449 stickers** — `<sticker xmlns='urn:xmpp:stickers:0'/>` with sibling
+  SFS image payloads; the `[File: …]` suffix is suppressed when icat displays the image.
+- **XEP-0514 custom emoji** — `<emoji xmlns='urn:xmpp:markup:emoji:0'/>` spans in
+  XEP-0394 markup resolved against sibling SFS/SIMS file hashes.
+- **XEP-0231 BoB (Movim stickers)** — XHTML-IM `<img src='cid:…@bob.xmpp.org'/>`
+  references are IQ-fetched from the sender, cached under
+  `~/.local/share/weechat/xmpp/bob_cache/<account>/`, and displayed inline (the
+  `[Sticker]` placeholder is not shown when icat is enabled).
 
 Only image MIME types (`image/*`) trigger icat. Other file types are announced
 normally without inline display.
@@ -1097,7 +1105,7 @@ Pull requests and issues are welcome. See the
   `stanza::spec` builders for outbound stanzas, and `weechat::UiPort` /
   `BufferPort` / `LineStorePort` for WeeChat output. Raw `xmpp_stanza_get_*`
   and `weechat_printf` belong only in hook/adapter glue.
-- **Tests** — run `make DEBUG=1` or `make test` (109 doctests) after changes; manual WeeChat testing
+- **Tests** — run `make DEBUG=1` or `make test` (118 doctests) after changes; manual WeeChat testing
   for integration behaviour.
 - **Releases** — see [Releasing wiki](https://github.com/ekollof/xepher/wiki/Releasing);
   pushing a `v*` tag triggers GitHub Actions to build and attach packages.
@@ -1194,6 +1202,9 @@ the JID above.
 - ✅ XEP-0437: Room Activity Indicators (Deferred — subscribe via `<rai xmlns='urn:xmpp:rai:0'/>` presence to own bare JID on connect; incoming `<activity>` notifications displayed in account buffer)
 - ✅ XEP-0446: File Metadata Element (image dimensions sent with uploads)
 - ✅ XEP-0447: Stateless File Sharing (inline previews for Conversations/Dino/Gajim)
+ - ⚡ XEP-0231: Bits of Binary (Experimental — receive: inline `<data xmlns='urn:xmpp:bob'/>` and XHTML-IM `cid:…@bob.xmpp.org` image refs; IQ-fetch uncached payloads from sender; local cache + weechat-icat inline display when `xmpp.look.icat` is on; Movim sticker interop)
+ - ⚡ XEP-0449: Stickers (Experimental — receive: `<sticker xmlns='urn:xmpp:stickers:0'/>` with SFS images; inline via weechat-icat; sticker pack pubsub not implemented)
+ - ⚡ XEP-0514: Emoji Markup (Experimental — receive: custom emoji spans in XEP-0394 markup resolved against sibling SFS/SIMS hashes; inline via weechat-icat)
 - ✅ XEP-0490: Message Displayed Synchronization
 - ✅ XEP-0511: Link Metadata (incoming previews + outgoing OpenGraph)
  - ⚡ XEP-0277: Microblogging over XMPP (Deferred — publish/reply/retract via `/feed post|reply|retract`; receive PEP microblog push events; Atom metadata: title, author, categories, enclosures, geolocation, replies links; `/feed comments` fetches comments nodes)
