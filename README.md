@@ -837,6 +837,15 @@ Incoming XEP-0447 file-sharing stanzas sent by other clients are also parsed and
 displayed, deduplicated against any SIMS or OOB element for the same URL so the
 file appears only once per message.
 
+**XEP-0231 Bits of Binary (small images, plaintext only):** On channels without
+OMEMO, `/upload` on an `image/*` file of **8 KiB or less** is sent as BoB instead
+of HTTP upload (Movim sticker interop). The message carries XHTML-IM
+`<img src='cid:sha1+…@bob.xmpp.org'/>`; payloads of **1 KiB or less** also include
+inline `<data xmlns='urn:xmpp:bob'/>`, and larger ones are IQ-hosted from
+`bob_hosted` when peers fetch the cid. The plugin advertises `urn:xmpp:bob` in
+entity capabilities. OMEMO-enabled channels still use HTTP upload with XEP-0448
+ESFS for images — outbound BoB inside encrypted messages is not implemented.
+
 #### Inline image display (weechat-icat)
 
 The `weechat-icat` script is **vendored** in `scripts/icat.py` (built from
@@ -845,7 +854,7 @@ plugin to automatically display received images inline using the Kitty graphics
 protocol:
 
 - **Outgoing uploads** — the local file is shown via `/icat` immediately after the
-  upload completes and the sharing link is posted.
+  upload completes and the sharing link is posted (HTTP upload or XEP-0231 BoB).
 - **Incoming SFS / SIMS / OOB** — unencrypted image URLs are passed to `/icat`
   when the message is received (including MAM replay).
 - **Incoming encrypted uploads (XEP-0448 ESFS)** — after the file is decrypted and
@@ -1203,7 +1212,7 @@ the JID above.
 - ✅ XEP-0437: Room Activity Indicators (Deferred — subscribe via `<rai xmlns='urn:xmpp:rai:0'/>` presence to own bare JID on connect; incoming `<activity>` notifications displayed in account buffer)
 - ✅ XEP-0446: File Metadata Element (image dimensions sent with uploads)
 - ✅ XEP-0447: Stateless File Sharing (inline previews for Conversations/Dino/Gajim)
- - ⚡ XEP-0231: Bits of Binary (Experimental — receive: inline `<data xmlns='urn:xmpp:bob'/>` and XHTML-IM `cid:…@bob.xmpp.org` image refs; IQ-fetch uncached payloads from sender; local cache + weechat-icat inline display when `xmpp.look.icat` is on; Movim sticker interop)
+ - ⚡ XEP-0231: Bits of Binary (Experimental — receive: inline `<data xmlns='urn:xmpp:bob'/>` and XHTML-IM `cid:…@bob.xmpp.org` image refs; IQ-fetch uncached payloads; local cache + weechat-icat; send: plaintext `/upload` of images ≤8 KiB as BoB + XHTML-IM with sha1 cid, inline data ≤1 KiB, IQ-get hosting; `urn:xmpp:bob` in caps; OMEMO outbound BoB not implemented)
  - ⚡ XEP-0449: Stickers (Experimental — receive: `<sticker xmlns='urn:xmpp:stickers:0'/>` with SFS images; inline via weechat-icat; sticker pack pubsub not implemented)
  - ⚡ XEP-0514: Emoji Markup (Experimental — receive: custom emoji spans in XEP-0394 markup resolved against sibling SFS/SIMS hashes; inline via weechat-icat)
 - ✅ XEP-0490: Message Displayed Synchronization

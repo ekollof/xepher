@@ -856,7 +856,7 @@
         <created>2026-06-10</created>
         <xmpp:note
                     xml:lang='en'
-                >XEP-0449 sticker and XEP-0514 custom emoji inline display via weechat-icat; XEP-0231 BoB fetch for Movim XHTML-IM cid stickers; outgoing emoticon-to-emoji conversion on the wire (xmpp.look.emoticons)</xmpp:note>
+                >XEP-0449 sticker and XEP-0514 custom emoji inline display via weechat-icat; XEP-0231 BoB receive (inline data and XHTML-IM cid IQ-fetch) for Movim stickers; outgoing emoticon-to-emoji conversion on the wire (xmpp.look.emoticons). BoB send/hosting added post-release on master.</xmpp:note>
       </Version>
     </release>
 
