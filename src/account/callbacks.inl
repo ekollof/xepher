@@ -333,7 +333,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         xepher::pending_feed_post finished_post = std::move(post);
         ptr_account->pending_feed_posts.erase(post_it);
         weechat::UiPort::for_buffer(finished_post.buffer)->printf_date_tags(0, "no_trigger,notify_none",
-            fmt::format("{}All embeds uploaded, publishing post…", weechat_prefix("network")));
+            fmt::format("{}All embeds uploaded, publishing post…", weechat::RuntimePort::default_runtime().prefix("network")));
         ptr_account->build_and_publish_post(finished_post);
         return WEECHAT_RC_OK;
     }
@@ -440,7 +440,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     }
 
     weechat::UiPort::for_buffer(status_buf)->printf_date_tags(0, "no_trigger,notify_none",
-        fmt::format("{}File uploaded! Sharing link… {}", weechat_prefix("network"), visible_link));
+        fmt::format("{}File uploaded! Sharing link… {}", weechat::RuntimePort::default_runtime().prefix("network"), visible_link));
 
     if (!ctx->local_path.empty())
     {

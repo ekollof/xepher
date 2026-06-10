@@ -4,7 +4,7 @@
 
 #include <weechat/weechat-plugin.h>
 #include "picker.hh"
-#include "../plugin.hh"  // for weechat_plugin global
+#include "plugin.hh"  // for weechat_plugin global
 
 namespace weechat::ui {
 

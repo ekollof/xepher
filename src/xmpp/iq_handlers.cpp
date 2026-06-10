@@ -8,7 +8,7 @@
 #include <string>
 #include <fmt/core.h>
 
-#include "../util.hh"
+#include "util.hh"
 
 namespace xmpp {
 

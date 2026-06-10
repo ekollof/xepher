@@ -4,6 +4,6 @@
 
 #include <weechat/weechat-plugin.h>
 
-#include "../plugin.hh"
-#include "../account.hh"
-#include "option.hh"
+#include "plugin.hh"
+#include "config/account.hh"
+#include "config/option.hh"

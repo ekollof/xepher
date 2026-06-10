@@ -8,7 +8,7 @@
 #include <string>
 #include <string_view>
 
-#include "../test_export.hh"
+#include "test_export.hh"
 
 namespace weechat {
 
@@ -19,6 +19,8 @@ public:
 
     [[nodiscard]] virtual std::string version_string() = 0;
     [[nodiscard]] virtual const char *color(std::string_view name) = 0;
+    [[nodiscard]] virtual const char *prefix(std::string_view name) = 0;
+    [[nodiscard]] virtual std::string xmpp_color(std::string_view name) = 0;
 
     static RuntimePort &default_runtime();
 };
@@ -27,6 +29,8 @@ class WeechatRuntimePort final : public RuntimePort {
 public:
     [[nodiscard]] std::string version_string() override;
     [[nodiscard]] const char *color(std::string_view name) override;
+    [[nodiscard]] const char *prefix(std::string_view name) override;
+    [[nodiscard]] std::string xmpp_color(std::string_view name) override;
 };
 
 }  // namespace weechat

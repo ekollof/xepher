@@ -195,7 +195,7 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
                 weechat::UiPort::for_buffer(ch.buffer)->printf_date_tags(
                     0, "xmpp_mam_fin,notify_none,no_log",
                     fmt::format("{}History loaded: {} → {}",
-                                weechat_prefix("network"), start_str, end_str));
+                                weechat::RuntimePort::default_runtime().prefix("network"), start_str, end_str));
             }
         }
     }

@@ -16,6 +16,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "color.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"

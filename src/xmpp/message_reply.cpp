@@ -14,6 +14,7 @@
 
 #include "color.hh"
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "xmpp/message_fallback.hh"
 
 namespace xmpp {
@@ -142,9 +143,9 @@ std::string extract_line_body_text(std::string_view raw)
 
 std::string format_reply_quote_body(std::string_view quote_nick, std::string_view excerpt)
 {
-    const auto dim = weechat::xmpp_color("darkgray");
-    const auto cyan = weechat::xmpp_color("cyan");
-    const auto reset = weechat::xmpp_color("resetcolor");
+    const auto dim = weechat::RuntimePort::default_runtime().xmpp_color("darkgray");
+    const auto cyan = weechat::RuntimePort::default_runtime().xmpp_color("cyan");
+    const auto reset = weechat::RuntimePort::default_runtime().xmpp_color("resetcolor");
     if (!quote_nick.empty())
     {
         return fmt::format("{}│ {}{}{}: {}{}{}",

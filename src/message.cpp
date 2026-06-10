@@ -15,6 +15,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "account.hh"
 #include "channel.hh"
 #include "user.hh"
@@ -114,10 +115,10 @@ static std::string message__translate_code(weechat::account *account,
     }
 
     std::string result;
-    result += weechat_color("chat_nick");
+    result += weechat::RuntimePort::default_runtime().color("chat_nick");
     result += prefix;
     result += symbol;
-    result += weechat_color("reset");
+    result += weechat::RuntimePort::default_runtime().color("reset");
     return result;
 }
 

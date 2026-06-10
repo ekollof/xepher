@@ -791,7 +791,7 @@ int command__feed(const void *pointer, void *data,
 
         ui->printf_network(fmt::format(fmt::runtime(_("{}: discovered {} PubSub service(s) on your server:")), WEECHAT_XMPP_PLUGIN_NAME, kps.size()));
         for (const auto &svc : kps)
-        ui->printf(fmt::format("  {}  /feed {}", weechat_color("chat_server"), svc.c_str()));
+        ui->printf(fmt::format("  {}  /feed {}", weechat::RuntimePort::default_runtime().color("chat_server"), svc.c_str()));
 
         // If --all flag present, auto-fetch all nodes from every discovered service.
         bool fetch_all_svcs = false;
@@ -1985,10 +1985,10 @@ int command__names(const void *pointer, void *data,
         return weechat_strcasecmp(a.sort_nick.c_str(), b.sort_nick.c_str()) < 0;
     });
 
-    const char *net_prefix = weechat_prefix("network");
-    const char *key_clr = weechat_color("chat_nick");
-    const char *val_clr = weechat_color("chat_value");
-    const char *rst = weechat_color("reset");
+    const char *net_prefix = weechat::RuntimePort::default_runtime().prefix("network");
+    const char *key_clr = weechat::RuntimePort::default_runtime().color("chat_nick");
+    const char *val_clr = weechat::RuntimePort::default_runtime().color("chat_value");
+    const char *rst = weechat::RuntimePort::default_runtime().color("reset");
     const std::string& room_label = ptr_channel->name.empty()
         ? ptr_channel->id
         : ptr_channel->name;
@@ -2081,11 +2081,11 @@ int command__modes(const void *pointer, void *data,
     }
 
     const auto &info = ptr_channel->get_muc_info();
-    const char *prefix = weechat_prefix("network");
-    const char *key_clr = weechat_color("chat_nick");
-    const char *val_clr = weechat_color("chat_value");
-    const char *sep     = weechat_color("chat_delimiters");
-    const char *rst     = weechat_color("reset");
+    const char *prefix = weechat::RuntimePort::default_runtime().prefix("network");
+    const char *key_clr = weechat::RuntimePort::default_runtime().color("chat_nick");
+    const char *val_clr = weechat::RuntimePort::default_runtime().color("chat_value");
+    const char *sep     = weechat::RuntimePort::default_runtime().color("chat_delimiters");
+    const char *rst     = weechat::RuntimePort::default_runtime().color("reset");
 
         ui->printf("");
         ui->printf(fmt::format("{}{}Room modes for {}{}{}:", prefix, key_clr, val_clr, ptr_channel->id.data(), rst));
@@ -2426,24 +2426,24 @@ int command__setmodes([[maybe_unused]] const void *pointer,
     }
 
         ui->printf("");
-        ui->printf_network(fmt::format("Planned changes to {}{}{}:", weechat_color("chat_server"), ptr_channel->id.data(), weechat_color("reset")));
-        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "moderated", weechat_color("reset"), weechat_color("chat_value"), (want_set[0]   ? "on" : (want_clear[0] ? "off" : "(unchanged)")), weechat_color("reset")));
-        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "members-only", weechat_color("reset"), weechat_color("chat_value"), (want_set[1]   ? "on" : (want_clear[1] ? "off" : "(unchanged)")), weechat_color("reset")));
-        ui->printf(fmt::format("  {}{:<16}{} {}{}{}{}", weechat_color("chat_nick"), "password", weechat_color("reset"), weechat_color("chat_value"), (want_set[2]   ? "on" : (want_clear[2] ? "off" : "(unchanged)")), want_set[2] ? fmt::format(" (secret set to {} chars)", password.size()).c_str() : "", weechat_color("reset")));
-        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "hidden", weechat_color("reset"), weechat_color("chat_value"), (want_set[3]   ? "on" : (want_clear[3] ? "off" : "(unchanged)")), weechat_color("reset")));
-        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "persistent", weechat_color("reset"), weechat_color("chat_value"), (want_set[4]   ? "on" : (want_clear[4] ? "off" : "(unchanged)")), weechat_color("reset")));
+        ui->printf_network(fmt::format("Planned changes to {}{}{}:", weechat::RuntimePort::default_runtime().color("chat_server"), ptr_channel->id.data(), weechat::RuntimePort::default_runtime().color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat::RuntimePort::default_runtime().color("chat_nick"), "moderated", weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_value"), (want_set[0]   ? "on" : (want_clear[0] ? "off" : "(unchanged)")), weechat::RuntimePort::default_runtime().color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat::RuntimePort::default_runtime().color("chat_nick"), "members-only", weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_value"), (want_set[1]   ? "on" : (want_clear[1] ? "off" : "(unchanged)")), weechat::RuntimePort::default_runtime().color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}{}", weechat::RuntimePort::default_runtime().color("chat_nick"), "password", weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_value"), (want_set[2]   ? "on" : (want_clear[2] ? "off" : "(unchanged)")), want_set[2] ? fmt::format(" (secret set to {} chars)", password.size()).c_str() : "", weechat::RuntimePort::default_runtime().color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat::RuntimePort::default_runtime().color("chat_nick"), "hidden", weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_value"), (want_set[3]   ? "on" : (want_clear[3] ? "off" : "(unchanged)")), weechat::RuntimePort::default_runtime().color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat::RuntimePort::default_runtime().color("chat_nick"), "persistent", weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_value"), (want_set[4]   ? "on" : (want_clear[4] ? "off" : "(unchanged)")), weechat::RuntimePort::default_runtime().color("reset")));
     {
         const char *anon = "(unchanged)";
         if (want_set[5])   anon = "non-anonymous (anyone sees real JIDs)";
         if (want_set[6])   anon = "semi-anonymous (mods see real JIDs)";
         if (want_clear[5] || want_clear[6]) anon = "default (server-defined)";
-        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "anonymity", weechat_color("reset"), weechat_color("chat_value"), anon, weechat_color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat::RuntimePort::default_runtime().color("chat_nick"), "anonymity", weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_value"), anon, weechat::RuntimePort::default_runtime().color("reset")));
     }
 
     if (!confirm)
     {
         ui->printf("");
-        ui->printf_error(fmt::format("{}: re-run with {}--confirm{} to apply.", WEECHAT_XMPP_PLUGIN_NAME, weechat_color("bold"), weechat_color("reset")));
+        ui->printf_error(fmt::format("{}: re-run with {}--confirm{} to apply.", WEECHAT_XMPP_PLUGIN_NAME, weechat::RuntimePort::default_runtime().color("bold"), weechat::RuntimePort::default_runtime().color("reset")));
         return WEECHAT_RC_OK;
     }
 
@@ -2599,17 +2599,17 @@ int command__destroy([[maybe_unused]] const void *pointer,
         if (std::string_view(argv[i]) == "--confirm") { confirm = true; break; }
 
     ui->printf("");
-    ui->printf_error(fmt::format("About to destroy room {}{}{}:", weechat_color("bold"), weechat_color("chat_server"), ptr_channel->id.data(), weechat_color("reset")));
-    ui->printf(fmt::format("  {}{:<18}{} {}{}{}", weechat_color("chat_nick"), "reason", weechat_color("reset"), weechat_color("chat_value"), reason.empty() ? "(none)" : reason.c_str(), weechat_color("reset")));
-    ui->printf(fmt::format("  {}{:<18}{} {}{}{}", weechat_color("chat_nick"), "alt room jid", weechat_color("reset"), weechat_color("chat_value"), alt_jid.empty() ? "(none)" : alt_jid.c_str(), weechat_color("reset")));
-    ui->printf(fmt::format("  {}{:<18}{} {}{}{}", weechat_color("chat_nick"), "alt room password", weechat_color("reset"), weechat_color("chat_value"), alt_password.empty() ? "(none)" : "(set)", weechat_color("reset")));
+    ui->printf_error(fmt::format("About to destroy room {}{}{}:", weechat::RuntimePort::default_runtime().color("bold"), weechat::RuntimePort::default_runtime().color("chat_server"), ptr_channel->id.data(), weechat::RuntimePort::default_runtime().color("reset")));
+    ui->printf(fmt::format("  {}{:<18}{} {}{}{}", weechat::RuntimePort::default_runtime().color("chat_nick"), "reason", weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_value"), reason.empty() ? "(none)" : reason.c_str(), weechat::RuntimePort::default_runtime().color("reset")));
+    ui->printf(fmt::format("  {}{:<18}{} {}{}{}", weechat::RuntimePort::default_runtime().color("chat_nick"), "alt room jid", weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_value"), alt_jid.empty() ? "(none)" : alt_jid.c_str(), weechat::RuntimePort::default_runtime().color("reset")));
+    ui->printf(fmt::format("  {}{:<18}{} {}{}{}", weechat::RuntimePort::default_runtime().color("chat_nick"), "alt room password", weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_value"), alt_password.empty() ? "(none)" : "(set)", weechat::RuntimePort::default_runtime().color("reset")));
     ui->printf("");
     ui->printf(fmt::format("{}{}This will kick all occupants and the room "
-                      "cannot be recovered.{}", weechat_color("bold"), weechat_color("red"), weechat_color("reset")));
+                      "cannot be recovered.{}", weechat::RuntimePort::default_runtime().color("bold"), weechat::RuntimePort::default_runtime().color("red"), weechat::RuntimePort::default_runtime().color("reset")));
 
     if (!confirm)
     {
-        ui->printf_error(fmt::format("{}: re-run with {}--confirm{} to destroy the room.", WEECHAT_XMPP_PLUGIN_NAME, weechat_color("bold"), weechat_color("reset")));
+        ui->printf_error(fmt::format("{}: re-run with {}--confirm{} to destroy the room.", WEECHAT_XMPP_PLUGIN_NAME, weechat::RuntimePort::default_runtime().color("bold"), weechat::RuntimePort::default_runtime().color("reset")));
         return WEECHAT_RC_OK;
     }
 
@@ -2736,30 +2736,30 @@ int command__affiliation([[maybe_unused]] const void *pointer,
     ui->printf("");
     ui->printf_network(fmt::format(
         "Planned affiliation change in {}{}{}:",
-        weechat_color("chat_server"), ptr_channel->id, weechat_color("reset")));
+        weechat::RuntimePort::default_runtime().color("chat_server"), ptr_channel->id, weechat::RuntimePort::default_runtime().color("reset")));
     ui->printf(fmt::format(
         "  {}{}{} {}{}{}",
-        weechat_color("chat_nick"), "target", weechat_color("reset"),
-        weechat_color("chat_value"), target_jid, weechat_color("reset")));
+        weechat::RuntimePort::default_runtime().color("chat_nick"), "target", weechat::RuntimePort::default_runtime().color("reset"),
+        weechat::RuntimePort::default_runtime().color("chat_value"), target_jid, weechat::RuntimePort::default_runtime().color("reset")));
     ui->printf(fmt::format(
         "  {}{}{} {}{}{}",
-        weechat_color("chat_nick"), "affiliation", weechat_color("reset"),
-        weechat_color("chat_value"), aff, weechat_color("reset")));
+        weechat::RuntimePort::default_runtime().color("chat_nick"), "affiliation", weechat::RuntimePort::default_runtime().color("reset"),
+        weechat::RuntimePort::default_runtime().color("chat_value"), aff, weechat::RuntimePort::default_runtime().color("reset")));
     if (opts.nick_specified)
     {
         ui->printf(fmt::format(
             "  {}{}{} {}{}{}",
-            weechat_color("chat_nick"), "nick", weechat_color("reset"),
-            weechat_color("chat_value"),
+            weechat::RuntimePort::default_runtime().color("chat_nick"), "nick", weechat::RuntimePort::default_runtime().color("reset"),
+            weechat::RuntimePort::default_runtime().color("chat_value"),
             opts.nick.empty() ? "(unset)" : opts.nick,
-            weechat_color("reset")));
+            weechat::RuntimePort::default_runtime().color("reset")));
     }
     if (!opts.reason.empty())
     {
         ui->printf(fmt::format(
             "  {}{}{} {}{}{}",
-            weechat_color("chat_nick"), "reason", weechat_color("reset"),
-            weechat_color("chat_value"), opts.reason, weechat_color("reset")));
+            weechat::RuntimePort::default_runtime().color("chat_nick"), "reason", weechat::RuntimePort::default_runtime().color("reset"),
+            weechat::RuntimePort::default_runtime().color("chat_value"), opts.reason, weechat::RuntimePort::default_runtime().color("reset")));
     }
 
     if (!opts.confirm)
@@ -2767,7 +2767,7 @@ int command__affiliation([[maybe_unused]] const void *pointer,
         ui->printf_error(fmt::format(
             "{}: re-run with {}--confirm{} to apply.",
             WEECHAT_XMPP_PLUGIN_NAME,
-            weechat_color("bold"), weechat_color("reset")));
+            weechat::RuntimePort::default_runtime().color("bold"), weechat::RuntimePort::default_runtime().color("reset")));
         return WEECHAT_RC_OK;
     }
 

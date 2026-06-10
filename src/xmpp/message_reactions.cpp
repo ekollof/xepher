@@ -12,6 +12,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "xmpp/message_fallback.hh"
 
 namespace xmpp {
@@ -41,7 +42,7 @@ std::optional<MessageReactions> parse_message_reactions(StanzaView msg)
 
 std::string reaction_suffix_marker()
 {
-    return fmt::format(" {}[", weechat_color("blue"));
+    return fmt::format(" {}[", weechat::RuntimePort::default_runtime().color("blue"));
 }
 
 std::string format_message_with_reactions(std::string_view original_message,
@@ -57,9 +58,9 @@ std::string format_message_with_reactions(std::string_view original_message,
 
     return fmt::format("{} {}[{}]{}",
                        base,
-                       weechat_color("blue"),
+                       weechat::RuntimePort::default_runtime().color("blue"),
                        emojis,
-                       weechat_color("resetcolor"));
+                       weechat::RuntimePort::default_runtime().color("resetcolor"));
 }
 
 }  // namespace xmpp

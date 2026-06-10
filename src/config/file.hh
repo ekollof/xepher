@@ -12,8 +12,8 @@
 #include <optional>
 #include <weechat/weechat-plugin.h>
 #include "fmt/core.h"
-#include "../plugin.hh"
-#include "breadcrumb.hh"
+#include "plugin.hh"
+#include "config/breadcrumb.hh"
 
 namespace weechat
 {

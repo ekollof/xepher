@@ -20,6 +20,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "util.hh"
 
 XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2)
@@ -112,7 +113,7 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
             text[i] == '`' && text[i+1] == '`' && text[i+2] == '`')
         {
             in_preblock = true;
-            result += weechat_color("gray");
+            result += weechat::RuntimePort::default_runtime().color("gray");
             i += 3;
             continue;
         }
@@ -120,7 +121,7 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
                  text[i] == '`' && text[i+1] == '`' && text[i+2] == '`')
         {
             in_preblock = false;
-            result += weechat_color("resetcolor");
+            result += weechat::RuntimePort::default_runtime().color("resetcolor");
             i += 3;
             continue;
         }
@@ -136,7 +137,7 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
         if ((i == 0 || text[i-1] == '\n') && text[i] == '>' && 
             (i + 1 >= text.length() || text[i+1] == ' '))
         {
-            result += weechat_color("green");
+            result += weechat::RuntimePort::default_runtime().color("green");
             result += '>';
             i++;
             // Continue until end of line
@@ -144,7 +145,7 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
             {
                 result += text[i++];
             }
-            result += weechat_color("resetcolor");
+            result += weechat::RuntimePort::default_runtime().color("resetcolor");
             if (i < text.length())
                 result += text[i++]; // Add the newline
             continue;
@@ -169,11 +170,11 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
                 if (end < text.length() && text[end] == '*' && !isspace(text[end-1]) &&
                     (end + 1 >= text.length() || isspace(text[end+1]) || ispunct(text[end+1])))
                 {
-                    result += weechat_color("bold");
+                    result += weechat::RuntimePort::default_runtime().color("bold");
                     i++;
                     while (i < end)
                         result += text[i++];
-                    result += weechat_color("-bold");
+                    result += weechat::RuntimePort::default_runtime().color("-bold");
                     i++; // Skip closing *
                     continue;
                 }
@@ -190,11 +191,11 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
                 if (end < text.length() && text[end] == '_' && !isspace(text[end-1]) &&
                     (end + 1 >= text.length() || isspace(text[end+1]) || ispunct(text[end+1])))
                 {
-                    result += weechat_color("underline");
+                    result += weechat::RuntimePort::default_runtime().color("underline");
                     i++;
                     while (i < end)
                         result += text[i++];
-                    result += weechat_color("-underline");
+                    result += weechat::RuntimePort::default_runtime().color("-underline");
                     i++; // Skip closing _
                     continue;
                 }
@@ -211,11 +212,11 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
                 if (end < text.length() && text[end] == '`' && !isspace(text[end-1]) &&
                     (end + 1 >= text.length() || isspace(text[end+1]) || ispunct(text[end+1])))
                 {
-                    result += weechat_color("gray");
+                    result += weechat::RuntimePort::default_runtime().color("gray");
                     i++;
                     while (i < end)
                         result += text[i++];
-                    result += weechat_color("resetcolor");
+                    result += weechat::RuntimePort::default_runtime().color("resetcolor");
                     i++; // Skip closing `
                     continue;
                 }
@@ -236,11 +237,11 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
                     !isspace(text[end-1]) &&
                     (end + 1 >= text.length() || isspace(text[end+1]) || ispunct(text[end+1])))
                 {
-                    result += weechat_color("red");
+                    result += weechat::RuntimePort::default_runtime().color("red");
                     i += 1; // Skip opening ~
                     while (i < end)
                         result += text[i++];
-                    result += weechat_color("resetcolor");
+                    result += weechat::RuntimePort::default_runtime().color("resetcolor");
                     i += 1; // Skip closing ~
                     continue;
                 }
@@ -335,17 +336,17 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_te
                 const char *sp_name = xmpp_stanza_get_name(sp);
                 if (!sp_name) continue;
                 if (std::string_view(sp_name) == "emphasis") {
-                    open_code  = weechat_color("italic");
-                    close_code = weechat_color("-italic");
+                    open_code  = weechat::RuntimePort::default_runtime().color("italic");
+                    close_code = weechat::RuntimePort::default_runtime().color("-italic");
                 } else if (std::string_view(sp_name) == "strong") {
-                    open_code  = weechat_color("bold");
-                    close_code = weechat_color("-bold");
+                    open_code  = weechat::RuntimePort::default_runtime().color("bold");
+                    close_code = weechat::RuntimePort::default_runtime().color("-bold");
                 } else if (std::string_view(sp_name) == "code") {
-                    open_code  = weechat_color("cyan");
-                    close_code = weechat_color("resetcolor");
+                    open_code  = weechat::RuntimePort::default_runtime().color("cyan");
+                    close_code = weechat::RuntimePort::default_runtime().color("resetcolor");
                 } else if (std::string_view(sp_name) == "deleted") {
-                    open_code  = weechat_color("8");   // dark grey ≈ strikethrough hint
-                    close_code = weechat_color("resetcolor");
+                    open_code  = weechat::RuntimePort::default_runtime().color("8");   // dark grey ≈ strikethrough hint
+                    close_code = weechat::RuntimePort::default_runtime().color("resetcolor");
                 }
                 if (!open_code.empty()) break;
             }
@@ -359,8 +360,8 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_te
             long start = get_long_attr(child, "start", -1);
             long end   = get_long_attr(child, "end",   -1);
             if (start < 0 || end <= start) continue;
-            events.push_back({cp_byte(start), 0, weechat_color("gray")});
-            events.push_back({cp_byte(end),   1, weechat_color("resetcolor")});
+            events.push_back({cp_byte(start), 0, weechat::RuntimePort::default_runtime().color("gray")});
+            events.push_back({cp_byte(end),   1, weechat::RuntimePort::default_runtime().color("resetcolor")});
         }
         else if (child_name_sv == "bquote")
         {
@@ -368,16 +369,16 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_te
             long end   = get_long_attr(child, "end",   -1);
             if (start < 0 || end <= start) continue;
             // Insert green color at start of each line within [start, end)
-            events.push_back({cp_byte(start), 0, weechat_color("green")});
+            events.push_back({cp_byte(start), 0, weechat::RuntimePort::default_runtime().color("green")});
             // Also emit green after every newline within the range
             std::size_t sb = cp_byte(start);
             std::size_t eb = cp_byte(end);
             for (std::size_t b = sb; b < eb && b < plain_text.size(); ++b)
             {
                 if (plain_text[b] == '\n' && b + 1 < eb)
-                    events.push_back({b + 1, 0, weechat_color("green")});
+                    events.push_back({b + 1, 0, weechat::RuntimePort::default_runtime().color("green")});
             }
-            events.push_back({cp_byte(end), 1, weechat_color("resetcolor")});
+            events.push_back({cp_byte(end), 1, weechat::RuntimePort::default_runtime().color("resetcolor")});
         }
         else if (child_name_sv == "list")
         {
@@ -448,16 +449,16 @@ std::string apply_markdown_to_weechat(std::string_view text)
     std::string result;
     result.reserve(text.size() * 2);
 
-    const char *bold       = weechat_color("bold");
-    const char *bold_off   = weechat_color("-bold");
-    const char *italic     = weechat_color("italic");
-    const char *italic_off = weechat_color("-italic");
-    const char *gray       = weechat_color("gray");
-    const char *darkgray   = weechat_color("darkgray");
-    const char *green      = weechat_color("green");
-    const char *blue       = weechat_color("blue");
-    const char *dim        = weechat_color("darkgray");
-    const char *rst        = weechat_color("resetcolor");
+    const char *bold       = weechat::RuntimePort::default_runtime().color("bold");
+    const char *bold_off   = weechat::RuntimePort::default_runtime().color("-bold");
+    const char *italic     = weechat::RuntimePort::default_runtime().color("italic");
+    const char *italic_off = weechat::RuntimePort::default_runtime().color("-italic");
+    const char *gray       = weechat::RuntimePort::default_runtime().color("gray");
+    const char *darkgray   = weechat::RuntimePort::default_runtime().color("darkgray");
+    const char *green      = weechat::RuntimePort::default_runtime().color("green");
+    const char *blue       = weechat::RuntimePort::default_runtime().color("blue");
+    const char *dim        = weechat::RuntimePort::default_runtime().color("darkgray");
+    const char *rst        = weechat::RuntimePort::default_runtime().color("resetcolor");
 
     // Helper: apply inline spans to a single line of text.
     // Processes: images, links, **bold**/__bold__, *italic*/_italic_,

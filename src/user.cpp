@@ -13,6 +13,7 @@
 #include <fmt/core.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "color.hh"
 #include "xmpp/node.hh"
 #include "account.hh"
@@ -69,14 +70,14 @@ std::string weechat::user::get_colour()
     if (cached_nick_color.empty() && !this->profile.display_name.empty())
     {
         std::string raw_color = compute_nick_color(this->profile.display_name);
-        cached_nick_color = weechat::xmpp_color(raw_color);
+        cached_nick_color = weechat::RuntimePort::default_runtime().xmpp_color(raw_color);
     }
     return cached_nick_color;
 }
 
 std::string weechat::user::get_colour(std::string_view name)
 {
-    return std::string(weechat::xmpp_color(compute_nick_color(name)));
+    return weechat::RuntimePort::default_runtime().xmpp_color(compute_nick_color(name));
 }
 
 std::string weechat::user::get_colour_for_nicklist()
@@ -99,7 +100,7 @@ std::string weechat::user::as_prefix_raw()
         if (!this->profile.avatar_rendered.empty())
             prefix = this->profile.avatar_rendered + " ";
         std::string color = this->get_colour();
-        std::string reset = weechat::xmpp_color("reset");
+        std::string reset = weechat::RuntimePort::default_runtime().xmpp_color("reset");
         cached_prefix_raw = fmt::format("{}{}{}{}", color, prefix, this->profile.display_name, reset);
     }
     return cached_prefix_raw;
@@ -108,7 +109,7 @@ std::string weechat::user::as_prefix_raw()
 std::string weechat::user::as_prefix_raw(std::string_view name)
 {
     std::string color = get_colour(name);
-    std::string reset = weechat::xmpp_color("reset");
+    std::string reset = weechat::RuntimePort::default_runtime().xmpp_color("reset");
     return fmt::format("{}{}{}", color, name, reset);
 }
 

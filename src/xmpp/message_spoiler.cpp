@@ -8,6 +8,7 @@
 
 #include "color.hh"
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 
 namespace xmpp {
 
@@ -25,10 +26,10 @@ std::optional<std::string> parse_spoiler_hint(StanzaView msg)
 
 std::string format_spoiler_display_prefix(std::optional<std::string_view> hint)
 {
-    std::string prefix = std::string(weechat::xmpp_color("yellow")) + "[Spoiler";
+    std::string prefix = std::string(weechat::RuntimePort::default_runtime().xmpp_color("yellow")) + "[Spoiler";
     if (hint && !hint->empty())
         prefix += ": " + std::string(*hint);
-    prefix += "] " + std::string(weechat::xmpp_color("resetcolor"));
+    prefix += "] " + std::string(weechat::RuntimePort::default_runtime().xmpp_color("resetcolor"));
     return prefix;
 }
 

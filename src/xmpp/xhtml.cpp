@@ -20,7 +20,8 @@
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>
 
-#include "../plugin.hh"
+#include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "node.hh"
 
 // ---------------------------------------------------------------------------
@@ -133,24 +134,24 @@ std::pair<std::string, std::string> css_style_to_weechat(const char *style)
             std::string wc = css_color_to_weechat(val);
             if (!wc.empty())
             {
-                open  += weechat_color(wc.c_str());
-                close  = std::string(weechat_color("resetcolor")) + close;
+                open  += weechat::RuntimePort::default_runtime().color(wc);
+                close  = std::string(weechat::RuntimePort::default_runtime().color("resetcolor")) + close;
             }
         }
         else if (prop == "font-weight" && val == "bold")
         {
-            open  += weechat_color("bold");
-            close  = std::string(weechat_color("-bold")) + close;
+            open  += weechat::RuntimePort::default_runtime().color("bold");
+            close  = std::string(weechat::RuntimePort::default_runtime().color("-bold")) + close;
         }
         else if (prop == "font-style" && val == "italic")
         {
-            open  += weechat_color("italic");
-            close  = std::string(weechat_color("-italic")) + close;
+            open  += weechat::RuntimePort::default_runtime().color("italic");
+            close  = std::string(weechat::RuntimePort::default_runtime().color("-italic")) + close;
         }
         else if (prop == "text-decoration" && val == "underline")
         {
-            open  += weechat_color("underline");
-            close  = std::string(weechat_color("-underline")) + close;
+            open  += weechat::RuntimePort::default_runtime().color("underline");
+            close  = std::string(weechat::RuntimePort::default_runtime().color("-underline")) + close;
         }
         // background-color: intentionally ignored
     }
@@ -178,9 +179,9 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
                 {
                     if (c == '\n')
                     {
-                        result += weechat_color("green");
+                        result += weechat::RuntimePort::default_runtime().color("green");
                         result += "> ";
-                        result += weechat_color("resetcolor");
+                        result += weechat::RuntimePort::default_runtime().color("resetcolor");
                         result += line;
                         result += '\n';
                         line.clear();
@@ -189,9 +190,9 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
                 }
                 if (!line.empty())
                 {
-                    result += weechat_color("green");
+                    result += weechat::RuntimePort::default_runtime().color("green");
                     result += "> ";
-                    result += weechat_color("resetcolor");
+                    result += weechat::RuntimePort::default_runtime().color("resetcolor");
                     result += line;
                 }
             }
@@ -219,9 +220,9 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             result += '\n';
             if (in_blockquote)
             {
-                result += weechat_color("green");
+                result += weechat::RuntimePort::default_runtime().color("green");
                 result += "> ";
-                result += weechat_color("resetcolor");
+                result += weechat::RuntimePort::default_runtime().color("resetcolor");
             }
             continue;
         }
@@ -230,9 +231,9 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
         {
             if (!result.empty() && result.back() != '\n') result += '\n';
             std::string inner = xhtml_to_weechat(child, true);
-            result += weechat_color("green");
+            result += weechat::RuntimePort::default_runtime().color("green");
             result += "> ";
-            result += weechat_color("resetcolor");
+            result += weechat::RuntimePort::default_runtime().color("resetcolor");
             result += inner;
             if (!result.empty() && result.back() != '\n') result += '\n';
             continue;
@@ -241,9 +242,9 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
         if (is_pre)
         {
             if (!result.empty() && result.back() != '\n') result += '\n';
-            result += weechat_color("gray");
+            result += weechat::RuntimePort::default_runtime().color("gray");
             result += xhtml_to_weechat(child, in_blockquote);
-            result += weechat_color("resetcolor");
+            result += weechat::RuntimePort::default_runtime().color("resetcolor");
             if (!result.empty() && result.back() != '\n') result += '\n';
             continue;
         }
@@ -258,41 +259,41 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
 
         if (name_sv == "b" || name_sv == "strong")
         {
-            result += weechat_color("bold");
+            result += weechat::RuntimePort::default_runtime().color("bold");
             result += xhtml_to_weechat(child, in_blockquote);
-            result += weechat_color("-bold");
+            result += weechat::RuntimePort::default_runtime().color("-bold");
             continue;
         }
 
         if (name_sv == "i" || name_sv == "em")
         {
-            result += weechat_color("italic");
+            result += weechat::RuntimePort::default_runtime().color("italic");
             result += xhtml_to_weechat(child, in_blockquote);
-            result += weechat_color("-italic");
+            result += weechat::RuntimePort::default_runtime().color("-italic");
             continue;
         }
 
         if (name_sv == "u")
         {
-            result += weechat_color("underline");
+            result += weechat::RuntimePort::default_runtime().color("underline");
             result += xhtml_to_weechat(child, in_blockquote);
-            result += weechat_color("-underline");
+            result += weechat::RuntimePort::default_runtime().color("-underline");
             continue;
         }
 
         if (name_sv == "del" || name_sv == "s" || name_sv == "strike")
         {
-            result += weechat_color("darkgray");
+            result += weechat::RuntimePort::default_runtime().color("darkgray");
             result += xhtml_to_weechat(child, in_blockquote);
-            result += weechat_color("resetcolor");
+            result += weechat::RuntimePort::default_runtime().color("resetcolor");
             continue;
         }
 
         if (name_sv == "code" || name_sv == "tt")
         {
-            result += weechat_color("gray");
+            result += weechat::RuntimePort::default_runtime().color("gray");
             result += xhtml_to_weechat(child, in_blockquote);
-            result += weechat_color("resetcolor");
+            result += weechat::RuntimePort::default_runtime().color("resetcolor");
             continue;
         }
 
@@ -324,19 +325,19 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
                 std::string safe_href = sanitize_url(href);
                 if (link_text == safe_href)
                 {
-                    result += weechat_color("blue");
+                    result += weechat::RuntimePort::default_runtime().color("blue");
                     result += safe_href;
-                    result += weechat_color("resetcolor");
+                    result += weechat::RuntimePort::default_runtime().color("resetcolor");
                 }
                 else
                 {
                     result += link_text;
                     result += ' ';
-                    result += weechat_color("blue");
+                    result += weechat::RuntimePort::default_runtime().color("blue");
                     result += '(';
                     result += safe_href;
                     result += ')';
-                    result += weechat_color("resetcolor");
+                    result += weechat::RuntimePort::default_runtime().color("resetcolor");
                 }
             }
             else
@@ -349,11 +350,11 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
         if (name_sv == "img")
         {
             const char *alt = xmpp_stanza_get_attribute(child, "alt");
-            result += weechat_color("darkgray");
+            result += weechat::RuntimePort::default_runtime().color("darkgray");
             result += '[';
             result += (alt && *alt) ? alt : "image";
             result += ']';
-            result += weechat_color("resetcolor");
+            result += weechat::RuntimePort::default_runtime().color("resetcolor");
             continue;
         }
 

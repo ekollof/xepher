@@ -4,4 +4,4 @@
 
 #include <weechat/weechat-plugin.h>
 
-#include "breadcrumb.hh"
+#include "config/breadcrumb.hh"

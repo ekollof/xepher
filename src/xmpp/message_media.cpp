@@ -8,6 +8,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "util.hh"
 
 namespace xmpp {
@@ -212,7 +213,7 @@ std::string format_file_share_suffix(std::string_view name,
                                      std::string_view size_raw,
                                      std::string_view url)
 {
-    std::string suffix = std::string("\n") + weechat_color("cyan") + "[File: ";
+    std::string suffix = std::string("\n") + weechat::RuntimePort::default_runtime().color("cyan") + "[File: ";
     if (!name.empty())
         suffix += name;
     else
@@ -230,27 +231,27 @@ std::string format_file_share_suffix(std::string_view name,
         suffix += ")";
     }
     suffix += " " + std::string(url);
-    suffix += "]" + std::string(weechat_color("resetcolor"));
+    suffix += "]" + std::string(weechat::RuntimePort::default_runtime().color("resetcolor"));
     return suffix;
 }
 
 std::string format_encrypted_file_suffix(std::string_view name, std::string_view size_raw)
 {
-    std::string suffix = std::string("\n") + weechat_color("cyan") + "[Encrypted file: ";
+    std::string suffix = std::string("\n") + weechat::RuntimePort::default_runtime().color("cyan") + "[Encrypted file: ";
     suffix += name.empty() ? "(unnamed)" : std::string(name);
     if (!size_raw.empty())
         suffix += " (" + format_byte_size(size_raw) + ")";
-    suffix += " — downloading…]" + std::string(weechat_color("resetcolor"));
+    suffix += " — downloading…]" + std::string(weechat::RuntimePort::default_runtime().color("resetcolor"));
     return suffix;
 }
 
 std::string format_encrypted_file_saved_suffix(std::string_view name,
                                                std::string_view saved_path)
 {
-    std::string suffix = std::string("\n") + weechat_color("cyan") + "[Encrypted file: ";
+    std::string suffix = std::string("\n") + weechat::RuntimePort::default_runtime().color("cyan") + "[Encrypted file: ";
     suffix += name.empty() ? "(unnamed)" : std::string(name);
     suffix += " — already saved: " + std::string(saved_path) + "]"
-        + std::string(weechat_color("resetcolor"));
+        + std::string(weechat::RuntimePort::default_runtime().color("resetcolor"));
     return suffix;
 }
 

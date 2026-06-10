@@ -516,7 +516,7 @@ int command__whois(const void *pointer, void *data,
         }
         else
         {
-        ui->printf(fmt::format("  {}Room is anonymous — vCard request sent to room JID", weechat_color("darkgray")));
+        ui->printf(fmt::format("  {}Room is anonymous — vCard request sent to room JID", weechat::RuntimePort::default_runtime().color("darkgray")));
         }
     }
 

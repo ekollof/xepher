@@ -12,7 +12,7 @@
 #include <optional>
 #include <weechat/weechat-plugin.h>
 #include "fmt/core.h"
-#include "../plugin.hh"
+#include "plugin.hh"
 
 namespace weechat
 {

@@ -41,6 +41,7 @@
 #include "weechat/ui_port.hh"
 #include "connection/internal.hh"
 #include "xmpp/stanza_view.hh"
+#include "weechat/runtime_port.hh"
 
 // ── parse_omemo_device_id ─────────────────────────────────────────────────────
 
@@ -798,10 +799,10 @@ std::string format_og_preview_card(std::string_view title,
                                          : title;
 
     std::string line;
-    line += weechat_color("darkgray");
-    line += weechat_color("bold");
+    line += weechat::RuntimePort::default_runtime().color("darkgray");
+    line += weechat::RuntimePort::default_runtime().color("bold");
     line += std::string(display_title);
-    line += weechat_color("-bold");
+    line += weechat::RuntimePort::default_runtime().color("-bold");
 
     // Sanitize description: collapse any internal newlines / tabs / CRs to spaces
     std::string desc = std::string(description);
@@ -824,9 +825,9 @@ std::string format_og_preview_card(std::string_view title,
     if (!display_url.empty() && display_url != display_title)
     {
         line += "  ";
-        line += weechat_color("blue");
+        line += weechat::RuntimePort::default_runtime().color("blue");
         line += std::string(display_url);
-        line += weechat_color("darkgray");
+        line += weechat::RuntimePort::default_runtime().color("darkgray");
     }
 
     if (!image.empty())
@@ -834,7 +835,7 @@ std::string format_og_preview_card(std::string_view title,
         line += " [img]";
     }
 
-    line += weechat_color("resetcolor");
+    line += weechat::RuntimePort::default_runtime().color("resetcolor");
     return line;
 }
 

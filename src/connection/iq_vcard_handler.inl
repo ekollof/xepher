@@ -79,8 +79,8 @@ bool weechat::connection::handle_vcard_iq_event(xmpp_stanza_t *stanza, std::stri
         if (!val.empty())
             target_ui->printf(fmt::format(
                 "  {}{}{} {}",
-                weechat_color("bold"), label,
-                weechat_color("reset"), val));
+                weechat::RuntimePort::default_runtime().color("bold"), label,
+                weechat::RuntimePort::default_runtime().color("reset"), val));
     };
 
     if (is_whois)

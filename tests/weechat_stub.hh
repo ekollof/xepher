@@ -99,6 +99,8 @@ public:
 
     [[nodiscard]] std::string version_string() override { return version_; }
     [[nodiscard]] const char *color(std::string_view) override { return ""; }
+    [[nodiscard]] const char *prefix(std::string_view) override { return ""; }
+    [[nodiscard]] std::string xmpp_color(std::string_view) override { return ""; }
 
 private:
     std::string version_;

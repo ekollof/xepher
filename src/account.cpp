@@ -23,6 +23,7 @@
 #include <lmdb++.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
 #include "config.hh"
@@ -59,7 +60,7 @@ void weechat::log_emit(void *const userdata, const xmpp_log_level_t level,
     weechat::UiPort::for_buffer(account ? account->buffer : nullptr)->printf_date_tags(
         0, tags ? tags : "",
         fmt::format(fmt::runtime(_("%s%s (%s): %s")),
-                    weechat_prefix("network"), area,
+                    weechat::RuntimePort::default_runtime().prefix("network"), area,
                     log_level_name[level], msg));
 }
 

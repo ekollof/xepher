@@ -5,9 +5,8 @@
 #include <weechat/weechat-plugin.h>
 #include <strophe.h>
 
-#include "../plugin.hh"
-#include "../account.hh"
-#include "account.hh"
+#include "plugin.hh"
+#include "config/account.hh"
 
 bool weechat::config_account::write()
 {

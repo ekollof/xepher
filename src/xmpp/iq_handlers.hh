@@ -7,8 +7,8 @@
 #include <ctime>
 #include <string_view>
 
-#include "../test_export.hh"
-#include "../weechat/runtime_port.hh"
+#include "test_export.hh"
+#include "weechat/runtime_port.hh"
 #include "node.hh"
 #include "stanza_view.hh"
 

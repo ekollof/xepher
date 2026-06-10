@@ -220,15 +220,15 @@ void weechat::account::mam_cache_load_messages(std::string_view channel_jid, str
                     {
                         weechat::UiPort::for_buffer(buffer)->printf_date_tags(timestamp, tags.c_str(),
                             fmt::format("{}{}\t{}[Message deleted]{}",
-                                        weechat_color("darkgray"), from,
-                                        weechat_color("darkgray"),
-                                        weechat_color("resetcolor")));
+                                        weechat::RuntimePort::default_runtime().color("darkgray"), from,
+                                        weechat::RuntimePort::default_runtime().color("darkgray"),
+                                        weechat::RuntimePort::default_runtime().color("resetcolor")));
                     }
                     else
                     {
                         weechat::UiPort::for_buffer(buffer)->printf_date_tags(timestamp, tags.c_str(),
                             fmt::format("{}{}\t{}",
-                                        weechat_color("darkgray"), from, body));
+                                        weechat::RuntimePort::default_runtime().color("darkgray"), from, body));
                     }
                     count++;
                 }

@@ -20,6 +20,7 @@
 #include "account.hh"
 #include "user.hh"
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/node.hh"
 #include "xmpp/xep-0084.inl"
@@ -281,7 +282,7 @@ void weechat::avatar::load_for_user(account& acc, user& user)
         
         weechat::UiPort::for_buffer(acc.buffer)->printf_date_tags(0, "xmpp_avatar",
             fmt::format("{}Loaded cached avatar for {} (hash: {:.8}...)",
-                        weechat_prefix("network"), user.id, hash));
+                        weechat::RuntimePort::default_runtime().prefix("network"), user.id, hash));
     }
 }
 

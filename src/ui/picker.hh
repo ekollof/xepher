@@ -12,8 +12,9 @@
 #include <vector>
 #include <functional>
 #include <memory>
-    #include "../plugin.hh"
-#include "../weechat/ui_port.hh"
+#include "plugin.hh"
+#include "weechat/runtime_port.hh"
+#include "weechat/ui_port.hh"
 #include <weechat/weechat-plugin.h>
 
 namespace weechat::ui {
@@ -167,27 +168,27 @@ public:
 
         // Row 0: header / instructions / current filter
         std::string header;
-        header += weechat_color("bold");
+        header += weechat::RuntimePort::default_runtime().color("bold");
         header += title_;
-        header += weechat_color("reset");
+        header += weechat::RuntimePort::default_runtime().color("reset");
         if (!filter_.empty()) {
             header += "  ";
-            header += weechat_color("yellow");
+            header += weechat::RuntimePort::default_runtime().color("yellow");
             header += "[search: ";
             header += filter_;
             header += "]";
-            header += weechat_color("reset");
+            header += weechat::RuntimePort::default_runtime().color("reset");
         }
         header += "  ";
-        header += weechat_color("darkgray");
+        header += weechat::RuntimePort::default_runtime().color("darkgray");
         header += "[Enter=select  ↑↓=navigate  q=cancel  type to search]";
-        header += weechat_color("reset");
+        header += weechat::RuntimePort::default_runtime().color("reset");
         weechat::UiPort::for_buffer(buf_)->printf_y(0, header);
 
         if (visible_.empty()) {
             weechat::UiPort::for_buffer(buf_)->printf_y(1,
                 fmt::format("  {}(no matches){}",
-                            weechat_color("darkgray"), weechat_color("reset")));
+                            weechat::RuntimePort::default_runtime().color("darkgray"), weechat::RuntimePort::default_runtime().color("reset")));
             return;
         }
 
@@ -197,13 +198,13 @@ public:
 
             std::string line;
             if (is_sel)
-                line += weechat_color("reverse");
+                line += weechat::RuntimePort::default_runtime().color("reverse");
 
             if (!e.selectable) {
-                line += weechat_color("darkgray");
+                line += weechat::RuntimePort::default_runtime().color("darkgray");
                 line += "  ";
                 line += e.label;
-                line += weechat_color("reset");
+                line += weechat::RuntimePort::default_runtime().color("reset");
             } else {
                 line += "  ";
                 // Highlight matching portion in the label if filtering.
@@ -214,16 +215,16 @@ public:
                 }
                 if (!e.sublabel.empty()) {
                     line += "  ";
-                    line += weechat_color("darkgray");
+                    line += weechat::RuntimePort::default_runtime().color("darkgray");
                     if (!filter_.empty()) {
                         line += highlight_match(e.sublabel, filter_, false);
                     } else {
                         line += e.sublabel;
                     }
-                    line += weechat_color("reset");
+                    line += weechat::RuntimePort::default_runtime().color("reset");
                 }
                 if (is_sel)
-                    line += weechat_color("reset");
+                    line += weechat::RuntimePort::default_runtime().color("reset");
             }
 
             weechat::UiPort::for_buffer(buf_)->printf_y(row + 1, line);
@@ -353,12 +354,12 @@ private:
         // Temporarily suspend reverse video so the highlight colour is visible.
         std::string result;
         result += std::string(text.substr(0, pos));
-        if (is_selected) result += weechat_color("reset");
-        result += weechat_color("yellow");
-        result += weechat_color("bold");
+        if (is_selected) result += weechat::RuntimePort::default_runtime().color("reset");
+        result += weechat::RuntimePort::default_runtime().color("yellow");
+        result += weechat::RuntimePort::default_runtime().color("bold");
         result += std::string(text.substr(pos, needle.size()));
-        result += weechat_color("reset");
-        if (is_selected) result += weechat_color("reverse");
+        result += weechat::RuntimePort::default_runtime().color("reset");
+        if (is_selected) result += weechat::RuntimePort::default_runtime().color("reverse");
         result += std::string(text.substr(pos + needle.size()));
         return result;
     }

@@ -118,7 +118,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             const std::string def = prefs_el.attr_string("default");
             prefs_ui->printf_network(fmt::format(
                 "MAM preferences: default={}{}{}",
-                weechat_color("bold"), !def.empty() ? def.c_str() : "(unset)", weechat_color("-bold")));
+                weechat::RuntimePort::default_runtime().color("bold"), !def.empty() ? def.c_str() : "(unset)", weechat::RuntimePort::default_runtime().color("-bold")));
 
             // Always list
             const ::xmpp::StanzaView always_el = prefs_el.child("always");
@@ -661,9 +661,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             ? fmt::format(" ({})", item.affiliation) : std::string{};
                         ui->printf(fmt::format(
                             "  {}{}{}  {}{}{}{}",
-                            weechat_color("chat_nick"), jid, weechat_color("reset"),
-                            weechat_color("chat_value"), item.nick,
-                            weechat_color("reset"), aff_suffix));
+                            weechat::RuntimePort::default_runtime().color("chat_nick"), jid, weechat::RuntimePort::default_runtime().color("reset"),
+                            weechat::RuntimePort::default_runtime().color("chat_value"), item.nick,
+                            weechat::RuntimePort::default_runtime().color("reset"), aff_suffix));
                     }
                     return true;
                 }
@@ -716,12 +716,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     {
                         ui->printf(fmt::format(
                             "  {}{}{}: {}{}{}",
-                            weechat_color("chat_nick"),
+                            weechat::RuntimePort::default_runtime().color("chat_nick"),
                             field.label.empty() ? field.var : field.label,
-                            weechat_color("reset"),
-                            weechat_color("chat_value"),
+                            weechat::RuntimePort::default_runtime().color("reset"),
+                            weechat::RuntimePort::default_runtime().color("chat_value"),
                             field.value.empty() ? "(empty)" : field.value,
-                            weechat_color("reset")));
+                            weechat::RuntimePort::default_runtime().color("reset")));
                     }
                     return true;
                 }

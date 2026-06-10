@@ -2,12 +2,12 @@
 // License, version 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "buffer_port.hh"
+#include "weechat/buffer_port.hh"
 
 #include <string>
 #include <weechat/weechat-plugin.h>
 
-#include "../plugin.hh"
+#include "plugin.hh"
 
 namespace weechat {
 

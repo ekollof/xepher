@@ -9,7 +9,7 @@
 #include <string_view>
 #include <strophe.h>
 
-#include "../test_export.hh"
+#include "test_export.hh"
 
 namespace xmpp {
 

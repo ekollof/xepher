@@ -20,7 +20,7 @@
 #include <vector>
 #include <strophe.h>
 
-#include "../test_export.hh"
+#include "test_export.hh"
 
 XMPP_TEST_EXPORT std::string get_name(xmpp_stanza_t *stanza);
 
@@ -583,6 +583,14 @@ inline xmpp_stanza_t *stanza_make_field(xmpp_ctx_t *ctx,
     auto sp = fs.build(ctx);
     xmpp_stanza_clone(sp.get());
     return sp.get();
+}
+
+// Attach a built child stanza to an existing parent (caller retains child ownership via shared_ptr).
+inline void stanza_attach_child(xmpp_stanza_t *parent,
+                                const std::shared_ptr<xmpp_stanza_t> &child)
+{
+    if (parent && child)
+        xmpp_stanza_add_child(parent, child.get());
 }
 
 // Parse a raw XML string into a stanza tree. Intended for the /xml debug command

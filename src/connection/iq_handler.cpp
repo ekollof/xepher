@@ -25,6 +25,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/atom.hh"

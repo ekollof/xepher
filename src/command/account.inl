@@ -138,11 +138,11 @@ void command__display_account(weechat::account *account)
     {
         num_channels = 0;
         num_pv = 0;
-        weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(" {} {}{}{} {}({}{}{}) [{}{}{}]{}, {} {}, {} pv", (account->connected()) ? "*" : " ", weechat_color("chat_server"), account->name.data(), weechat_color("reset"), weechat_color("chat_delimiters"), weechat_color("chat_server"), account->jid().data(), weechat_color("chat_delimiters"), weechat_color("reset"), (account->connected()) ? _("connected") : _("not connected"), weechat_color("chat_delimiters"), weechat_color("reset"), num_channels, NG_("channel", "channels", num_channels), num_pv));
+        weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(" {} {}{}{} {}({}{}{}) [{}{}{}]{}, {} {}, {} pv", (account->connected()) ? "*" : " ", weechat::RuntimePort::default_runtime().color("chat_server"), account->name.data(), weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("chat_server"), account->jid().data(), weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("reset"), (account->connected()) ? _("connected") : _("not connected"), weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("reset"), num_channels, NG_("channel", "channels", num_channels), num_pv));
     }
     else
     {
-        weechat::UiPort::for_buffer(nullptr)->printf(fmt::format("   {}{}{} {}({}{}{}){}", weechat_color("chat_server"), account->name.data(), weechat_color("reset"), weechat_color("chat_delimiters"), weechat_color("chat_server"), account->jid().data(), weechat_color("chat_delimiters"), weechat_color("reset")));
+        weechat::UiPort::for_buffer(nullptr)->printf(fmt::format("   {}{}{} {}({}{}{}){}", weechat::RuntimePort::default_runtime().color("chat_server"), account->name.data(), weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("chat_server"), account->jid().data(), weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("reset")));
     }
 }
 
@@ -584,7 +584,7 @@ void command__add_account(const char *name, const char *jid, const char *passwor
     if (jid)
         account->nickname(::jid(nullptr, jid).local);
 
-            weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("{}: account {}{}{} {}({}{}{}){} added")), weechat_color("chat_server"), account->name.data(), weechat_color("reset"), weechat_color("chat_delimiters"), weechat_color("chat_server"), jid ? jid : "???", weechat_color("chat_delimiters"), weechat_color("reset")));
+            weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("{}: account {}{}{} {}({}{}{}){} added")), weechat::RuntimePort::default_runtime().color("chat_server"), account->name.data(), weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("chat_server"), jid ? jid : "???", weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("reset")));
 }
 
 void command__account_add(struct t_gui_buffer *buffer, int argc, char **argv)
@@ -941,7 +941,7 @@ void command__account_delete(struct t_gui_buffer *buffer, int argc, char **argv)
     }
     weechat::accounts.erase(account->name);
     weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("{}: account {}{}{} has been deleted")),
-        weechat_color("chat_server"), !account_name.empty() ? account_name.data() : "???", weechat_color("reset")));
+        weechat::RuntimePort::default_runtime().color("chat_server"), !account_name.empty() ? account_name.data() : "???", weechat::RuntimePort::default_runtime().color("reset")));
 }
 
 int command__account(const void *pointer, void *data,

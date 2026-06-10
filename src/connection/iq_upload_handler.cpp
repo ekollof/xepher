@@ -20,6 +20,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "account.hh"
 #include "channel.hh"
 #include "connection.hh"

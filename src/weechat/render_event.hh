@@ -12,7 +12,7 @@
 
 struct t_gui_buffer;
 
-#include "../test_export.hh"
+#include "test_export.hh"
 
 namespace weechat {
 

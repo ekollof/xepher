@@ -21,6 +21,7 @@
 #include <lmdb++.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
 #include "config.hh"

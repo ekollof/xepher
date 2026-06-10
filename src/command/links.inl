@@ -139,11 +139,11 @@ int command__links(COMMAND_ARGS)
 
     // ── Print the list ────────────────────────────────────────────────────────
 
-    const char *pfx  = weechat_prefix("network");
-    const char *bold = weechat_color("bold");
-    const char *rst  = weechat_color("reset");
-    const char *dim  = weechat_color("darkgray");
-    const char *cyan = weechat_color("cyan");
+    const char *pfx  = weechat::RuntimePort::default_runtime().prefix("network");
+    const char *bold = weechat::RuntimePort::default_runtime().color("bold");
+    const char *rst  = weechat::RuntimePort::default_runtime().color("reset");
+    const char *dim  = weechat::RuntimePort::default_runtime().color("darkgray");
+    const char *cyan = weechat::RuntimePort::default_runtime().color("cyan");
 
         ui->printf(fmt::format("{}xmpp/links: {} URL{} in this buffer:", pfx, urls.size(), urls.size() == 1 ? "" : "s"));
 

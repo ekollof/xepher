@@ -287,7 +287,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                 weechat::UiPort::for_buffer(muc_buf)->printf_date_tags(
                                     mmn_ts, "xmpp_message,notify_highlight,log1",
                                     fmt::format("{}{}\t{}",
-                                        weechat_prefix("action"),
+                                        weechat::RuntimePort::default_runtime().prefix("action"),
                                         mmn_nick, mmn_text));
                             }
                         }
@@ -589,7 +589,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     weechat::UiPort::for_buffer(ch->buffer)->printf_date_tags(
                         0, "xmpp_attention,notify_highlight",
                         fmt::format("{}{} is requesting your attention! (/buzz)",
-                            weechat_prefix("network"), bare_s));
+                            weechat::RuntimePort::default_runtime().prefix("network"), bare_s));
                 }
                 return 1;
             }
@@ -633,9 +633,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
                             "{}{}{}{}",
                             _("Room activity: "),
-                            weechat_color("chat_nick_self"),
+                            weechat::RuntimePort::default_runtime().color("chat_nick_self"),
                             jid,
-                            weechat_color("reset")));
+                            weechat::RuntimePort::default_runtime().color("reset")));
                     }
                 }
                 return 1;
@@ -705,14 +705,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     {
                         rx_ui->printf_date_tags(0, "notify_none",
                             fmt::format("{}{} retracted a message",
-                                weechat_prefix("network"), rx_from));
+                                weechat::RuntimePort::default_runtime().prefix("network"), rx_from));
                     }
                     else if (retraction_lookup
                              != weechat::LineStoreLookupResult::SenderRejected)
                     {
                         rx_ui->printf_date_tags(0, "notify_none",
                             fmt::format("{}{} retracted a message (not found in buffer)",
-                                weechat_prefix("network"), rx_from));
+                                weechat::RuntimePort::default_runtime().prefix("network"), rx_from));
                     }
                 }
                 return 1;
@@ -1165,7 +1165,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
                     0, "notify_none",
                     fmt::format("{}OMEMO Decryption Error ({})",
-                        weechat_prefix("error"), from));
+                        weechat::RuntimePort::default_runtime().prefix("error"), from));
                 return 1;
             }
         }
@@ -1289,26 +1289,26 @@ message_handler_after_omemo:
             {
                 mod_ui->printf_date_tags(0, "notify_none",
                     fmt::format("{}{} moderated a message: {}",
-                        weechat_prefix("network"), from_bare, *moderation->reason));
+                        weechat::RuntimePort::default_runtime().prefix("network"), from_bare, *moderation->reason));
             }
             else
             {
                 mod_ui->printf_date_tags(0, "notify_none",
                     fmt::format("{}{} moderated a message",
-                        weechat_prefix("network"), from_bare));
+                        weechat::RuntimePort::default_runtime().prefix("network"), from_bare));
             }
         }
         else if (moderation->reason)
         {
             mod_ui->printf_date_tags(0, "notify_none",
                 fmt::format("{}{} moderated a message (not found in buffer): {}",
-                    weechat_prefix("network"), from_bare, *moderation->reason));
+                    weechat::RuntimePort::default_runtime().prefix("network"), from_bare, *moderation->reason));
         }
         else
         {
             mod_ui->printf_date_tags(0, "notify_none",
                 fmt::format("{}{} moderated a message (not found in buffer)",
-                    weechat_prefix("network"), from_bare));
+                    weechat::RuntimePort::default_runtime().prefix("network"), from_bare));
         }
 
         return 1;
@@ -1352,13 +1352,13 @@ message_handler_after_omemo:
         {
             retr_ui->printf_date_tags(0, "notify_none",
                 fmt::format("{}{} retracted a message",
-                    weechat_prefix("network"), from_bare));
+                    weechat::RuntimePort::default_runtime().prefix("network"), from_bare));
         }
         else if (retraction_lookup != weechat::LineStoreLookupResult::SenderRejected)
         {
             retr_ui->printf_date_tags(0, "notify_none",
                 fmt::format("{}{} retracted a message (not found in buffer)",
-                    weechat_prefix("network"), from_bare));
+                    weechat::RuntimePort::default_runtime().prefix("network"), from_bare));
         }
 
         return 1;
@@ -1799,16 +1799,16 @@ message_handler_after_omemo:
                 if (!desc_text.empty())
                 {
                     oob_suffix = fmt::format(" {}[URL: {} ({})]{}",
-                                            weechat_color("blue"),
+                                            weechat::RuntimePort::default_runtime().color("blue"),
                                             desc_text, url_text,
-                                            weechat_color("resetcolor"));
+                                            weechat::RuntimePort::default_runtime().color("resetcolor"));
                 }
                 else
                 {
                     oob_suffix = fmt::format(" {}[URL: {}]{}",
-                                            weechat_color("blue"),
+                                            weechat::RuntimePort::default_runtime().color("blue"),
                                             url_text,
-                                            weechat_color("resetcolor"));
+                                            weechat::RuntimePort::default_runtime().color("resetcolor"));
                 }
         }
     }
@@ -2114,7 +2114,7 @@ message_handler_after_omemo:
     else if (weechat_string_match(text, "/me *", 0))
     {
         std::string msg = fmt::format("{}\t{}{}{} {}",
-                                      weechat_prefix("action"),
+                                      weechat::RuntimePort::default_runtime().prefix("action"),
                                       edit, display_prefix,
                                       encrypted_glyph,
                                       display_text ? display_text+4 : "");
@@ -2299,35 +2299,28 @@ message_handler_after_omemo:
 
 xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional<std::string> *hash, const char *node)
 {
-    // Build <query xmlns='http://jabber.org/protocol/disco#info'> via spec builder.
     struct query_spec : stanza::spec {
         query_spec(const char *n) : spec("query") {
             attr("xmlns", "http://jabber.org/protocol/disco#info");
             if (n && *n) attr("node", n);
         }
     } qs(node);
-    auto query_sp = qs.build(account.context);
-    xmpp_stanza_t *query = query_sp.get();
 
-    std::unique_ptr<char, decltype(&free)> client_name(
-            weechat_string_eval_expression(
-                "weechat ${info:version}", nullptr, nullptr, nullptr),
-            &free);
+    const std::string client_name = fmt::format(
+        "weechat {}", weechat::RuntimePort::default_runtime().version_string());
     char **serial = weechat_string_dyn_alloc(256);
     weechat_string_dyn_concat(serial, "client/pc//", -1);
-    weechat_string_dyn_concat(serial, client_name.get(), -1);
+    weechat_string_dyn_concat(serial, client_name.c_str(), -1);
     weechat_string_dyn_concat(serial, "<", -1);
 
-    // Build <identity category='client' name='...' type='pc'/> via spec builder.
     struct identity_spec : stanza::spec {
-        identity_spec(const char *name) : spec("identity") {
+        identity_spec(std::string_view name) : spec("identity") {
             attr("category", "client");
-            attr("name", name ? name : "");
+            attr("name", name);
             attr("type", "pc");
         }
-    } ids(client_name.get());
-    auto id_sp = ids.build(account.context);
-    xmpp_stanza_add_child(query, id_sp.get());
+    } ids(client_name);
+    qs.child(ids);
 
     const std::vector<std::string_view> advertised_features {
         "http://jabber.org/protocol/caps",
@@ -2410,25 +2403,20 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
     for (const auto &ns : sorted_features)
     {
         struct feature_spec : stanza::spec {
-            feature_spec(const char *v) : spec("feature") { attr("var", v); }
-        } fs(ns.c_str());
-        auto fsp = fs.build(account.context);
-        xmpp_stanza_add_child(query, fsp.get());
+            feature_spec(std::string_view v) : spec("feature") { attr("var", v); }
+        } fs(ns);
+        qs.child(fs);
 
-        // XEP-0115 hash input must use sorted features.
-        weechat_string_dyn_concat(serial, ns.c_str(), -1);
+        weechat_string_dyn_concat(serial, ns.data(), static_cast<int>(ns.size()));
         weechat_string_dyn_concat(serial, "<", -1);
     }
 
-    // Build <x xmlns='jabber:x:data' type='result'> via spec builder.
     struct xdata_spec : stanza::spec {
         xdata_spec() : spec("x") {
             attr("xmlns", "jabber:x:data");
             attr("type", "result");
         }
     } xs;
-    auto x_sp = xs.build(account.context);
-    xmpp_stanza_t *x = x_sp.get();
 
     static struct utsname osinfo;
     if (uname(&osinfo) < 0)
@@ -2441,41 +2429,49 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
     // XEP-0115 §5.1: the S string for a form is:
     //   form_type_value< (FORM_TYPE value only, NOT "FORM_TYPE<value")
     //   then for each non-FORM_TYPE field sorted by var: var<val<
+    struct value_spec1 : stanza::spec {
+        explicit value_spec1(const char *v) : spec("value") { text(v ? v : ""); }
+    };
+    struct field_spec1 : stanza::spec {
+        field_spec1(const char *var_, const char *val_, const char *type_)
+            : spec("field")
+        {
+            attr("var", var_);
+            if (type_) attr("type", type_);
+            value_spec1 vs(val_);
+            child(vs);
+        }
+    };
     auto add_feature1 = [&](const char *var, const char *type, const char *val) {
-        xmpp_stanza_t *f = stanza_make_field(account.context, var, val, type);
-        xmpp_stanza_add_child(x, f);
-        xmpp_stanza_release(f);
+        field_spec1 fs(var, val, type);
+        xs.child(fs);
         if (std::string_view(var) != "FORM_TYPE") {
-            // non-FORM_TYPE fields: var<val<
             weechat_string_dyn_concat(serial, var, -1);
             weechat_string_dyn_concat(serial, "<", -1);
         }
-        // FORM_TYPE field: just the value (the form type URI); non-FORM_TYPE: the value
         weechat_string_dyn_concat(serial, val, -1);
         weechat_string_dyn_concat(serial, "<", -1);
     };
-    // Add a two-value x-data field via builder and append both values to the serial.
+    struct value_spec2 : stanza::spec {
+        explicit value_spec2(const char *v) : spec("value") { text(v ? v : ""); }
+    };
+    struct field_spec2 : stanza::spec {
+        field_spec2(const char *var_, const char *type_,
+                    const char *v1, const char *v2)
+            : spec("field")
+        {
+            attr("var", var_);
+            if (type_) attr("type", type_);
+            value_spec2 vs1(v1);
+            value_spec2 vs2(v2);
+            child(vs1);
+            child(vs2);
+        }
+    };
     auto add_feature2 = [&](const char *var, const char *type,
                             const char *val1, const char *val2) {
-        // Build <field var='...' type='...'><value>val1</value><value>val2</value></field>
-        struct value_spec2 : stanza::spec {
-            explicit value_spec2(const char *v) : spec("value") { text(v); }
-        };
-        struct field_spec2 : stanza::spec {
-            field_spec2(const char *var_, const char *type_,
-                        const char *v1, const char *v2)
-                : spec("field")
-            {
-                attr("var", var_);
-                if (type_) attr("type", type_);
-                value_spec2 vs1(v1);
-                value_spec2 vs2(v2);
-                child(vs1);
-                child(vs2);
-            }
-        } fs2(var, type, val1, val2);
-        auto fsp2 = fs2.build(account.context);
-        xmpp_stanza_add_child(x, fsp2.get());
+        field_spec2 fs2(var, type, val1, val2);
+        xs.child(fs2);
         weechat_string_dyn_concat(serial, var,  -1);
         weechat_string_dyn_concat(serial, "<",  -1);
         weechat_string_dyn_concat(serial, val1, -1);
@@ -2486,20 +2482,20 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
 
     add_feature1("FORM_TYPE", "hidden", "urn:xmpp:dataforms:softwareinfo");
     add_feature2("ip_version", "text-multi", "ipv4", "ipv6");
-    // XEP-0092 §5 MUST NOT: an application MUST provide a way to disable
-    // sharing OS information.  Gate on look.share_os_info (default on).
     if (weechat_config_boolean(weechat::config::instance->look.share_os_info))
     {
         add_feature1("os",         nullptr, osinfo.sysname);
         add_feature1("os_version", nullptr, osinfo.release);
     }
     add_feature1("software",         nullptr, "weechat");
-    add_feature1("software_version", nullptr, weechat_info_get("version", nullptr));
+    add_feature1("software_version", nullptr,
+                  weechat::RuntimePort::default_runtime().version_string().c_str());
 
-    xmpp_stanza_add_child(query, x);
+    qs.child(xs);
 
+    auto query_sp = qs.build(account.context);
     xmpp_stanza_set_type(reply, "result");
-    xmpp_stanza_add_child(reply, query);
+    stanza_attach_child(reply, query_sp);
 
     // XEP-0115 requires SHA-1; use EVP_Digest (present in both OpenSSL and
     // LibreSSL) instead of the libstrophe-specific xmpp_sha1_* API.
@@ -2539,19 +2535,19 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
     auto form_ui = weechat::UiPort::for_buffer(buf);
     form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
         fmt::format("{}{}── Ad-Hoc Form{}{}{} ──{}",
-            weechat_prefix("network"),
-            weechat_color("bold"),
+            weechat::RuntimePort::default_runtime().prefix("network"),
+            weechat::RuntimePort::default_runtime().color("bold"),
             title.empty() ? "" : ": ",
             title.empty() ? "" : title,
             title.empty() ? "" : "",
-            weechat_color("-bold")));
+            weechat::RuntimePort::default_runtime().color("-bold")));
     if (!instr.empty())
         form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
             fmt::format("{}  {}{}{}",
-                weechat_prefix("network"),
-                weechat_color("italic"),
+                weechat::RuntimePort::default_runtime().prefix("network"),
+                weechat::RuntimePort::default_runtime().color("italic"),
                 instr,
-                weechat_color("-italic")));
+                weechat::RuntimePort::default_runtime().color("-italic")));
 
     int field_index = 0;
 
@@ -2595,10 +2591,10 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
             for (auto &v : values)
                 form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
                     fmt::format("{}  {}{}{}",
-                        weechat_prefix("network"),
-                        weechat_color("darkgray"),
+                        weechat::RuntimePort::default_runtime().prefix("network"),
+                        weechat::RuntimePort::default_runtime().color("darkgray"),
                         v,
-                        weechat_color("resetcolor")));
+                        weechat::RuntimePort::default_runtime().color("resetcolor")));
             continue;
         }
 
@@ -2616,15 +2612,15 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
             {
                 const auto &v = values[0];
                 bool on = (v == "1" || v == "true");
-                val_display  = std::string(weechat_color(on ? "green" : "red"));
+                val_display  = std::string(weechat::RuntimePort::default_runtime().color(on ? "green" : "red"));
                 val_display += on ? "true" : "false";
-                val_display += weechat_color("resetcolor");
+                val_display += weechat::RuntimePort::default_runtime().color("resetcolor");
             }
         }
         else if (values.empty())
         {
-            val_display = std::string(weechat_color("darkgray")) + "(empty)"
-                        + weechat_color("resetcolor");
+            val_display = std::string(weechat::RuntimePort::default_runtime().color("darkgray")) + "(empty)"
+                        + weechat::RuntimePort::default_runtime().color("resetcolor");
         }
         else if (values.size() == 1)
         {
@@ -2636,8 +2632,8 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
             bool first = true;
             std::ranges::for_each(values, [&](const auto &v) {
                 if (!first)
-                    val_display += std::string(weechat_color("darkgray"))
-                                   + " | " + weechat_color("resetcolor");
+                    val_display += std::string(weechat::RuntimePort::default_runtime().color("darkgray"))
+                                   + " | " + weechat::RuntimePort::default_runtime().color("resetcolor");
                 first = false;
                 val_display += v;
             });
@@ -2664,9 +2660,9 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
                     if (!oval.empty() && v == oval) { selected = true; break; }
 
                 if (selected)
-                    options_str += weechat_color("green");
+                    options_str += weechat::RuntimePort::default_runtime().color("green");
                 else
-                    options_str += weechat_color("darkgray");
+                    options_str += weechat::RuntimePort::default_runtime().color("darkgray");
 
                 options_str += oval.empty() ? "?" : oval;
                 if (olabel && !oval.empty() && std::string_view(olabel) != oval)
@@ -2676,9 +2672,9 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
                     options_str += ')';
                 }
                 if (selected)
-                    options_str += weechat_color("resetcolor");
+                    options_str += weechat::RuntimePort::default_runtime().color("resetcolor");
                 else
-                    options_str += weechat_color("resetcolor");
+                    options_str += weechat::RuntimePort::default_runtime().color("resetcolor");
             }
         }
 
@@ -2699,19 +2695,19 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         // Print: "  N. Label [var/type] = value"
         form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
             fmt::format("{}  {}{}.{} {}{}{}{} {}{}{}{}{}{} = {}{}",
-                weechat_prefix("network"),
-                weechat_color("darkgray"), field_index, weechat_color("resetcolor"),
-                weechat_color("bold"),
+                weechat::RuntimePort::default_runtime().prefix("network"),
+                weechat::RuntimePort::default_runtime().color("darkgray"), field_index, weechat::RuntimePort::default_runtime().color("resetcolor"),
+                weechat::RuntimePort::default_runtime().color("bold"),
                 label ? label : (var ? var : "?"),
                 required ? "*" : "",
-                weechat_color("-bold"),
-                weechat_color("darkgray"),
-                weechat_color(type_color),
+                weechat::RuntimePort::default_runtime().color("-bold"),
+                weechat::RuntimePort::default_runtime().color("darkgray"),
+                weechat::RuntimePort::default_runtime().color(type_color),
                 var ? var : "?",
                 ftype ? "/" : "",
                 ftype ? ftype : "",
-                weechat_color("darkgray"),
-                weechat_color("resetcolor"),
+                weechat::RuntimePort::default_runtime().color("darkgray"),
+                weechat::RuntimePort::default_runtime().color("resetcolor"),
                 val_display,
                 options_str.empty() ? "" : (std::string("  ") + options_str)));
     }
@@ -2720,9 +2716,9 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
     if (session_id && node && jid)
         form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
             fmt::format("{}  {}Submit:{} /adhoc {} {} {} {}var{}={}value{} ...",
-                weechat_prefix("network"),
-                weechat_color("gray"), weechat_color("resetcolor"),
+                weechat::RuntimePort::default_runtime().prefix("network"),
+                weechat::RuntimePort::default_runtime().color("gray"), weechat::RuntimePort::default_runtime().color("resetcolor"),
                 jid, node, session_id,
-                weechat_color("cyan"), weechat_color("resetcolor"),
-                weechat_color("yellow"), weechat_color("resetcolor")));
+                weechat::RuntimePort::default_runtime().color("cyan"), weechat::RuntimePort::default_runtime().color("resetcolor"),
+                weechat::RuntimePort::default_runtime().color("yellow"), weechat::RuntimePort::default_runtime().color("resetcolor")));
 }

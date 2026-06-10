@@ -68,7 +68,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                 weechat::UiPort::for_buffer(account.buffer)->printf_date_tags(
                     0, "no_trigger,notify_none",
                     fmt::format("{}Upload slot received, uploading file...",
-                                weechat_prefix("network")));
+                                weechat::RuntimePort::default_runtime().prefix("network")));
                 
                 // Verify file exists (non-blocking, no FILE* needed)
                 if (access(req.filepath.c_str(), R_OK) != 0)

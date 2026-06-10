@@ -10,7 +10,7 @@
 #include <vector>
 #include <fmt/core.h>
 
-#include "../util.hh"
+#include "util.hh"
 #include "node.hh"
 #pragma GCC visibility push(default)
 #include "ns.hh"

@@ -2,7 +2,7 @@
 // License, version 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "icat_preview.hh"
+#include "weechat/icat_preview.hh"
 
 #include <filesystem>
 #include <fstream>
@@ -15,10 +15,10 @@
 #include <fmt/core.h>
 #include <weechat/weechat-plugin.h>
 
-#include "../account.hh"
-#include "../config.hh"
-#include "../plugin.hh"
-#include "../util.hh"
+#include "account.hh"
+#include "config.hh"
+#include "plugin.hh"
+#include "util.hh"
 
 namespace weechat {
 

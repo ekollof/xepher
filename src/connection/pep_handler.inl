@@ -424,16 +424,16 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
                                 weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
                                     0, "xmpp_feed,notify_none",
                                     fmt::format("{}Feed title:{} {}",
-                                        weechat_prefix("network"),
-                                        weechat_color("reset"),
+                                        weechat::RuntimePort::default_runtime().prefix("network"),
+                                        weechat::RuntimePort::default_runtime().color("reset"),
                                         af.title));
                             }
                             if (!af.author.empty())
                                 weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
                                     0, "xmpp_feed,notify_none",
                                     fmt::format("  {}Author:{} {}",
-                                        weechat_color("darkgray"),
-                                        weechat_color("reset"),
+                                        weechat::RuntimePort::default_runtime().color("darkgray"),
+                                        weechat::RuntimePort::default_runtime().color("reset"),
                                         af.author));
                             if (!af.subtitle.empty())
                                 weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
@@ -493,7 +493,7 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
                             weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
                                 0, "xmpp_feed,notify_message",
                                 fmt::format("{}[{}] New item (no content)",
-                                    weechat_prefix("network"),
+                                    weechat::RuntimePort::default_runtime().prefix("network"),
                                     std::string(node_sv)));
                         }
                     }

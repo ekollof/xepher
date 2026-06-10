@@ -18,6 +18,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "color.hh"
 #include "account.hh"
 #include "config.hh"
@@ -698,7 +699,7 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     if (this->id == id && type == weechat::channel::chat_type::MUC)
     {
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "log2",
-            fmt::format("{}MUC: {}", weechat_prefix("network"), id));
+            fmt::format("{}MUC: {}", weechat::RuntimePort::default_runtime().prefix("network"), id));
         return std::nullopt;
     }
 
@@ -760,51 +761,51 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
              && type == weechat::channel::chat_type::MUC)
     {
         std::string msg = fmt::format("{}{}{}{}{} {}{}{}{} {}{}{}{}{}{}{}{}{}{}{}{}{}{}",
-                                      weechat_prefix("join"),
+                                      weechat::RuntimePort::default_runtime().prefix("join"),
                                       user_prefix,
                                       client ? " (" : "",
                                       client ? client : "",
                                       client ? ")" : "",
                                       user->profile.status.has_value() ? "is " : "",
-                                      weechat::xmpp_color("irc.color.message_join").c_str(),
+                                      weechat::RuntimePort::default_runtime().xmpp_color("irc.color.message_join").c_str(),
                                       user->profile.status.has_value() ? user->profile.status->c_str() : (user->profile.idle.has_value() ? "idle" : "entered"),
-                                      weechat::xmpp_color("reset").c_str(),
+                                      weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str(),
                                       id,
                                       user->profile.status_text.has_value() ? " [" : "",
                                       user->profile.status_text.has_value() ? user->profile.status_text->c_str() : "",
                                       user->profile.status_text.has_value() ? "]" : "",
-                                      weechat::xmpp_color("yellow").c_str(), " as ", weechat::xmpp_color("reset").c_str(),
+                                      weechat::RuntimePort::default_runtime().xmpp_color("yellow").c_str(), " as ", weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str(),
                                       user->profile.affiliation.has_value() ? user->profile.affiliation->c_str() : "",
                                       user->profile.affiliation.has_value() ? " " : "",
                                       user->profile.role.has_value() ? user->profile.role->c_str() : "",
-                                      user->profile.pgp_id.has_value() ? weechat::xmpp_color("gray").c_str() : "",
+                                      user->profile.pgp_id.has_value() ? weechat::RuntimePort::default_runtime().xmpp_color("gray").c_str() : "",
                                       user->profile.pgp_id.has_value() ? " with PGP:" : "",
                                       user->profile.pgp_id.has_value() ? user->profile.pgp_id->c_str() : "",
-                                      user->profile.pgp_id.has_value() ? weechat::xmpp_color("reset").c_str() : "");
+                                      user->profile.pgp_id.has_value() ? weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str() : "");
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, enter_tags.c_str(), msg);
     }
     else
     {
         std::string msg = fmt::format("{}{} ({}) {}{}{}{} {}{}{}{}{}{}{}{}{}{}{}{}",
-                                      weechat_prefix("join"),
+                                      weechat::RuntimePort::default_runtime().prefix("join"),
                                       jid_resource ? user_prefix : "You",
                                       jid_resource ? jid_resource : user_prefix,
                                       user->profile.status.has_value() ? "is " : "",
-                                      weechat::xmpp_color("irc.color.message_join").c_str(),
+                                      weechat::RuntimePort::default_runtime().xmpp_color("irc.color.message_join").c_str(),
                                       user->profile.status.has_value() ? user->profile.status->c_str() : (user->profile.idle.has_value() ? "idle" : "entered"),
-                                      weechat::xmpp_color("reset").c_str(),
+                                      weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str(),
                                       user->profile.idle.has_value() ? "since " : "",
                                       user->profile.idle.has_value() ? user->profile.idle->data() : "",
                                       user->profile.status_text.has_value() ? " [" : "",
                                       user->profile.status_text.has_value() ? user->profile.status_text->c_str() : "",
                                       user->profile.status_text.has_value() ? "]" : "",
-                                      (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat::xmpp_color("gray").c_str() : "",
+                                      (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat::RuntimePort::default_runtime().xmpp_color("gray").c_str() : "",
                                       (user->profile.pgp_id.has_value() || user->profile.omemo) ? " with " : "",
                                       user->profile.pgp_id.has_value() ? "PGP:" : "",
                                       user->profile.pgp_id.has_value() ? user->profile.pgp_id->c_str() : "",
                                       (user->profile.omemo && user->profile.pgp_id.has_value()) ? " and " : "",
                                       user->profile.omemo ? "OMEMO" : "",
-                                      (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat::xmpp_color("reset").c_str() : "");
+                                      (user->profile.pgp_id.has_value() || user->profile.omemo) ? weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str() : "");
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, enter_tags.c_str(), msg);
     }
 
@@ -850,10 +851,10 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
         && type == weechat::channel::chat_type::MUC)
     {
         std::string msg = fmt::format("{}{} {}left{} {} {}{}{}",
-                                      weechat_prefix("quit"),
+                                      weechat::RuntimePort::default_runtime().prefix("quit"),
                                       jid_resource ? jid_resource : "",
-                                      weechat::xmpp_color("irc.color.message_quit").c_str(),
-                                      weechat::xmpp_color("reset").c_str(),
+                                      weechat::RuntimePort::default_runtime().xmpp_color("irc.color.message_quit").c_str(),
+                                      weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str(),
                                       id,
                                       reason ? "[" : "",
                                       reason ? reason : "",
@@ -863,11 +864,11 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
     else
     {
         std::string msg = fmt::format("{}{} ({}) {}left{} {} {}{}{}",
-                                      weechat_prefix("quit"),
+                                      weechat::RuntimePort::default_runtime().prefix("quit"),
                                       jid_bare ? jid_bare : "",
                                       jid_resource ? jid_resource : "",
-                                      weechat::xmpp_color("irc.color.message_quit").c_str(),
-                                      weechat::xmpp_color("reset").c_str(),
+                                      weechat::RuntimePort::default_runtime().xmpp_color("irc.color.message_quit").c_str(),
+                                      weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str(),
                                       id,
                                       reason ? "[" : "",
                                       reason ? reason : "",
@@ -1075,7 +1076,7 @@ void weechat::channel::maybe_disable_muc_omemo()
             : "not non-anonymous";
 
     weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-        fmt::format("{}{}", weechat_prefix("network"),
+        fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("network"),
                     fmt::format("OMEMO disabled: room is {} (XEP-0384 requires non-anonymous)",
                                 reason)));
 }
@@ -1307,7 +1308,7 @@ int weechat::channel::send_bob_image(std::string_view to,
     {
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
             fmt::format("{}: image too large for XEP-0231 BoB (max {} bytes)",
-                        weechat_prefix("error"), ::xmpp::k_bob_max_payload_bytes));
+                        weechat::RuntimePort::default_runtime().prefix("error"), ::xmpp::k_bob_max_payload_bytes));
         return WEECHAT_RC_ERROR;
     }
 
@@ -1315,7 +1316,7 @@ int weechat::channel::send_bob_image(std::string_view to,
     {
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
             fmt::format("{}: BoB send requires plaintext; disable OMEMO or use /upload",
-                        weechat_prefix("error")));
+                        weechat::RuntimePort::default_runtime().prefix("error")));
         return WEECHAT_RC_ERROR;
     }
 
@@ -1401,21 +1402,21 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         {
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
                 fmt::format("{}: OMEMO group chat requires a non-anonymous room (XEP-0384 §5.8)",
-                            weechat_prefix("error")));
+                            weechat::RuntimePort::default_runtime().prefix("error")));
             return WEECHAT_RC_ERROR;
         }
         if (omemo_recipient_jids.empty())
         {
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
                 fmt::format("{}: OMEMO not ready yet (waiting for member/admin/owner lists)",
-                            weechat_prefix("error")));
+                            weechat::RuntimePort::default_runtime().prefix("error")));
             return WEECHAT_RC_ERROR;
         }
         if (!all_occupants_have_real_jid())
         {
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
                 fmt::format("{}: OMEMO requires real JIDs visible for all online occupants",
-                            weechat_prefix("error")));
+                            weechat::RuntimePort::default_runtime().prefix("error")));
             return WEECHAT_RC_ERROR;
         }
         if (!omemo.pending_muc_bundle_keys.empty()
@@ -1423,7 +1424,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         {
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
                 fmt::format("{}: OMEMO not ready yet (fetching occupant bundles… {} pending)",
-                            weechat_prefix("error"),
+                            weechat::RuntimePort::default_runtime().prefix("error"),
                             omemo.pending_muc_bundle_keys.size()));
             return WEECHAT_RC_ERROR;
         }
@@ -1469,15 +1470,15 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                 queue_pending_omemo_message(body_str);
                 account.omemo.request_axolotl_devicelist(account, peer_bare);
                 weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                    fmt::format("{}{}", weechat_prefix("network"),
+                    fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("network"),
                                 "OMEMO not ready yet; queued message and requested device/bundle updates"));
                 return WEECHAT_RC_OK;
             }
 
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}{}", weechat_prefix("error"), "OMEMO Encryption Error"));
+                fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("error"), "OMEMO Encryption Error"));
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}{}", weechat_prefix("error"),
+                fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("error"),
                             "Message not sent; OMEMO stays enabled for this channel"));
             return WEECHAT_RC_ERROR;
         }
@@ -1501,7 +1502,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         else
         {
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}{}", weechat_prefix("error"), "PGP Error"));
+                fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("error"), "PGP Error"));
             set_transport(weechat::channel::transport::PLAIN, 1);
             return WEECHAT_RC_ERROR;
         }
@@ -1576,7 +1577,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                     {
                         weechat::UiPort::for_buffer(task->channel.buffer)->printf_date_tags(0,
                                 "notify_none,no_log",
-                                fmt::format("[oob]\t{}{}", weechat::xmpp_color("gray"), mime));
+                                fmt::format("[oob]\t{}{}", weechat::RuntimePort::default_runtime().xmpp_color("gray"), mime));
                         task->channel.send_message(task->to, task->body, { task->url });
                     }
                     else
@@ -1647,7 +1648,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         {
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, tag.c_str(),
                 fmt::format("{}{} {}{} ⌛",
-                            weechat_prefix("action"),
+                            weechat::RuntimePort::default_runtime().prefix("action"),
                             prefix,
                             encrypted ? "🔒 " : "",
                             body_str.substr(4)));
@@ -2151,7 +2152,7 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
             ? format_local_timestamp(*end) : "now";
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "xmpp_mam_fetch,notify_none,no_log",
             fmt::format("{}Fetching history: {} → {}",
-                        weechat_prefix("network"), start_str, end_str));
+                        weechat::RuntimePort::default_runtime().prefix("network"), start_str, end_str));
     }
 
     // XEP-0313: MUC MAM is addressed to the room JID.

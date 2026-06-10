@@ -23,6 +23,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/stanza_view.hh"
 #include "xmpp/node.hh"

@@ -48,6 +48,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 ### Local development
 
 - **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Default toolchain is **Clang** (`CC=clang`, `CXX=clang++`; Homebrew LLVM on macOS). The makefile assigns these explicitly (GNU make predefines `CXX=g++`, so `?=` does not work). On BSD use `gmake` instead of `make`.
+- Don't redirect make stdout, this just obfuscates issues.
 - **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick)
 - **Output**: `xmpp.so` (WeeChat plugin)
 - **Dependencies**: Managed via git submodules in `deps/`

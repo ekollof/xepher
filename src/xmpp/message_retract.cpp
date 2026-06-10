@@ -8,6 +8,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "xmpp/message_correct.hh"
 #include "xmpp/node.hh"
 
@@ -85,8 +86,8 @@ std::string retraction_sender_key(
 std::string format_retraction_tombstone()
 {
     return fmt::format("{}[Message deleted]{}",
-                       weechat_color("darkgray"),
-                       weechat_color("resetcolor"));
+                       weechat::RuntimePort::default_runtime().color("darkgray"),
+                       weechat::RuntimePort::default_runtime().color("resetcolor"));
 }
 
 std::string format_moderation_tombstone(std::optional<std::string_view> reason)
@@ -94,13 +95,13 @@ std::string format_moderation_tombstone(std::optional<std::string_view> reason)
     if (reason && !reason->empty())
     {
         return fmt::format("{}[Message moderated: {}]{}",
-                           weechat_color("darkgray"),
+                           weechat::RuntimePort::default_runtime().color("darkgray"),
                            *reason,
-                           weechat_color("resetcolor"));
+                           weechat::RuntimePort::default_runtime().color("resetcolor"));
     }
     return fmt::format("{}[Message moderated by room moderator]{}",
-                       weechat_color("darkgray"),
-                       weechat_color("resetcolor"));
+                       weechat::RuntimePort::default_runtime().color("darkgray"),
+                       weechat::RuntimePort::default_runtime().color("resetcolor"));
 }
 
 }  // namespace xmpp

@@ -13,6 +13,7 @@
 #include "account.hh"
 #include "channel.hh"
 #include "plugin.hh"
+#include "weechat/runtime_port.hh"
 #include "xmpp/iq_pubsub_feed.hh"
 #include "weechat/ui_port.hh"
 
@@ -31,11 +32,11 @@ struct FeedColors {
 [[nodiscard]] FeedColors feed_colors()
 {
     return {
-        .pfx = weechat_prefix("join"),
-        .bold = weechat_color("bold"),
-        .rst = weechat_color("reset"),
-        .dim = weechat_color("darkgray"),
-        .grn = weechat_color("green"),
+        .pfx = weechat::RuntimePort::default_runtime().prefix("join"),
+        .bold = weechat::RuntimePort::default_runtime().color("bold"),
+        .rst = weechat::RuntimePort::default_runtime().color("reset"),
+        .dim = weechat::RuntimePort::default_runtime().color("darkgray"),
+        .grn = weechat::RuntimePort::default_runtime().color("green"),
     };
 }
 

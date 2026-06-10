@@ -2,14 +2,14 @@
 // License, version 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "render_event.hh"
+#include "weechat/render_event.hh"
 
 #include <string>
 #include <weechat/weechat-plugin.h>
 
-#include "../plugin.hh"
-#include "line_store.hh"
-#include "ui_port.hh"
+#include "plugin.hh"
+#include "weechat/line_store.hh"
+#include "weechat/ui_port.hh"
 
 namespace weechat {
 
