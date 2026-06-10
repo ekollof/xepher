@@ -712,6 +712,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             account.roster[jid].subscription = subscription ? subscription : "none";
             parse_roster_groups(item, jid);
         }
+        account.sync_roster_nicklist();
     }
 
     // RFC 6121 §2.1.6 — roster push: server sends IQ type="set" with a single item
@@ -729,6 +730,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 if (subscription && weechat_strcasecmp(subscription, "remove") == 0)
                 {
                     account.roster.erase(jid);
+                    if (weechat::user *removed = weechat::user::search(&account, jid))
+                        removed->nicklist_remove(&account, nullptr);
                     weechat_printf(account.buffer, "%sRoster: %s removed",
                                    weechat_prefix("network"), jid);
                 }
@@ -749,6 +752,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                                        weechat_prefix("network"), jid,
                                        subscription ? subscription : "none");
 
+                    account.update_roster_nicklist_entry(jid);
                 }
             }
         }

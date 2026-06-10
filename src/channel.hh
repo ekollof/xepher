@@ -26,6 +26,12 @@ namespace weechat
     class account;
     class user;
 
+    struct add_member_opts
+    {
+        bool announce_join = true;
+        bool online = true;
+    };
+
     class channel
     {
     public:
@@ -88,6 +94,7 @@ namespace weechat
             std::optional<std::string> role;
             std::optional<std::string> affiliation;
             std::optional<std::string> real_jid;  // occupant's real JID if room is non-anonymous
+            bool present = true;  // false when affiliated but not currently in the room
         };
 
         struct topic
@@ -120,6 +127,8 @@ namespace weechat
             std::optional<int>         occupants;
             std::optional<int>         max_users;
             bool subject_modifiable = true; // muc#roominfo_subjectmod
+            // XEP-0045 status 102/103: show affiliated members who left the room.
+            bool show_unavailable_members = true;
         };
 
         struct unread
@@ -338,9 +347,12 @@ namespace weechat
 
         std::optional<member*> add_member(const char *id, const char *client,
                                            std::optional<std::string_view> real_jid = std::nullopt,
-                                           weechat::user *known_user = nullptr);
+                                           weechat::user *known_user = nullptr,
+                                           add_member_opts opts = {});
         std::optional<member*> member_search(const char *id);
         std::optional<member*> remove_member(const char *id, const char *reason);
+        void set_member_offline(const char *id, weechat::user *known_user = nullptr);
+        void set_show_unavailable_members(bool show);
         std::string find_member_by_nick(std::string_view nick) const;
 
         // For MUC OMEMO: returns true only if every known occupant has a real_jid

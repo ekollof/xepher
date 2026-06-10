@@ -53,6 +53,7 @@ namespace weechat
     public:
         std::string id;
         bool is_away = false;
+        bool is_online = true;
         struct profile profile;
         std::string cached_nick_color;
         std::string cached_nick_color_name;

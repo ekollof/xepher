@@ -647,6 +647,77 @@ void weechat::account::disconnect_all()
     }
 }
 
+bool weechat::account::roster_bare_jid_online(std::string_view bare_jid) const
+{
+    if (bare_jid.empty())
+        return false;
+
+    return std::ranges::any_of(users, [&](const auto& entry) {
+        const auto& [id, user] = entry;
+        return user.is_online && ::jid(nullptr, id).bare == bare_jid;
+    });
+}
+
+void weechat::account::update_roster_nicklist_entry(std::string_view bare_jid)
+{
+    if (bare_jid.empty() || !buffer)
+        return;
+
+    auto roster_it = roster.find(std::string(bare_jid));
+    if (roster_it == roster.end() || roster_it->second.subscription == "none")
+        return;
+
+    const bool online = roster_bare_jid_online(bare_jid);
+    bool away = false;
+    if (online)
+    {
+        for (const auto& [id, u] : users)
+        {
+            if (u.is_online && u.is_away && ::jid(nullptr, id).bare == bare_jid)
+            {
+                away = true;
+                break;
+            }
+        }
+    }
+
+    weechat::user *roster_user = user::search(this, bare_jid);
+    if (!roster_user)
+    {
+        const std::string display = roster_it->second.name.empty()
+            ? std::string(bare_jid)
+            : roster_it->second.name;
+        try
+        {
+            auto [it_u, _ins] = users.emplace(
+                std::piecewise_construct,
+                std::forward_as_tuple(std::string(bare_jid)),
+                std::forward_as_tuple(this, nullptr, bare_jid, display));
+            roster_user = &it_u->second;
+        }
+        catch (const std::invalid_argument&)
+        {
+            roster_user = user::search(this, bare_jid);
+            if (!roster_user)
+                return;
+        }
+    }
+
+    if (!roster_it->second.name.empty())
+        roster_user->profile.display_name = roster_it->second.name;
+
+    roster_user->is_online = online;
+    roster_user->is_away = away;
+    roster_user->nicklist_remove(this, nullptr);
+    roster_user->nicklist_add(this, nullptr);
+}
+
+void weechat::account::sync_roster_nicklist()
+{
+    for (const auto& [jid, _] : roster)
+        update_roster_nicklist_entry(jid);
+}
+
 struct t_gui_buffer *weechat::account::create_buffer()
 {
     buffer = weechat_buffer_new(fmt::format("account.{}", name).data(),

@@ -121,8 +121,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     }
                     break;
                 case 102: // : [message | Configuration change]: Inform occupants that room now shows unavailable members
+                    if (channel)
+                        channel->set_show_unavailable_members(true);
                     break;
                 case 103: // : [message | Configuration change]: Inform occupants that room now does not show unavailable members
+                    if (channel)
+                        channel->set_show_unavailable_members(false);
                     break;
                 case 104: // : [message | Configuration change]: Inform occupants that a non-privacy-related room configuration change has occurred
                     // Re-fetch disco#info so the buffer's "modes" string reflects
@@ -451,6 +455,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                         if (leaving)
                             leaving->nicklist_remove(&account, channel);
                     }
+                    else if (user->profile.affiliation.has_value())
+                        channel->set_member_offline(binding->from->full.data(), user);
                     else
                         channel->remove_member(binding->from->full.data(), status ? status->data() : nullptr);
                 }
@@ -459,7 +465,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     channel->add_member(binding->from->full.data(), jid.data(),
                                         item.target ? std::optional(std::string_view(item.target->full))
                                                     : std::nullopt,
-                                        user);
+                                        user,
+                                        {.announce_join = true, .online = true});
 
                     // docs/planning-muc-omemo.md §2.3: Whenever we learn (or re-learn) a
                     // real JID for a MUC occupant via presence, proactively request their
@@ -583,16 +590,32 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         // For roster contacts (not in a MUC), manage account buffer nicklist
         if (!channel)
         {
-            if (binding->type && *binding->type == "unavailable")
+            const std::string bare_jid = binding->from->bare;
+            const bool unavailable = binding->type && *binding->type == "unavailable";
+
+            if (!unavailable)
             {
-                // User went offline, remove from account nicklist
-                user->nicklist_remove(&account, nullptr);
+                user->is_online = true;
+                user->is_away = show && *show == "away";
             }
             else
             {
-                // User is online (or status update), add/update in account nicklist
-                user->nicklist_remove(&account, nullptr);  // Remove first to avoid duplicates
+                user->is_online = false;
+            }
+
+            if (account.roster.contains(bare_jid)
+                && account.roster[bare_jid].subscription != "none")
+            {
+                account.update_roster_nicklist_entry(bare_jid);
+            }
+            else if (!unavailable)
+            {
+                user->nicklist_remove(&account, nullptr);
                 user->nicklist_add(&account, nullptr);
+            }
+            else
+            {
+                user->nicklist_remove(&account, nullptr);
             }
         }
         

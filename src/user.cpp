@@ -31,6 +31,16 @@ unsigned long nick_hash(std::string_view name)
     return hash;
 }
 
+[[nodiscard]] const char *nicklist_color_name(const weechat::user &user,
+                                              const std::string &palette_color)
+{
+    if (!user.is_online)
+        return "weechat.color.nicklist_offline";
+    if (user.is_away)
+        return "weechat.color.nicklist_away";
+    return palette_color.empty() ? nullptr : palette_color.c_str();
+}
+
 std::string compute_nick_color(std::string_view name)
 {
     const char *colors_str = weechat_config_string(
@@ -255,9 +265,7 @@ void weechat::user::nicklist_add(weechat::account *account,
     auto colour = get_colour_for_nicklist();
     weechat_nicklist_add_nick(ptr_buffer, ptr_group,
                               name,
-                              this->is_away ?
-                              "weechat.color.nicklist_away" :
-                              (colour.empty() ? nullptr : colour.c_str()),
+                              nicklist_color_name(*this, colour),
                               group,
                               "bar_fg",
                               1);
@@ -292,10 +300,8 @@ void weechat::user::nicklist_set_color(weechat::account *account,
     if (ptr_nick)
     {
         auto colour = get_colour_for_nicklist();
-        const char *color = this->is_away
-            ? "weechat.color.nicklist_away"
-            : (colour.empty() ? nullptr : colour.c_str());
-        weechat_nicklist_nick_set(ptr_buffer, ptr_nick, "color", color);
+        weechat_nicklist_nick_set(ptr_buffer, ptr_nick, "color",
+                                  nicklist_color_name(*this, colour));
     }
 }
 

@@ -711,7 +711,8 @@ bool weechat::channel::include_room_config_field_in_submit(
 
 std::optional<weechat::channel::member*> weechat::channel::add_member(const char *id, const char *client,
                                                                        std::optional<std::string_view> real_jid,
-                                                                       weechat::user *known_user)
+                                                                       weechat::user *known_user,
+                                                                       add_member_opts opts)
 {
     weechat::channel::member *member;
     weechat::user *user;
@@ -740,6 +741,7 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
         if (real_jid)
             member->real_jid = std::string(*real_jid);
     }
+    member->present = opts.online;
 
     // docs/planning-muc-omemo.md §2.3: Central place — whenever a real_jid becomes
     // known for a MUC occupant (via presence, future admin affiliation results, etc.),
@@ -756,10 +758,14 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
 
     if (user)
     {
+        user->is_online = opts.online;
         user->nicklist_remove(&account, this);
         user->nicklist_add(&account, this);
     }
     else return member; // no user object yet; member was created above, return it without printing a join line
+
+    if (!opts.announce_join || !opts.online)
+        return member;
 
     const std::string jid_bare_s = ::jid(nullptr, user->id).bare;
     const std::string jid_resource_s = ::jid(nullptr, user->id).resource;
@@ -893,7 +899,74 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
         weechat_printf_date_tags(buffer, 0, leave_tags.c_str(), "%s", msg.c_str());
     }
 
+    if (member_opt)
+        (*member_opt)->present = false;
+
     return member_opt;
+}
+
+void weechat::channel::set_member_offline(const char *id, weechat::user *known_user)
+{
+    if (!id || type != chat_type::MUC || !muc_info_.show_unavailable_members)
+        return;
+
+    weechat::user *user = known_user ? known_user : user::search(&account, id);
+    if (!user || !user->profile.affiliation.has_value())
+        return;
+
+    auto member_opt = member_search(id);
+    weechat::channel::member *member = nullptr;
+    if (!member_opt)
+    {
+        auto& new_member = members[std::string(id)];
+        new_member.id = id;
+        member = &new_member;
+    }
+    else
+    {
+        member = *member_opt;
+    }
+
+    member->present = false;
+    member->role = std::nullopt;
+    if (user->profile.affiliation.has_value())
+        member->affiliation = user->profile.affiliation;
+
+    user->profile.role = std::nullopt;
+    user->is_online = false;
+    user->nicklist_remove(&account, this);
+    user->nicklist_add(&account, this);
+}
+
+void weechat::channel::set_show_unavailable_members(const bool show)
+{
+    if (type != chat_type::MUC)
+        return;
+
+    muc_info_.show_unavailable_members = show;
+    if (!show)
+    {
+        for (auto& [member_id, member] : members)
+        {
+            if (member.present)
+                continue;
+            if (weechat::user *user = user::search(&account, member_id.c_str()))
+                user->nicklist_remove(&account, this);
+        }
+        return;
+    }
+
+    for (auto& [member_id, member] : members)
+    {
+        if (member.present)
+            continue;
+        if (weechat::user *user = user::search(&account, member_id.c_str()))
+        {
+            user->is_online = false;
+            user->nicklist_remove(&account, this);
+            user->nicklist_add(&account, this);
+        }
+    }
 }
 
 std::string weechat::channel::find_member_by_nick(std::string_view nick) const

@@ -122,13 +122,57 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                     {
                         const char *nick = xmpp_stanza_get_attribute(item, "nick");
                         const char *real_jid = xmpp_stanza_get_attribute(item, "jid");
+                        const char *affiliation = xmpp_stanza_get_attribute(item, "affiliation");
                         if (real_jid && *real_jid)
                         {
                             ch.register_omemo_recipient(real_jid);
                             if (nick && *nick)
                             {
-                                ch.add_member(nick, nullptr,
-                                    std::optional<std::string_view>(real_jid));
+                                const std::string full_id =
+                                    fmt::format("{}/{}", from_bare, nick);
+                                weechat::user *occupant =
+                                    weechat::user::search(&account, full_id.c_str());
+                                if (!occupant)
+                                    occupant = weechat::user::search(&account, nick);
+                                if (!occupant)
+                                {
+                                    try
+                                    {
+                                        auto [it_u, _ins] = account.users.emplace(
+                                            std::piecewise_construct,
+                                            std::forward_as_tuple(full_id),
+                                            std::forward_as_tuple(
+                                                &account, &ch, full_id, nick));
+                                        occupant = &it_u->second;
+                                    }
+                                    catch (const std::invalid_argument&)
+                                    {
+                                        occupant = weechat::user::search(&account, full_id.c_str());
+                                    }
+                                }
+
+                                bool online = false;
+                                if (occupant)
+                                    online = occupant->is_online;
+                                else if (auto member = ch.member_search(full_id.c_str());
+                                         member && (*member)->present)
+                                    online = true;
+                                else if (auto member = ch.member_search(nick);
+                                         member && (*member)->present)
+                                    online = true;
+
+                                if (occupant && affiliation && *affiliation
+                                    && weechat_strcasecmp(affiliation, "none") != 0)
+                                {
+                                    occupant->profile.affiliation = affiliation;
+                                }
+
+                                ch.add_member(
+                                    full_id.c_str(), nullptr,
+                                    std::optional<std::string_view>(real_jid),
+                                    occupant,
+                                    {.announce_join = false,
+                                     .online = online});
                             }
                             else if (account.omemo && ch.muc_supports_omemo())
                             {

@@ -602,6 +602,10 @@ namespace weechat
 
         struct t_gui_buffer* create_buffer();
 
+        [[nodiscard]] bool roster_bare_jid_online(std::string_view bare_jid) const;
+        void update_roster_nicklist_entry(std::string_view bare_jid);
+        void sync_roster_nicklist();
+
         std::string jid() {
             if (!jid_bare_cache_.empty())
                 return jid_bare_cache_;
