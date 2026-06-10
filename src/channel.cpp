@@ -737,8 +737,6 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
         member = *member_opt;
         if (real_jid)
             member->real_jid = std::string(*real_jid);
-        if (user)
-            user->nicklist_remove(&account, this);
     }
 
     // docs/planning-muc-omemo.md §2.3: Central place — whenever a real_jid becomes
@@ -755,7 +753,10 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     }
 
     if (user)
+    {
+        user->nicklist_remove(&account, this);
         user->nicklist_add(&account, this);
+    }
     else return member; // no user object yet; member was created above, return it without printing a join line
 
     const std::string jid_bare_s = ::jid(nullptr, user->id).bare;

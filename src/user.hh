@@ -90,6 +90,8 @@ namespace weechat
             std::optional<std::string_view> affiliation);
         [[nodiscard]] static int muc_nicklist_prefix_rank(char prefix);
         [[nodiscard]] char muc_nicklist_prefix() const;
+        // Nick shown in a MUC nicklist (resource from display_name or occupant JID).
+        [[nodiscard]] std::string muc_nicklist_name(weechat::channel *channel) const;
         [[nodiscard]] static std::string muc_display_nick(
             weechat::channel *channel, std::string_view member_id, const user *occupant);
 

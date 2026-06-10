@@ -187,23 +187,30 @@ char weechat::user::muc_nicklist_prefix() const
     return muc_nicklist_prefix(profile.role, profile.affiliation);
 }
 
+std::string weechat::user::muc_nicklist_name(weechat::channel *channel) const
+{
+    std::string name = profile.display_name;
+    if (name.empty())
+        name = jid(nullptr, id).resource;
+
+    std::string name_bare = jid(nullptr, name).bare;
+    if (!name_bare.empty()
+        && weechat_strcasecmp(name_bare.c_str(), channel->id.data()) == 0)
+    {
+        std::string resource = jid(nullptr, name).resource;
+        if (!resource.empty())
+            name = std::move(resource);
+    }
+    if (name.empty())
+        name = jid(nullptr, id).resource;
+    return name;
+}
+
 std::string weechat::user::muc_display_nick(
     weechat::channel *channel, std::string_view member_id, const user *occupant)
 {
     if (occupant)
-    {
-        const char *name = occupant->profile.display_name.c_str();
-        std::string resource_buf;
-        std::string name_bare = channel ? jid(nullptr, name).bare : std::string{};
-        if (channel && !name_bare.empty()
-            && weechat_strcasecmp(name_bare.c_str(), channel->id.data()) == 0)
-        {
-            resource_buf = jid(nullptr, name).resource;
-            if (!resource_buf.empty())
-                return resource_buf;
-        }
-        return occupant->profile.display_name;
-    }
+        return occupant->muc_nicklist_name(channel);
 
     auto slash = member_id.rfind('/');
     if (slash != std::string::npos && slash + 1 < member_id.size())
@@ -216,37 +223,42 @@ void weechat::user::nicklist_add(weechat::account *account,
 {
     struct t_gui_nick_group *ptr_group;
     struct t_gui_buffer *ptr_buffer;
-    const char *name = channel ? this->profile.display_name.c_str() : this->id.c_str();
+    std::string nick_buf;
+    const char *name = nullptr;
 
-    // For roster contacts (account buffer), strip resource from JID
-    std::string bare_buf, resource_buf;
-    if (!channel)
+    if (channel && channel->type == weechat::channel::chat_type::MUC)
     {
-        bare_buf = jid(nullptr, this->id).bare;
-        if (!bare_buf.empty()) name = bare_buf.c_str();
+        nick_buf = muc_nicklist_name(channel);
+        if (nick_buf.empty())
+            return;
+        name = nick_buf.c_str();
     }
-
+    else if (!channel)
     {
-        std::string name_bare = channel ? jid(nullptr, name).bare : std::string{};
-        if (channel && !name_bare.empty() &&
-            weechat_strcasecmp(name_bare.c_str(), channel->id.data()) == 0)
-        {
-            resource_buf = jid(nullptr, name).resource;
-            if (!resource_buf.empty()) name = resource_buf.c_str();
-        }
+        nick_buf = jid(nullptr, this->id).bare;
+        if (nick_buf.empty())
+            nick_buf = this->id;
+        name = nick_buf.c_str();
+    }
+    else
+    {
+        name = this->profile.display_name.c_str();
     }
 
     ptr_buffer = channel ? channel->buffer : account->buffer;
 
     char group_buf[2] = { muc_nicklist_prefix(), '\0' };
-    ptr_group = weechat_nicklist_search_group(ptr_buffer, nullptr, group_buf);
+    const char *group = channel && channel->type == weechat::channel::chat_type::MUC
+        ? group_buf
+        : ".";
+    ptr_group = weechat_nicklist_search_group(ptr_buffer, nullptr, group);
     auto colour = get_colour_for_nicklist();
     weechat_nicklist_add_nick(ptr_buffer, ptr_group,
                               name,
                               this->is_away ?
                               "weechat.color.nicklist_away" :
                               (colour.empty() ? nullptr : colour.c_str()),
-                              group_buf,
+                              group,
                               "bar_fg",
                               1);
 }
@@ -254,22 +266,25 @@ void weechat::user::nicklist_add(weechat::account *account,
 void weechat::user::nicklist_set_color(weechat::account *account,
                                        weechat::channel *channel)
 {
-    // Compute the same nick name as nicklist_add uses, then update in-place.
-    const char *name = channel ? this->profile.display_name.c_str() : this->id.c_str();
-    std::string bare_buf, resource_buf;
-    if (!channel)
+    std::string nick_buf;
+    const char *name = nullptr;
+    if (channel && channel->type == weechat::channel::chat_type::MUC)
     {
-        bare_buf = jid(nullptr, this->id).bare;
-        if (!bare_buf.empty()) name = bare_buf.c_str();
+        nick_buf = muc_nicklist_name(channel);
+        if (nick_buf.empty())
+            return;
+        name = nick_buf.c_str();
     }
+    else if (!channel)
     {
-        std::string name_bare = channel ? jid(nullptr, name).bare : std::string{};
-        if (channel && !name_bare.empty() &&
-            weechat_strcasecmp(name_bare.c_str(), channel->id.data()) == 0)
-        {
-            resource_buf = jid(nullptr, name).resource;
-            if (!resource_buf.empty()) name = resource_buf.c_str();
-        }
+        nick_buf = jid(nullptr, this->id).bare;
+        if (nick_buf.empty())
+            nick_buf = this->id;
+        name = nick_buf.c_str();
+    }
+    else
+    {
+        name = this->profile.display_name.c_str();
     }
 
     struct t_gui_buffer *ptr_buffer = channel ? channel->buffer : account->buffer;
@@ -289,22 +304,31 @@ void weechat::user::nicklist_remove(weechat::account *account,
 {
     struct t_gui_nick *ptr_nick;
     struct t_gui_buffer *ptr_buffer;
-    const char *name = this->profile.display_name.c_str();
-    std::string resource_buf;
-    {
-        std::string name_bare = channel ? jid(nullptr, name).bare : std::string{};
-        if (channel && !name_bare.empty() &&
-            weechat_strcasecmp(name_bare.c_str(), channel->id.data()) == 0)
-        {
-            resource_buf = jid(nullptr, name).resource;
-            if (!resource_buf.empty()) name = resource_buf.c_str();
-        }
-    }
 
     ptr_buffer = channel ? channel->buffer : account->buffer;
 
-    if (name && (ptr_nick = weechat_nicklist_search_nick(ptr_buffer, nullptr, name)))
-        weechat_nicklist_remove_nick(ptr_buffer, ptr_nick);
+    auto try_remove = [&](const char *candidate) {
+        if (!candidate)
+            return;
+        if ((ptr_nick = weechat_nicklist_search_nick(ptr_buffer, nullptr, candidate)))
+            weechat_nicklist_remove_nick(ptr_buffer, ptr_nick);
+    };
+
+    if (channel && channel->type == weechat::channel::chat_type::MUC)
+    {
+        // Remove the canonical nick and any legacy duplicate (empty label or
+        // stale prefix group) left by the pre-role constructor nicklist_add.
+        try_remove(muc_nicklist_name(channel).c_str());
+        try_remove("");
+        if (!profile.display_name.empty())
+            try_remove(profile.display_name.c_str());
+        return;
+    }
+
+    std::string nick_buf = jid(nullptr, this->id).bare;
+    if (nick_buf.empty())
+        nick_buf = this->id;
+    try_remove(nick_buf.c_str());
 }
 
 weechat::user::user(weechat::account *account, weechat::channel *channel,
@@ -326,10 +350,9 @@ weechat::user::user(weechat::account *account, weechat::channel *channel,
     // Try to load cached avatar if available
     weechat::avatar::load_for_user(*account, *this);
 
-    // Add to nicklist:
-    // - For MUC users: add to channel nicklist
-    // - For roster contacts: add to account buffer nicklist (shown when online)
-    if (channel)
+    // MUC nicklist updates are deferred to channel::add_member() once role and
+    // affiliation are known. Non-MUC channel buffers still add here.
+    if (channel && channel->type != weechat::channel::chat_type::MUC)
         nicklist_add(account, channel);
     // Note: Roster contacts added to nicklist when they come online in presence_handler
 }
