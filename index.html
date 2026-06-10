@@ -295,7 +295,7 @@
     </div>
     <div class="feature">
       <h3>MUC Support</h3>
-      <p>Full XEP-0045 multi-user chat — <code>/create</code> for explicit room creation (with <code>--reserved</code> for the locked-room flow), kick, ban, topic, moderation (XEP-0425), reactions (XEP-0444). IRC-style room mode display in the status bar (<code>+miP</code> for moderated, members-only, persistent) plus owner actions via <code>/setmodes</code>, <code>/destroy</code>, and <code>/affiliation</code>.</p>
+      <p>Full XEP-0045 multi-user chat — <code>/create</code> (instant + <code>--reserved</code>), IRC-style admin (<code>/kick</code>, <code>/ban</code>, <code>/voice</code>, <code>/devoice</code>, <code>/op</code>, <code>/deop</code>), owner config (<code>/setmodes</code>, <code>/affiliation</code>, <code>/destroy</code>), registration (<code>/mucregister</code>), direct and mediated invites (<code>/invite</code>, <code>/decline</code>), topic, moderation (XEP-0425), reactions (XEP-0444). IRC-style mode display in the status bar (<code>+miP</code>).</p>
     </div>
     <div class="feature">
       <h3>Ad-hoc Commands</h3>
@@ -338,7 +338,7 @@ sudo pacman -U xepher-0.9.0-1-x86_64.pkg.tar.zst</pre>
     <pre>git clone --depth 1 git@github.com:ekollof/xepher.git
 cd xepher
 make install-deps   # detects distro, installs packages
-make DEBUG=1        # 118 doctests (plain make skips them)
+make DEBUG=1        # 123 doctests (plain make skips them)
 make install        # installs to ~/.local/share/weechat/plugins/</pre>
     <p>Requires WeeChat &ge; 3.0, libstrophe, libxml2, lmdb, libomemo-c, gpgme, libfmt, and GCC &ge; 12 / Clang &ge; 15.</p>
     <p>See the <a href="https://github.com/ekollof/xepher/wiki/Installation">Installation wiki page</a> for all platforms, BSD notes, and package details.</p>
@@ -353,7 +353,7 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
       </thead>
       <tbody>
         <tr><td>XEP-0030</td><td>Service Discovery</td><td></td></tr>
-        <tr><td>XEP-0045</td><td>Multi-User Chat</td><td><code>/create</code> for explicit room creation (instant + reserved), IRC-style mode display, owner actions via <code>/setmodes</code>, <code>/destroy</code>, <code>/affiliation</code></td></tr>
+        <tr><td>XEP-0045</td><td>Multi-User Chat</td><td><code>/create</code> (instant + reserved), IRC-style admin (<code>/voice</code>, <code>/op</code>, …), owner config (<code>/setmodes</code>, <code>/affiliation</code>, <code>/destroy</code>), <code>/mucregister</code>, invites (<code>/invite</code>, <code>/decline</code>); partial — no full roomconfig UI</td></tr>
         <tr><td>XEP-0048</td><td>Bookmarks</td><td></td></tr>
         <tr><td>XEP-0050</td><td>Ad-Hoc Commands</td><td></td></tr>
         <tr><td>XEP-0054</td><td>vcard-temp</td><td></td></tr>
