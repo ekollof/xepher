@@ -89,4 +89,35 @@ std::optional<MediatedMucInvite> parse_mediated_muc_invite(StanzaView msg)
     return parsed;
 }
 
+std::optional<MediatedMucDecline> parse_mediated_muc_decline(StanzaView msg)
+{
+    const StanzaView muc_user = msg.child("x", k_muc_user_ns);
+    if (!muc_user.valid())
+        return std::nullopt;
+
+    const StanzaView decline = muc_user.child("decline");
+    if (!decline.valid())
+        return std::nullopt;
+
+    const auto from = msg.from();
+    if (!from || from->empty())
+        return std::nullopt;
+
+    MediatedMucDecline parsed;
+    parsed.room_jid = bare_jid_from(*from);
+    if (parsed.room_jid.empty())
+        return std::nullopt;
+
+    if (const std::string decliner = decline.attr_string("from"); !decliner.empty())
+        parsed.decliner_bare = bare_jid_from(decliner);
+
+    if (const StanzaView reason_el = decline.child("reason"); reason_el.valid())
+    {
+        if (const std::string reason = reason_el.text(); !reason.empty())
+            parsed.reason = reason;
+    }
+
+    return parsed;
+}
+
 }  // namespace xmpp

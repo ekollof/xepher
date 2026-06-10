@@ -555,6 +555,9 @@ void weechat::account::disconnect(int reconnect)
     // fresh /create on reconnect starts clean.
     muc_reserved_pending.clear();
 
+    // XEP-0045 §7.8.2: drop pending mediated invites on disconnect.
+    pending_mediated_invites.clear();
+
     // libstrophe's built-in SM is disabled via XMPP_CONN_FLAG_DISABLE_SM
     // (set in connect()), so xmpp_conn_get_sm_state() will always return
     // nullptr here — no clearing needed.

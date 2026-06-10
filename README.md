@@ -753,6 +753,7 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 | `/mucregister query` | Show room registration / reserved-nick info (XEP-0045 §15) |
 | `/mucregister [nick]` | Register with the room using the given nick |
 | `/invite [--mediated] <jid> [reason]` | Invite a user (direct XEP-0249 by default; `--mediated` for XEP-0045 §7.8.2) |
+| `/decline [room inviter [reason]]` | Decline a pending mediated MUC invitation (XEP-0045 §7.8.2) |
 | `/topic [text]` | Set or clear the room topic |
 | `/nick [newnick]` | Change your nickname in the current MUC |
 | `/names` | List all known occupants in the current MUC with IRC-style role/affiliation prefixes (same symbols as the nicklist; sorted by rank then nick) |

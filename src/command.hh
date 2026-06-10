@@ -29,6 +29,7 @@ int command__edit_to(COMMAND_ARGS);
 int command__ephemeral(COMMAND_ARGS);
 int command__feed(COMMAND_ARGS);
 int command__invite(COMMAND_ARGS);
+int command__decline(COMMAND_ARGS);
 int command__kick(COMMAND_ARGS);
 int command__links(COMMAND_ARGS);
 int command__list(COMMAND_ARGS);

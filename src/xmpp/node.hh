@@ -386,6 +386,15 @@ namespace stanza {
             child(ux);
             return *this;
         }
+        message& mediated_decline(std::string_view to_jid, std::string_view decline_reason = {}) {
+            xep0045::muc_user_x ux;
+            xep0045::decline_to dec(to_jid);
+            if (!decline_reason.empty())
+                dec.reason(decline_reason);
+            ux.decline(dec);
+            child(ux);
+            return *this;
+        }
     };
 
     struct presence : virtual public spec,

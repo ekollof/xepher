@@ -283,7 +283,7 @@ Bump `DOAP.xml` `xmpp:version` to **1.35.5** when work lands.
 **Phase 3 — Invitations**
 - [x] `/invite --mediated <jid> [reason]` — room-mediated invite (§7.8.2); default stays XEP-0249 direct
 - [x] Inbound mediated invite handler: notify + `/join` hint
-- [ ] Decline support (optional follow-up): `muc#user` decline stanza if user wants `/decline` later
+- [x] Decline support: `/decline` sends `muc#user` decline stanza; pending invite queue + inviter notification
 
 **Phase 4 — Registration (`muc#register`)**
 - [x] `/mucregister [nick]` — submit registration for current room (membership request / reserved nick)

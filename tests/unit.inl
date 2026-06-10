@@ -1156,6 +1156,30 @@ TEST_CASE("parse_mediated_muc_invite reads XEP-0045 muc#user invite")
     xmpp_stanza_release(msg);
 }
 
+TEST_CASE("parse_mediated_muc_decline reads XEP-0045 muc#user decline")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' from='room@conf.example' to='alice@example.org/desktop'>"
+        "<x xmlns='http://jabber.org/protocol/muc#user'>"
+        "<decline from='bob@example.org'>"
+        "<reason>busy</reason></decline>"
+        "</x></message>");
+    REQUIRE(msg != nullptr);
+
+    auto decline = xmpp::parse_mediated_muc_decline(xmpp::StanzaView(msg));
+    REQUIRE(decline.has_value());
+    CHECK(decline->room_jid == "room@conf.example");
+    REQUIRE(decline->decliner_bare.has_value());
+    CHECK(*decline->decliner_bare == "bob@example.org");
+    REQUIRE(decline->reason.has_value());
+    CHECK(*decline->reason == "busy");
+
+    xmpp_stanza_release(msg);
+}
+
 TEST_CASE("message_ephemeral spoiler and fallback helpers")
 {
     unit_strophe_env env;

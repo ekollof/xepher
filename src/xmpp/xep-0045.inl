@@ -417,12 +417,27 @@ namespace stanza {
             }
         };
 
+        // <decline to='user@host'><reason>…</reason></decline> (XEP-0045 §7.8.2)
+        struct decline_to : virtual public spec {
+            explicit decline_to(std::string_view to_jid) : spec("decline") {
+                attr("to", to_jid);
+            }
+            decline_to& reason(std::string_view r) {
+                struct r_el : virtual public spec {
+                    r_el(std::string_view t) : spec("reason") { text(t); }
+                } re(r);
+                child(re);
+                return *this;
+            }
+        };
+
         // <x xmlns='http://jabber.org/protocol/muc#user'/>
         struct muc_user_x : virtual public spec {
             muc_user_x() : spec("x") {
                 xmlns<jabber_org::protocol::muc::user>();
             }
             muc_user_x& invite(invite_to& inv) { child(inv); return *this; }
+            muc_user_x& decline(decline_to& dec) { child(dec); return *this; }
         };
 
         // stanza::presence mixin — adds a <x xmlns='...muc'><history maxstanzas='0'/></x>
@@ -458,6 +473,17 @@ namespace stanza {
                 if (!invite_reason.empty())
                     inv.reason(invite_reason);
                 ux.invite(inv);
+                child(ux);
+                return *this;
+            }
+
+            // XEP-0045 §7.8.2: mediated invitation decline (message to room@service).
+            message& mediated_decline(std::string_view to_jid, std::string_view decline_reason = {}) {
+                xep0045::muc_user_x ux;
+                xep0045::decline_to dec(to_jid);
+                if (!decline_reason.empty())
+                    dec.reason(decline_reason);
+                ux.decline(dec);
                 child(ux);
                 return *this;
             }

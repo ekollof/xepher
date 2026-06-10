@@ -193,6 +193,18 @@ void command__init()
         weechat_printf(nullptr, "Failed to setup command /invite");
 
     hook = weechat_hook_command(
+        "decline",
+        N_("decline a mediated MUC invitation (XEP-0045 §7.8.2)"),
+        N_("[<room> <inviter> [<reason>]]"),
+        N_("Decline the most recent pending mediated invite, or a specific one.\n"
+           "  room: room JID (e.g. room@conference.example)\n"
+           "inviter: bare JID of the person who invited you\n"
+           " reason: optional decline message"),
+        nullptr, &command__decline, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /decline");
+
+    hook = weechat_hook_command(
         "selfping",
         N_("send a self-ping to verify MUC membership (XEP-0410)"),
         N_(""),

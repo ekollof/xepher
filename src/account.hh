@@ -262,6 +262,14 @@ namespace weechat
         // /setmodes / /affiliation / /destroy. Cleared on disconnect.
         std::unordered_set<std::string> muc_reserved_pending;
 
+        // XEP-0045 §7.8.2: pending mediated MUC invitations awaiting /decline.
+        struct pending_mediated_invite {
+            std::string room_jid;
+            std::string inviter_bare;
+            std::optional<std::string> password;
+        };
+        std::deque<pending_mediated_invite> pending_mediated_invites;
+
         // XEP-0054 / XEP-0292 vCard query tracking
         struct whois_query_info {
             struct t_gui_buffer *buffer;  // buffer to print vCard results into

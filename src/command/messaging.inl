@@ -178,3 +178,116 @@ int command__invite(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int command__decline(const void *pointer, void *data,
+                     struct t_gui_buffer *buffer, int argc,
+                     char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    (void) pointer;
+    (void) data;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+    (void) ptr_channel;
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer,
+                        _("%s%s: you are not connected to server"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    if (ptr_account->pending_mediated_invites.empty())
+    {
+        weechat_printf(buffer,
+                        _("%s%s: no pending mediated MUC invitations"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    std::optional<std::size_t> match_idx;
+    const char *reason = nullptr;
+
+    auto find_pending = [&](std::string_view room_jid, std::string_view inviter)
+        -> std::optional<std::size_t>
+    {
+        for (std::size_t i = 0; i < ptr_account->pending_mediated_invites.size(); ++i)
+        {
+            const auto& pending = ptr_account->pending_mediated_invites[i];
+            if (pending.room_jid == room_jid && pending.inviter_bare == inviter)
+                return i;
+        }
+        return std::nullopt;
+    };
+
+    if (argc < 2)
+    {
+        match_idx = ptr_account->pending_mediated_invites.size() - 1;
+    }
+    else if (argc == 2)
+    {
+        const std::string_view arg1{argv[1]};
+        if (arg1.contains('@'))
+        {
+            weechat_printf(buffer,
+                            _("%s%s: usage: /decline [<room> <inviter> [<reason>]]"),
+                            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            return WEECHAT_RC_OK;
+        }
+        match_idx = ptr_account->pending_mediated_invites.size() - 1;
+        reason = argv_eol[1];
+    }
+    else if (argc == 3)
+    {
+        const std::string_view room_jid{argv[1]};
+        const std::string_view inviter{argv[2]};
+        match_idx = find_pending(room_jid, inviter);
+        if (!match_idx)
+        {
+            weechat_printf(buffer, "%s%s",
+                           weechat_prefix("error"),
+                           fmt::format("{}: no pending invite from {} for {}",
+                                       WEECHAT_XMPP_PLUGIN_NAME,
+                                       inviter, room_jid).c_str());
+            return WEECHAT_RC_OK;
+        }
+    }
+    else
+    {
+        const std::string_view room_jid{argv[1]};
+        const std::string_view inviter{argv[2]};
+        match_idx = find_pending(room_jid, inviter);
+        if (!match_idx)
+        {
+            weechat_printf(buffer, "%s%s",
+                           weechat_prefix("error"),
+                           fmt::format("{}: no pending invite from {} for {}",
+                                       WEECHAT_XMPP_PLUGIN_NAME,
+                                       inviter, room_jid).c_str());
+            return WEECHAT_RC_OK;
+        }
+        reason = argv_eol[3];
+    }
+
+    const auto pending = ptr_account->pending_mediated_invites[*match_idx];
+    auto dec_msg = stanza::message().to(pending.room_jid).mediated_decline(
+        pending.inviter_bare,
+        reason ? std::string_view(reason) : std::string_view{});
+    ptr_account->connection.send(dec_msg.build(ptr_account->context).get());
+
+    ptr_account->pending_mediated_invites.erase(
+        ptr_account->pending_mediated_invites.begin()
+        + static_cast<std::ptrdiff_t>(*match_idx));
+
+    weechat_printf(buffer, "%s%s",
+                   weechat_prefix("network"),
+                   fmt::format("Declined invitation to {} from {}",
+                               pending.room_jid, pending.inviter_bare).c_str());
+    return WEECHAT_RC_OK;
+}
+

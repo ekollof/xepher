@@ -38,4 +38,13 @@ struct MediatedMucInvite {
 [[nodiscard]] XMPP_TEST_EXPORT std::optional<MediatedMucInvite>
 parse_mediated_muc_invite(StanzaView msg);
 
+struct MediatedMucDecline {
+    std::string room_jid;
+    std::optional<std::string> reason;
+    std::optional<std::string> decliner_bare;
+};
+
+[[nodiscard]] XMPP_TEST_EXPORT std::optional<MediatedMucDecline>
+parse_mediated_muc_decline(StanzaView msg);
+
 }  // namespace xmpp

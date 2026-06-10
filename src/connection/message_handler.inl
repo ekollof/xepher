@@ -877,13 +877,26 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // XEP-0045 §7.8.2: Mediated MUC invitations
     if (auto mediated = ::xmpp::parse_mediated_muc_invite(::xmpp::StanzaView(stanza)))
     {
-        const std::string_view who = mediated->inviter_bare
-            ? std::string_view{*mediated->inviter_bare}
-            : std::string_view{mediated->room_jid};
+        const std::string inviter = mediated->inviter_bare
+            ? *mediated->inviter_bare
+            : mediated->room_jid;
+        const std::string_view who = inviter;
         const auto reason_suffix = mediated->reason
             ? fmt::format(" ({})", *mediated->reason) : std::string{};
         const auto join_args = mediated->password
             ? fmt::format(" {}", *mediated->password) : std::string{};
+
+        weechat::account::pending_mediated_invite pending;
+        pending.room_jid = mediated->room_jid;
+        pending.inviter_bare = inviter;
+        pending.password = mediated->password;
+        std::erase_if(account.pending_mediated_invites,
+                      [&](const auto& p) {
+                          return p.room_jid == pending.room_jid
+                              && p.inviter_bare == pending.inviter_bare;
+                      });
+        account.pending_mediated_invites.push_back(std::move(pending));
+
         weechat_printf(account.buffer, "%s%s",
                        weechat_prefix("network"),
                        fmt::format("{} invited you to {}{}",
@@ -892,6 +905,24 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                        weechat_prefix("network"),
                        fmt::format("To join: /join {}{}",
                                    mediated->room_jid, join_args).c_str());
+        weechat_printf(account.buffer, "%s%s",
+                       weechat_prefix("network"),
+                       _("To decline: /decline [reason]"));
+        return 1;
+    }
+
+    // XEP-0045 §7.8.2: Mediated invitation declined (room notifies inviter)
+    if (auto declined = ::xmpp::parse_mediated_muc_decline(::xmpp::StanzaView(stanza)))
+    {
+        const std::string_view who = declined->decliner_bare
+            ? std::string_view{*declined->decliner_bare}
+            : std::string_view{declined->room_jid};
+        const auto reason_suffix = declined->reason
+            ? fmt::format(" ({})", *declined->reason) : std::string{};
+        weechat_printf(account.buffer, "%s%s",
+                       weechat_prefix("network"),
+                       fmt::format("{} declined your invitation to {}{}",
+                                   who, declined->room_jid, reason_suffix).c_str());
         return 1;
     }
 
