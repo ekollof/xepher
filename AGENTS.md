@@ -40,8 +40,8 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
   `/usr/lib/python3/dist-packages/gajim/common/modules/omemo.py`,
   `/usr/lib/python3/dist-packages/gajim/common/storage/omemo.py`,
   `/usr/lib/python3/dist-packages/omemo_dr/`
-- **Current refactor plan**: See `TODO.md` in the repository root for the full phase-by-phase
-  breakdown of the ongoing axolotl-only + BTBV refactor (branch `omemo-axolotl-btbv`).
+- **Refactor status**: Axolotl-only + BTBV refactor is **complete on `master`**. See `TODO.md`
+  for remaining open work (not the archived phase plans — those live in git history).
 
 ## Build System
 
@@ -59,7 +59,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 | Profile | Command | Flags | When |
 |---------|---------|-------|------|
-| Dev (default for agents) | `make DEBUG=1` | `-O0 -DDEBUG -g` | Day-to-day coding, fast rebuilds, assertions on; **runs 125 doctests** |
+| Dev (default for agents) | `make DEBUG=1` | `-O0 -DDEBUG -g` | Day-to-day coding, fast rebuilds, assertions on; **runs 132 doctests** |
 | Optimized | `make` | `-O2 -DNDEBUG -g` | Pre-release smoke test, performance checks; skips doctests |
 | ASan | `make DEBUG=1 ASAN=1` | dev + `-fsanitize=address` | Memory debugging (Linux: links `libasan`) |
 
@@ -177,7 +177,12 @@ Output lands in `packaging/build/` (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`, `.xb
 
 - **Output and buffer operations**: use `UiPort`, `BufferPort`, `LineStorePort`, and `RenderEvent` in handler/command logic — not raw `weechat_printf` / `weechat_buffer_*` (see Port abstraction). Direct `weechat_*` calls belong only in port adapters and hook registration glue.
 - Hook/callback **function signatures** must match WeeChat exactly (`weechat_*` types at the C boundary).
-- Use `weechat_prefix()` (or `RuntimePort::color()`) when building formatted strings passed to `UiPort`.
+- Use typed `UiPort` methods (`printf_error`, `printf_info`, `printf_network`,
+  `printf_date_tags_network`, `printf_date_tags_error`) for prefixed notifications — not
+  embedded `RuntimePort::default_runtime().prefix()` in message bodies. Use
+  `RuntimePort::default_runtime().color()` / `.xmpp_color()` for inline styling; reserve
+  `prefix("action")` only for dated chat message columns (`/me`, MAM mentions). Raw
+  `weechat_prefix()` belongs in port adapters (`ui_port.cpp`) only.
 - Buffer display values: `"1"` (don't auto-switch), `"auto"` (auto-switch)
 - Never reload plugin - always restart WeeChat (race condition with timer hooks)
 
@@ -339,8 +344,8 @@ Connection TUs register thin C adapters: receive `xmpp_stanza_t*`, wrap into `St
 
 | Port | Header | Role |
 |------|--------|------|
-| `weechat::UiPort` | `src/weechat/ui_port.hh` | Buffer output (`printf`, `printf_error`, `printf_info`, `printf_network`, `printf_date_tags`); `UiPort::for_buffer()` |
-| `weechat::RuntimePort` | `src/weechat/runtime_port.hh` | Host queries (`version_string`, `color`); `RuntimePort::default_runtime()` |
+| `weechat::UiPort` | `src/weechat/ui_port.hh` | Buffer output (`printf`, `printf_error`, `printf_info`, `printf_network`, `printf_date_tags`, `printf_date_tags_network`, `printf_date_tags_error`); `UiPort::for_buffer()` |
+| `weechat::RuntimePort` | `src/weechat/runtime_port.hh` | Host queries (`version_string`, `color`, `prefix`, `xmpp_color`); `RuntimePort::default_runtime()` |
 | `weechat::BufferPort` | `src/weechat/buffer_port.hh` | Buffer search + nicklist mutations |
 | `weechat::LineStorePort` | `src/weechat/line_store.hh` | Line updates by message tag (receipts, retractions, reactions, tombstones) |
 | `RenderEvent` / `UiAction` | `src/weechat/render_event.hh` | Sum type for the handler render step (print, nicklist, line glyph updates) |
@@ -357,7 +362,9 @@ Commands and handlers take or create `UiPort` (or return `RenderEvent`s) — not
 
 `tests/weechat_stub.hh` provides `CapturingUiPort`, `NullUiPort`, and `StubRuntimePort`. Handler-slice doctests exercise `StanzaView` + `NullUiPort` without a live WeeChat instance.
 
-Migration history: `TODO.md` § Port Abstraction (Waves 1–4 complete).
+Migration history: port abstraction Waves 0–4 and Phases 1–5 (StanzaView handlers,
+RenderEvent, BufferPort, parse utilities) are complete — see git history and archived
+`TODO.md` entries.
 
 ### Channel Types
 
@@ -422,7 +429,7 @@ Xepher follows **semantic versioning** (MAJOR.MINOR.PATCH):
 
 ### Release checklist
 
-1. **All commits pushed**, 125 doctests passing (`make DEBUG=1`), and optimized build OK (`make`).
+1. **All commits pushed**, 132 doctests passing (`make DEBUG=1`), and optimized build OK (`make`).
 2. **Bump version** in the three packaging files (all must match):
    - `packaging/arch/PKGBUILD` — `pkgver=X.Y.Z`
    - `packaging/rpm/weechat-xmpp.spec` — `Version: X.Y.Z` + new `%changelog` entry
@@ -540,7 +547,7 @@ Skip autojoin for IRC gateway rooms (causes connection issues):
 
 ### Testing Limitations
 
-- **125 doctests** cover handler slices, `StanzaView`, IQ builders, and port stubs (`make DEBUG=1` runs them automatically; `make test` anytime) — extend these when adding protocol logic
+- **132 doctests** cover handler slices, `StanzaView`, IQ builders, parse utilities, and port stubs (`make DEBUG=1` runs them automatically; `make test` anytime) — extend these when adding protocol logic
 - Full WeeChat integration still requires manual testing in a live instance
 - Use `/debug dump` for troubleshooting
 - Check logs: `/set xmpp.look.debug_level 2`
