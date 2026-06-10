@@ -453,6 +453,14 @@ namespace weechat
 
         bool connected() { return is_connected; }
 
+        // XEP-0045 §7.8.2: pending mediated invites for /decline.
+        void track_pending_mediated_invite(std::string_view room_jid,
+                                           std::string_view inviter_bare,
+                                           std::optional<std::string_view> password = std::nullopt);
+        [[nodiscard]] std::optional<std::size_t> find_pending_mediated_invite(
+            std::string_view room_jid, std::string_view inviter_bare) const;
+        void erase_pending_mediated_invite(std::size_t index);
+
         bool search_device(device* out, std::uint32_t id);
         void add_device(device *device);
         void device_free_all();

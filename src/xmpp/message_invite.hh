@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "test_export.hh"
 #include "xmpp/stanza_view.hh"
@@ -46,5 +47,37 @@ struct MediatedMucDecline {
 
 [[nodiscard]] XMPP_TEST_EXPORT std::optional<MediatedMucDecline>
 parse_mediated_muc_decline(StanzaView msg);
+
+struct MucInviteNotification {
+    std::vector<std::string> network_lines;
+};
+
+[[nodiscard]] XMPP_TEST_EXPORT MucInviteNotification
+render_direct_muc_invite_notification(const DirectMucInvite& invite);
+
+[[nodiscard]] XMPP_TEST_EXPORT MucInviteNotification
+render_mediated_muc_invite_notification(const MediatedMucInvite& invite);
+
+[[nodiscard]] XMPP_TEST_EXPORT std::string
+render_mediated_muc_decline_notification(const MediatedMucDecline& decline);
+
+struct MucAdminListItem {
+    std::string jid;
+    std::string nick;
+    std::string affiliation;
+};
+
+[[nodiscard]] XMPP_TEST_EXPORT std::vector<MucAdminListItem>
+parse_muc_admin_list_items(StanzaView admin_query);
+
+struct MucRegisterFormField {
+    std::string var;
+    std::string label;
+    std::string type;
+    std::string value;
+};
+
+[[nodiscard]] XMPP_TEST_EXPORT std::vector<MucRegisterFormField>
+parse_muc_register_form_fields(StanzaView xdata_form);
 
 }  // namespace xmpp

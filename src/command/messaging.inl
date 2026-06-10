@@ -108,20 +108,20 @@ int command__invite(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(
-            ptr_account->buffer,
-            _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "invite");
+        ui->printf_error(fmt::format(
+            "{}: \"invite\" command can only be executed in a MUC buffer",
+            WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(
+            "{}: you are not connected to server", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -141,38 +141,37 @@ int command__invite(const void *pointer, void *data,
     if (argc < 2 || invitee_arg >= argc
         || std::string_view{argv[invitee_arg]} == "--mediated")
     {
-        weechat_printf(buffer,
-                        _("%s%s: usage: /invite [--mediated] <jid> [<reason>]"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(
+            "{}: usage: /invite [--mediated] <jid> [<reason>]",
+            WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
-    const char *invitee_jid = argv[invitee_arg];
-    const char *reason = (invitee_arg + 1 < argc) ? argv_eol[invitee_arg + 1] : nullptr;
+    const std::string_view invitee_jid{argv[invitee_arg]};
+    const std::string_view reason = (invitee_arg + 1 < argc)
+        ? std::string_view{argv_eol[invitee_arg + 1]}
+        : std::string_view{};
 
     if (mediated)
     {
         auto inv_msg = stanza::message().to(ptr_channel->id).mediated_invite(
-            invitee_jid, reason ? std::string_view(reason) : std::string_view{});
+            invitee_jid, reason);
         ptr_account->connection.send(inv_msg.build(ptr_account->context).get());
 
-        weechat_printf(buffer, "%s%s",
-                       weechat_prefix("network"),
-                       fmt::format("Mediated invite sent for {} to join {}",
-                                   invitee_jid, ptr_channel->name).c_str());
+        ui->printf_network(fmt::format(
+            "Mediated invite sent for {} to join {}",
+            invitee_jid, ptr_channel->name));
     }
     else
     {
         auto inv_msg = stanza::message().to(invitee_jid);
         static_cast<stanza::xep0249::message&>(inv_msg).invite(
-            ptr_channel->name.data(), nullptr, reason);
+            ptr_channel->name.data(), nullptr,
+            reason.empty() ? nullptr : reason.data());
         ptr_account->connection.send(inv_msg.build(ptr_account->context).get());
 
-        weechat_printf(buffer,
-                        _("%sInvited %s to %s"),
-                        weechat_prefix("network"),
-                        invitee_jid,
-                        ptr_channel->name.data());
+        ui->printf_network(fmt::format(
+            "Invited {} to {}", invitee_jid, ptr_channel->name));
     }
 
     return WEECHAT_RC_OK;
@@ -194,36 +193,24 @@ int command__decline(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(
+            "{}: you are not connected to server", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     if (ptr_account->pending_mediated_invites.empty())
     {
-        weechat_printf(buffer,
-                        _("%s%s: no pending mediated MUC invitations"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(
+            "{}: no pending mediated MUC invitations", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     std::optional<std::size_t> match_idx;
-    const char *reason = nullptr;
-
-    auto find_pending = [&](std::string_view room_jid, std::string_view inviter)
-        -> std::optional<std::size_t>
-    {
-        for (std::size_t i = 0; i < ptr_account->pending_mediated_invites.size(); ++i)
-        {
-            const auto& pending = ptr_account->pending_mediated_invites[i];
-            if (pending.room_jid == room_jid && pending.inviter_bare == inviter)
-                return i;
-        }
-        return std::nullopt;
-    };
+    std::string_view reason;
 
     if (argc < 2)
     {
@@ -234,60 +221,40 @@ int command__decline(const void *pointer, void *data,
         const std::string_view arg1{argv[1]};
         if (arg1.contains('@'))
         {
-            weechat_printf(buffer,
-                            _("%s%s: usage: /decline [<room> <inviter> [<reason>]]"),
-                            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            ui->printf_error(fmt::format(
+                "{}: usage: /decline [<room> <inviter> [<reason>]]",
+                WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
         match_idx = ptr_account->pending_mediated_invites.size() - 1;
         reason = argv_eol[1];
     }
-    else if (argc == 3)
-    {
-        const std::string_view room_jid{argv[1]};
-        const std::string_view inviter{argv[2]};
-        match_idx = find_pending(room_jid, inviter);
-        if (!match_idx)
-        {
-            weechat_printf(buffer, "%s%s",
-                           weechat_prefix("error"),
-                           fmt::format("{}: no pending invite from {} for {}",
-                                       WEECHAT_XMPP_PLUGIN_NAME,
-                                       inviter, room_jid).c_str());
-            return WEECHAT_RC_OK;
-        }
-    }
     else
     {
         const std::string_view room_jid{argv[1]};
         const std::string_view inviter{argv[2]};
-        match_idx = find_pending(room_jid, inviter);
+        match_idx = ptr_account->find_pending_mediated_invite(room_jid, inviter);
         if (!match_idx)
         {
-            weechat_printf(buffer, "%s%s",
-                           weechat_prefix("error"),
-                           fmt::format("{}: no pending invite from {} for {}",
-                                       WEECHAT_XMPP_PLUGIN_NAME,
-                                       inviter, room_jid).c_str());
+            ui->printf_error(fmt::format(
+                "{}: no pending invite from {} for {}",
+                WEECHAT_XMPP_PLUGIN_NAME, inviter, room_jid));
             return WEECHAT_RC_OK;
         }
-        reason = argv_eol[3];
+        if (argc >= 4)
+            reason = argv_eol[3];
     }
 
     const auto pending = ptr_account->pending_mediated_invites[*match_idx];
     auto dec_msg = stanza::message().to(pending.room_jid).mediated_decline(
-        pending.inviter_bare,
-        reason ? std::string_view(reason) : std::string_view{});
+        pending.inviter_bare, reason);
     ptr_account->connection.send(dec_msg.build(ptr_account->context).get());
 
-    ptr_account->pending_mediated_invites.erase(
-        ptr_account->pending_mediated_invites.begin()
-        + static_cast<std::ptrdiff_t>(*match_idx));
+    ptr_account->erase_pending_mediated_invite(*match_idx);
 
-    weechat_printf(buffer, "%s%s",
-                   weechat_prefix("network"),
-                   fmt::format("Declined invitation to {} from {}",
-                               pending.room_jid, pending.inviter_bare).c_str());
+    ui->printf_network(fmt::format(
+        "Declined invitation to {} from {}",
+        pending.room_jid, pending.inviter_bare));
     return WEECHAT_RC_OK;
 }
 

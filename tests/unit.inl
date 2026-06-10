@@ -1156,6 +1156,41 @@ TEST_CASE("parse_mediated_muc_invite reads XEP-0045 muc#user invite")
     xmpp_stanza_release(msg);
 }
 
+TEST_CASE("render_mediated_muc_invite_notification includes decline hint")
+{
+    xmpp::MediatedMucInvite invite;
+    invite.room_jid = "room@conf.example";
+    invite.inviter_bare = "alice@example.org";
+    invite.reason = "join us";
+
+    const auto lines = xmpp::render_mediated_muc_invite_notification(invite).network_lines;
+    REQUIRE(lines.size() == 3);
+    CHECK(lines[0].contains("alice@example.org"));
+    CHECK(lines[0].contains("room@conf.example"));
+    CHECK(lines[1].contains("/join room@conf.example"));
+    CHECK(lines[2].contains("/decline"));
+}
+
+TEST_CASE("parse_muc_admin_list_items reads muc#admin affiliation list")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *query = xmpp_stanza_new_from_string(env.ctx,
+        "<query xmlns='http://jabber.org/protocol/muc#admin'>"
+        "<item affiliation='member' jid='bob@example.org' nick='bob'/>"
+        "</query>");
+    REQUIRE(query != nullptr);
+
+    const auto items = xmpp::parse_muc_admin_list_items(xmpp::StanzaView{query});
+    REQUIRE(items.size() == 1);
+    CHECK(items[0].jid == "bob@example.org");
+    CHECK(items[0].nick == "bob");
+    CHECK(items[0].affiliation == "member");
+
+    xmpp_stanza_release(query);
+}
+
 TEST_CASE("parse_mediated_muc_decline reads XEP-0045 muc#user decline")
 {
     unit_strophe_env env;

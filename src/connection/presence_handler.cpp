@@ -31,6 +31,7 @@
 #include "avatar.hh"
 #include "debug.hh"
 #include "connection/internal.hh"
+#include "weechat/ui_port.hh"
 #include "xmpp/xep-0054.inl"
 #include "xmpp/xep-0084.inl"
 #include "xmpp/xep-0172.inl"

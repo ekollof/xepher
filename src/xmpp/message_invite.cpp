@@ -4,7 +4,10 @@
 
 #include "message_invite.hh"
 
+#include <ranges>
 #include <string_view>
+
+#include <fmt/core.h>
 
 #include "xmpp/node.hh"
 
@@ -118,6 +121,97 @@ std::optional<MediatedMucDecline> parse_mediated_muc_decline(StanzaView msg)
     }
 
     return parsed;
+}
+
+MucInviteNotification render_direct_muc_invite_notification(const DirectMucInvite& invite)
+{
+    MucInviteNotification out;
+    const auto reason_suffix = invite.reason
+        ? fmt::format(" ({})", *invite.reason) : std::string{};
+    const auto join_args = invite.password
+        ? fmt::format(" {}", *invite.password) : std::string{};
+    out.network_lines.push_back(
+        fmt::format("{} invited you to {}{}",
+                    invite.inviter_bare, invite.room_jid, reason_suffix));
+    out.network_lines.push_back(
+        fmt::format("To join: /join {}{}", invite.room_jid, join_args));
+    return out;
+}
+
+MucInviteNotification render_mediated_muc_invite_notification(const MediatedMucInvite& invite)
+{
+    MucInviteNotification out;
+    const std::string inviter = invite.inviter_bare
+        ? *invite.inviter_bare
+        : invite.room_jid;
+    const auto reason_suffix = invite.reason
+        ? fmt::format(" ({})", *invite.reason) : std::string{};
+    const auto join_args = invite.password
+        ? fmt::format(" {}", *invite.password) : std::string{};
+    out.network_lines.push_back(
+        fmt::format("{} invited you to {}{}",
+                    inviter, invite.room_jid, reason_suffix));
+    out.network_lines.push_back(
+        fmt::format("To join: /join {}{}", invite.room_jid, join_args));
+    out.network_lines.push_back("To decline: /decline [reason]");
+    return out;
+}
+
+std::string render_mediated_muc_decline_notification(const MediatedMucDecline& decline)
+{
+    const std::string_view who = decline.decliner_bare
+        ? std::string_view{*decline.decliner_bare}
+        : std::string_view{decline.room_jid};
+    const auto reason_suffix = decline.reason
+        ? fmt::format(" ({})", *decline.reason) : std::string{};
+    return fmt::format("{} declined your invitation to {}{}",
+                       who, decline.room_jid, reason_suffix);
+}
+
+std::vector<MucAdminListItem> parse_muc_admin_list_items(StanzaView admin_query)
+{
+    if (!admin_query.valid())
+        return {};
+
+    std::vector<MucAdminListItem> items;
+    for (const auto item : admin_query)
+    {
+        if (item.name() != "item")
+            continue;
+        MucAdminListItem parsed;
+        parsed.jid = item.attr_string("jid");
+        parsed.nick = item.attr_string("nick");
+        parsed.affiliation = item.attr_string("affiliation");
+        items.push_back(std::move(parsed));
+    }
+    return items;
+}
+
+std::vector<MucRegisterFormField> parse_muc_register_form_fields(StanzaView xdata_form)
+{
+    if (!xdata_form.valid())
+        return {};
+
+    std::vector<MucRegisterFormField> fields;
+    for (const auto field : xdata_form)
+    {
+        if (field.name() != "field")
+            continue;
+        const std::string var = field.attr_string("var");
+        if (var.empty() || var == "FORM_TYPE")
+            continue;
+        MucRegisterFormField parsed;
+        parsed.var = var;
+        parsed.label = field.attr_string("label");
+        parsed.type = field.attr_string("type");
+        for (const auto value_el : field)
+        {
+            if (value_el.name() == "value")
+                parsed.value = value_el.text();
+        }
+        fields.push_back(std::move(parsed));
+    }
+    return fields;
 }
 
 }  // namespace xmpp

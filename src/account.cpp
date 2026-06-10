@@ -662,6 +662,45 @@ bool weechat::account::roster_bare_jid_online(std::string_view bare_jid) const
     });
 }
 
+void weechat::account::track_pending_mediated_invite(
+    std::string_view room_jid,
+    std::string_view inviter_bare,
+    std::optional<std::string_view> password)
+{
+    pending_mediated_invite pending;
+    pending.room_jid = room_jid;
+    pending.inviter_bare = inviter_bare;
+    if (password && !password->empty())
+        pending.password = std::string(*password);
+    std::erase_if(pending_mediated_invites,
+                  [&](const auto& p) {
+                      return p.room_jid == pending.room_jid
+                          && p.inviter_bare == pending.inviter_bare;
+                  });
+    pending_mediated_invites.push_back(std::move(pending));
+}
+
+std::optional<std::size_t> weechat::account::find_pending_mediated_invite(
+    std::string_view room_jid,
+    std::string_view inviter_bare) const
+{
+    for (std::size_t i = 0; i < pending_mediated_invites.size(); ++i)
+    {
+        const auto& pending = pending_mediated_invites[i];
+        if (pending.room_jid == room_jid && pending.inviter_bare == inviter_bare)
+            return i;
+    }
+    return std::nullopt;
+}
+
+void weechat::account::erase_pending_mediated_invite(std::size_t index)
+{
+    if (index >= pending_mediated_invites.size())
+        return;
+    pending_mediated_invites.erase(
+        pending_mediated_invites.begin() + static_cast<std::ptrdiff_t>(index));
+}
+
 void weechat::account::update_roster_nicklist_entry(std::string_view bare_jid)
 {
     if (bare_jid.empty() || !buffer)

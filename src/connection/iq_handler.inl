@@ -454,14 +454,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 case weechat::account::muc_owner_kind::register_get: what = "fetch registration";     break;
                 case weechat::account::muc_owner_kind::register_set: what = "submit registration";   break;
             }
-            weechat_printf(out, "%s%s: %s failed: %s",
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                           what, err.c_str());
+            auto ui = weechat::UiPort::for_buffer(out);
+            ui->printf_error(fmt::format(
+                "{}: {} failed: {}", WEECHAT_XMPP_PLUGIN_NAME, what, err));
             return true;
         }
 
         if (type && weechat_strcasecmp(type, "result") == 0)
         {
+            auto ui = weechat::UiPort::for_buffer(out);
             switch (info.kind)
             {
                 case weechat::account::muc_owner_kind::config_get:
@@ -656,83 +657,52 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
                 case weechat::account::muc_owner_kind::aff_set:
                 {
-                    weechat_printf(out, "%s%s: affiliation change applied for %s",
-                                   weechat_prefix("network"),
-                                   WEECHAT_XMPP_PLUGIN_NAME,
-                                   info.room_jid.c_str());
+                    ui->printf_network(fmt::format(
+                        "{}: affiliation change applied for {}",
+                        WEECHAT_XMPP_PLUGIN_NAME, info.room_jid));
                     return true;
                 }
                 case weechat::account::muc_owner_kind::aff_list:
                 {
-                    weechat_printf(out, "%s%s",
-                                   weechat_prefix("network"),
-                                   fmt::format("{} list for {}:",
-                                               info.list_affiliation,
-                                               info.room_jid).c_str());
-                    if (admin_q)
+                    ui->printf_network(fmt::format(
+                        "{} list for {}:", info.list_affiliation, info.room_jid));
+                    for (const auto& item :
+                         ::xmpp::parse_muc_admin_list_items(
+                             ::xmpp::StanzaView{admin_q}))
                     {
-                        for (xmpp_stanza_t *item = xmpp_stanza_get_children(admin_q);
-                             item; item = xmpp_stanza_get_next(item))
-                        {
-                            const char *iname = xmpp_stanza_get_name(item);
-                            if (!iname || weechat_strcasecmp(iname, "item") != 0)
-                                continue;
-                            const char *jid_attr = xmpp_stanza_get_attribute(item, "jid");
-                            const char *nick_attr = xmpp_stanza_get_attribute(item, "nick");
-                            const std::string_view jid = jid_attr ? jid_attr : "(no jid)";
-                            const std::string_view nick = nick_attr ? nick_attr : "";
-                            const char *aff = xmpp_stanza_get_attribute(item, "affiliation");
-                            const auto aff_suffix = (aff
-                                && weechat_strcasecmp(aff, info.list_affiliation.c_str()) != 0)
-                                ? fmt::format(" ({})", aff) : std::string{};
-                            weechat_printf(out, "%s",
-                                           fmt::format("  {}{}{}  {}{}{}{}",
-                                                       weechat_color("chat_nick"), jid,
-                                                       weechat_color("reset"),
-                                                       weechat_color("chat_value"), nick,
-                                                       weechat_color("reset"), aff_suffix).c_str());
-                        }
+                        const std::string_view jid = item.jid.empty()
+                            ? std::string_view{"(no jid)"}
+                            : std::string_view{item.jid};
+                        const auto aff_suffix = (!item.affiliation.empty()
+                            && item.affiliation != info.list_affiliation)
+                            ? fmt::format(" ({})", item.affiliation) : std::string{};
+                        ui->printf(fmt::format(
+                            "  {}{}{}  {}{}{}{}",
+                            weechat_color("chat_nick"), jid, weechat_color("reset"),
+                            weechat_color("chat_value"), item.nick,
+                            weechat_color("reset"), aff_suffix));
                     }
                     return true;
                 }
                 case weechat::account::muc_owner_kind::register_get:
                 {
-                    xmpp_stanza_t *xdata = register_q
-                        ? xmpp_stanza_get_child_by_name_and_ns(
-                              register_q, "x", "jabber:x:data")
-                        : nullptr;
+                    const ::xmpp::StanzaView xdata = register_q
+                        ? ::xmpp::StanzaView{register_q}.child("x", "jabber:x:data")
+                        : ::xmpp::StanzaView{};
+                    const auto fields = ::xmpp::parse_muc_register_form_fields(xdata);
 
-                    if (!info.register_nick.empty() && xdata)
+                    if (!info.register_nick.empty() && xdata.valid())
                     {
                         stanza::xep0004::form submit("submit");
                         submit.add_hidden("FORM_TYPE",
                             "http://jabber.org/protocol/muc#register");
-                        for (xmpp_stanza_t *field = xmpp_stanza_get_children(xdata);
-                             field; field = xmpp_stanza_get_next(field))
+                        for (const auto& field : fields)
                         {
-                            const char *fname = xmpp_stanza_get_name(field);
-                            if (!fname || weechat_strcasecmp(fname, "field") != 0)
-                                continue;
-                            const char *var = xmpp_stanza_get_attribute(field, "var");
-                            if (!var)
-                                continue;
-                            std::string value;
-                            if (std::string_view{var} == "muc#register_roomnick")
-                                value = info.register_nick;
-                            else
-                            {
-                                for (xmpp_stanza_t *v = xmpp_stanza_get_children(field);
-                                     v; v = xmpp_stanza_get_next(v))
-                                {
-                                    const char *vname = xmpp_stanza_get_name(v);
-                                    if (vname && weechat_strcasecmp(vname, "value") == 0)
-                                        value = stanza_element_text(v);
-                                }
-                            }
-                            stanza::xep0004::field fd(var);
-                            if (const char *typ = xmpp_stanza_get_attribute(field, "type"))
-                                fd.type(typ);
-                            fd.value(value);
+                            stanza::xep0004::field fd(field.var);
+                            if (!field.type.empty())
+                                fd.type(field.type);
+                            fd.value(field.var == "muc#register_roomnick"
+                                ? info.register_nick : field.value);
                             submit.add_field(fd);
                         }
 
@@ -751,57 +721,32 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         set_iq.muc_register(rq);
                         account.connection.send(set_iq.build(account.context).get());
 
-                        weechat_printf(out, "%s%s",
-                                       weechat_prefix("network"),
-                                       fmt::format("{}: registration form submitted for {}",
-                                                   WEECHAT_XMPP_PLUGIN_NAME,
-                                                   info.room_jid).c_str());
+                        ui->printf_network(fmt::format(
+                            "{}: registration form submitted for {}",
+                            WEECHAT_XMPP_PLUGIN_NAME, info.room_jid));
                         return true;
                     }
 
-                    weechat_printf(out, "%s%s",
-                                   weechat_prefix("network"),
-                                   fmt::format("Registration info for {}:",
-                                               info.room_jid).c_str());
-                    if (xdata)
+                    ui->printf_network(fmt::format(
+                        "Registration info for {}:", info.room_jid));
+                    for (const auto& field : fields)
                     {
-                        for (xmpp_stanza_t *field = xmpp_stanza_get_children(xdata);
-                             field; field = xmpp_stanza_get_next(field))
-                        {
-                            const char *fname = xmpp_stanza_get_name(field);
-                            if (!fname || weechat_strcasecmp(fname, "field") != 0)
-                                continue;
-                            const char *var = xmpp_stanza_get_attribute(field, "var");
-                            const char *label = xmpp_stanza_get_attribute(field, "label");
-                            if (!var || std::string_view{var} == "FORM_TYPE")
-                                continue;
-                            std::string val;
-                            for (xmpp_stanza_t *v = xmpp_stanza_get_children(field);
-                                 v; v = xmpp_stanza_get_next(v))
-                            {
-                                const char *vname = xmpp_stanza_get_name(v);
-                                if (vname && weechat_strcasecmp(vname, "value") == 0)
-                                    val = stanza_element_text(v);
-                            }
-                            weechat_printf(out, "%s",
-                                           fmt::format("  {}{}{}: {}{}{}",
-                                                       weechat_color("chat_nick"),
-                                                       label ? label : var,
-                                                       weechat_color("reset"),
-                                                       weechat_color("chat_value"),
-                                                       val.empty() ? "(empty)" : val,
-                                                       weechat_color("reset")).c_str());
-                        }
+                        ui->printf(fmt::format(
+                            "  {}{}{}: {}{}{}",
+                            weechat_color("chat_nick"),
+                            field.label.empty() ? field.var : field.label,
+                            weechat_color("reset"),
+                            weechat_color("chat_value"),
+                            field.value.empty() ? "(empty)" : field.value,
+                            weechat_color("reset")));
                     }
                     return true;
                 }
                 case weechat::account::muc_owner_kind::register_set:
                 {
-                    weechat_printf(out, "%s%s",
-                                   weechat_prefix("network"),
-                                   fmt::format("{}: room registration submitted for {}",
-                                               WEECHAT_XMPP_PLUGIN_NAME,
-                                               info.room_jid).c_str());
+                    ui->printf_network(fmt::format(
+                        "{}: room registration submitted for {}",
+                        WEECHAT_XMPP_PLUGIN_NAME, info.room_jid));
                     return true;
                 }
             }
