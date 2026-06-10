@@ -353,6 +353,9 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             fmt::format("{}: file upload failed ({})",
                         WEECHAT_XMPP_PLUGIN_NAME,
                         ctx->curl_error.empty() ? "unknown error" : ctx->curl_error));
+        if (!ctx->local_path.empty()
+            && ctx->local_path.rfind("/tmp/xepher-upload-", 0) == 0)
+            ::unlink(ctx->local_path.c_str());
         return WEECHAT_RC_OK;
     }
 
@@ -452,6 +455,10 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         req.mime = ctx->content_type;
         invoke_icat_preview(req, *ptr_account);
     }
+
+    if (!ctx->local_path.empty()
+        && ctx->local_path.rfind("/tmp/xepher-upload-", 0) == 0)
+        ::unlink(ctx->local_path.c_str());
 
     return WEECHAT_RC_OK;
 }
