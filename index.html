@@ -317,24 +317,28 @@
       <h3>Encrypted File Sharing</h3>
       <p>XEP-0448 — AES-256-GCM encrypt files before upload; decrypt on receive automatically.</p>
     </div>
+    <div class="feature">
+      <h3>Inline Images &amp; Stickers</h3>
+      <p>Kitty terminal graphics via vendored <code>icat.py</code> — SFS/SIMS/OOB uploads, XEP-0449 stickers, XEP-0514 custom emoji, and Movim stickers via XEP-0231 BoB (<code>cid:…@bob.xmpp.org</code>).</p>
+    </div>
   </div>
 
   <div class="install">
     <h2>Installation</h2>
-    <p style="margin-bottom:1rem;font-size:0.9rem;color:var(--muted)">Pre-built packages for Debian, Fedora, Arch, Void, and Alpine are on <a href="https://github.com/ekollof/xepher/releases/latest">GitHub Releases</a> (latest: v0.8.1). Use v0.8.1+ — v0.8.0 RPM/APK had a packaging bug.</p>
+    <p style="margin-bottom:1rem;font-size:0.9rem;color:var(--muted)">Pre-built packages for Debian, Fedora, Arch, Void, and Alpine are on <a href="https://github.com/ekollof/xepher/releases/latest">GitHub Releases</a> (latest: v0.9.0). Use v0.8.1+ — v0.8.0 RPM/APK had a packaging bug.</p>
     <pre># Debian/Ubuntu
-sudo dpkg -i xepher_0.8.1-1_amd64.deb
+sudo dpkg -i xepher_0.9.0-1_amd64.deb
 
 # Fedora
-sudo dnf install ./xepher-0.8.1-1.fc44.x86_64.rpm
+sudo dnf install ./xepher-0.9.0-1.fc*.x86_64.rpm
 
 # Arch
-sudo pacman -U xepher-0.8.1-1-x86_64.pkg.tar.zst</pre>
+sudo pacman -U xepher-0.9.0-1-x86_64.pkg.tar.zst</pre>
     <p>Or build from source:</p>
     <pre>git clone --depth 1 git@github.com:ekollof/xepher.git
 cd xepher
 make install-deps   # detects distro, installs packages
-make                # 109 doctests run automatically
+make DEBUG=1        # 118 doctests (plain make skips them)
 make install        # installs to ~/.local/share/weechat/plugins/</pre>
     <p>Requires WeeChat &ge; 3.0, libstrophe, libxml2, lmdb, libomemo-c, gpgme, libfmt, and GCC &ge; 12 / Clang &ge; 15.</p>
     <p>See the <a href="https://github.com/ekollof/xepher/wiki/Installation">Installation wiki page</a> for all platforms, BSD notes, and package details.</p>
@@ -393,8 +397,10 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
         <tr><td>XEP-0441</td><td>MAM Preferences</td><td>/mam prefs — view and set archiving policy</td></tr>
         <tr><td>XEP-0442</td><td>Pubsub MAM</td><td>Fetch feed history via MAM with RSM cursor persistence</td></tr>
         <tr><td>XEP-0444</td><td>Message Reactions</td><td></td></tr>
+        <tr><td>XEP-0231</td><td>Bits of Binary</td><td>Movim XHTML-IM <code>cid:…@bob.xmpp.org</code> stickers; IQ-fetch + icat</td></tr>
         <tr><td>XEP-0447</td><td>Stateless File Sharing</td><td></td></tr>
         <tr><td>XEP-0448</td><td>Encrypted File Sharing</td><td>AES-256-GCM encrypt/decrypt for OMEMO channels</td></tr>
+        <tr><td>XEP-0449</td><td>Stickers</td><td>Receive with SFS payloads; inline via icat</td></tr>
         <tr><td>XEP-0452</td><td>MUC Mention Notifications</td><td>Receive missed @mention notifications from MUC service</td></tr>
         <tr><td>XEP-0461</td><td>Message Replies</td><td></td></tr>
         <tr><td>XEP-0466</td><td>Ephemeral Messages</td><td>/ephemeral &lt;seconds&gt; &lt;text&gt; — auto-tombstone after timer</td></tr>
@@ -402,6 +408,7 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
         <tr><td>XEP-0490</td><td>Message Displayed Synchronization</td><td>Sync read state across own devices</td></tr>
         <tr><td>XEP-0492</td><td>Chat Notification Settings</td><td>/notify [jid] [always|on-mention|never]</td></tr>
         <tr><td>XEP-0511</td><td>OpenGraph Link Previews</td><td></td></tr>
+        <tr><td>XEP-0514</td><td>Emoji Markup</td><td>Custom emoji spans resolved against SFS/SIMS hashes; icat</td></tr>
       </tbody>
     </table>
   </div>
