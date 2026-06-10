@@ -42,6 +42,7 @@
 #include "xmpp/message_body.hh"
 #include "xmpp/message_media.hh"
 #include "xmpp/message_sticker_emoji.hh"
+#include "xmpp/message_bob.hh"
 #include "xmpp/message_omemo.hh"
 #include "xmpp/message_invite.hh"
 #include "xmpp/message_ephemeral.hh"
@@ -199,6 +200,7 @@ TEST_CASE("parse_int64")
     }
 }
 
+// doctest line-number collision guard (omemo_xep.inl)
 TEST_CASE("format_utc_timestamp")
 {
     CHECK(format_utc_timestamp(0) == "1970-01-01T00:00:00Z");
@@ -801,6 +803,7 @@ TEST_CASE("angle_to_weechat_color output range")
     }
 }
 
+// doctest line-number collision guard (omemo_mechanics.inl)
 TEST_CASE("consistent_color")
 {
     SUBCASE("empty string returns empty")
@@ -2857,5 +2860,54 @@ TEST_CASE("is_image_mime_type rejects non-image MIME types")
     CHECK(is_image_mime_type("audio/ogg") == false);
     CHECK(is_image_mime_type("image") == false);
     CHECK(is_image_mime_type("") == false);
+}
+
+TEST_CASE("collect_bob_image_refs parses Movim XHTML-IM cid sticker")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='groupchat' "
+        "from='room@conference.example/Alice'>"
+        "<body>Sticker notification</body>"
+        "<html xmlns='http://jabber.org/protocol/xhtml-im'>"
+        "<body xmlns='http://www.w3.org/1999/xhtml'>"
+        "<p><img alt='Sticker' "
+        "src='cid:sha-256+75b3af0d3dd8b6d6edff67cacaf4e2a00d1781802a1d3eb8f5c2464a02442e0b@bob.xmpp.org'/>"
+        "</p></body></html>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    CHECK(xmpp::message_has_xhtml_bob_images(xmpp::StanzaView(msg)));
+
+    const auto refs = xmpp::collect_bob_image_refs(xmpp::StanzaView(msg));
+    REQUIRE(refs.size() == 1);
+    CHECK(refs[0].cid
+        == "sha-256+75b3af0d3dd8b6d6edff67cacaf4e2a00d1781802a1d3eb8f5c2464a02442e0b@bob.xmpp.org");
+    CHECK(refs[0].inline_b64.empty());
+
+    xmpp_stanza_release(msg);
+}
+
+TEST_CASE("collect_bob_image_refs parses inline XEP-0231 data element")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<data xmlns='urn:xmpp:bob' "
+        "cid='sha1+abc@bob.xmpp.org' type='image/png'>aGVsbG8=</data>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto refs = xmpp::collect_bob_image_refs(xmpp::StanzaView(msg));
+    REQUIRE(refs.size() == 1);
+    CHECK(refs[0].cid == "sha1+abc@bob.xmpp.org");
+    CHECK(refs[0].mime == "image/png");
+    CHECK(refs[0].inline_b64 == "aGVsbG8=");
+
+    xmpp_stanza_release(msg);
 }
 

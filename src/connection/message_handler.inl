@@ -947,8 +947,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // We apply it whenever XHTML is present AND the message is not encrypted
     // (encrypted messages have no usable XHTML anyway).
     // If plain <body> is also absent we use the XHTML as the sole text source.
+    // XEP-0231: Movim stickers use <img src='cid:…@bob.xmpp.org'/> without inline
+    // BoB data — skip XHTML text when icat will fetch/display the image.
+    const bool icat_enabled_early = weechat::config::instance
+        && weechat::config::instance->look.icat.boolean();
+    const bool skip_xhtml_for_bob = icat_enabled_early
+        && ::xmpp::message_has_xhtml_bob_images(::xmpp::StanzaView(stanza));
     std::string xhtml_fallback;
-    if (!encrypted && !x)
+    if (!encrypted && !x && !skip_xhtml_for_bob)
     {
         xmpp_stanza_t *html_elem = xmpp_stanza_get_child_by_name_and_ns(
             stanza, "html", "http://jabber.org/protocol/xhtml-im");
@@ -972,7 +978,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             }
         }
     }
-    
+    if (skip_xhtml_for_bob)
+        intext_storage.clear();
+
     // Auto-enable OMEMO when receiving encrypted messages (PM or MUC).
     // MUC auto-enable is now safe because we have real-JID tracking + bundle readiness checks.
     if (channel
@@ -2145,6 +2153,34 @@ message_handler_after_omemo:
                 incoming_image_height,
                 incoming_image_mime,
             });
+        }
+
+        // XEP-0231: BoB stickers (Movim XHTML-IM cid references).
+        if (icat_enabled)
+        {
+            for (const auto &bob : ::xmpp::collect_bob_image_refs(media_view))
+            {
+                if (!bob.inline_b64.empty())
+                {
+                    const auto bytes = ::xmpp::bob_decode_base64(bob.inline_b64);
+                    if (bytes.empty())
+                        continue;
+                    const std::string mime = bob.mime.empty()
+                        ? "image/png" : bob.mime;
+                    if (auto path = ::xmpp::bob_cache_store_bytes(
+                            account, bob.cid, mime, bytes))
+                    {
+                        emit_icat(pending_icat_preview{*path, 0, 0, mime});
+                    }
+                    continue;
+                }
+
+                if (!from)
+                    continue;
+                ::xmpp::bob_start_fetch(account, from, bob.cid, bob.mime,
+                                        channel->buffer, channel_jid_str,
+                                        stable_id_str, is_mam_replay);
+            }
         }
     }
 

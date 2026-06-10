@@ -182,6 +182,7 @@ SRCS=src/plugin.cpp \
 	 src/connection/pep_handler.cpp \
 	 src/connection/iq_ping_handler.cpp \
 	 src/connection/iq_avatar_handler.cpp \
+	 src/connection/iq_bob_handler.cpp \
 	 src/connection/iq_pubsub_feed_handler.cpp \
 	 src/connection/iq_omemo_pubsub_handler.cpp \
 	 src/connection/iq_upload_handler.cpp \
@@ -243,6 +244,7 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/message_body.cpp \
 	 src/xmpp/message_media.cpp \
 	 src/xmpp/message_sticker_emoji.cpp \
+	 src/xmpp/message_bob.cpp \
 	 src/xmpp/message_omemo.cpp \
 	 src/xmpp/message_invite.cpp \
 	 src/xmpp/message_ephemeral.cpp \

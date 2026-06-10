@@ -15,6 +15,7 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include <optional>
 #include <expected>
 #include <utility>
@@ -310,6 +311,19 @@ namespace weechat
 
         // XEP-0280: pending carbons enable IQ id (connect-time negotiation).
         std::optional<std::string> pending_carbons_enable_iq_;
+
+        // XEP-0231: BoB image fetches for XHTML-IM cid:…@bob.xmpp.org stickers.
+        struct bob_icat_context {
+            std::string cid;
+            struct t_gui_buffer *buffer = nullptr;
+            std::string channel_jid;
+            std::string stable_id;
+            std::string mime;
+            bool mam_replay = false;
+        };
+        std::unordered_map<std::string, bob_icat_context> bob_fetch_queries;  // iq_id → ctx
+        std::unordered_set<std::string> bob_inflight_cids;
+        std::unordered_map<std::string, std::vector<bob_icat_context>> bob_deferred_icat;
 
         // XEP-0060: pending publish IQs (/feed post, /feed reply, /feed retract).
         // Maps IQ id → context used to report errors to the user.
