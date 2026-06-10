@@ -443,7 +443,6 @@ int command__whois(const void *pointer, void *data,
 
     (void) pointer;
     (void) data;
-    (void) argv_eol;
 
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 
@@ -461,23 +460,32 @@ int command__whois(const void *pointer, void *data,
     std::string target_storage;
     if (argc > 1)
     {
-        std::string_view arg(argv[1]);
-        // In a MUC buffer, treat arguments without '@' as nicks
+        const char *arg_raw = argv_eol[1];
+        if (!arg_raw || !*arg_raw)
+        {
+            weechat_printf(buffer, "%s%s: missing JID argument",
+                           weechat_prefix("error"), argv[0]);
+            return WEECHAT_RC_OK;
+        }
+
+        std::string_view arg(arg_raw);
+        // In a MUC buffer, treat arguments without '@' as nicks (argv_eol so
+        // multi-word nicks like "Zero Tolerance" are not split on spaces).
         if (ptr_channel && ptr_channel->type == weechat::channel::chat_type::MUC
             && !arg.contains('@'))
         {
-            target_storage = ptr_channel->find_member_by_nick(std::string(arg));
+            target_storage = ptr_channel->find_member_by_nick(arg);
             if (target_storage.empty())
             {
                 weechat_printf(buffer, "%s%s: nick '%s' not found in this MUC",
-                               weechat_prefix("error"), argv[0], argv[1]);
+                               weechat_prefix("error"), argv[0], arg_raw);
                 return WEECHAT_RC_OK;
             }
             target = target_storage.c_str();
         }
         else
         {
-            target = argv[1];
+            target = arg_raw;
         }
     }
     else if (ptr_channel && ptr_channel->type == weechat::channel::chat_type::PM)
