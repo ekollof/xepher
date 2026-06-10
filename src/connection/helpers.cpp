@@ -456,7 +456,7 @@ void esfs_start_download(std::string_view cipher_url,
             ctx.success = false;
             ctx.error_msg = path.error();
         }
-        ::write(ctx.pipe_write_fd, "x", 1);
+        signal_worker_pipe(ctx.pipe_write_fd);
     });
 }
 
@@ -917,7 +917,7 @@ static void og_launch_one(og_pending_entry entry)
             CURL *curl = curl_easy_init();
             if (!curl)
             {
-                ::write(ctx.pipe_write_fd, "x", 1);
+                signal_worker_pipe(ctx.pipe_write_fd);
                 return;
             }
 
@@ -987,7 +987,7 @@ static void og_launch_one(og_pending_entry entry)
 
             if ((res != CURLE_OK && res != CURLE_WRITE_ERROR) || http_code != 200)
             {
-                ::write(ctx.pipe_write_fd, "x", 1);
+                signal_worker_pipe(ctx.pipe_write_fd);
                 return;
             }
             body = std::move(wctx.data);
@@ -995,6 +995,6 @@ static void og_launch_one(og_pending_entry entry)
 
         ctx.preview = parse_og_from_html(body);
         ctx.success = !ctx.preview.title.empty() || !ctx.preview.description.empty();
-        ::write(ctx.pipe_write_fd, "x", 1);
+        signal_worker_pipe(ctx.pipe_write_fd);
     });
 }

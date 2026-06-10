@@ -13,7 +13,7 @@ fi
 VERSION=$1
 OUTPUT_DIR="${2:-/output}"
 
-pacman -Sy --needed --noconfirm base-devel git sudo
+pacman -Sy --needed --noconfirm base-devel clang git sudo
 
 if ! id builder >/dev/null 2>&1; then
     useradd -m -G wheel builder

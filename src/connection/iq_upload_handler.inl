@@ -181,7 +181,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                     {
                         c.success   = false;
                         c.curl_error = "failed to open file";
-                        ::write(c.pipe_write_fd, "x", 1);
+                        signal_worker_pipe(c.pipe_write_fd);
                         return;
                     }
 
@@ -190,7 +190,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                     {
                         c.success    = false;
                         c.curl_error = "failed to seek to end of file";
-                        ::write(c.pipe_write_fd, "x", 1);
+                        signal_worker_pipe(c.pipe_write_fd);
                         return;
                     }
                     long file_size = ftell(upload_file);
@@ -198,7 +198,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                     {
                         c.success    = false;
                         c.curl_error = "failed to determine file size";
-                        ::write(c.pipe_write_fd, "x", 1);
+                        signal_worker_pipe(c.pipe_write_fd);
                         return;
                     }
                     c.file_size = static_cast<size_t>(file_size);
@@ -221,7 +221,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                     {
                         c.success    = false;
                         c.curl_error = "failed to rewind file after measuring size";
-                        ::write(c.pipe_write_fd, "x", 1);
+                        signal_worker_pipe(c.pipe_write_fd);
                         return;
                     }
 
@@ -341,7 +341,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                         {
                             c.success    = false;
                             c.curl_error = "esfs: RAND_bytes failed for key/IV generation";
-                            ::write(c.pipe_write_fd, "x", 1);
+                            signal_worker_pipe(c.pipe_write_fd);
                             return;
                         }
 
@@ -374,7 +374,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                         {
                             c.success    = false;
                             c.curl_error = "esfs: failed to open plaintext for encryption";
-                            ::write(c.pipe_write_fd, "x", 1);
+                            signal_worker_pipe(c.pipe_write_fd);
                             return;
                         }
 
@@ -385,7 +385,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                         {
                             c.success    = false;
                             c.curl_error = "esfs: mkstemp failed";
-                            ::write(c.pipe_write_fd, "x", 1);
+                            signal_worker_pipe(c.pipe_write_fd);
                             return;
                         }
                         esfs_tmpfile_path = tmp_tmpl;
@@ -399,7 +399,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                             ::unlink(esfs_tmpfile_path.c_str());
                             c.success    = false;
                             c.curl_error = "esfs: fdopen failed on tmpfile";
-                            ::write(c.pipe_write_fd, "x", 1);
+                            signal_worker_pipe(c.pipe_write_fd);
                             return;
                         }
 
@@ -417,7 +417,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                             ::unlink(esfs_tmpfile_path.c_str());
                             c.success    = false;
                             c.curl_error = "esfs: EVP init failed";
-                            ::write(c.pipe_write_fd, "x", 1);
+                            signal_worker_pipe(c.pipe_write_fd);
                             return;
                         }
 
@@ -454,7 +454,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                             ::unlink(esfs_tmpfile_path.c_str());
                             c.success    = false;
                             c.curl_error = "esfs: EVP_EncryptUpdate failed";
-                            ::write(c.pipe_write_fd, "x", 1);
+                            signal_worker_pipe(c.pipe_write_fd);
                             return;
                         }
 
@@ -495,7 +495,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                             ::unlink(esfs_tmpfile_path.c_str());
                             c.success    = false;
                             c.curl_error = "esfs: failed to reopen tmpfile for upload";
-                            ::write(c.pipe_write_fd, "x", 1);
+                            signal_worker_pipe(c.pipe_write_fd);
                             return;
                         }
                         // Update file_size in context for <file> metadata (ciphertext size).
@@ -511,7 +511,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                         {
                             c.success    = false;
                             c.curl_error = "failed to rewind file for upload";
-                            ::write(c.pipe_write_fd, "x", 1);
+                            signal_worker_pipe(c.pipe_write_fd);
                             return;
                         }
                         // upload_file and guard are already set from the size open;
@@ -525,7 +525,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                         // upload_file_guard will close the file on return
                         c.success    = false;
                         c.curl_error = "failed to initialize curl";
-                        ::write(c.pipe_write_fd, "x", 1);
+                        signal_worker_pipe(c.pipe_write_fd);
                         return;
                     }
 
@@ -607,7 +607,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                     c.worker_done.store(true);
                     // No XDEBUG here (see comment at thread start): worker thread must
                     // not call any weechat_* APIs.
-                    ::write(c.pipe_write_fd, "x", 1);
+                    signal_worker_pipe(c.pipe_write_fd);
                 });
             }
             else

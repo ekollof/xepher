@@ -18,7 +18,7 @@ DEPS_STAMP=/opt/xepher-build/arch-deps.stamp
 echo "=== [Arch] Building xepher ${VERSION} ==="
 
 xepher_install_arch_deps() {
-    xepher_as_root pacman -Sy --needed --noconfirm base-devel git
+    xepher_as_root pacman -Sy --needed --noconfirm base-devel clang git
 }
 
 xepher_install_build_deps_once xepher_install_arch_deps

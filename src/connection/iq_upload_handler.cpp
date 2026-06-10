@@ -23,6 +23,7 @@
 #include "account.hh"
 #include "channel.hh"
 #include "connection.hh"
+#include "connection/internal.hh"
 #include "debug.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"

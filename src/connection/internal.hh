@@ -18,12 +18,21 @@
 #include <thread>
 #include <vector>
 #include <stdint.h>
+#include <unistd.h>
 
 #include <weechat/weechat-plugin.h>
 #include <strophe.h>
 
 // Forward declaration
 namespace weechat { class account; }
+
+// Wake the WeeChat fd hook after a background worker finishes (best-effort).
+inline void signal_worker_pipe(int fd)
+{
+    if (fd < 0)
+        return;
+    [[maybe_unused]] const ssize_t nbytes = ::write(fd, "x", 1);
+}
 
 // ── parse_omemo_device_id ─────────────────────────────────────────────────────
 // Parse a decimal string into a valid OMEMO device-ID (1 … 0x7FFFFFFF).
