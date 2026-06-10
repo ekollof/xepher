@@ -478,14 +478,22 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
             if (own_jid == recipient_jid && *remote_device_id == device_id && !include_own_device)
                 continue;
 
-            // BTBV trust gate: skip devices that are UNTRUSTED or UNDECIDED
+            // BTBV trust gate: skip UNTRUSTED; skip UNDECIDED for peers only.
+            // Own-account sibling devices must still receive keys so carbons and
+            // other clients (e.g. Movim) can decrypt outbound PM traffic.
             {
                 const auto trust = load_tofu_trust(*this, recipient_jid, *remote_device_id);
-                if (trust && (*trust == omemo_trust::UNTRUSTED || *trust == omemo_trust::UNDECIDED))
+                const bool is_own_account = (recipient_jid == own_jid);
+                if (trust && *trust == omemo_trust::UNTRUSTED)
                 {
-                    XDEBUG("omemo encode: skipping device {}/{} (trust={})",
-                           recipient_jid, *remote_device_id,
-                           trust ? static_cast<int>(*trust) : -1);
+                    XDEBUG("omemo encode: skipping device {}/{} (trust=UNTRUSTED)",
+                           recipient_jid, *remote_device_id);
+                    continue;
+                }
+                if (trust && *trust == omemo_trust::UNDECIDED && !is_own_account)
+                {
+                    XDEBUG("omemo encode: skipping device {}/{} (trust=UNDECIDED)",
+                           recipient_jid, *remote_device_id);
                     continue;
                 }
             }
@@ -543,8 +551,25 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
         const auto own_legacy_devicelist = load_string(*this, key_for_axolotl_devicelist(own_jid));
         if (own_legacy_devicelist && !own_legacy_devicelist->empty())
         {
+            int incomplete_own_devices = 0;
             added_any_key = add_axolotl_keys(own_jid, *own_legacy_devicelist,
-                                             nullptr, /*include_own_device=*/true) || added_any_key;
+                                             &incomplete_own_devices,
+                                             /*include_own_device=*/true) || added_any_key;
+            if (incomplete_own_devices > 0)
+            {
+                print_info(buffer, fmt::format(
+                    "OMEMO: message sent, but {} own device(s) may not decrypt the "
+                    "carbon copy (missing bundle/session). Try /omemo fetch {} <device-id>",
+                    incomplete_own_devices, own_jid));
+            }
+        }
+        else
+        {
+            request_axolotl_devicelist(*account, own_jid);
+            print_info(buffer, fmt::format(
+                "OMEMO: own devicelist not cached — requested refresh; other clients "
+                "may miss this message until /omemo fetch {} <device-id> completes",
+                own_jid));
         }
     }
 
@@ -639,7 +664,10 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
 
             {
                 const auto trust = load_tofu_trust(*this, recipient_jid, *remote_device_id);
-                if (trust && (*trust == omemo_trust::UNTRUSTED || *trust == omemo_trust::UNDECIDED))
+                const bool is_own_account = (recipient_jid == own_jid);
+                if (trust && *trust == omemo_trust::UNTRUSTED)
+                    continue;
+                if (trust && *trust == omemo_trust::UNDECIDED && !is_own_account)
                     continue;
             }
 

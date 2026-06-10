@@ -256,6 +256,30 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
     missing_axolotl_devicelist.erase(bare_jid);
     store_string(*this, key_for_axolotl_devicelist(bare_jid), devicelist_str);
 
+    // Sibling devices on our own account must be BLIND-trusted so encode includes
+    // keys for carbon-copy delivery to other clients (BTBV UNDECIDED would skip them).
+    if (account)
+    {
+        std::string account_bare = ::jid(nullptr, account->jid().data()).bare;
+        if (account_bare.empty())
+            account_bare = account->jid();
+        if (bare_jid == account_bare)
+        {
+            for (const auto &dev : devices)
+            {
+                const auto sibling_id = parse_uint32(dev);
+                if (!sibling_id || !is_valid_omemo_device_id(*sibling_id)
+                    || *sibling_id == device_id)
+                {
+                    continue;
+                }
+                const auto trust = load_tofu_trust(*this, bare_jid, *sibling_id);
+                if (!trust || *trust == omemo_trust::UNDECIDED)
+                    store_tofu_trust(*this, bare_jid, *sibling_id, omemo_trust::BLIND);
+            }
+        }
+    }
+
     XDEBUG("omemo: handle_axolotl_devicelist for {}: storing {} device(s) [{}]",
            bare_jid,
            devices.size(),
