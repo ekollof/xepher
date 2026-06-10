@@ -1,472 +1,96 @@
-# OMEMO Refactor: Axolotl-only + BTBV TOFU
+# Xepher — Open Work
 
-Branch: `omemo-axolotl-btbv`
+Living task list for remaining implementation debt. Completed initiatives (OMEMO BTBV
+refactor, XEP compliance emission migration, XEP-0045 MUC features, port abstraction
+Waves 0–4) are removed from this file — see git history for archived phase-by-phase plans.
 
-## Goal
-
-Collapse the dual OMEMO:2 / axolotl implementation down to a single
-`eu.siacs.conversations.axolotl` stack, replace the XEP-0450 ATM trust model
-with Gajim-style BTBV (Blind Trust Before Verification) TOFU, and remove all
-dead OMEMO:2 code paths.
+**Verification baseline:** `CXX="ccache clang++" make DEBUG=1` — 125 doctests, all assertions
+green. Manual WeeChat retest after user-visible changes (full restart; no `/plugin reload`).
 
 ---
 
-## Trust Model (BTBV)
+## Not planned
 
-| Value | Name       | Meaning                                          |
-|-------|------------|--------------------------------------------------|
-| 0     | UNTRUSTED  | Explicitly distrusted by user                    |
-| 1     | VERIFIED   | Manually verified by user (fingerprint)          |
-| 2     | UNDECIDED  | New device for JID that already has trusted keys |
-| 3     | BLIND      | Auto-trusted (TOFU — first device for this JID)  |
-
-**`get_default_trust(jid)`**: scan `trust:{jid}:*` LMDB keys; if any has value
-VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
-
-**Encrypt gate**: only VERIFIED(1) and BLIND(3) devices receive key material.
-
-**LMDB key**: `trust:{bare_jid}:{device_id}` → decimal string `"0"`–`"3"`
+- [ ] **XEP-0353** Jingle Message Initiation (voice/video calls) — requires full Jingle stack
+- [ ] **Full modern OMEMO SCE** (Stable Consensus Encryption) — tracked on a separate branch, not `master`
 
 ---
 
-## Status: ALL PHASES COMPLETE ✓
+## OMEMO maintenance (ongoing)
 
-### Phase 0 — Planning & branch setup
-- [x] Create `omemo-axolotl-btbv` branch
-- [x] Write this TODO.md
-- [x] Update `.github/copilot-instructions.md`
-
-### Phase 1 — LMDB trust schema (`internal_prelude.inl`)
-- [x] Add `enum class omemo_trust` with UNTRUSTED/VERIFIED/UNDECIDED/BLIND
-- [x] Add `key_for_tofu_trust`, `store_tofu_trust`, `load_tofu_trust`
-- [x] Add `get_default_trust(self, jid)` (BTBV scan)
-- [x] Remove ATM trust helpers (`key_for_atm_trust`, etc.)
-- [x] Remove `sce_wrap()`, `sce_wrap_content()`, `make_rpad()`
-- [x] Remove `store_device_mode()`, `load_device_mode()`
-- [x] Remove OMEMO:2 constants (`kOmemoNs`, `kDevicesNode`, `kBundlesNode`)
-- [x] Remove `atm_fingerprint_b64()`, `key_for_devicelist()`, `utc_timestamp_now()`, `xml_escape()`
-- [x] Remove truncated `hmac_sha256` declaration
-
-### Phase 2 — Signal store trust callbacks (`internal_signal_store.inl`)
-- [x] Rewrite `identity_save()`: BTBV `get_default_trust` on new identity
-- [x] Rewrite `identity_is_trusted()`: VERIFIED/BLIND → 1; UNTRUSTED/UNDECIDED → 0
-- [x] Remove unused `extract_devices_from_items`
-- [x] Remove unused `extract_bundle_from_items` (and its orphaned body in `internal_stanza_parse.inl`)
-
-### Phase 3 — Strip ATM (`session_flow.inl`, `commands.inl`)
-- [x] Remove ATM functions from `commands.inl`
-- [x] Remove ATM/OMEMO:2 code from `session_flow.inl`
-- [x] Remove unused `devicelist_contains_device` static
-- [x] Remove stale `request_devicelist` wrapper body
-- [x] Replace thin `send_key_transport` wrapper with full inline implementation
-- [x] Remove `/omemo approve`, `/omemo optout`, `/omemo optout-ack` subcommands
-- [x] Rewrite `distrust_fp` to accept `std::optional<uint32_t>` device_id
-
-### Phase 4 — Collapse encode/decode to axolotl-only (`codec.inl`)
-- [x] Remove OMEMO:2 encode path
-- [x] Remove OMEMO:2 decode path
-- [x] Remove `peer_mode` dispatch
-- [x] Fix `static_cast<int>(trust)` where trust is `std::optional<omemo_trust>`
-
-### Phase 5 — Remove OMEMO:2 crypto (`internal_crypto.inl`)
-- [x] Remove `omemo2_encrypt()`, `omemo2_decrypt()`
-- [x] Remove orphaned `hmac_sha256` function body tail
-
-### Phase 6 — Remove OMEMO:2 lifecycle (`lifecycle.inl`)
-- [x] Remove `get_bundle()` (OMEMO:2 PEP publish path)
-- [x] Remove `handle_devicelist()` (OMEMO:2 handler)
-- [x] Remove `missing_omemo2_devicelist` tracking
-
-### Phase 7 — Remove OMEMO:2 from connect lifecycle (`connect_lifecycle.inl`)
-- [x] Stop fetching/publishing OMEMO:2 devicelist/bundle on connect
-
-### Phase 8 — Remove OMEMO:2 from IQ/message handlers
-- [x] `iq_handler.inl`: remove OMEMO:2 IQ dispatch, unused variables
-- [x] `message_handler.inl`: remove ATM blocks, OMEMO:2 PEP handler, XEP-0434 feature ad
-
-### Phase 9 — Clean up `omemo.hh`
-- [x] Remove `peer_mode` enum
-- [x] Remove `pending_atm_trust_from_unauthenticated`, `pending_atm_trust_for_unknown_key`
-- [x] Remove `missing_omemo2_devicelist`, `omemo_opted_out_peers`
-- [x] Remove OMEMO:2 / ATM method declarations
-- [x] Add `trust_jid`, updated `distrust_fp` declarations
-
-### Phase 10 — Config cleanup
-- [x] `omemo_atm` config boolean left in place (referenced by existing config files)
-       but no longer used by any OMEMO code path
-
-### Phase 11 — Update `/omemo` commands
-- [x] `commands.inl`: trust/distrust use `omemo_trust::` enum values
-- [x] `command/encryption.inl`: `distrust_fp` call-site updated
-- [x] `command/channel.inl`: `request_axolotl_devicelist` call updated
-- [x] `command.cpp`: help text cleaned
-
-### Phase 12 — Account API
-- [x] `account.hh` / `account.cpp`: `get_legacy_devicelist()` renamed to `get_devicelist()`;
-       OMEMO:2 `get_devicelist()` removed
-
-### Phase 13 — Build & tests
-- [x] `make` — clean build, no errors
-- [x] All 27 unit tests pass (27/27)
-- [x] Fixed stale `.cov.o` ODR mismatch (touch `src/omemo/api.cpp` before test run)
+Axolotl-only + BTBV refactor is **complete on `master`**. On any OMEMO change: verify against
+`docs/specs/xep-0384.txt`, run `tools/correlate_omemo_xml.sh --account <account>`, enable
+`xmpp.look.debug` + `xmpp.look.raw_xml_log`. No OMEMO:2 primary path; no ATM.
 
 ---
 
-## Remaining / Future Work
+## AGENTS.md compliance gaps
 
-- [x] `README.org` — update feature list, trust model, command docs
-- [x] Consider removing `omemo_atm` config option entirely (separate PR)
-- [x] Consider adding BTBV fingerprint display to `/omemo devices` output
+Post-migration audit after UiPort, StanzaView handler slices, RuntimePort, include
+normalization, and builder emission work. Surgical/minimal changes only; update this section
+when items land.
 
----
+### Gaps (prioritized)
 
-## XEP Compliance Gaps & Remediation Plan
-
-**Origin**: Full codebase audit (user request "Audit our codebase for spec compliance, locate gaps and create a TODO.md to plan fixes"). See session plan.md for detailed discovery process, per-XEP rationale, and execution steps. This section is the committed living plan (modeled on OMEMO section above).
-
-**Key principles (from AGENTS.md, re-read in full for this audit)**:
-- XEP specs (in `docs/specs/xep-NNNN.txt`) must be *religiously* followed for compatibility (structure, ns, nesting, sizes/hashes plain-vs-cipher for ESFS, examples, MUST/RECOMMENDED/SHOULD, behaviors). Never mutate specs to match code; re-fetch + commit alongside any implement/modify.
-- Stanza emission: Raw `xmpp_stanza_new()` / manual trees forbidden in `.cpp`/`.inl`. Use fluent `stanza::spec` / `stanza::message()` + mixins from `src/xmpp/node.hh` + `xep-*.inl` exclusively. `stanza_node`/`stanza_text_node` helpers are approved only because implemented inside node.hh via spec.
-- Read `.cpp` wrappers first (never `.inl` for logic); use dedicated grep tool for searches.
-- OMEMO special: legacy `eu.siacs.conversations.axolotl` **only** (see section above + committed xep-0384.txt); no omemo:2.
-- Surgical/minimal changes; ccache `CXX="ccache clang++" make` + 27/27+286/286 after groups; manual WeeChat retest (full restart); update README/DOAP/AGENTS/TODO in same commit as relevant work; chore:/fix: commits.
-- No loose planning docs in repo.
-
-**Discovery summary** (read-only, AGENTS-compliant): Re-read AGENTS + old plan + this TODO + DOAP.xml + README (sampled) + all relevant `docs/specs/*.txt`; list_dir src/ + src/xmpp/ + docs/specs/ (50+ specs + many builders); read_file on all key `.cpp`/`.hh` wrappers (channel.cpp, account.cpp, account/callbacks.cpp, command/rooms.cpp, connection/*.cpp, xmpp/node.{hh,cpp}, ns.hh, strophe.hh, atom.hh etc. — never .inl for logic); extensive grep tool calls (path=src/ glob=*.cpp for "xmpp_stanza_new|...|add_child|make_child|stanza::|XEP-|urn:xmpp:" + specific elems; also glob=*.inl for builder discovery only); cross-ref to node.hh mixins (e.g. xep0447, xep0184, xep0428, xep0085, xep0333, xep0359) and ns.hh; read spec excerpts for MUST/examples/reqs (0184,0085,0334,0363,0447/8/6,0300,0060,0280,0198,0313,0115,0384 etc.).
-
-### Gaps Table (Prioritized)
-| XEP(s) | Gap / Description | Code Location(s) | Spec Ref (local docs/specs + examples) | Severity | Remediation | Status |
-|--------|---------------------|------------------|---------------------------------------|----------|-------------|--------|
-| 0184 (Receipts) | Builder incomplete (only `received` + `receipt_received` in xep-0184.inl; no `<request/>` or `message::receipt_request()`). Main sends use manual `stanza_node` + `add_child`. Always adds `<id>` (good). Skips groupchat (matches NOT RECOMMENDED §5.3). | src/channel.cpp:1468 (regular), 1039 (file helper); also handlers for inbound received | xep-0184.txt §7 ex3 (`<request xmlns='urn:xmpp:receipts'/>` in content with id), §5.4 (MUST NOT in acks), §5.3 (groupchat) | High (daily reliability + builder rule) | Add `request` struct + `message& receipt_request()` to xep-0184.inl (modeled on received); migrate channel sends to fluent `stanza::message()....receipt_request()...`; update handlers if needed. Re-fetch+commit spec. | **done** |
-| 0334 (Hints) + related | No dedicated xep-0334.inl / mixin (not in node.hh includes or message). Hints partially in xep-0384 (store_hint) + xep-0333 (no_store etc). Main sends use manual `stanza_node` for `<store>`, previews/markers use manual or .no_store() (from 0333). | src/channel.cpp:1479 (store), 1728 (no-store/no-copy in link preview), 1902/1794 (no_store on states/markers) | xep-0334.txt ( `<store/>` to force archive; `no-store`/`no-copy`/`no-permanent-store` to exclude; ns `urn:xmpp:hints`) | High (MAM interaction, markers/states correctness) | Added `no_copy` to xep-0333.inl (hints already present there); migrated all manual sites to fluent `.store()`, `.no_store()`, `.no_copy()`. | **done** |
-| 0428 (Fallback) + 0447/0385/0066/0300 (SFS/ESFS/SIMS/OOB) | Core SFS/ESFS now uses `stanza::xep0447::` (good, post-prior; matches nesting/sizes/hashes in 0447/8/6/0300 ex). But fallback, SIMS, OOB still manual in file helper (comments acknowledge available builders). Main envelope (origin-id, chatstate, receipts etc) manual despite mixins. | src/channel.cpp:983 (fallback comment), 993-1026 (SIMS/OOB manual), 985 (make_child), 1029-1049 & 1457-1481 (active/request/markable/store), 979 (fs_sp add after build) | xep-0447.txt §3.1/3.2/3.3 (file-sharing + file + sources + encrypted), xep-0448.txt ex (inner sources for cipher), xep-0428.txt (fallback for=), xep-0385 (SIMS compat), xep-0066 (OOB), xep-0300 (hashes) | High (builder rule + prior real symptoms like missing previews) | Migrated to full fluent: created xep-0385.inl (SIMS), xep-0066.inl (OOB), added wrappers to stanza::message; removed make_child lambdas; file helper now returns unbuilt `stanza::message` so caller can set body + optional OMEMO before build. | **done** |
-| 0085 (Chat States) | Builder exists (`chatstate(state)` + mixin); dedicated paths use it. But main send always manually adds `<active>` (every message). | src/channel.cpp:1458 (manual active), 1901 (good .chatstate in send_chat_state) | xep-0085.txt §5.1 (active on open/composing; states are notifications, not required on every body) | Medium (spec intent vs practice) | Migrated main send + file helper to `.chatstate("active")` via wrapper. | **done** |
-| 0359 (Stanza IDs) + 0333 (Markers) | Mixins exist (origin-id, markable/displayed); some use (markers use .chat_marker_displayed + .no_store). Main send + file use manual stanza_node for origin-id/markable. | src/channel.cpp:1200 (origin), 1472 (markable), 1793 (good fluent in markers) | xep-0359.txt, xep-0333.txt (MUST NOT markable in groupchat — code skips) | Medium | Migrated main send + file helper to `.origin_id(id)` / `.chat_marker_markable()` via wrappers. Added `markers_markable` to xep-0333.inl. | **done** |
-| 0060 (Pubsub) + Atom/microblog (0277/0472) + SFS embeds | Manual tree in account.cpp using stanza_node lambdas + direct add_child + low-level set on iq_el for <iq><pubsub><publish><item><entry> (Atom) + optional file-sharing. Dupe SFS logic vs channel. Not using xep0060 builders (in node.hh). | src/account.cpp:880-1117 (make_sp, entry, pubsub_el, iq_el sets/adds; also SFS for embeds) | xep-0060.txt ex (publish node/item), xep-0277/0472 for Atom in PEP, xep-0447 if SFS in posts | Medium (feed feature, builder consistency) | Migrate to `stanza::iq().type("set")... .pubsub( xep0060::publish(...) )`; share/reuse file share builder for SFS in posts; keep dynamic Atom via spec children. | **done** |
-| 0363 (HTTP Upload) + 0448 layering | Custom `upload_request_iq : stanza::spec` (good, fluent; no dedicated xep-0363.inl needed as mostly HTTP). Correct +16 slot for ESFS cipher, plain meta in SFS. Manual? No raw. Gaps minor: no <purpose> (optional), sanitization, header allow (code has any_of). | src/command/rooms.inl:461 (upload_request_iq), 482 (build/send); iq_handler for response/worker; 0363 ns in ns.hh | xep-0363.txt §4 ex5 (request filename+size+optional content-type; ns urn:xmpp:http:upload:0), §9.2 (allowed headers), newer purpose §4 | Low-Medium (optional features) | Add purpose support (optional /upload flag or auto); extend for multi-hash in related 044x work. Re-fetch on touch. | **done** |
-| 0446/0300 (File meta + hashes) + 0447 builder | Only sha-256 (single <hash>). Builder exposes only hash_sha256. Specs RECOMMEND multiple + agility. | src/channel.cpp (SFS), worker hash (EVP_sha256), xep-0447.inl (limited file API) | xep-0446.txt, xep-0300.txt (multi-hash, agility; b64 values) | Medium (future-proofing, clients may prefer) | Extend 0447 file for additional hashes (sha3 etc via gcrypt); update worker to compute vector, file_metadata, SFS emission. | **done** (SHA-256 + SHA-512 in one pass; portable OpenSSL/LibreSSL) |
-| 0280 (Carbons), 0313 (MAM), 0198 (SM), 0115 (Caps) etc. | Builders/mixins exist (in node.hh for many); inbound/outbound mostly via handlers + dedicated. Minor: verify exact acks/RSM/caps hash/ <enable resume> vs current specs. MUC PM special in channel for carbons. | Various (message_handler, iq_handler, session_lifecycle, presence for caps) + channel for MUC#user x | Respective specs ex + MUST (e.g. 0280 carbons received/forwarded; 0313 mam:2 query+rsm; 0198 sm:3; 0115 caps c= hash) | Medium (core reliability) | Audit + minimal surgical if deviations found (use grep + spec re-read); migrate any remaining manual. | **done** (Phase 2 audit: no critical deviations; all emission uses builders) |
-| OMEMO 0384 (legacy only) + SFS wrapping | All via builders (xep-0384). Legacy ns only (AGENTS). SFS/ESFS in clear + encrypted body (known; 0448 prefers SCE but forbidden here). | src/omemo/* (api wrapper), xep-0384.inl, channel OMEMO blocks | xep-0384.txt (axolotl ns, devicelist/bundle, encrypt); AGENTS carve-out | Low (per AGENTS + existing TODO.md) | Re-verify on any touch (grep + correlate_omemo_xml.sh + raw logs); no :2. See OMEMO section above for BTBV status. | ongoing (ref above) |
-| General (builder under-use, alt wrapper) | Main paths + account + connection.cpp (libstrophe::stanza for version/time 0092/0202) use manual or alt low-level despite primary system. Inbound lenient (C-ABI ok per caveats). | src/channel.cpp (main), src/account.cpp (feeds), src/connection.cpp:92 (libstrophe::stanza), src/xmpp/strophe.hh (alt wrapper) | All relevant XEP ex + node.hh "exclusively" rule + "no raw outside node.hh" | High (architectural) | Phase 1 migration to fluent; document or migrate alt wrapper; no C-ABI changes. | **done** (channel + account pubsub/iq wrappers + connection version/time; strophe.hh alt wrapper documented as parse-only) |
-
-### Execution Phases (Post Phase 0)
-**Phase 0 — Audit & TODO (complete)**
-- [x] Full discovery (wrappers, grep, specs, DOAP, AGENTS re-read).
-- [x] Create/enhance this TODO.md section + table (no .cpp changes).
-- [x] Surgical stale DOAP OMEMO note update (removed ATM ref; matches current BTBV/legacy per AGENTS + OMEMO section).
-- [x] `CXX="ccache clang++" make` (noop pass); commit + push (docs/chore: message referencing this audit/plan).
-
-**Phase 1 — High Priority (Core Emission + Builders; daily interop)**
-- [x] Complete 0184 builder (request) + migrate channel sends (regular + file).
-- [x] Add hints (`no_copy`) + migrate stores/no-*.
-- [x] Migrate file-share compat (fallback/SIMS/OOB) + main envelope to fluent (use 0428/0447/0359 etc mixins); deprecate make_child.
-- [x] Migrate account.cpp feeds/pubsub to stanza::iq + xep0060; share SFS builder.
-- [x] Unify version/time replies (connection.cpp) to stanza::iq or document.
-- [x] Extend 0447 + worker for hash agility (SHA-256 + SHA-512); re-fetch 0300/0446/0363 + commit specs.
-- [x] Add HTTP Upload <purpose> support (XEP-0363 optional); default message purpose emitted for all uploads.
-- [x] Re-verify OMEMO legacy paths (no OMEMO:2 active code; BTBV trust model correct).
-- [x] Migrate remaining raw emission in command/muc_admin.inl, connection/iq_handler.inl (search/config/error), xep-0054.inl (vCard) to fluent builders.
-- Build/verify 27+286 after groups; manual retest (upload, receipts, states, markers, MAM, carbons, previews in other clients); update README/DOAP/AGENTS if user-visible; commit with any re-fetched specs.
-- Per AGENTS: wrappers first every batch, grep searches, surgical, ccache, full restart for test.
-
-**Phase 2 — Medium (Other Builders + Polish)**
-- [x] Fill gaps in caps/MAM/carbons/SM if emission or critical parse deviations — no critical deviations found; all emission uses builders.
-- [x] Inbound improvements (lenient where C-ABI allows) — parse layer already lenient via C-ABI safe patterns.
-- [x] More <file> attrs (date etc) — added <date> with file mtime (UTC ISO-8601) to xep0447::file and xep0385::file; emitted in upload worker + channel + account paths.
-- Re-fetch/commit on touches; same verification.
-
-**Phase 3 — Low / Future**
-- [x] Spoilers: XEP-0382 already implemented (builder + parser + /spoiler command).
-- [x] Invites: XEP-0249 Direct MUC Invitations already implemented (fluent builder + handler).
-- [x] XEP-0045 MUC admin/registration remainder — see dedicated section below.
-- [x] Blocking: XEP-0191 Blocking Command already implemented (fluent builder + /block /unblock /blocklist commands + picker UI + server push handler).
-- [ ] XEP-0353 Jingle Message Initiation (voice/video calls) — not planned; requires full Jingle stack.
-- [x] XEP-0437 Room Activity Indicators — subscribe via presence to own bare JID, display <activity> notifications in account buffer; deferred but implemented for convenience.
-- [ ] Full modern OMEMO SCE (Stable Consensus Encryption) — tracked on separate branch; not master.
-- Ongoing: any new XEP support or modify triggers full re-fetch/verify/commit spec + TODO update.
-
-**Verification (every phase + final)**
-- Re-read AGENTS + wrappers + relevant specs before edits.
-- ccache make + 27/27 + 286/286 after logical groups.
-- Manual WeeChat (restart + new .so): smoke + critical checklist (PM no-recreate, typing, auto-encrypt, bookmarks, /list/ping/caps, upload self/MUC/OMEMO/close-race + Conversations preview/integrity); enable debug+raw; cross logs/raw vs spec ex; retest prior fixed bugs.
-- `git diff --stat` minimal; commit includes TODO updates + re-fetched specs + README/DOAP (if applicable).
-- For OMEMO bits: tools/correlate_omemo_xml.sh --account <acct> first.
-- No /reload; push after commit.
-
-**Cross-References**
-- OMEMO axolotl-only + BTBV full details + remaining: section above (and branch `omemo-axolotl-btbv`).
-- Upload/SFS fundamental builder fix (0447): prior work + high phase above; specs 0363/0447/0448/0446/0300/0385/0066.
-- AGENTS.md (XEP "religiously", builder exclusively, wrappers/grep, re-fetch rule, no loose docs, ccache, etc.).
-- Session plan.md (detailed per-gap rationale + file lists; not committed).
-
-**When adding future XEP support or modifying**: Follow AGENTS checklist exactly (fetch spec, verify, commit .txt with code, update DOAP/README, add row here, test, commit, push).
-
-*This section created as Phase 0 of the audit. Next high-priority work (emission migration) requires user approval of specific batch before surgical edits.*
-
----
-
-## XEP-0045: Complete Remaining MUC Client Features
-
-**Origin**: Spec freshness audit (xmpp.org **1.35.5** vs local `docs/specs/xep-0045.txt` **1.35.3**).
-Revisions 1.35.4/1.35.5 are editorial/example-only — no wire-protocol changes. This plan
-covers the **implementation gaps** that keep DOAP at `partial`.
-
-**Canonical spec**: Re-fetch `docs/specs/xep-0045.txt` from
-`https://xmpp.org/extensions/xep-0045.html` and commit alongside the first code batch.
-Bump `DOAP.xml` `xmpp:version` to **1.35.5** when work lands.
-
-### Design decisions (confirmed)
-
-| Topic | Decision |
-|-------|----------|
-| Command style | **IRC-style** — `/voice`, `/devoice`, `/op`, `/deop` (matches existing `/kick`, `/ban`, `/topic`, `/nick`) |
-| Affiliation lists | **Extend `/affiliation`** — add `list` subcommand; keep `set` as today |
-| Room config UI | **`/setmodes` + `/affiliation` is sufficient** — no interactive `/roomconfig` picker over all `muc#roomconfig_*` fields |
-| PM → MUC conference | **`jabber:x:conference` in PM → print `/join` hint** — do not auto-join |
-
-### Already implemented (no rework)
-
-- Join/leave, `<history maxstanzas='0'/>`, password on join (`/create`, `/enter`)
-- Groupchat send/receive, topic (`/topic`), nick change (`/nick`)
-- Kick/ban (`/kick`, `/ban`), occupant display (`/names`, `/modes`)
-- Room create instant + `--reserved`; owner config via `/setmodes`; destroy (`/destroy`)
-- Affiliation set single-JID (`/affiliation set … --confirm`)
-- Direct invite XEP-0249 (`/invite`)
-- MUC private messages (`room@service/nick` + `muc#user` for carbons)
-- Status codes, role/affiliation nicklist, offline occupant display
-
-### Gaps (this plan)
-
-| Gap | XEP ref | Notes |
-|-----|---------|-------|
-| Voice grant/revoke | §9.6 | `muc#admin` IQ set: `role=participant` / `role=visitor` by nick |
-| Moderator grant/revoke | §9.5 | `muc#admin` IQ set: `role=moderator` / `role=participant` by nick |
-| Affiliation list query | §9.3–9.4 | `muc#admin` IQ get with `<item affiliation='…'/>` |
-| Member nick on set | §9.4, §10.5, §1.35.4 | Optional `nick` attr on `/affiliation set` for member list; empty nick unsets reserved nick |
-| Mediated room invite | §6.3, §10.6 | IQ set to room with `<invite to='…'/>` in `muc#user` |
-| Inbound mediated invite | §6.3 | Notify user; offer `/join` shortcut (no auto-join) |
-| Room registration | §15 | `muc#register` IQ for membership + reserved nick |
-| PM conference hint | §6.2 (jabber:x:conference) | Detect in PM handler; print join hint only |
-| DOAP note refresh | — | Expand note: partial admin + `/setmodes`/`/affiliation`/`/destroy`; not full voice/register until below done |
-
-**Explicitly out of scope** (per design decisions):
-- Full interactive room config over all `muc#roomconfig_*` fields
-- Auto-join on `jabber:x:conference` in PM
-- Server-side MUC service admin (XEP-0133)
-- Logging retrieval, message moderation UI beyond existing `/moderate`
-
-### Execution phases
-
-**Phase 0 — Spec + builders (prerequisite)**
-- [x] Re-fetch + commit `docs/specs/xep-0045.txt` (1.35.5)
-- [x] Extend `src/xmpp/xep-0045-admin.inl`:
-  - `item_by_jid` with optional `nick` attr (member list modify)
-  - mediated-invite builder: `muc#user` `<invite to='…'><reason>…</reason></invite>` on message (§7.8.2)
-- [x] Add `src/xmpp/xep-0045-register.inl`: `muc#register` query + form submit
-- [x] Doctest: `parse_mediated_muc_invite`
-
-**Phase 1 — IRC-style admin commands (highest value)**
-- [x] `/voice <nick> [reason]` — IQ set `role=participant` (§9.6)
-- [x] `/devoice <nick> [reason]` — IQ set `role=visitor`
-- [x] `/op <nick> [reason]` — IQ set `role=moderator` (§9.5)
-- [x] `/deop <nick> [reason]` — IQ set `role=participant` (not kick; distinct from `/kick`)
-- [x] Register commands in `src/command.cpp` with help text
-- [x] Implement in `src/command/muc_admin.inl`; reuse `xep0045admin` builders
-
-**Phase 2 — Extend `/affiliation`**
-- [x] `/affiliation list [owner|admin|member|outcast]` — `muc#admin` IQ get; print JID/nick table to buffer
-- [x] Track pending list queries on account (`muc_owner_queries` + `aff_list` kind)
-- [x] Extend `/affiliation set <jid> <aff> [--nick <nick>] [reason] [--confirm]`
-- [x] 1.35.4 reserved-nick unset via `--nick` with empty value
-- [x] Result handler: parse affiliation list items into buffer output
-
-**Phase 3 — Invitations**
-- [x] `/invite --mediated <jid> [reason]` — room-mediated invite (§7.8.2); default stays XEP-0249 direct
-- [x] Inbound mediated invite handler: notify + `/join` hint
-- [x] Decline support: `/decline` sends `muc#user` decline stanza; pending invite queue + inviter notification
-
-**Phase 4 — Registration (`muc#register`)**
-- [x] `/mucregister [nick]` — submit registration for current room (membership request / reserved nick)
-- [x] `/mucregister query` — discover existing registration / reserved nick (§15.3.2)
-- [x] On join `registration-required` error: print hint to run `/mucregister`
-- [x] Register commands in `command.cpp`
-
-**Phase 5 — PM conference hint**
-- [x] XEP-0249 `jabber:x:conference` in PM already prints `/join` hint (no auto-join)
-
-**Phase 6 — Documentation + DOAP**
-- [x] `README.md`: document new commands
-- [x] `DOAP.xml`: bump XEP-0045 version to 1.35.5; expand `xmpp:note`
-
-### Key files
-
-| Area | Path |
-|------|------|
-| Admin commands | `src/command/muc_admin.inl`, `src/command/muc_admin.cpp`, `src/command.cpp` |
-| Builders | `src/xmpp/xep-0045-admin.inl`, `src/xmpp/xep-0045.inl`, new `xep-0045-register.inl` + thin `.cpp` wrapper |
-| IQ results | `src/connection/iq_handler.inl` |
-| Inbound invites | `src/xmpp/message_invite.cpp` or `presence_handler.inl` (mediated invite arrives as message/presence with `muc#user`) |
-| Account state | `src/account.hh` — pending `muc_admin_queries` map (mirror `muc_owner_queries`) |
-| Tests | extend doctests in relevant `src/xmpp/*.cpp` wrappers |
-
-### Verification
-
-- `CXX="ccache clang++" make DEBUG=1` — 123 doctests pass
-- Manual WeeChat (full restart): join moderated room as mod; `/voice`/`/devoice`/`/op`/`/deop`; `/affiliation list member`; `/affiliation set` with nick; `/invite --mediated`; receive mediated invite; `/mucregister` on members-only room; PM with `x:conference` shows hint only
-- Enable `xmpp.look.debug` + `xmpp.look.raw_xml_log`; cross-check stanzas against `docs/specs/xep-0045.txt` examples
-- Retest critical regressions: PM no-recreate, typing indicators, MUC nicklist, `/kick`/`/ban`, `/setmodes`/`/destroy`
-
-### Status
-
-- [x] Phase 0 — spec + builders
-- [x] Phase 1 — voice/op commands
-- [x] Phase 2 — affiliation list + nick on set
-- [x] Phase 3 — mediated invites
-- [x] Phase 4 — muc#register
-- [x] Phase 5 — PM conference hint (XEP-0249 `jabber:x:conference` join hint already existed)
-- [x] Phase 6 — docs + DOAP
-
-*Preplanned per user request. Execute phases in order; each phase is one logical commit (or stacked commits per phase sub-step). Say "execute the plan" / "start Phase 1" to begin implementation.*
-
----
-
-## Port Abstraction (Strophe + WeeChat)
-
-**Goal:** Isolate libstrophe inbound reads and WeeChat UI calls behind thin ports so domain
-logic is testable and handlers/commands are less noisy. Incremental only — no big-bang rewrite.
-See AGENTS.md § Port abstraction for API reference.
-
-### Phase 0 — Foundation + proof (complete)
-- [x] `xmpp::StanzaView` (`src/xmpp/stanza_view.{hh,cpp}`)
-- [x] `weechat::UiPort` + `weechat::RuntimePort` (`src/weechat/`)
-- [x] Pure XEP-0092/0202 handlers (`src/xmpp/iq_handlers.{hh,cpp}`); thin adapters in `connection.cpp`
-- [x] OMEMO `print_info` / `print_error` → `UiPort`
-- [x] `/ephemeral` command errors → `UiPort`
-- [x] `tests/weechat_stub.hh` (`CapturingUiPort`, `StubRuntimePort`)
-- [x] Doctests for `StanzaView`, `handle_version_iq`, `handle_time_iq`
-
-### Wave 1 — Low-risk migration (complete)
-- [x] Command argv feedback: `encryption.inl` (`command__omemo`), `archive.inl`, `presence.inl` (`/ping`) → `UiPort`
-- [x] `encryption.inl` device-id parse errors → `UiPort`
-- [x] `command__pgp` / `command__plain` / `command__xml` account-buffer errors → `UiPort`
-- [x] Replace ad-hoc stanza attrs in XEP-0199 ping reply (`iq_handler.inl`) with `StanzaView`
-- [x] `pgp.cpp` user-facing errors → `UiPort` (`pgp_print` helper)
-- [x] `UiPort::printf_info`; `StanzaView::attr_string`
-
-### Wave 2 — Handler split (multi-PR; largest long-term win)
-
-Split inbound handlers into **parse → domain struct → render** so protocol logic can be
-unit-tested without WeeChat. One PR per slice; keep behavior identical.
-
-**`message_handler.inl` slices (in suggested order):**
-- [x] Receipts / markers (XEP-0184, 0333) — `message_ack.{hh,cpp}` + `line_store.{hh,cpp}`
-- [x] Chat states / typing (XEP-0085) — `chat_state.{hh,cpp}`
-- [x] Carbons + MAM replay dispatch (XEP-0280, 0313) — `message_forward.{hh,cpp}`
-- [x] Body + styling (XEP-0393/0394) + SIMS/SFS display — `message_body.{hh,cpp}`, `message_media.{hh,cpp}`
-- [x] OMEMO inbound branch (parse/policy in `message_omemo.{hh,cpp}`; `decode()` + UI remain in handler)
-- [x] Invites, ephemeral, spoiler, fallback — `message_invite`, `message_ephemeral`, `message_spoiler`, `message_fallback`
-- [x] Retract/replace/moderation — `message_line_tag`, `message_correct`, `message_retract`, `line_store` tombstone helpers
-- [x] Reactions + reply (XEP-0444, 0461) — `message_reactions`, `message_reply`, `line_store` quote/reaction helpers
-- [x] PEP / pubsub feeds — `message_pep`, `message_pep_feed`, `pep_handler` (avatar/bookmarks/MDS remain in pep_handler TU)
-
-**`iq_handler.inl` slices:**
-- [x] Version/time — see `iq_handlers.cpp`
-- [x] Ping / error IQ replies — `iq_ping`, `iq_error`, `iq_ping_handler`; `handle_ping_iq` in `iq_handlers`
-- [x] Pubsub / PEP (avatars, microblog, OMEMO bundles) — `iq_avatar_handler`, `iq_pubsub_feed_handler`, `iq_omemo_pubsub_handler`; `avatar::apply_pep_data_b64`
-- [x] HTTP upload slot responses — `iq_upload`, `iq_upload_handler` (slot result + error paths)
-- [x] MAM fin / RSM — `iq_mam`, `iq_mam_handler` (fin + error paths)
-- [x] Search / disco / caps — `iq_disco`, `iq_caps`, `iq_disco_handler`
-- [x] vCard / bookmarks — `iq_vcard`, `iq_bookmarks`, `iq_vcard_handler`
-
-**Shared infrastructure for Wave 2:**
-- [x] `UiAction` / `RenderEvent` sum type (print, nicklist, line-update-by-tag) — `render_event.{hh,cpp}`; receipt/displayed ack path
-- [x] `LineStorePort` — `line_store_update_line_glyph_by_tag` in `src/weechat/line_store.{hh,cpp}`
-- [x] `BufferPort` (v2) — `buffer_port.{hh,cpp}` (search/nicklist); `channel.cpp` adapter
-
-### Wave 3 — Outbound cleanup
-- [x] Replace hybrid `stanza_node` + `xmpp_stanza_add_child` in `account.cpp`, `muc_admin.inl`, `channel.cpp` RDF path
-
-### Wave 4 — Test infrastructure
-- [x] Extend `tests/weechat_stub.hh` for handler slice tests
-- [x] `NullUiPort` for no-output protocol tests
-
-**Verification:** `CXX="ccache clang++" make DEBUG=1` after each slice (125 doctests); manual WeeChat retest for touched features; no `/plugin reload`.
-
----
-
-## AGENTS.md Compliance Gaps (Remaining)
-
-**Origin**: Post-migration audit after UiPort, StanzaView handler slices, RuntimePort, include
-normalization, and builder emission work. Most major migrations are complete; this section tracks
-the residual debt against AGENTS.md rules (ports, StanzaView, builders, RenderEvent).
-
-**Baseline (verified before this section was added):** `CXX="ccache clang++" make DEBUG=1` —
-125/125 doctests, 963/963 assertions, clean working tree on `master`.
-
-**Key principles**: Surgical/minimal changes only; migrate raw APIs only in code paths being
-edited; `make DEBUG=1` after each logical group; no `/plugin reload`; update this section when
-items land.
-
-### Gaps table (prioritized)
-
-| Priority | Gap | Location(s) | AGENTS rule | Remediation |
-|----------|-----|-------------|-------------|-------------|
-| High | OMEMO inbound parse still uses raw `xmpp_stanza_get_*` | `src/omemo/codec.inl` (~22), `internal_stanza_parse.inl` (~11), `session_flow.inl` (~6) | Inbound reads → `StanzaView` at handler edge | Wrap encrypted/bundle/devicelist stanzas in `StanzaView`; migrate walks to `attr_string()`, `child()`, `children()` |
-| High | Post-build stanza mutation | `iq_disco_handler.inl` (error IQ), `message_handler.inl` (`xmpp_stanza_set_type`), `command/account.inl` (`xmpp_stanza_set_to` ×4) | Outbound → `stanza::spec` builders only | Move attrs/type/to into builder specs before `build()`; no raw `xmpp_stanza_set_*` / `add_child` in handlers |
-| High | Parse utilities on raw libstrophe | `src/xmpp/atom.cpp`, `src/xmpp/xhtml.cpp`, `src/util.cpp` (markup/styling) | Domain logic → `StanzaView` | Migrate when touching those files; add doctests where parse output is testable |
-| Medium | `RenderEvent` barely wired | `message_handler.inl` calls `line_store_*` directly for reactions, retractions, tombstones, corrections, reply quotes; only receipt/displayed use `build_incoming_*_render_event` | Handlers return/apply `RenderEvent` for line/nicklist updates | Extend `RenderEvent` builders; handler applies via `apply_render_event` instead of direct `line_store_*` |
-| Medium | `BufferPort` underused | `nicklist.cpp` (all `weechat_nicklist_*`), `render_event.cpp` (nicklist ops), `channel.cpp`/`account.cpp`/commands (`weechat_buffer_set/get` for input/display/search) | `BufferPort` for buffer search + nicklist mutations | Extend `BufferPort` (nick add/search, optional input/display helpers); migrate `nicklist.cpp` and render nicklist actions |
-| Medium | Manual prefix in dated messages | `message_handler.inl`, `presence_handler.inl` — `RuntimePort::prefix()` embedded in `printf_date_tags` bodies | `UiPort` typed methods (`printf_network`, `printf_error`, …) | Use `printf_network`/`printf_error`/`printf_info` instead of baking prefixes into `printf_date_tags` message strings |
-| Low | OMEMO lifecycle post-build attrs | `src/omemo/lifecycle.inl` — `xmpp_stanza_set_attribute` on built IQ | Builders only | Fold `from`/`to` into IQ spec before build |
-| Low | `debug.hh` bypasses ports | `XDEBUG` → raw `weechat_printf` + `weechat_color` | Ports in domain logic; raw `weechat_*` at adapter edge | Optional: route through `UiPort::for_buffer(debug_buf)` when refactoring debug path |
-| Low | Docs drift | `AGENTS.md` line 180 (`weechat_prefix` vs `RuntimePort`); `TODO.md` verification sections cite old doctest counts (27/286) | Docs match implementation | Update AGENTS.md prefix guidance; sweep stale counts in this file |
+| Priority | Gap | Location(s) | Remediation |
+|----------|-----|-------------|-------------|
+| High | OMEMO inbound parse uses raw `xmpp_stanza_get_*` | `codec.inl` (~22), `internal_stanza_parse.inl` (~11), `session_flow.inl` (~6) | `StanzaView` at parse edge: `attr_string()`, `child()`, `children()` |
+| High | Post-build stanza mutation | `iq_disco_handler.inl`, `message_handler.inl`, `command/account.inl` (`xmpp_stanza_set_to` ×4) | Fold attrs/type/to into `stanza::spec` before `build()` |
+| High | Parse utilities on raw libstrophe | `atom.cpp`, `xhtml.cpp`, `util.cpp` | Migrate to `StanzaView` when those paths are next edited |
+| Medium | `RenderEvent` barely wired | `message_handler.inl` — direct `line_store_*` for reactions/retract/tombstone/correct/reply; only receipt/displayed use `RenderEvent` | Extend builders; apply via `apply_render_event` |
+| Medium | `BufferPort` underused | `nicklist.cpp`, `render_event.cpp`, buffer set/get in `channel.cpp` / `account.cpp` / commands | Extend port (nick add/search); migrate nicklist + render nicklist actions |
+| Medium | Manual prefix in dated messages | `message_handler.inl`, `presence_handler.inl` | Use `printf_network` / `printf_error` instead of embedding `RuntimePort::prefix()` in `printf_date_tags` bodies |
+| Low | OMEMO lifecycle post-build attrs | `lifecycle.inl` — `xmpp_stanza_set_attribute` on built IQ | Fold `from`/`to` into IQ spec |
+| Low | `debug.hh` bypasses ports | `XDEBUG` → raw `weechat_printf` | Optional: route through `UiPort` when refactoring debug path |
+| Low | `AGENTS.md` docs drift | Line 180 still cites `weechat_prefix()` | Align with `RuntimePort::default_runtime().prefix()` |
 
 ### Acceptable exceptions (no action unless touched)
 
-- Port adapters: `ui_port.cpp`, `runtime_port.cpp`, `buffer_port.cpp`, `line_store.cpp`
-- `StanzaView` / builder implementation: `stanza_view.cpp`, `node.cpp`, `node.hh`, `xep-0163.inl` post-build
-- C-ABI glue: `connection.cpp` `send()` SM name check, channel/account buffer creation, hook callbacks
-- `strophe.hh` — documented parse-only alt wrapper
+Port adapters (`ui_port.cpp`, `runtime_port.cpp`, `buffer_port.cpp`, `line_store.cpp`);
+`StanzaView` / builder impl (`stanza_view.cpp`, `node.cpp`, `node.hh`, `xep-0163.inl`);
+C-ABI glue (`connection.cpp` SM counting, buffer creation, hook callbacks); `strophe.hh`
+(parse-only alt wrapper, documented).
 
-### Execution phases
+### Phase 1 — OMEMO StanzaView
 
-**Phase 1 — OMEMO StanzaView (highest raw-strophe debt)**
 - [ ] `codec.inl`: decode path via `StanzaView`
 - [ ] `internal_stanza_parse.inl`: bundle/prekey parse via `StanzaView`
 - [ ] `session_flow.inl`: devicelist parse via `StanzaView`
 - [ ] `lifecycle.inl`: fold IQ `from`/`to` into builder
-- [ ] `make DEBUG=1`; OMEMO manual retest + `tools/correlate_omemo_xml.sh` if needed
+- [ ] `make DEBUG=1`; OMEMO manual retest + correlate helper if needed
 
-**Phase 2 — Post-build mutations → builders**
+### Phase 2 — Post-build mutations → builders
+
 - [ ] `iq_disco_handler.inl`: error IQ fully fluent
 - [ ] `message_handler.inl`: result reply type in builder
-- [ ] `command/account.inl`: `to` attr in IBR/register specs (remove `xmpp_stanza_set_to`)
-- [ ] `make DEBUG=1`; manual IBR/disco smoke if server available
+- [ ] `command/account.inl`: `to` in IBR/register specs (remove `xmpp_stanza_set_to`)
+- [ ] `make DEBUG=1`
 
-**Phase 3 — RenderEvent for line_store paths**
-- [ ] Add builders for reaction, retract, tombstone, correct, reply-quote updates
-- [ ] `message_handler.inl`: apply via `apply_render_event` (mirror receipt/displayed pattern)
+### Phase 3 — RenderEvent for line_store paths
+
+- [ ] Builders for reaction, retract, tombstone, correct, reply-quote updates
+- [ ] `message_handler.inl`: `apply_render_event` (mirror receipt/displayed pattern)
 - [ ] Extend doctests in `render_event` / handler slice tests
 - [ ] `make DEBUG=1`; manual retest receipts, reactions, retractions, corrections
 
-**Phase 4 — BufferPort + prefix cleanup**
+### Phase 4 — BufferPort + prefix cleanup
+
 - [ ] Extend `BufferPort` (nicklist add/search; evaluate input/display setters)
-- [ ] Migrate `nicklist.cpp`; wire `render_event` nicklist actions through port
-- [ ] Replace embedded-prefix `printf_date_tags` with typed `UiPort` methods in handlers
+- [ ] Migrate `nicklist.cpp`; wire render nicklist actions through port
+- [ ] Replace embedded-prefix `printf_date_tags` with typed `UiPort` methods
 - [ ] `make DEBUG=1`; manual MUC nicklist + network message display retest
 
-**Phase 5 — Parse utilities (when touched)**
-- [ ] `atom.cpp`, `xhtml.cpp`, `util.cpp` → `StanzaView` on next edit to those paths
+### Phase 5 — Parse utilities (when touched)
+
+- [ ] `atom.cpp`, `xhtml.cpp`, `util.cpp` → `StanzaView`
 - [ ] Add/adjust doctests as needed
 
-**Phase 6 — Docs hygiene**
-- [ ] `AGENTS.md`: align prefix guidance with `RuntimePort`
-- [ ] Sweep stale doctest counts in this file (27/286 → 125)
+### Phase 6 — Docs hygiene
 
-### Verification (every phase)
+- [ ] `AGENTS.md`: align prefix guidance with `RuntimePort`; update stale TODO.md pointer (BTBV refactor complete)
 
-- `CXX="ccache clang++" make DEBUG=1` — 125 doctests, all assertions green
-- Plain `make` smoke before any release-oriented commit
-- Manual WeeChat retest for touched features (full restart; no `/plugin reload`)
-- OMEMO changes: `tools/correlate_omemo_xml.sh --account <account>` before protocol fixes
-- Atomic commits; check off items here in the same commit as the fix
+### New XEP support
+
+When adding or modifying XEP support: fetch spec to `docs/specs/xep-NNNN.txt`, verify against
+spec, commit spec with code, update DOAP/README, add a row here, `make DEBUG=1`, commit, push.
+See AGENTS.md for the full checklist.
