@@ -370,7 +370,7 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] PEP / pubsub feeds — `message_pep`, `message_pep_feed`, `pep_handler` (avatar/bookmarks/MDS remain in pep_handler TU)
 
 **`iq_handler.inl` slices:**
-- [ ] Version/time (done — see `iq_handlers.cpp`)
+- [x] Version/time — see `iq_handlers.cpp`
 - [x] Ping / error IQ replies — `iq_ping`, `iq_error`, `iq_ping_handler`; `handle_ping_iq` in `iq_handlers`
 - [x] Pubsub / PEP (avatars, microblog, OMEMO bundles) — `iq_avatar_handler`, `iq_pubsub_feed_handler`, `iq_omemo_pubsub_handler`; `avatar::apply_pep_data_b64`
 - [x] HTTP upload slot responses — `iq_upload`, `iq_upload_handler` (slot result + error paths)
@@ -390,4 +390,83 @@ unit-tested without WeeChat. One PR per slice; keep behavior identical.
 - [x] Extend `tests/weechat_stub.hh` for handler slice tests
 - [x] `NullUiPort` for no-output protocol tests
 
-**Verification:** `CXX="ccache clang++" make -j$(nproc)` after each slice; manual WeeChat retest for touched features; no `/plugin reload`.
+**Verification:** `CXX="ccache clang++" make DEBUG=1` after each slice (125 doctests); manual WeeChat retest for touched features; no `/plugin reload`.
+
+---
+
+## AGENTS.md Compliance Gaps (Remaining)
+
+**Origin**: Post-migration audit after UiPort, StanzaView handler slices, RuntimePort, include
+normalization, and builder emission work. Most major migrations are complete; this section tracks
+the residual debt against AGENTS.md rules (ports, StanzaView, builders, RenderEvent).
+
+**Baseline (verified before this section was added):** `CXX="ccache clang++" make DEBUG=1` —
+125/125 doctests, 963/963 assertions, clean working tree on `master`.
+
+**Key principles**: Surgical/minimal changes only; migrate raw APIs only in code paths being
+edited; `make DEBUG=1` after each logical group; no `/plugin reload`; update this section when
+items land.
+
+### Gaps table (prioritized)
+
+| Priority | Gap | Location(s) | AGENTS rule | Remediation |
+|----------|-----|-------------|-------------|-------------|
+| High | OMEMO inbound parse still uses raw `xmpp_stanza_get_*` | `src/omemo/codec.inl` (~22), `internal_stanza_parse.inl` (~11), `session_flow.inl` (~6) | Inbound reads → `StanzaView` at handler edge | Wrap encrypted/bundle/devicelist stanzas in `StanzaView`; migrate walks to `attr_string()`, `child()`, `children()` |
+| High | Post-build stanza mutation | `iq_disco_handler.inl` (error IQ), `message_handler.inl` (`xmpp_stanza_set_type`), `command/account.inl` (`xmpp_stanza_set_to` ×4) | Outbound → `stanza::spec` builders only | Move attrs/type/to into builder specs before `build()`; no raw `xmpp_stanza_set_*` / `add_child` in handlers |
+| High | Parse utilities on raw libstrophe | `src/xmpp/atom.cpp`, `src/xmpp/xhtml.cpp`, `src/util.cpp` (markup/styling) | Domain logic → `StanzaView` | Migrate when touching those files; add doctests where parse output is testable |
+| Medium | `RenderEvent` barely wired | `message_handler.inl` calls `line_store_*` directly for reactions, retractions, tombstones, corrections, reply quotes; only receipt/displayed use `build_incoming_*_render_event` | Handlers return/apply `RenderEvent` for line/nicklist updates | Extend `RenderEvent` builders; handler applies via `apply_render_event` instead of direct `line_store_*` |
+| Medium | `BufferPort` underused | `nicklist.cpp` (all `weechat_nicklist_*`), `render_event.cpp` (nicklist ops), `channel.cpp`/`account.cpp`/commands (`weechat_buffer_set/get` for input/display/search) | `BufferPort` for buffer search + nicklist mutations | Extend `BufferPort` (nick add/search, optional input/display helpers); migrate `nicklist.cpp` and render nicklist actions |
+| Medium | Manual prefix in dated messages | `message_handler.inl`, `presence_handler.inl` — `RuntimePort::prefix()` embedded in `printf_date_tags` bodies | `UiPort` typed methods (`printf_network`, `printf_error`, …) | Use `printf_network`/`printf_error`/`printf_info` instead of baking prefixes into `printf_date_tags` message strings |
+| Low | OMEMO lifecycle post-build attrs | `src/omemo/lifecycle.inl` — `xmpp_stanza_set_attribute` on built IQ | Builders only | Fold `from`/`to` into IQ spec before build |
+| Low | `debug.hh` bypasses ports | `XDEBUG` → raw `weechat_printf` + `weechat_color` | Ports in domain logic; raw `weechat_*` at adapter edge | Optional: route through `UiPort::for_buffer(debug_buf)` when refactoring debug path |
+| Low | Docs drift | `AGENTS.md` line 180 (`weechat_prefix` vs `RuntimePort`); `TODO.md` verification sections cite old doctest counts (27/286) | Docs match implementation | Update AGENTS.md prefix guidance; sweep stale counts in this file |
+
+### Acceptable exceptions (no action unless touched)
+
+- Port adapters: `ui_port.cpp`, `runtime_port.cpp`, `buffer_port.cpp`, `line_store.cpp`
+- `StanzaView` / builder implementation: `stanza_view.cpp`, `node.cpp`, `node.hh`, `xep-0163.inl` post-build
+- C-ABI glue: `connection.cpp` `send()` SM name check, channel/account buffer creation, hook callbacks
+- `strophe.hh` — documented parse-only alt wrapper
+
+### Execution phases
+
+**Phase 1 — OMEMO StanzaView (highest raw-strophe debt)**
+- [ ] `codec.inl`: decode path via `StanzaView`
+- [ ] `internal_stanza_parse.inl`: bundle/prekey parse via `StanzaView`
+- [ ] `session_flow.inl`: devicelist parse via `StanzaView`
+- [ ] `lifecycle.inl`: fold IQ `from`/`to` into builder
+- [ ] `make DEBUG=1`; OMEMO manual retest + `tools/correlate_omemo_xml.sh` if needed
+
+**Phase 2 — Post-build mutations → builders**
+- [ ] `iq_disco_handler.inl`: error IQ fully fluent
+- [ ] `message_handler.inl`: result reply type in builder
+- [ ] `command/account.inl`: `to` attr in IBR/register specs (remove `xmpp_stanza_set_to`)
+- [ ] `make DEBUG=1`; manual IBR/disco smoke if server available
+
+**Phase 3 — RenderEvent for line_store paths**
+- [ ] Add builders for reaction, retract, tombstone, correct, reply-quote updates
+- [ ] `message_handler.inl`: apply via `apply_render_event` (mirror receipt/displayed pattern)
+- [ ] Extend doctests in `render_event` / handler slice tests
+- [ ] `make DEBUG=1`; manual retest receipts, reactions, retractions, corrections
+
+**Phase 4 — BufferPort + prefix cleanup**
+- [ ] Extend `BufferPort` (nicklist add/search; evaluate input/display setters)
+- [ ] Migrate `nicklist.cpp`; wire `render_event` nicklist actions through port
+- [ ] Replace embedded-prefix `printf_date_tags` with typed `UiPort` methods in handlers
+- [ ] `make DEBUG=1`; manual MUC nicklist + network message display retest
+
+**Phase 5 — Parse utilities (when touched)**
+- [ ] `atom.cpp`, `xhtml.cpp`, `util.cpp` → `StanzaView` on next edit to those paths
+- [ ] Add/adjust doctests as needed
+
+**Phase 6 — Docs hygiene**
+- [ ] `AGENTS.md`: align prefix guidance with `RuntimePort`
+- [ ] Sweep stale doctest counts in this file (27/286 → 125)
+
+### Verification (every phase)
+
+- `CXX="ccache clang++" make DEBUG=1` — 125 doctests, all assertions green
+- Plain `make` smoke before any release-oriented commit
+- Manual WeeChat retest for touched features (full restart; no `/plugin reload`)
+- OMEMO changes: `tools/correlate_omemo_xml.sh --account <account>` before protocol fixes
+- Atomic commits; check off items here in the same commit as the fix
