@@ -34,13 +34,12 @@ when items land.
 
 | Priority | Gap | Location(s) | Remediation |
 |----------|-----|-------------|-------------|
-| High | OMEMO inbound parse uses raw `xmpp_stanza_get_*` | `codec.inl` (~22), `internal_stanza_parse.inl` (~11), `session_flow.inl` (~6) | `StanzaView` at parse edge: `attr_string()`, `child()`, `children()` |
 | High | Post-build stanza mutation | `iq_disco_handler.inl`, `message_handler.inl`, `command/account.inl` (`xmpp_stanza_set_to` ×4) | Fold attrs/type/to into `stanza::spec` before `build()` |
 | High | Parse utilities on raw libstrophe | `atom.cpp`, `xhtml.cpp`, `util.cpp` | Migrate to `StanzaView` when those paths are next edited |
 | Medium | `RenderEvent` barely wired | `message_handler.inl` — direct `line_store_*` for reactions/retract/tombstone/correct/reply; only receipt/displayed use `RenderEvent` | Extend builders; apply via `apply_render_event` |
 | Medium | `BufferPort` underused | `nicklist.cpp`, `render_event.cpp`, buffer set/get in `channel.cpp` / `account.cpp` / commands | Extend port (nick add/search); migrate nicklist + render nicklist actions |
 | Medium | Manual prefix in dated messages | `message_handler.inl`, `presence_handler.inl` | Use `printf_network` / `printf_error` instead of embedding `RuntimePort::prefix()` in `printf_date_tags` bodies |
-| Low | OMEMO lifecycle post-build attrs | `lifecycle.inl` — `xmpp_stanza_set_attribute` on built IQ | Fold `from`/`to` into IQ spec |
+
 | Low | `debug.hh` bypasses ports | `XDEBUG` → raw `weechat_printf` | Optional: route through `UiPort` when refactoring debug path |
 | Low | `AGENTS.md` docs drift | Line 180 still cites `weechat_prefix()` | Align with `RuntimePort::default_runtime().prefix()` |
 
@@ -50,14 +49,6 @@ Port adapters (`ui_port.cpp`, `runtime_port.cpp`, `buffer_port.cpp`, `line_store
 `StanzaView` / builder impl (`stanza_view.cpp`, `node.cpp`, `node.hh`, `xep-0163.inl`);
 C-ABI glue (`connection.cpp` SM counting, buffer creation, hook callbacks); `strophe.hh`
 (parse-only alt wrapper, documented).
-
-### Phase 1 — OMEMO StanzaView
-
-- [ ] `codec.inl`: decode path via `StanzaView`
-- [ ] `internal_stanza_parse.inl`: bundle/prekey parse via `StanzaView`
-- [ ] `session_flow.inl`: devicelist parse via `StanzaView`
-- [ ] `lifecycle.inl`: fold IQ `from`/`to` into builder
-- [ ] `make DEBUG=1`; OMEMO manual retest + correlate helper if needed
 
 ### Phase 2 — Post-build mutations → builders
 

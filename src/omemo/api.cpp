@@ -49,6 +49,7 @@
 #include "xmpp/iq_pubsub_feed.hh"
 #include "xmpp/ns.hh"
 #include "xmpp/stanza.hh"
+#include "xmpp/stanza_view.hh"
 #include "xmpp/xep-0060.inl"
 
 #ifndef NDEBUG

@@ -16,47 +16,45 @@ void signal_log_emit(int level, const char *message, std::size_t length, void *u
 //   <prekeys xmlns="eu.siacs.conversations.axolotl">
 //     <preKeyPublic preKeyId="N">base64</preKeyPublic> ...
 //   </prekeys>
-[[nodiscard]] auto parse_legacy_bundle(xmpp_stanza_t *bundle)
+[[nodiscard]] auto parse_legacy_bundle(::xmpp::StanzaView bundle)
     -> std::optional<bundle_metadata>
 {
-    if (!bundle)
+    if (!bundle.valid())
         return std::nullopt;
 
     bundle_metadata result;
 
-    xmpp_stanza_t *spk = xmpp_stanza_get_child_by_name(bundle, "signedPreKeyPublic");
-    if (!spk)
+    const ::xmpp::StanzaView spk = bundle.child("signedPreKeyPublic");
+    if (!spk.valid())
         return std::nullopt;
-    const char *spk_id = xmpp_stanza_get_attribute(spk, "signedPreKeyId");
+    const auto spk_id = spk.attr("signedPreKeyId");
     if (!spk_id)
         return std::nullopt;
-    result.signed_pre_key_id = spk_id;
-    result.signed_pre_key = stanza_text(spk);
+    result.signed_pre_key_id = std::string(*spk_id);
+    result.signed_pre_key = spk.text();
 
-    xmpp_stanza_t *spks = xmpp_stanza_get_child_by_name(bundle, "signedPreKeySignature");
-    if (!spks)
+    const ::xmpp::StanzaView spks = bundle.child("signedPreKeySignature");
+    if (!spks.valid())
         return std::nullopt;
-    result.signed_pre_key_signature = stanza_text(spks);
+    result.signed_pre_key_signature = spks.text();
 
-    xmpp_stanza_t *ik = xmpp_stanza_get_child_by_name(bundle, "identityKey");
-    if (!ik)
+    const ::xmpp::StanzaView ik = bundle.child("identityKey");
+    if (!ik.valid())
         return std::nullopt;
-    result.identity_key = stanza_text(ik);
+    result.identity_key = ik.text();
 
-    xmpp_stanza_t *prekeys = xmpp_stanza_get_child_by_name(bundle, "prekeys");
-    if (!prekeys)
+    const ::xmpp::StanzaView prekeys = bundle.child("prekeys");
+    if (!prekeys.valid())
         return std::nullopt;
 
-    for (xmpp_stanza_t *pk = xmpp_stanza_get_children(prekeys);
-         pk; pk = xmpp_stanza_get_next(pk))
+    for (const ::xmpp::StanzaView pk : prekeys)
     {
-        const char *name = xmpp_stanza_get_name(pk);
-        if (!name || weechat_strcasecmp(name, "preKeyPublic") != 0)
+        if (!stanza_attr_iequals(pk.name(), "preKeyPublic"))
             continue;
-        const char *pk_id = xmpp_stanza_get_attribute(pk, "preKeyId");
+        const auto pk_id = pk.attr("preKeyId");
         if (!pk_id)
             continue;
-        result.prekeys.emplace_back(pk_id, stanza_text(pk));
+        result.prekeys.emplace_back(std::string(*pk_id), pk.text());
     }
 
     if (result.signed_pre_key.empty() || result.signed_pre_key_signature.empty()
@@ -73,15 +71,11 @@ void signal_log_emit(int level, const char *message, std::size_t length, void *u
     if (!items)
         return std::nullopt;
 
-    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items, "item");
-    if (!item)
+    const ::xmpp::StanzaView items_view(items);
+    const ::xmpp::StanzaView item = items_view.child("item");
+    if (!item.valid())
         return std::nullopt;
 
-    xmpp_stanza_t *bundle = xmpp_stanza_get_child_by_name_and_ns(
-        item, "bundle", kLegacyOmemoNs.data());
-    if (!bundle)
-        return std::nullopt;
-
+    const ::xmpp::StanzaView bundle = item.child("bundle", kLegacyOmemoNs);
     return parse_legacy_bundle(bundle);
 }
-

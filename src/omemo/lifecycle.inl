@@ -100,14 +100,16 @@ XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ct
                             .item(item_spec))
                .publish_options(pub_opts);
 
-    auto iq_sp = stanza::iq()
-        .type("set")
-        .id("omemo-legacy-bundle")
-        .pubsub(pubsub_spec)
-        .build(context);
+    stanza::iq iq_spec;
+    iq_spec.type("set")
+           .id("omemo-legacy-bundle")
+           .pubsub(pubsub_spec);
+    if (from)
+        iq_spec.from(from);
+    if (to)
+        iq_spec.to(to);
 
-    if (from) xmpp_stanza_set_attribute(iq_sp.get(), "from", from);
-    if (to)   xmpp_stanza_set_attribute(iq_sp.get(), "to", to);
+    auto iq_sp = iq_spec.build(context);
 
     xmpp_stanza_clone(iq_sp.get());  // bump refcount; shared_ptr dtor will release its ref
     return iq_sp.get();              // caller owns one ref; must call xmpp_stanza_release()

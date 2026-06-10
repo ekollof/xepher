@@ -229,21 +229,15 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
     std::vector<std::string> devices;
     if (items)
     {
-        xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items, "item");
-        xmpp_stanza_t *list = item
-            ? xmpp_stanza_get_child_by_name_and_ns(item, "list", kLegacyOmemoNs.data())
-            : nullptr;
+        const ::xmpp::StanzaView items_view(items);
+        const ::xmpp::StanzaView list = items_view.child("item").child("list", kLegacyOmemoNs);
 
-        for (xmpp_stanza_t *device = list ? xmpp_stanza_get_children(list) : nullptr;
-             device;
-             device = xmpp_stanza_get_next(device))
+        for (const ::xmpp::StanzaView device : list)
         {
-            const char *name = xmpp_stanza_get_name(device);
-            if (!name || weechat_strcasecmp(name, "device") != 0)
+            if (!stanza_attr_iequals(device.name(), "device"))
                 continue;
 
-            const char *device_id = xmpp_stanza_get_attribute(device, "id");
-            const auto parsed_device_id = parse_uint32(device_id ? device_id : "");
+            const auto parsed_device_id = parse_uint32(device.attr_string("id"));
             if (!parsed_device_id || !is_valid_omemo_device_id(*parsed_device_id))
                 continue;
 

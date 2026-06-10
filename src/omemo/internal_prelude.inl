@@ -315,9 +315,29 @@ void store_tofu_trust(omemo &self,
     return fmt::format("senderkey:{}:{}:{}", group, jid, device_id);
 }
 
-[[nodiscard]] auto stanza_text(xmpp_stanza_t *stanza) -> std::string
+[[nodiscard]] auto stanza_attr_iequals(std::string_view a, std::string_view b) -> bool
 {
-    return stanza_element_text(stanza);
+    if (a.size() != b.size())
+        return false;
+    return std::ranges::equal(a, b, [](const char x, const char y) {
+        return std::tolower(static_cast<unsigned char>(x))
+            == std::tolower(static_cast<unsigned char>(y));
+    });
+}
+
+[[nodiscard]] auto stanza_attr_is_truthy(std::optional<std::string_view> value) -> bool
+{
+    if (!value)
+        return false;
+    return stanza_attr_iequals(*value, "true") || stanza_attr_iequals(*value, "1");
+}
+
+[[nodiscard]] auto omemo_key_is_prekey(::xmpp::StanzaView key_stanza) -> bool
+{
+    const auto kex_val = key_stanza.attr("kex");
+    const auto legacy_prekey_val = key_stanza.attr("prekey");
+    return stanza_attr_is_truthy(kex_val)
+        || (!kex_val && stanza_attr_is_truthy(legacy_prekey_val));
 }
 
 [[nodiscard]] auto base64_encode_raw(std::span<const std::uint8_t> data) -> std::string

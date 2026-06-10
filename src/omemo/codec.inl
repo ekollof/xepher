@@ -30,31 +30,29 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
         return std::nullopt;
     }
 
-    xmpp_stanza_t *header = xmpp_stanza_get_child_by_name(encrypted, "header");
-    xmpp_stanza_t *payload_stanza = xmpp_stanza_get_child_by_name(encrypted, "payload");
-    if (!header)
+    const ::xmpp::StanzaView enc_view(encrypted);
+    const ::xmpp::StanzaView header = enc_view.child("header");
+    const ::xmpp::StanzaView payload_view = enc_view.child("payload");
+    if (!header.valid())
     {
         print_error(buffer, "OMEMO message is missing header.");
         return std::nullopt;
     }
 
-    const auto sender_device_id = parse_uint32(
-        xmpp_stanza_get_attribute(header, "sid")
-            ? xmpp_stanza_get_attribute(header, "sid")
-            : "");
+    const auto sender_device_id = parse_uint32(header.attr_string("sid"));
     if (!sender_device_id)
     {
         print_error(buffer, "OMEMO message header is missing a valid sender sid.");
         return std::nullopt;
     }
-    // payload_stanza may be absent for KeyTransportElement (XEP-0384 §7.3).
-    const auto payload_text = payload_stanza ? stanza_text(payload_stanza) : std::string {};
-    const auto payload = payload_stanza
+    // payload may be absent for KeyTransportElement (XEP-0384 §7.3).
+    const auto payload_text = payload_view.valid() ? payload_view.text() : std::string {};
+    const auto payload = payload_view.valid()
         ? base64_decode(*account->context, payload_text)
         : std::vector<std::uint8_t> {};
     // A missing or empty payload is only an error for full encrypted messages,
     // not for key-transport stanzas.
-    if (payload_stanza && payload.empty())
+    if (payload_view.valid() && payload.empty())
     {
         print_error(buffer, "OMEMO payload is present but empty or invalid base64.");
         return std::nullopt;
@@ -62,20 +60,20 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
 
     const std::string own_bare_jid = ::jid(nullptr, account->jid().data()).bare;
 
-    const char *enc_ns = xmpp_stanza_get_ns(encrypted);
+    const auto enc_ns = enc_view.xmlns();
     if (enc_ns)
-        XDEBUG("OMEMO decode: <encrypted> xmlns='{}'", enc_ns);
+        XDEBUG("OMEMO decode: <encrypted> xmlns='{}'", *enc_ns);
 
-    if (!enc_ns || std::string_view {enc_ns} != kLegacyOmemoNs)
+    if (!enc_ns || *enc_ns != kLegacyOmemoNs)
     {
         if (!quiet)
             print_error(buffer, fmt::format(
                 "OMEMO: unexpected <encrypted> namespace '{}'; expected '{}'.",
-                enc_ns ? enc_ns : "(none)", kLegacyOmemoNs));
+                enc_ns ? std::string(*enc_ns) : "(none)", kLegacyOmemoNs));
         return std::nullopt;
     }
 
-    xmpp_stanza_t *iv_stanza = xmpp_stanza_get_child_by_name(header, "iv");
+    const ::xmpp::StanzaView iv_view = header.child("iv");
 
     // Receiving an OMEMO message from a peer counts as observed traffic for
     // that peer — this unblocks bundle requests (which check has_peer_traffic)
@@ -97,17 +95,17 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     bool found_keys_elem = false;
     bool found_keys_for_our_bare_jid = false;
     bool found_key_for_us = false;
-    for (xmpp_stanza_t *child = xmpp_stanza_get_children(header);
-         child && !legacy_transport_key;
-         child = xmpp_stanza_get_next(child))
+    for (const ::xmpp::StanzaView child : header)
     {
-        const char *name = xmpp_stanza_get_name(child);
-        if (!name || weechat_strcasecmp(name, "keys") != 0)
+        if (legacy_transport_key)
+            break;
+        if (!stanza_attr_iequals(child.name(), "keys"))
             continue;
         found_keys_elem = true;
 
-        const char *keys_jid = xmpp_stanza_get_attribute(child, "jid");
-        XDEBUG("OMEMO decode: <keys jid='{}'> element found", keys_jid ? keys_jid : "(none)");
+        const auto keys_jid = child.attr("jid");
+        XDEBUG("OMEMO decode: <keys jid='{}'> element found",
+               keys_jid ? std::string(*keys_jid) : "(none)");
         if (!keys_jid)
         {
             // Legacy compatibility: OMEMO:1 senders may omit keys@jid.
@@ -115,50 +113,41 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             found_keys_for_our_bare_jid = true;
         }
 
-        if (keys_jid && std::string_view {keys_jid}.contains('/'))
+        if (keys_jid && keys_jid->contains('/'))
         {
             print_error(buffer, fmt::format(
                 "OMEMO message has non-bare keys jid '{}'; ignoring non-compliant element.",
-                keys_jid));
+                *keys_jid));
             continue;
         }
 
-        if (keys_jid && own_bare_jid != keys_jid)
+        if (keys_jid && own_bare_jid != *keys_jid)
             continue;
 
         if (keys_jid)
             found_keys_for_our_bare_jid = true;
 
-        for (xmpp_stanza_t *key_stanza = xmpp_stanza_get_children(child);
-             key_stanza && !legacy_transport_key;
-             key_stanza = xmpp_stanza_get_next(key_stanza))
+        for (const ::xmpp::StanzaView key_stanza : child)
         {
-            const char *key_name = xmpp_stanza_get_name(key_stanza);
-            if (!key_name || weechat_strcasecmp(key_name, "key") != 0)
+            if (legacy_transport_key)
+                break;
+            if (!stanza_attr_iequals(key_stanza.name(), "key"))
                 continue;
 
-            const char *rid = xmpp_stanza_get_attribute(key_stanza, "rid");
-            const auto rid_val = rid ? parse_uint32(rid).value_or(0) : 0;
+            const auto rid_val = parse_uint32(key_stanza.attr_string("rid")).value_or(0);
             XDEBUG("OMEMO decode:   <key rid='{}'> (our device_id={})",
-                   rid ? rid : "(null)", device_id);
+                   key_stanza.attr_string("rid"), device_id);
             if (rid_val != device_id)
                 continue;
 
             found_key_for_us = true;
-            const char *kex_val = xmpp_stanza_get_attribute(key_stanza, "kex");
-            const char *legacy_prekey_val = xmpp_stanza_get_attribute(key_stanza, "prekey");
-            const bool is_prekey = (kex_val != nullptr
-                && (weechat_strcasecmp(kex_val, "true") == 0
-                    || weechat_strcasecmp(kex_val, "1") == 0))
-                || (kex_val == nullptr && legacy_prekey_val != nullptr
-                    && (weechat_strcasecmp(legacy_prekey_val, "true") == 0
-                        || weechat_strcasecmp(legacy_prekey_val, "1") == 0));
+            const bool is_prekey = omemo_key_is_prekey(key_stanza);
             decoded_as_prekey = is_prekey;
-            if (!kex_val && legacy_prekey_val)
+            if (!key_stanza.attr("kex") && key_stanza.attr("prekey"))
             {
                 XDEBUG("OMEMO decode: accepting legacy 'prekey' key attribute; strict XEP-0384 uses 'kex'.");
             }
-            const auto serialized = base64_decode(*account->context, stanza_text(key_stanza));
+            const auto serialized = base64_decode(*account->context, key_stanza.text());
             XDEBUG("OMEMO decode:   found key for us: is_prekey={} serialized-bytes={}",
                    is_prekey, serialized.size());
             if (serialized.empty())
@@ -180,12 +169,11 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     // directly under <header> instead of wrapping them in <keys/>.
     if (!legacy_transport_key && !found_keys_elem)
     {
-        for (xmpp_stanza_t *key_stanza = xmpp_stanza_get_children(header);
-             key_stanza && !legacy_transport_key;
-             key_stanza = xmpp_stanza_get_next(key_stanza))
+        for (const ::xmpp::StanzaView key_stanza : header)
         {
-            const char *key_name = xmpp_stanza_get_name(key_stanza);
-            if (!key_name || weechat_strcasecmp(key_name, "key") != 0)
+            if (legacy_transport_key)
+                break;
+            if (!stanza_attr_iequals(key_stanza.name(), "key"))
                 continue;
 
             // Legacy OMEMO:1 layout: <header><key .../></header> has no
@@ -194,24 +182,16 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             found_keys_elem = true;
             found_keys_for_our_bare_jid = true;
 
-            const char *rid = xmpp_stanza_get_attribute(key_stanza, "rid");
-            const auto rid_val = rid ? parse_uint32(rid).value_or(0) : 0;
+            const auto rid_val = parse_uint32(key_stanza.attr_string("rid")).value_or(0);
             if (rid_val != device_id)
                 continue;
 
             found_key_for_us = true;
 
-            const char *kex_val = xmpp_stanza_get_attribute(key_stanza, "kex");
-            const char *legacy_prekey_val = xmpp_stanza_get_attribute(key_stanza, "prekey");
-            const bool is_prekey = (kex_val != nullptr
-                && (weechat_strcasecmp(kex_val, "true") == 0
-                    || weechat_strcasecmp(kex_val, "1") == 0))
-                || (kex_val == nullptr && legacy_prekey_val != nullptr
-                    && (weechat_strcasecmp(legacy_prekey_val, "true") == 0
-                        || weechat_strcasecmp(legacy_prekey_val, "1") == 0));
+            const bool is_prekey = omemo_key_is_prekey(key_stanza);
             decoded_as_prekey = is_prekey;
 
-            const auto serialized = base64_decode(*account->context, stanza_text(key_stanza));
+            const auto serialized = base64_decode(*account->context, key_stanza.text());
             if (serialized.empty())
                 continue;
 
@@ -322,14 +302,14 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
 
     // Key-transport element: no payload, nothing more to decrypt.
     // The session is now established from our side.
-    if (!payload_stanza || payload.empty())
+    if (!payload_view.valid() || payload.empty())
     {
         XDEBUG("OMEMO: received KeyTransportElement — session established.");
         return std::nullopt;
     }
 
     // Legacy format: AES-128-GCM decrypt path (no SCE wrapping)
-    const auto iv_text = stanza_text(iv_stanza);
+    const auto iv_text = iv_view.text();
     const auto iv_vec = base64_decode(*account->context, iv_text);
     if (iv_vec.size() != 12)
     {
