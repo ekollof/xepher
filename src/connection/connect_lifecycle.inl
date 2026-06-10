@@ -138,13 +138,8 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         /* Send initial <presence/> so that we appear online to contacts */
         /* children: <c/> caps, <status/>, <x vcard-temp:x:update/>, optionally <x jabber:x:signed/> */
         {
-            // Compute entity caps hash — use a throwaway stanza as the reply placeholder.
-            struct caps_placeholder_spec : stanza::spec {
-                caps_placeholder_spec() : spec("caps") {}
-            } cpp;
-            auto caps_placeholder = cpp.build(account.context);
             std::optional<std::string> cap_hash;
-            this->get_caps(caps_placeholder.get(), &cap_hash);
+            this->get_caps(::xmpp::StanzaView{}, &cap_hash);
 
             struct caps_spec : stanza::spec {
                 caps_spec(const char *ver) : spec("c") {

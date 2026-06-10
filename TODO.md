@@ -34,7 +34,7 @@ when items land.
 
 | Priority | Gap | Location(s) | Remediation |
 |----------|-----|-------------|-------------|
-| High | Post-build stanza mutation | `iq_disco_handler.inl`, `message_handler.inl`, `command/account.inl` (`xmpp_stanza_set_to` ×4) | Fold attrs/type/to into `stanza::spec` before `build()` |
+
 | High | Parse utilities on raw libstrophe | `atom.cpp`, `xhtml.cpp`, `util.cpp` | Migrate to `StanzaView` when those paths are next edited |
 | Medium | `RenderEvent` barely wired | `message_handler.inl` — direct `line_store_*` for reactions/retract/tombstone/correct/reply; only receipt/displayed use `RenderEvent` | Extend builders; apply via `apply_render_event` |
 | Medium | `BufferPort` underused | `nicklist.cpp`, `render_event.cpp`, buffer set/get in `channel.cpp` / `account.cpp` / commands | Extend port (nick add/search); migrate nicklist + render nicklist actions |
@@ -49,13 +49,6 @@ Port adapters (`ui_port.cpp`, `runtime_port.cpp`, `buffer_port.cpp`, `line_store
 `StanzaView` / builder impl (`stanza_view.cpp`, `node.cpp`, `node.hh`, `xep-0163.inl`);
 C-ABI glue (`connection.cpp` SM counting, buffer creation, hook callbacks); `strophe.hh`
 (parse-only alt wrapper, documented).
-
-### Phase 2 — Post-build mutations → builders
-
-- [ ] `iq_disco_handler.inl`: error IQ fully fluent
-- [ ] `message_handler.inl`: result reply type in builder
-- [ ] `command/account.inl`: `to` in IBR/register specs (remove `xmpp_stanza_set_to`)
-- [ ] `make DEBUG=1`
 
 ### Phase 3 — RenderEvent for line_store paths
 

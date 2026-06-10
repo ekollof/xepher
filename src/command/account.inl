@@ -390,9 +390,12 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     if (username.empty()) username = st->jid;
 
     struct ibr_set_spec : stanza::spec {
-        ibr_set_spec(std::string_view uname, std::string_view pass) : spec("iq") {
+        ibr_set_spec(std::string_view uname, std::string_view pass, std::string_view to_jid)
+            : spec("iq")
+        {
             attr("type", "set");
             attr("id", "ibr-set");
+            attr("to", to_jid);
             struct query_spec : stanza::spec {
                 query_spec(std::string_view u, std::string_view p) : spec("query") {
                     attr("xmlns", "jabber:iq:register");
@@ -409,9 +412,8 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
             } q(uname, pass);
             child(q);
         }
-    } ibr_iq(username, st->password);
+    } ibr_iq(username, st->password, st->server);
     auto built = ibr_iq.build(ctx);
-    xmpp_stanza_set_to(built.get(), st->server.c_str());
 
     // Register result handler for the set IQ before sending
     xmpp_id_handler_add(conn, ibr_set_result_handler, "ibr-set", st);
@@ -440,17 +442,17 @@ static void ibr_conn_handler(xmpp_conn_t *conn, xmpp_conn_event_t status,
         // Send IBR field-list query.
         xmpp_ctx_t *ctx = st->ctx;
         struct ibr_get_spec : stanza::spec {
-            ibr_get_spec() : spec("iq") {
+            explicit ibr_get_spec(std::string_view to_jid) : spec("iq") {
                 attr("type", "get");
                 attr("id", "ibr-get");
+                attr("to", to_jid);
                 struct query_spec : stanza::spec {
                     query_spec() : spec("query") { attr("xmlns", "jabber:iq:register"); }
                 } q;
                 child(q);
             }
-        } ibr_get_iq;
+        } ibr_get_iq(st->server);
         auto built = ibr_get_iq.build(ctx);
-        xmpp_stanza_set_to(built.get(), st->server.c_str());
         xmpp_id_handler_add(conn, ibr_get_result_handler, "ibr-get", st);
         xmpp_send(conn, built.get());
         return;
@@ -782,9 +784,11 @@ void command__account_unregister(struct t_gui_buffer *buffer, int argc, char **a
     std::string domain = ::jid(nullptr, account->jid()).domain;
 
     struct ibr_unregister_spec : stanza::spec {
-        ibr_unregister_spec() : spec("iq") {
+        explicit ibr_unregister_spec(std::string_view to_jid) : spec("iq") {
             attr("type", "set");
             attr("id", "ibr-unregister");
+            if (!to_jid.empty())
+                attr("to", to_jid);
             struct query_spec : stanza::spec {
                 query_spec() : spec("query") {
                     attr("xmlns", "jabber:iq:register");
@@ -796,10 +800,8 @@ void command__account_unregister(struct t_gui_buffer *buffer, int argc, char **a
             } q;
             child(q);
         }
-    } unreg_iq;
+    } unreg_iq(domain);
     auto built = unreg_iq.build(ctx);
-    if (!domain.empty())
-        xmpp_stanza_set_to(built.get(), domain.c_str());
 
     auto uctx = std::make_unique<ibr_unregister_context>(ibr_unregister_context{ account, buffer });
     xmpp_id_handler_add(account->connection, ibr_unregister_result_handler,
@@ -874,9 +876,13 @@ void command__account_passwd(struct t_gui_buffer *buffer, int argc, char **argv)
     std::string uname = acct_jid.local.empty() ? account->jid() : acct_jid.local;
 
     struct ibr_passwd_spec : stanza::spec {
-        ibr_passwd_spec(std::string_view uname, const char *pass) : spec("iq") {
+        ibr_passwd_spec(std::string_view uname, const char *pass, std::string_view to_jid)
+            : spec("iq")
+        {
             attr("type", "set");
             attr("id", "ibr-passwd");
+            if (!to_jid.empty())
+                attr("to", to_jid);
             struct query_spec : stanza::spec {
                 query_spec(std::string_view u, const char *p) : spec("query") {
                     attr("xmlns", "jabber:iq:register");
@@ -893,10 +899,8 @@ void command__account_passwd(struct t_gui_buffer *buffer, int argc, char **argv)
             } q(uname, pass);
             child(q);
         }
-    } passwd_iq(uname, argv[3]);
+    } passwd_iq(uname, argv[3], acct_jid.domain);
     auto built = passwd_iq.build(ctx);
-    if (!acct_jid.domain.empty())
-        xmpp_stanza_set_to(built.get(), acct_jid.domain.c_str());
 
     auto pctx = std::make_unique<ibr_passwd_context>(ibr_passwd_context{ account, buffer, std::string(argv[3]) });
     xmpp_id_handler_add(account->connection, ibr_passwd_result_handler,

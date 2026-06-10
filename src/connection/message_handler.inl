@@ -2297,7 +2297,9 @@ message_handler_after_omemo:
     return true;
 }
 
-xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional<std::string> *hash, const char *node)
+xmpp_stanza_t *weechat::connection::get_caps(::xmpp::StanzaView request,
+                                             std::optional<std::string> *hash,
+                                             const char *node)
 {
     struct query_spec : stanza::spec {
         query_spec(const char *n) : spec("query") {
@@ -2493,9 +2495,19 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
 
     qs.child(xs);
 
-    auto query_sp = qs.build(account.context);
-    xmpp_stanza_set_type(reply, "result");
-    stanza_attach_child(reply, query_sp);
+    stanza::iq result_iq;
+    result_iq.type("result");
+    if (request.valid())
+    {
+        result_iq.id(request.attr_string("id"));
+        if (auto from = request.from())
+            result_iq.to(*from);
+        if (auto to = request.to())
+            result_iq.from(*to);
+    }
+    result_iq.child(qs);
+
+    auto result_sp = result_iq.build(account.context);
 
     // XEP-0115 requires SHA-1; use EVP_Digest (present in both OpenSSL and
     // LibreSSL) instead of the libstrophe-specific xmpp_sha1_* API.
@@ -2519,7 +2531,8 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
         }
     }
 
-    return reply;
+    xmpp_stanza_clone(result_sp.get());
+    return result_sp.get();
 }
 
 // XEP-0004: Data Forms — render a <x xmlns='jabber:x:data'> form to a buffer

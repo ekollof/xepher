@@ -10,6 +10,7 @@
 #include <string>
 #include <strophe.h>
 #include "xmpp/ns.hh"
+#include "xmpp/stanza_view.hh"
 #include "strophe.hh"
 #include "config.hh"
 
@@ -95,6 +96,8 @@ namespace weechat {
 
         bool conn_handler(event status, int error, xmpp_stream_error_t *stream_error);
 
-        xmpp_stanza_t *get_caps(xmpp_stanza_t *reply, std::optional<std::string> *hash = nullptr, const char *node = nullptr);
+        xmpp_stanza_t *get_caps(::xmpp::StanzaView request,
+                                std::optional<std::string> *hash = nullptr,
+                                const char *node = nullptr);
     };
 }

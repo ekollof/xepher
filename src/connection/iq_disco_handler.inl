@@ -928,15 +928,8 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
             bool node_ok = true;
             if (!requested_node.empty() )
             {
-                // Recompute our caps hash to derive the canonical node URI.
-                    // Use a throwaway pre-existing stanza as reply placeholder.
-                    struct caps_placeholder : stanza::spec {
-                        caps_placeholder() : spec("caps") {}
-                    } cph;
-                    auto dummy_sp = cph.build(account.context);
-                    std::optional<std::string> computed_hash;
-                    get_caps(dummy_sp.get(), &computed_hash);
-                    // dummy_sp owns the ref — do NOT xmpp_stanza_release here.
+                std::optional<std::string> computed_hash;
+                get_caps(::xmpp::StanzaView{}, &computed_hash);
 
                 node_ok = ::xmpp::caps_requested_node_ok(
                     requested_node,
@@ -945,31 +938,37 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
 
             if (node_ok)
             {
-                reply = get_caps(xmpp_stanza_reply(stanza), nullptr, requested_node.empty() ? nullptr : requested_node.c_str());
+                reply = get_caps(::xmpp::StanzaView(stanza), nullptr,
+                                 requested_node.empty() ? nullptr : requested_node.c_str());
                 account.connection.send(reply);
                 xmpp_stanza_release(reply);
             }
             else
             {
-                // Return <iq type='error'><error type='cancel'><item-not-found/></error></iq>
-                xmpp_stanza_t *err_iq = xmpp_stanza_reply(stanza);
-                xmpp_stanza_set_attribute(err_iq, "type", "error");
-                // Build <error type='cancel'><item-not-found xmlns='...'/></error> via spec builder.
-                struct inf_spec : stanza::spec {
-                    inf_spec() : spec("item-not-found") {
+                struct item_not_found_spec : stanza::spec {
+                    item_not_found_spec() : spec("item-not-found") {
                         attr("xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas");
                     }
-                } infs;
-                struct err_spec : stanza::spec {
-                    err_spec(stanza::spec &child) : spec("error") {
+                };
+                struct error_spec : stanza::spec {
+                    explicit error_spec(stanza::spec &child_spec) : spec("error") {
                         attr("type", "cancel");
-                        this->child(child);
+                        child(child_spec);
                     }
-                } errs(infs);
-                auto err_sp = errs.build(account.context);
-                xmpp_stanza_add_child(err_iq, err_sp.get());
-                account.connection.send(err_iq);
-                xmpp_stanza_release(err_iq);
+                };
+                const ::xmpp::StanzaView iq_view(stanza);
+                item_not_found_spec inf;
+                error_spec err(inf);
+                stanza::iq err_iq;
+                err_iq.type("error")
+                      .id(iq_view.attr_string("id"));
+                if (auto from = iq_view.from())
+                    err_iq.to(*from);
+                if (auto to = iq_view.to())
+                    err_iq.from(*to);
+                err_iq.child(err);
+                auto err_sp = err_iq.build(account.context);
+                account.connection.send(err_sp.get());
             }
         }
 
