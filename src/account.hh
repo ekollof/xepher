@@ -605,6 +605,7 @@ namespace weechat
         [[nodiscard]] bool roster_bare_jid_online(std::string_view bare_jid) const;
         void update_roster_nicklist_entry(std::string_view bare_jid);
         void sync_roster_nicklist();
+        void count_roster_nicklist_presence(int &online, int &offline) const;
 
         std::string jid() {
             if (!jid_bare_cache_.empty())

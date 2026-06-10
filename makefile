@@ -211,6 +211,7 @@ SRCS=src/plugin.cpp \
 	 src/omemo/api.cpp \
 	 src/pgp.cpp \
 	 src/user.cpp \
+	 src/nicklist.cpp \
 	 src/util.cpp \
 	 src/weechat/ui_port.cpp \
 	 src/weechat/icat_preview.cpp \

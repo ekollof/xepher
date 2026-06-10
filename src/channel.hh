@@ -353,6 +353,7 @@ namespace weechat
         std::optional<member*> remove_member(const char *id, const char *reason);
         void set_member_offline(const char *id, weechat::user *known_user = nullptr);
         void set_show_unavailable_members(bool show);
+        void count_nicklist_presence(int &online, int &offline) const;
         std::string find_member_by_nick(std::string_view nick) const;
 
         // For MUC OMEMO: returns true only if every known occupant has a real_jid

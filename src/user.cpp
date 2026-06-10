@@ -18,6 +18,7 @@
 #include "account.hh"
 #include "user.hh"
 #include "channel.hh"
+#include "nicklist.hh"
 #include "avatar.hh"
 
 namespace {
@@ -257,18 +258,39 @@ void weechat::user::nicklist_add(weechat::account *account,
 
     ptr_buffer = channel ? channel->buffer : account->buffer;
 
-    char group_buf[2] = { muc_nicklist_prefix(), '\0' };
-    const char *group = channel && channel->type == weechat::channel::chat_type::MUC
-        ? group_buf
-        : ".";
-    ptr_group = weechat_nicklist_search_group(ptr_buffer, nullptr, group);
+    const char prefix = muc_nicklist_prefix();
+    const std::string group_name =
+        channel && channel->type == weechat::channel::chat_type::MUC
+            ? nicklist::muc_group_name(prefix, is_online)
+            : nicklist::account_group_name(is_online);
+    char prefix_buf[2] = {prefix, '\0'};
+    const char *nick_prefix =
+        channel && channel->type == weechat::channel::chat_type::MUC
+            ? prefix_buf
+            : ".";
+    ptr_group = nicklist::find_or_add_group(ptr_buffer, group_name);
     auto colour = get_colour_for_nicklist();
     weechat_nicklist_add_nick(ptr_buffer, ptr_group,
                               name,
                               nicklist_color_name(*this, colour),
-                              group,
+                              nick_prefix,
                               "bar_fg",
                               1);
+
+    if (channel && channel->type == weechat::channel::chat_type::MUC)
+    {
+        int online = 0;
+        int offline = 0;
+        channel->count_nicklist_presence(online, offline);
+        nicklist::refresh_separator(ptr_buffer, online > 0, offline > 0);
+    }
+    else if (!channel)
+    {
+        int online = 0;
+        int offline = 0;
+        account->count_roster_nicklist_presence(online, offline);
+        nicklist::refresh_separator(ptr_buffer, online > 0, offline > 0);
+    }
 }
 
 void weechat::user::nicklist_set_color(weechat::account *account,
@@ -335,6 +357,21 @@ void weechat::user::nicklist_remove(weechat::account *account,
     if (nick_buf.empty())
         nick_buf = this->id;
     try_remove(nick_buf.c_str());
+
+    if (channel && channel->type == weechat::channel::chat_type::MUC)
+    {
+        int online = 0;
+        int offline = 0;
+        channel->count_nicklist_presence(online, offline);
+        nicklist::refresh_separator(ptr_buffer, online > 0, offline > 0);
+    }
+    else if (!channel)
+    {
+        int online = 0;
+        int offline = 0;
+        account->count_roster_nicklist_presence(online, offline);
+        nicklist::refresh_separator(ptr_buffer, online > 0, offline > 0);
+    }
 }
 
 weechat::user::user(weechat::account *account, weechat::channel *channel,

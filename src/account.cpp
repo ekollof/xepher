@@ -31,6 +31,7 @@
 #include "account.hh"
 #include "connection.hh"
 #include "user.hh"
+#include "nicklist.hh"
 #include "channel.hh"
 #include "buffer.hh"
 #include "debug.hh"
@@ -718,6 +719,29 @@ void weechat::account::sync_roster_nicklist()
         update_roster_nicklist_entry(jid);
 }
 
+void weechat::account::count_roster_nicklist_presence(int &online,
+                                                      int &offline) const
+{
+    online = 0;
+    offline = 0;
+
+    for (const auto& [jid, item] : roster)
+    {
+        if (item.subscription == "none")
+            continue;
+
+        const weechat::user *roster_user = user::search(
+            const_cast<account *>(this), jid.c_str());
+        if (!roster_user)
+            continue;
+
+        if (roster_user->is_online)
+            ++online;
+        else
+            ++offline;
+    }
+}
+
 struct t_gui_buffer *weechat::account::create_buffer()
 {
     buffer = weechat_buffer_new(fmt::format("account.{}", name).data(),
@@ -738,6 +762,7 @@ struct t_gui_buffer *weechat::account::create_buffer()
 
     weechat_buffer_set(buffer, "nicklist", "1");
     weechat_buffer_set(buffer, "nicklist_display_groups", "0");
+    nicklist::ensure_account_groups(buffer);
     weechat_buffer_set_pointer(buffer, "nicklist_callback",
                                (void*)&buffer__nickcmp_cb);
     weechat_buffer_set_pointer(buffer, "nicklist_callback_pointer",

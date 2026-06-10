@@ -23,6 +23,7 @@
 #include "config.hh"
 #include "omemo.hh"
 #include "user.hh"
+#include "nicklist.hh"
 #include "channel.hh"
 #include "weechat/buffer_port.hh"
 #include "input.hh"
@@ -200,33 +201,7 @@ void weechat::channel::add_nicklist_groups()
         || type == weechat::channel::chat_type::FEED)
         return;
 
-    // Sort order constants for XEP-0045 MUC role/affiliation prefixes.
-    // Lower numbers appear first in the nicklist; 999 = no-role sentinel.
-    static constexpr char grp_owner[]   = "000|~";
-    static constexpr char grp_admin[]   = "001|&";
-    static constexpr char grp_op[]      = "002|@";
-    static constexpr char grp_halfop[]  = "003|%";
-    static constexpr char grp_voice[]   = "004|+";
-    static constexpr char grp_unknown[] = "005|?";
-    static constexpr char grp_novoice[] = "006|!";
-    static constexpr char grp_norole[]  = "999|.";
-
-    weechat_nicklist_add_group(buffer, nullptr, grp_owner,
-                               "weechat.color.nicklist_group", 1);
-    weechat_nicklist_add_group(buffer, nullptr, grp_admin,
-                               "weechat.color.nicklist_group", 1);
-    weechat_nicklist_add_group(buffer, nullptr, grp_op,
-                               "weechat.color.nicklist_group", 1);
-    weechat_nicklist_add_group(buffer, nullptr, grp_halfop,
-                               "weechat.color.nicklist_group", 1);
-    weechat_nicklist_add_group(buffer, nullptr, grp_voice,
-                               "weechat.color.nicklist_group", 1);
-    weechat_nicklist_add_group(buffer, nullptr, grp_unknown,
-                               "weechat.color.nicklist_group", 1);
-    weechat_nicklist_add_group(buffer, nullptr, grp_novoice,
-                               "weechat.color.nicklist_group", 1);
-    weechat_nicklist_add_group(buffer, nullptr, grp_norole,
-                               "weechat.color.nicklist_group", 1);
+    nicklist::ensure_muc_groups(buffer);
 }
 
 weechat::channel::channel(weechat::account& account,
@@ -966,6 +941,26 @@ void weechat::channel::set_show_unavailable_members(const bool show)
             user->nicklist_remove(&account, this);
             user->nicklist_add(&account, this);
         }
+    }
+}
+
+void weechat::channel::count_nicklist_presence(int &online, int &offline) const
+{
+    online = 0;
+    offline = 0;
+    if (type != chat_type::MUC)
+        return;
+
+    for (const auto& [member_id, member] : members)
+    {
+        (void)member;
+        weechat::user *occupant = user::search(&account, member_id.c_str());
+        if (!occupant)
+            continue;
+        if (occupant->is_online)
+            ++online;
+        else
+            ++offline;
     }
 }
 
