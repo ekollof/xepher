@@ -1,6 +1,6 @@
 # Planning: OMEMO Encrypted Multi-User Chats (MUCs)
 
-> Status: **Implementation complete + committed (de78d33) but live testing not yet performed.** Marked "complete-but-untested" until section 8 checklist is executed in real WeeChat + non-anonymous MUC. 27/27 green.
+> Status: **Implementation complete (de78d33) + issue #6 prefetch hardening (b1532e6).** Live testing still limited — section 8 checklist not fully executed in production. 132/132 doctests green.
 
 ---
 
@@ -29,9 +29,10 @@ Before any encryption/decryption code can work, the following plumbing must be i
 
 ### 2.3 Device list fetching for all occupants
 - [x] Iterate occupant bare JIDs and call `request_axolotl_devicelist()` for each. (Done via 110 block, disco#items result handler, admin result handler, live presence, and centralized in `channel::add_member`.)
+- [x] **Gated on `muc_supports_omemo()`** (b1532e6): devicelist IQs only fire in non-anonymous rooms; re-fetch when anonymity is confirmed via disco (`apply_muc_info`) or presence status 172 (`set_muc_anonymity`).
 - [x] Cache results in the existing LMDB `axolotl:devicelist:{jid}` table (no schema change needed). (Existing behavior.)
 - [x] Handle devicelist updates (pubsub notifications) for any occupant while joined. (Global handler path works for MUC occupant bare JIDs.)
-- Hardened PEP feed classification (message_handler) to explicitly drop legacy OMEMO nodes (`eu.siacs.conversations.axolotl.*`) with XDEBUG logging. Prevents MUC OMEMO occupant discovery from creating spurious FEED buffers. Defense-in-depth on top of `node_is_protocol_ns`.
+- Hardened PEP feed classification (`classify_generic_pubsub_feed` in `message_pep.cpp`) to explicitly drop legacy OMEMO nodes (`eu.siacs.conversations.axolotl.*`) with XDEBUG logging. Prevents MUC OMEMO occupant discovery from creating spurious FEED buffers. Users who want no feeds at all can set `xmpp.look.feeds off` (b1532e6).
 
 ### 2.4 Bundle fetching for all occupant devices
 - [x] After each devicelist arrives, fetch bundles for every new/updated device ID. (Proactive fetch already present in `handle_axolotl_devicelist`; extended to MUC occupants via our devicelist request paths.)
@@ -67,6 +68,7 @@ All items below were implemented via a new `encode_muc()` entry point (declared 
 
 ### 3.3 Key transport in MUC
 - [x] `send_key_transport()` detects MUC occupants, sends as `groupchat` to the room, and now encrypts the (zero) key-transport payload for **every** current occupant using the same multi-recipient `axolotl_keys` approach as normal messages. Own devices are also included. 27/27 green.
+- [x] **Passive prefetch must not key-transport** (b1532e6, issue #6): when a bundle arrives during background MUC occupant prefetch (`session_is_fresh && !needs_key_transport` with groupchat routing), skip `send_key_transport()`. Explicit recovery (`needs_key_transport` from decode failure, `/omemo kex`) still sends. Prevents strangers in the room from receiving undecryptable OMEMO stanzas they did not expect.
 
 ---
 

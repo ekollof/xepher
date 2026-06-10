@@ -903,6 +903,7 @@ void command__init()
            "/feed discover: list PubSub services found on your server at connect time.\n"
            "  /feed discover --all  fetches every node from every discovered service.\n\n"
            "/feed close: close all open feed buffers (does not unsubscribe).\n\n"
+           "Disable feeds entirely: /set xmpp.look.feeds off (re-enable with on).\n\n"
            "After a fetch the feed buffer shows a '/feed ... --before <id>' hint for\n"
            "paging to older entries. Use --latest to go back to the newest page.\n\n"
            "Examples:\n"

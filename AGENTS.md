@@ -598,6 +598,16 @@ monitor debug messages without opening WeeChat:
 tail -f ~/.local/share/weechat/logs/xmpp.debug.weechatlog
 ```
 
+#### `xmpp.look.feeds` — PubSub microblog buffers
+
+When **off**, no FEED buffers are created or restored on connect, pubsub push
+handlers ignore feed nodes, and `/feed` is blocked (except `/feed close` to
+dismiss existing buffers). Default: **on**.
+
+```
+/set xmpp.look.feeds off
+```
+
 #### `xmpp.look.raw_xml_log` — wire-level XML file
 
 Appends every SEND and RECV XML stanza to a per-account log file:

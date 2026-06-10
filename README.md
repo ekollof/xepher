@@ -675,7 +675,31 @@ reporting `identity category='pubsub'` is remembered. You can then use:
 /feed                        # fetch subscriptions from all discovered services
 /feed discover               # list discovered services without fetching
 /feed discover --all         # fetch every node from every discovered service
+/feed close                  # close all open feed buffers (does not unsubscribe)
 ```
+
+**Closing feed buffers:**
+
+`/feed close` dismisses every open FEED buffer without unsubscribing from PubSub
+nodes. Closed feeds do not receive pubsub push updates until opened again via
+`/feed`.
+
+**Disabling feeds entirely:**
+
+If you do not use microblogging and want to prevent feed buffers from appearing:
+
+```
+/set xmpp.look.feeds off
+```
+
+When off: no feed buffers are created or restored on connect, pubsub pushes for
+feed nodes are ignored, and `/feed` is disabled (except `/feed close` to dismiss
+buffers that were already open). Default is `on`. Re-enable with
+`/set xmpp.look.feeds on`.
+
+Legacy OMEMO PEP nodes (`eu.siacs.conversations.axolotl.*`) are never
+misclassified as feeds; this option is for users who want no PubSub timeline
+buffers at all.
 
 ---
 
@@ -788,7 +812,22 @@ Each nick in a MUC room displays a prefix indicating their role or affiliation
 
 ### Encryption
 
-**Note:** OMEMO for non-anonymous MUC rooms (XEP-0384 multi-recipient) is implemented but **experimental and untested**. Use at your own risk. See `docs/planning-muc-omemo.md` for the current status (complete-but-untested as of the latest commits). PM OMEMO remains the primary tested path.
+**Note:** OMEMO for non-anonymous MUC rooms (XEP-0384 §5.8 multi-recipient) is
+implemented but **experimental and lightly tested**. Use at your own risk. See
+`docs/planning-muc-omemo.md` for architecture and status. PM OMEMO remains the
+primary tested path.
+
+**MUC requirements:** The room must be **non-anonymous** — every occupant's real
+bare JID must be visible (check with `/modes`; `N` in the mode string). OMEMO is
+refused in semi-anonymous or fully anonymous rooms.
+
+**MUC prefetch:** When OMEMO is enabled in an eligible MUC, device lists and
+bundles for occupants are fetched in the background so the first encrypted message
+can be sent once the bar leaves `🔒OMEMO (pending)`. Passive prefetch establishes
+Signal sessions quietly; it does **not** send key-transport groupchat stanzas into
+the room (avoiding spurious undecryptable messages for strangers). Key-transport
+is sent only when explicitly needed — e.g. `/omemo kex` or decrypt recovery after
+you have exchanged encrypted traffic with that contact.
 
 **Trust model:** This plugin uses **Blind Trust Before Verification (BTBV)** TOFU, matching Gajim's default behaviour. Trust levels are stored per `{jid, device_id}` in LMDB:
 
@@ -932,6 +971,7 @@ Also requires Python `PIL`/`Pillow` (`pip install Pillow` or `python-pillow` pac
 | `/roster del <jid>` | Remove a contact |
 | `/list [keywords]` | Search public MUC rooms (XEP-0433) |
 | `/feed` | Fetch subscriptions from all auto-discovered PubSub services (XEP-0060) |
+| `/feed close` | Close all open feed buffers (does not unsubscribe) |
 | `/feed discover` | List auto-discovered PubSub services |
 | `/feed discover --all` | Fetch every node from every discovered service |
 | `/feed <service-jid>` | Fetch all subscribed nodes on a service |
@@ -1049,6 +1089,18 @@ Turn off to stop writing (existing log file is kept):
 ```
 /set xmpp.look.raw_xml_log off
 ```
+
+### PubSub feeds — `xmpp.look.feeds`
+
+Controls whether PubSub microblog feed buffers (`/feed`, XEP-0060 / XEP-0472) are
+enabled. On by default.
+
+```
+/set xmpp.look.feeds off   # disable feed buffers and /feed (except /feed close)
+/set xmpp.look.feeds on    # re-enable (default)
+```
+
+See [Microblogging — `/feed`](#microblogging--feed-xep-0277--xep-0472) for details.
 
 ### OMEMO log correlation helper
 
