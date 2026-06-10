@@ -497,6 +497,9 @@ namespace weechat
         void feed_open_sync_from_cache();
         void feed_dismiss(std::string_view feed_key);
         std::vector<std::string> feed_open_list();
+
+        // True when bare_jid is a registered OMEMO recipient in an eligible (non-anon) MUC.
+        [[nodiscard]] bool omemo_muc_occupant_in_eligible_room(std::string_view bare_jid) const;
         void feed_atom_id_set(std::string_view feed_key, std::string_view item_id,
                               std::string_view atom_id)
         {

@@ -745,10 +745,13 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     // known for a MUC occupant (via presence, future admin affiliation results, etc.),
     // kick off their devicelist fetch so bundles can be requested next. The request
     // path is idempotent.
-    if (real_jid && type == weechat::channel::chat_type::MUC && account.omemo)
+    if (real_jid && type == weechat::channel::chat_type::MUC)
+        register_omemo_recipient(*real_jid);
+
+    if (real_jid && type == weechat::channel::chat_type::MUC && account.omemo
+        && muc_supports_omemo())
     {
         account.omemo.request_axolotl_devicelist(account, *real_jid);
-        inc_pending_omemo_bundles();  // §2.4: we will soon request bundles for this occupant
     }
 
     if (user)
@@ -917,22 +920,92 @@ bool weechat::channel::all_occupants_have_real_jid() const
     });
 }
 
-void weechat::channel::inc_pending_omemo_bundles()
+bool weechat::channel::muc_supports_omemo() const
 {
-    if (type == weechat::channel::chat_type::MUC)
-    {
-        ++omemo.pending_bundles;
-        weechat_bar_item_update("xmpp_encryption");
-    }
+    return type == weechat::channel::chat_type::MUC
+        && muc_info_.anon == muc_info::anonymity::nonanonymous;
 }
 
-void weechat::channel::dec_pending_omemo_bundles()
+void weechat::channel::register_omemo_recipient(std::string_view bare_jid)
 {
-    if (type == weechat::channel::chat_type::MUC && omemo.pending_bundles > 0)
-    {
-        --omemo.pending_bundles;
+    if (type != weechat::channel::chat_type::MUC || bare_jid.empty())
+        return;
+
+    const std::string normalized = ::jid(nullptr, std::string(bare_jid)).bare;
+    if (!normalized.empty())
+        omemo_recipient_jids.insert(normalized);
+}
+
+std::vector<std::string> weechat::channel::omemo_recipient_list() const
+{
+    return {omemo_recipient_jids.begin(), omemo_recipient_jids.end()};
+}
+
+void weechat::channel::mark_omemo_bundle_pending(std::string_view bare_jid,
+                                                 std::uint32_t device_id)
+{
+    if (type != weechat::channel::chat_type::MUC || bare_jid.empty() || device_id == 0)
+        return;
+
+    omemo.pending_muc_bundle_keys.insert(fmt::format("{}/{}", bare_jid, device_id));
+    weechat_bar_item_update("xmpp_encryption");
+}
+
+void weechat::channel::clear_omemo_bundle_pending(std::string_view bare_jid,
+                                                  std::uint32_t device_id)
+{
+    if (type != weechat::channel::chat_type::MUC || bare_jid.empty() || device_id == 0)
+        return;
+
+    if (omemo.pending_muc_bundle_keys.erase(fmt::format("{}/{}", bare_jid, device_id)) > 0)
         weechat_bar_item_update("xmpp_encryption");
-    }
+}
+
+bool weechat::channel::muc_omemo_ready() const
+{
+    if (!muc_supports_omemo())
+        return false;
+    if (omemo_recipient_jids.empty())
+        return false;
+    if (!omemo.pending_muc_bundle_keys.empty())
+        return false;
+    if (!all_occupants_have_real_jid())
+        return false;
+    return true;
+}
+
+void weechat::channel::set_muc_anonymity(muc_info::anonymity anon)
+{
+    if (type != weechat::channel::chat_type::MUC)
+        return;
+
+    muc_info_.anon = anon;
+    update_modes();
+    maybe_disable_muc_omemo();
+}
+
+void weechat::channel::maybe_disable_muc_omemo()
+{
+    if (type != weechat::channel::chat_type::MUC || muc_supports_omemo())
+        return;
+
+    if (!omemo.enabled)
+        return;
+
+    omemo.enabled = 0;
+    set_transport(weechat::channel::transport::PLAIN, 0);
+    weechat_bar_item_update("xmpp_encryption");
+
+    const char *reason = (muc_info_.anon == muc_info::anonymity::semianonymous)
+        ? "semi-anonymous"
+        : (muc_info_.anon == muc_info::anonymity::anonymous)
+            ? "fully anonymous"
+            : "not non-anonymous";
+
+    weechat_printf_date_tags(buffer, 0, "notify_none", "%s%s",
+                             weechat_prefix("network"),
+                             fmt::format("OMEMO disabled: room is {} (XEP-0384 requires non-anonymous)",
+                                         reason).c_str());
 }
 
 std::string weechat::channel::omemo_status() const
@@ -940,9 +1013,13 @@ std::string weechat::channel::omemo_status() const
     if (!omemo.enabled)
         return {};
 
-    if (type == weechat::channel::chat_type::MUC && omemo.pending_bundles > 0)
+    if (type == weechat::channel::chat_type::MUC)
     {
-        return "🔒OMEMO (pending)";
+        if (!muc_supports_omemo())
+            return "🔒OMEMO (unsupported)";
+
+        if (!omemo.pending_muc_bundle_keys.empty())
+            return "🔒OMEMO (pending)";
     }
 
     return "🔒OMEMO";
@@ -1077,32 +1154,15 @@ int weechat::channel::send_message(std::string to, std::string body,
         {
             // Pre-checks (adapted from regular send; for upload we fallback instead of error
             // since the file is already uploaded).
-            if (!all_occupants_have_real_jid())
+            if (muc_supports_omemo() && muc_omemo_ready())
             {
-                // fall through to plaintext send with SFS (aesgcm body)
-            }
-            else if (omemo.pending_bundles > 0 || !account.omemo.pending_bundle_fetch.empty())
-            {
-                // fall through
-            }
-            else
-            {
-                std::vector<std::string> recipients;
-                auto has_real = [](const auto& p) {
-                    const auto& [_, m] = p;
-                    return m.real_jid && !m.real_jid->empty();
-                };
-                auto extract = [](const auto& p) {
-                    const auto& [_, m] = p;
-                    return *m.real_jid;
-                };
-                std::ranges::copy(
-                    members | std::views::filter(has_real) | std::views::transform(extract),
-                    std::back_inserter(recipients)
-                );
+                std::vector<std::string> recipients = omemo_recipient_list();
                 const std::string own_bare = ::jid(nullptr, account.jid()).bare;
-                if (!own_bare.empty())
+                if (!own_bare.empty()
+                    && std::ranges::find(recipients, own_bare) == recipients.end())
+                {
                     recipients.push_back(own_bare);
+                }
 
                 if (!recipients.empty())
                 {
@@ -1197,26 +1257,38 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         msg.muc_user(stanza::xep0045::muc_user_x());
     }
 
-    // OMEMO for MUCs requires visible real JIDs for all occupants (non-anonymous room)
-    // and no pending bundle fetches.
-    if (account.omemo && omemo.enabled && type == weechat::channel::chat_type::MUC &&
-        !all_occupants_have_real_jid())
+    if (account.omemo && omemo.enabled && type == weechat::channel::chat_type::MUC)
     {
-        weechat_printf_date_tags(buffer, 0, "notify_none",
-            "%s", fmt::format("{}: OMEMO requires a non-anonymous room (real JIDs visible for all occupants)",
-                              weechat_prefix("error")).c_str());
-        return WEECHAT_RC_ERROR;
-    }
-
-    // docs/planning-muc-omemo.md §2.4: Block MUC OMEMO sends while bundles are
-    // still being fetched for occupants (Option B). Prefer per-channel counter.
-    if (account.omemo && omemo.enabled && type == weechat::channel::chat_type::MUC &&
-        (omemo.pending_bundles > 0 || !account.omemo.pending_bundle_fetch.empty()))
-    {
-        weechat_printf_date_tags(buffer, 0, "notify_none",
-            "%s", fmt::format("{}: OMEMO not ready yet (fetching occupant bundles… {} pending)",
-                              weechat_prefix("error"), omemo.pending_bundles).c_str());
-        return WEECHAT_RC_ERROR;
+        if (!muc_supports_omemo())
+        {
+            weechat_printf_date_tags(buffer, 0, "notify_none",
+                "%s", fmt::format("{}: OMEMO group chat requires a non-anonymous room (XEP-0384 §5.8)",
+                                  weechat_prefix("error")).c_str());
+            return WEECHAT_RC_ERROR;
+        }
+        if (omemo_recipient_jids.empty())
+        {
+            weechat_printf_date_tags(buffer, 0, "notify_none",
+                "%s", fmt::format("{}: OMEMO not ready yet (waiting for member/admin/owner lists)",
+                                  weechat_prefix("error")).c_str());
+            return WEECHAT_RC_ERROR;
+        }
+        if (!all_occupants_have_real_jid())
+        {
+            weechat_printf_date_tags(buffer, 0, "notify_none",
+                "%s", fmt::format("{}: OMEMO requires real JIDs visible for all online occupants",
+                                  weechat_prefix("error")).c_str());
+            return WEECHAT_RC_ERROR;
+        }
+        if (!omemo.pending_muc_bundle_keys.empty()
+            || !account.omemo.pending_bundle_fetch.empty())
+        {
+            weechat_printf_date_tags(buffer, 0, "notify_none",
+                "%s", fmt::format("{}: OMEMO not ready yet (fetching occupant bundles… {} pending)",
+                                  weechat_prefix("error"),
+                                  omemo.pending_muc_bundle_keys.size()).c_str());
+            return WEECHAT_RC_ERROR;
+        }
     }
 
     if (account.omemo && omemo.enabled)
@@ -1231,23 +1303,13 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
 
         if (type == weechat::channel::chat_type::MUC)
         {
-            std::vector<std::string> recipients;
-            auto has_real = [](const auto& p) {
-                const auto& [_, m] = p;
-                return m.real_jid && !m.real_jid->empty();
-            };
-            auto extract = [](const auto& p) { 
-                const auto& [_, m] = p; 
-                return *m.real_jid; 
-            };
-
-            std::ranges::copy(
-                members | std::views::filter(has_real) | std::views::transform(extract),
-                std::back_inserter(recipients)
-            );
+            std::vector<std::string> recipients = omemo_recipient_list();
             const std::string own_bare = ::jid(nullptr, account.jid()).bare;
-            if (!own_bare.empty())
+            if (!own_bare.empty()
+                && std::ranges::find(recipients, own_bare) == recipients.end())
+            {
                 recipients.push_back(own_bare);
+            }
 
             encrypted = make_encrypted(
                 account.omemo.encode_muc(&account, buffer, id,

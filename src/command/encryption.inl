@@ -284,15 +284,35 @@ int command__omemo(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    // Per docs/planning-muc-omemo.md §2.1: reject OMEMO in rooms where we do not
-    // have real JIDs for all occupants (anonymous or not-yet-visible).
-    if (ptr_channel->type == weechat::channel::chat_type::MUC &&
-        !ptr_channel->all_occupants_have_real_jid())
+    if (ptr_channel->type == weechat::channel::chat_type::MUC)
     {
-        ui->printf_error(fmt::format(
-            "{}: OMEMO requires a non-anonymous room where real JIDs are visible for all occupants",
-            WEECHAT_XMPP_PLUGIN_NAME));
-        return WEECHAT_RC_OK;
+        if (!ptr_channel->muc_supports_omemo())
+        {
+            const auto &info = ptr_channel->get_muc_info();
+            const char *anon = (info.anon == weechat::channel::muc_info::anonymity::semianonymous)
+                ? "semi-anonymous"
+                : (info.anon == weechat::channel::muc_info::anonymity::anonymous)
+                    ? "fully anonymous"
+                    : "not yet known as non-anonymous";
+            ui->printf_error(fmt::format(
+                "{}: OMEMO group chat requires a non-anonymous room (XEP-0384 §5.8); this room is {}",
+                WEECHAT_XMPP_PLUGIN_NAME, anon));
+            return WEECHAT_RC_OK;
+        }
+        if (ptr_channel->omemo_recipient_jids.empty())
+        {
+            ui->printf_error(fmt::format(
+                "{}: OMEMO not ready yet — waiting for member/admin/owner affiliation lists",
+                WEECHAT_XMPP_PLUGIN_NAME));
+            return WEECHAT_RC_OK;
+        }
+        if (!ptr_channel->all_occupants_have_real_jid())
+        {
+            ui->printf_error(fmt::format(
+                "{}: OMEMO requires real JIDs visible for all online occupants",
+                WEECHAT_XMPP_PLUGIN_NAME));
+            return WEECHAT_RC_OK;
+        }
     }
 
     ptr_channel->omemo.enabled = 1;

@@ -2,6 +2,8 @@
 // License, version 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+// OMEMO mechanics tests (doctest TU — keep line numbers distinct from unit.inl).
+
 // OMEMO mechanics tests — exercise the real libsignal + LMDB stack using a
 // per-test temporary database directory.  No mocks: all code paths are live.
 //

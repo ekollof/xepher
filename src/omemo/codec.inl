@@ -687,6 +687,14 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
         return added;
     };
 
+    for (const auto &rec : recipient_bare_jids)
+    {
+        std::string r = ::jid(nullptr, rec).bare;
+        if (r.empty())
+            r = rec;
+        note_peer_traffic(account->context, r);
+    }
+
     // For every recipient provided by the MUC caller
     for (const auto& rec : recipient_bare_jids)
     {

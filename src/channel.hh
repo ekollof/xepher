@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <ctime>
 #include <deque>
 #include <string>
@@ -204,8 +205,11 @@ namespace weechat
             int enabled;
             struct t_hashtable *devicelist_requests;
             struct t_hashtable *bundle_requests;
-            int pending_bundles = 0;  // §2.4: per-channel count for MUC OMEMO bundle fetching
+            // MUC OMEMO: pending "bare_jid/device_id" bundle fetches for this room.
+            std::unordered_set<std::string> pending_muc_bundle_keys;
         } omemo;
+        // XEP-0384 §5.8.1: bare JIDs from member/admin/owner affiliation lists.
+        std::unordered_set<std::string> omemo_recipient_jids;
         struct {
             int enabled = 0;
             std::unordered_set<std::string> ids;
@@ -342,13 +346,25 @@ namespace weechat
         // (i.e., the room is non-anonymous and we have seen their real JID in presence).
         bool all_occupants_have_real_jid() const;
 
+        // XEP-0384 §5.8: OMEMO group chat requires a non-anonymous MUC.
+        [[nodiscard]] bool muc_supports_omemo() const;
+
+        // True when the room is OMEMO-eligible, we have recipients, online occupants
+        // have visible real JIDs, and no bundle fetches are outstanding.
+        [[nodiscard]] bool muc_omemo_ready() const;
+
+        void register_omemo_recipient(std::string_view bare_jid);
+        [[nodiscard]] std::vector<std::string> omemo_recipient_list() const;
+
+        void mark_omemo_bundle_pending(std::string_view bare_jid, std::uint32_t device_id);
+        void clear_omemo_bundle_pending(std::string_view bare_jid, std::uint32_t device_id);
+
+        void set_muc_anonymity(muc_info::anonymity anon);
+        void maybe_disable_muc_omemo();
+
         // Short status string used by the xmpp_encryption bar item.
         // For MUC OMEMO with pending bundles this can surface "pending" state.
         std::string omemo_status() const;
-
-        // §2.4: simple per-channel bundle fetch tracking for MUC OMEMO.
-        void inc_pending_omemo_bundles();
-        void dec_pending_omemo_bundles();
 
         // Smart filter helpers
         void record_speak(const char *nick);

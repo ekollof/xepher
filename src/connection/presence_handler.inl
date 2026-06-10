@@ -302,6 +302,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 case 172: // Room is now non-anonymous (full JIDs visible)
                     if (channel)
                     {
+                        channel->set_muc_anonymity(
+                            weechat::channel::muc_info::anonymity::nonanonymous);
                         std::string msg = fmt::format("{}{}[Room] Room is now {}non-anonymous{} — full JIDs are visible to all occupants",
                                                       weechat_prefix("network"), weechat::xmpp_color("yellow").c_str(),
                                                       weechat::xmpp_color("yellow,bold").c_str(), weechat::xmpp_color("reset").c_str());
@@ -311,6 +313,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 case 173: // Room is now semi-anonymous
                     if (channel)
                     {
+                        channel->set_muc_anonymity(
+                            weechat::channel::muc_info::anonymity::semianonymous);
                         std::string msg = fmt::format("{}{}[Room] Room is now semi-anonymous — full JIDs visible to moderators only",
                                                       weechat_prefix("network"), weechat::xmpp_color("gray").c_str());
                         weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
@@ -319,6 +323,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 case 174: // Room is now fully-anonymous
                     if (channel)
                     {
+                        channel->set_muc_anonymity(
+                            weechat::channel::muc_info::anonymity::anonymous);
                         std::string msg = fmt::format("{}{}[Room] Room is now fully-anonymous — JIDs are hidden from all occupants",
                                                       weechat_prefix("network"), weechat::xmpp_color("gray").c_str());
                         weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());

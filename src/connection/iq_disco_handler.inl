@@ -122,10 +122,18 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                     {
                         const char *nick = xmpp_stanza_get_attribute(item, "nick");
                         const char *real_jid = xmpp_stanza_get_attribute(item, "jid");
-                        if (nick && real_jid)
+                        if (real_jid && *real_jid)
                         {
-                            ch.add_member(nick, nullptr,
-                                std::optional<std::string_view>(real_jid));
+                            ch.register_omemo_recipient(real_jid);
+                            if (nick && *nick)
+                            {
+                                ch.add_member(nick, nullptr,
+                                    std::optional<std::string_view>(real_jid));
+                            }
+                            else if (account.omemo && ch.muc_supports_omemo())
+                            {
+                                account.omemo.request_axolotl_devicelist(account, real_jid);
+                            }
                         }
                         item = xmpp_stanza_get_next(item);
                     }

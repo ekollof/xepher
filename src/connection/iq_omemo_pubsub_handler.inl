@@ -415,6 +415,17 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                                        "%somemo: legacy bundle fetch for %s/%u returned error",
                                        weechat_prefix("error"),
                                        bundle_jid.c_str(), bundle_device_id);
+                        if (bundle_device_id != 0 && !bundle_jid.empty())
+                        {
+                            for (auto &[_, ch] : account.channels)
+                            {
+                                if (ch.type == weechat::channel::chat_type::MUC
+                                    && ch.omemo_recipient_jids.contains(bundle_jid))
+                                {
+                                    ch.clear_omemo_bundle_pending(bundle_jid, bundle_device_id);
+                                }
+                            }
+                        }
                     }
                 handled = true;
                 }

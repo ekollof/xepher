@@ -167,6 +167,7 @@ HDRS=src/plugin.hh \
 
 SRCS=src/plugin.cpp \
 	 src/account.cpp \
+	 src/account_omemo_muc.cpp \
 	 src/avatar.cpp \
 	 src/buffer.cpp \
 	 src/color.cpp \

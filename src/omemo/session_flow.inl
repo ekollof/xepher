@@ -1,3 +1,13 @@
+static struct t_gui_buffer *key_transport_buffer_for_peer(weechat::account &account,
+                                                        struct t_gui_buffer *fallback,
+                                                        std::string_view peer_bare_jid);
+
+static void resolve_key_transport_route(weechat::account &account,
+                                      struct t_gui_buffer *buffer,
+                                      std::string_view peer_bare_jid,
+                                      std::string &dest,
+                                      std::string &msg_type);
+
 static void send_key_transport(omemo &self,
                                weechat::account &account,
                                struct t_gui_buffer *buffer,
@@ -148,8 +158,9 @@ void weechat::xmpp::omemo::force_kex(weechat::account &account,
 
         if (have_session)
         {
-            send_key_transport(*this, account, buffer ? buffer : account.buffer,
-                               bare_jid.c_str(), remote_device_id);
+            struct t_gui_buffer *kt_buf = key_transport_buffer_for_peer(
+                account, buffer ? buffer : account.buffer, bare_jid);
+            send_key_transport(*this, account, kt_buf, bare_jid.c_str(), remote_device_id);
             ++sent_now;
             continue;
         }
@@ -253,50 +264,133 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
     if (!account)
         return;
 
-    auto ch_it = account->channels.find(bare_jid);
-    if (ch_it == account->channels.end())
-        return;
-
-    auto& [_, ch] = *ch_it;
-
-    // MUC OMEMO support (docs/planning-muc-omemo.md §2.4 + §6):
-    // After a devicelist arrives for an occupant (or PM), proactively request
-    // bundles for all their devices. This is the main path that satisfies
-    // "After each devicelist arrives, fetch bundles for every new/updated device ID".
-    //
-    // Trust note: These occupants were discovered with real JIDs (via presence,
-    // disco#items, or admin affiliation queries). They will be treated with
-    // default BTBV (blind) trust unless the user manually verifies them.
+    // MUC OMEMO (XEP-0384 §5.8.2): fetch bundles for every device on eligible
+    // rooms that list this occupant as a recipient — independent of PM channels.
     for (const auto &dev : devices)
     {
         const auto remote_device_id = parse_uint32(dev);
         if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
             continue;
 
-        // Request the bundle (existing function). For MUC occupants this
-        // populates the sessions we will need for multi-recipient encode.
+        for (auto &[_, ch] : account->channels)
+        {
+            if (ch.type != weechat::channel::chat_type::MUC
+                || !ch.muc_supports_omemo()
+                || !ch.omemo_recipient_jids.contains(bare_jid))
+            {
+                continue;
+            }
+            ch.mark_omemo_bundle_pending(bare_jid, *remote_device_id);
+        }
+
         request_axolotl_bundle(*account, bare_jid, *remote_device_id);
     }
 
-    if (ch.pending_omemo_messages.empty())
-        return;
-
-    bool has_any_session = false;
-    for (const auto &dev : devices)
+    if (auto ch_it = account->channels.find(bare_jid);
+        ch_it != account->channels.end())
     {
-        const auto remote_device_id = parse_uint32(dev);
-        if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
-            continue;
-
-        if (has_session(bare_jid.c_str(), *remote_device_id))
+        auto &[_, ch] = *ch_it;
+        if (ch.type == weechat::channel::chat_type::PM
+            && !ch.pending_omemo_messages.empty())
         {
-            has_any_session = true;
-            break;
+            const bool has_any_session = std::ranges::any_of(devices, [&](const auto &dev) {
+                const auto remote_device_id = parse_uint32(dev);
+                return remote_device_id
+                    && is_valid_omemo_device_id(*remote_device_id)
+                    && has_session(bare_jid.c_str(), *remote_device_id);
+            });
+            if (has_any_session)
+                ch.flush_pending_omemo_messages();
+        }
+    }
+}
+
+// Pick the buffer whose channel context should govern key-transport routing
+// when the caller only has the account buffer (e.g. bundle IQ handler).
+static struct t_gui_buffer *key_transport_buffer_for_peer(weechat::account &account,
+                                                        struct t_gui_buffer *fallback,
+                                                        std::string_view peer_bare_jid)
+{
+    if (peer_bare_jid.empty())
+        return fallback;
+
+    const std::string normalized = ::jid(nullptr, std::string(peer_bare_jid)).bare;
+    const std::string_view peer = normalized.empty() ? peer_bare_jid : std::string_view(normalized);
+
+    if (auto pm_it = account.channels.find(std::string(peer));
+        pm_it != account.channels.end()
+        && pm_it->second.type == weechat::channel::chat_type::PM)
+    {
+        return pm_it->second.buffer;
+    }
+
+    for (auto &[_, ch] : account.channels)
+    {
+        if (ch.type == weechat::channel::chat_type::MUC
+            && ch.omemo_recipient_jids.contains(std::string(peer)))
+        {
+            return ch.buffer;
         }
     }
 
-    if (has_any_session)
-        ch.flush_pending_omemo_messages();
+    return fallback;
+}
+
+// PM buffer context always wins over shared MUC membership: a contact may be in
+// a room with us while we recover a 1:1 session from their PM buffer.
+static void resolve_key_transport_route(weechat::account &account,
+                                      struct t_gui_buffer *buffer,
+                                      std::string_view peer_bare_jid,
+                                      std::string &dest,
+                                      std::string &msg_type)
+{
+    const std::string normalized = ::jid(nullptr, std::string(peer_bare_jid)).bare;
+    const std::string peer = normalized.empty() ? std::string(peer_bare_jid) : normalized;
+
+    dest = peer;
+    msg_type = "chat";
+
+    const weechat::channel *ctx_channel = nullptr;
+    if (buffer)
+    {
+        for (const auto &[_, ch] : account.channels)
+        {
+            if (ch.buffer == buffer)
+            {
+                ctx_channel = &ch;
+                break;
+            }
+        }
+    }
+
+    if (ctx_channel)
+    {
+        if (ctx_channel->type == weechat::channel::chat_type::MUC)
+        {
+            dest = ctx_channel->id;
+            msg_type = "groupchat";
+        }
+        return;
+    }
+
+    // Account buffer or unknown buffer: prefer an open PM channel for this peer.
+    if (auto pm_it = account.channels.find(peer);
+        pm_it != account.channels.end()
+        && pm_it->second.type == weechat::channel::chat_type::PM)
+    {
+        return;
+    }
+
+    for (const auto &[room_id, ch] : account.channels)
+    {
+        if (ch.type == weechat::channel::chat_type::MUC
+            && ch.omemo_recipient_jids.contains(peer))
+        {
+            dest = room_id;
+            msg_type = "groupchat";
+            return;
+        }
+    }
 }
 
 static void send_key_transport(omemo &self,
@@ -320,23 +414,9 @@ static void send_key_transport(omemo &self,
         return b.empty() ? std::string(account.jid()) : b;
     }();
 
-    // Compute destination + type early so the multi-recipient KT logic below can use it.
-    std::string dest = peer_jid;
-    std::string msg_type = "chat";
-
-    // docs/planning-muc-omemo.md §3.3: If the peer is a MUC occupant,
-    // we will send as groupchat to the room and encrypt for all occupants.
-    for (auto& [room_id, ch] : account.channels) {
-        if (ch.type == weechat::channel::chat_type::MUC) {
-            for (const auto& [nick, m] : ch.members) {
-                if (m.real_jid && *m.real_jid == std::string(peer_jid)) {
-                    dest = room_id;
-                    msg_type = "groupchat";
-                    break;
-                }
-            }
-        }
-    }
+    std::string dest;
+    std::string msg_type;
+    resolve_key_transport_route(account, buffer, peer_jid, dest, msg_type);
 
     stanza::xep0384::axolotl_header header_spec(fmt::format("{}", self.device_id));
     bool any_keys = false;
@@ -534,7 +614,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
                 const bool session_is_fresh = !had_session_before
                     && has_session(bare_jid.c_str(), remote_device_id);
 
-                if ((session_is_fresh || needs_key_transport) && account && buffer)
+                if ((session_is_fresh || needs_key_transport) && account)
                 {
                     if (global_mam_catchup)
                     {
@@ -542,7 +622,9 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
                     }
                     else
                     {
-                        send_key_transport(*this, *account, buffer, bare_jid.c_str(), remote_device_id);
+                        struct t_gui_buffer *kt_buf = key_transport_buffer_for_peer(
+                            *account, buffer, bare_jid);
+                        send_key_transport(*this, *account, kt_buf, bare_jid.c_str(), remote_device_id);
                     }
                 }
             }
@@ -554,25 +636,6 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
                        bare_jid, remote_device_id, lpks.size());
             }
 
-            // §2.4: If this bundle was for a MUC occupant, decrement the per-channel
-            // pending bundle counter so the send guard can release when ready.
-            if (account && !bare_jid.empty() && !is_own_device)
-            {
-                for (auto& [ch_id, ch] : account->channels)
-                {
-                    if (ch.type == weechat::channel::chat_type::MUC)
-                    {
-                        for (const auto& [nick, m] : ch.members)
-                        {
-                            if (m.real_jid && *m.real_jid == bare_jid)
-                            {
-                                ch.dec_pending_omemo_bundles();
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
         }
         else
         {
@@ -580,6 +643,19 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
                 print_error(buffer, fmt::format(
                     "OMEMO (legacy) failed to parse bundle for {}/{}",
                     bare_jid, remote_device_id));
+        }
+    }
+
+    // MUC OMEMO: bundle fetch completed (success, parse failure, or empty).
+    if (account && !bare_jid.empty() && !is_own_device)
+    {
+        for (auto &[_, ch] : account->channels)
+        {
+            if (ch.type == weechat::channel::chat_type::MUC
+                && ch.omemo_recipient_jids.contains(bare_jid))
+            {
+                ch.clear_omemo_bundle_pending(bare_jid, remote_device_id);
+            }
         }
     }
 
@@ -611,13 +687,8 @@ void weechat::xmpp::omemo::process_postponed_key_transports(weechat::account &ac
 
     for (const auto &[bare_jid, device_id] : postponed_key_transports)
     {
-        struct t_gui_buffer *buf = account.buffer;
-        if (auto ch_it = account.channels.find(bare_jid); ch_it != account.channels.end())
-        {
-            auto& [_, ch] = *ch_it;
-            buf = ch.buffer;
-        }
-
+        struct t_gui_buffer *buf = key_transport_buffer_for_peer(
+            account, account.buffer, bare_jid);
         send_key_transport(*this, account, buf, bare_jid.c_str(), device_id);
     }
     postponed_key_transports.clear();
