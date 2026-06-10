@@ -586,10 +586,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         auto& [_, c] = *it_ch;
                         ch = &c;
                     }
-                    weechat::UiPort::for_buffer(ch->buffer)->printf_date_tags(
+                    weechat::UiPort::for_buffer(ch->buffer)->printf_date_tags_network(
                         0, "xmpp_attention,notify_highlight",
-                        fmt::format("{}{} is requesting your attention! (/buzz)",
-                            weechat::RuntimePort::default_runtime().prefix("network"), bare_s));
+                        fmt::format("{} is requesting your attention! (/buzz)", bare_s));
                 }
                 return 1;
             }
@@ -705,17 +704,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     if (retraction_lookup
                         && *retraction_lookup == weechat::LineStoreLookupResult::Found)
                     {
-                        rx_ui->printf_date_tags(0, "notify_none",
-                            fmt::format("{}{} retracted a message",
-                                weechat::RuntimePort::default_runtime().prefix("network"), rx_from));
+                        rx_ui->printf_network(fmt::format("{} retracted a message", rx_from));
                     }
                     else if (!retraction_lookup
                              || *retraction_lookup
                                     != weechat::LineStoreLookupResult::SenderRejected)
                     {
-                        rx_ui->printf_date_tags(0, "notify_none",
-                            fmt::format("{}{} retracted a message (not found in buffer)",
-                                weechat::RuntimePort::default_runtime().prefix("network"), rx_from));
+                        rx_ui->printf_network(
+                            fmt::format("{} retracted a message (not found in buffer)", rx_from));
                     }
                 }
                 return 1;
@@ -1165,10 +1161,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             case ::xmpp::OmemoDecryptFailureDisposition::AbortSilent:
                 return 1;
             case ::xmpp::OmemoDecryptFailureDisposition::ShowDecryptionError:
-                weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-                    0, "notify_none",
-                    fmt::format("{}OMEMO Decryption Error ({})",
-                        weechat::RuntimePort::default_runtime().prefix("error"), from));
+                weechat::UiPort::for_buffer(channel->buffer)->printf_error(
+                    fmt::format("OMEMO Decryption Error ({})", from));
                 return 1;
             }
         }
@@ -1292,28 +1286,23 @@ message_handler_after_omemo:
         {
             if (moderation->reason)
             {
-                mod_ui->printf_date_tags(0, "notify_none",
-                    fmt::format("{}{} moderated a message: {}",
-                        weechat::RuntimePort::default_runtime().prefix("network"), from_bare, *moderation->reason));
+                mod_ui->printf_network(
+                    fmt::format("{} moderated a message: {}", from_bare, *moderation->reason));
             }
             else
             {
-                mod_ui->printf_date_tags(0, "notify_none",
-                    fmt::format("{}{} moderated a message",
-                        weechat::RuntimePort::default_runtime().prefix("network"), from_bare));
+                mod_ui->printf_network(fmt::format("{} moderated a message", from_bare));
             }
         }
         else if (moderation->reason)
         {
-            mod_ui->printf_date_tags(0, "notify_none",
-                fmt::format("{}{} moderated a message (not found in buffer): {}",
-                    weechat::RuntimePort::default_runtime().prefix("network"), from_bare, *moderation->reason));
+            mod_ui->printf_network(fmt::format(
+                "{} moderated a message (not found in buffer): {}", from_bare, *moderation->reason));
         }
         else
         {
-            mod_ui->printf_date_tags(0, "notify_none",
-                fmt::format("{}{} moderated a message (not found in buffer)",
-                    weechat::RuntimePort::default_runtime().prefix("network"), from_bare));
+            mod_ui->printf_network(
+                fmt::format("{} moderated a message (not found in buffer)", from_bare));
         }
 
         return 1;
@@ -1357,16 +1346,13 @@ message_handler_after_omemo:
         if (retraction_lookup
             && *retraction_lookup == weechat::LineStoreLookupResult::Found)
         {
-            retr_ui->printf_date_tags(0, "notify_none",
-                fmt::format("{}{} retracted a message",
-                    weechat::RuntimePort::default_runtime().prefix("network"), from_bare));
+            retr_ui->printf_network(fmt::format("{} retracted a message", from_bare));
         }
         else if (!retraction_lookup
                  || *retraction_lookup != weechat::LineStoreLookupResult::SenderRejected)
         {
-            retr_ui->printf_date_tags(0, "notify_none",
-                fmt::format("{}{} retracted a message (not found in buffer)",
-                    weechat::RuntimePort::default_runtime().prefix("network"), from_bare));
+            retr_ui->printf_network(
+                fmt::format("{} retracted a message (not found in buffer)", from_bare));
         }
 
         return 1;
@@ -2555,18 +2541,16 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
     const std::string instr = form_view.child("instructions").text();
 
     auto form_ui = weechat::UiPort::for_buffer(buf);
-    form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-        fmt::format("{}{}── Ad-Hoc Form{}{}{} ──{}",
-            weechat::RuntimePort::default_runtime().prefix("network"),
+    form_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+        fmt::format("── Ad-Hoc Form{}{}{} ──{}",
             weechat::RuntimePort::default_runtime().color("bold"),
             title.empty() ? "" : ": ",
             title.empty() ? "" : title,
             title.empty() ? "" : "",
             weechat::RuntimePort::default_runtime().color("-bold")));
     if (!instr.empty())
-        form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-            fmt::format("{}  {}{}{}",
-                weechat::RuntimePort::default_runtime().prefix("network"),
+        form_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+            fmt::format("  {}{}{}",
                 weechat::RuntimePort::default_runtime().color("italic"),
                 instr,
                 weechat::RuntimePort::default_runtime().color("-italic")));
@@ -2611,9 +2595,8 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         if (is_fixed)
         {
             for (auto &v : values)
-                form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-                    fmt::format("{}  {}{}{}",
-                        weechat::RuntimePort::default_runtime().prefix("network"),
+                form_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                    fmt::format("  {}{}{}",
                         weechat::RuntimePort::default_runtime().color("darkgray"),
                         v,
                         weechat::RuntimePort::default_runtime().color("resetcolor")));
@@ -2715,9 +2698,8 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         }
 
         // Print: "  N. Label [var/type] = value"
-        form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-            fmt::format("{}  {}{}.{} {}{}{}{} {}{}{}{}{}{} = {}{}",
-                weechat::RuntimePort::default_runtime().prefix("network"),
+        form_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+            fmt::format("  {}{}.{} {}{}{}{} {}{}{}{}{}{} = {}{}",
                 weechat::RuntimePort::default_runtime().color("darkgray"), field_index, weechat::RuntimePort::default_runtime().color("resetcolor"),
                 weechat::RuntimePort::default_runtime().color("bold"),
                 label ? label : (var ? var : "?"),
@@ -2736,9 +2718,8 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
 
     // Show how to submit
     if (session_id && node && jid)
-        form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-            fmt::format("{}  {}Submit:{} /adhoc {} {} {} {}var{}={}value{} ...",
-                weechat::RuntimePort::default_runtime().prefix("network"),
+        form_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+            fmt::format("  {}Submit:{} /adhoc {} {} {} {}var{}={}value{} ...",
                 weechat::RuntimePort::default_runtime().color("gray"), weechat::RuntimePort::default_runtime().color("resetcolor"),
                 jid, node, session_id,
                 weechat::RuntimePort::default_runtime().color("cyan"), weechat::RuntimePort::default_runtime().color("resetcolor"),

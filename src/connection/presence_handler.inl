@@ -101,9 +101,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             else
             {
                 // Debug: log unspecified errors with JID
-                std::string msg = fmt::format("{}[DEBUG] Received unspecified error from {} (presence)",
-                                              weechat::RuntimePort::default_runtime().prefix("network"), from_str);
-                weechat::UiPort::for_buffer(account.buffer)->printf(msg);
+                weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                    fmt::format("[DEBUG] Received unspecified error from {} (presence)", from_str));
             }
         }
         return 1;
@@ -124,10 +123,10 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 case 101: // Affiliation change: room visibility changed, JID now visible to all
                     if (channel)
                     {
-                        std::string msg = fmt::format("{}{}[Room] Your affiliation changed; your full JID is now visible to all occupants",
-                                                      weechat::RuntimePort::default_runtime().prefix("network"), weechat::RuntimePort::default_runtime().xmpp_color("gray").c_str());
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-    0, "xmpp_presence,notify_none,no_trigger", msg);
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                            0, "xmpp_presence,notify_none,no_trigger",
+                            fmt::format("{}[Room] Your affiliation changed; your full JID is now visible to all occupants",
+                                weechat::RuntimePort::default_runtime().xmpp_color("gray")));
                     }
                     break;
                 case 102: // : [message | Configuration change]: Inform occupants that room now shows unavailable members
@@ -299,20 +298,21 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 case 170: // Logging Active: room logging enabled — privacy notice
                     if (channel)
                     {
-                        std::string msg = fmt::format("{}{}[Room] Warning: room logging is now {}enabled{} — messages are being stored",
-                                                      weechat::RuntimePort::default_runtime().prefix("network"), weechat::RuntimePort::default_runtime().xmpp_color("yellow").c_str(),
-                                                      weechat::RuntimePort::default_runtime().xmpp_color("yellow,bold").c_str(), weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str());
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-    0, "xmpp_presence,notify_none,no_trigger", msg);
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                            0, "xmpp_presence,notify_none,no_trigger",
+                            fmt::format("{}[Room] Warning: room logging is now {}enabled{} — messages are being stored",
+                                weechat::RuntimePort::default_runtime().xmpp_color("yellow"),
+                                weechat::RuntimePort::default_runtime().xmpp_color("yellow,bold"),
+                                weechat::RuntimePort::default_runtime().xmpp_color("reset")));
                     }
                     break;
                 case 171: // Logging disabled
                     if (channel)
                     {
-                        std::string msg = fmt::format("{}{}[Room] Room logging is now disabled",
-                                                      weechat::RuntimePort::default_runtime().prefix("network"), weechat::RuntimePort::default_runtime().xmpp_color("gray").c_str());
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-    0, "xmpp_presence,notify_none,no_trigger", msg);
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                            0, "xmpp_presence,notify_none,no_trigger",
+                            fmt::format("{}[Room] Room logging is now disabled",
+                                weechat::RuntimePort::default_runtime().xmpp_color("gray")));
                     }
                     break;
                 case 172: // Room is now non-anonymous (full JIDs visible)
@@ -320,11 +320,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     {
                         channel->set_muc_anonymity(
                             weechat::channel::muc_info::anonymity::nonanonymous);
-                        std::string msg = fmt::format("{}{}[Room] Room is now {}non-anonymous{} — full JIDs are visible to all occupants",
-                                                      weechat::RuntimePort::default_runtime().prefix("network"), weechat::RuntimePort::default_runtime().xmpp_color("yellow").c_str(),
-                                                      weechat::RuntimePort::default_runtime().xmpp_color("yellow,bold").c_str(), weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str());
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-    0, "xmpp_presence,notify_none,no_trigger", msg);
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                            0, "xmpp_presence,notify_none,no_trigger",
+                            fmt::format("{}[Room] Room is now {}non-anonymous{} — full JIDs are visible to all occupants",
+                                weechat::RuntimePort::default_runtime().xmpp_color("yellow"),
+                                weechat::RuntimePort::default_runtime().xmpp_color("yellow,bold"),
+                                weechat::RuntimePort::default_runtime().xmpp_color("reset")));
                     }
                     break;
                 case 173: // Room is now semi-anonymous
@@ -332,10 +333,10 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     {
                         channel->set_muc_anonymity(
                             weechat::channel::muc_info::anonymity::semianonymous);
-                        std::string msg = fmt::format("{}{}[Room] Room is now semi-anonymous — full JIDs visible to moderators only",
-                                                      weechat::RuntimePort::default_runtime().prefix("network"), weechat::RuntimePort::default_runtime().xmpp_color("gray").c_str());
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-    0, "xmpp_presence,notify_none,no_trigger", msg);
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                            0, "xmpp_presence,notify_none,no_trigger",
+                            fmt::format("{}[Room] Room is now semi-anonymous — full JIDs visible to moderators only",
+                                weechat::RuntimePort::default_runtime().xmpp_color("gray")));
                     }
                     break;
                 case 174: // Room is now fully-anonymous
@@ -343,20 +344,20 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     {
                         channel->set_muc_anonymity(
                             weechat::channel::muc_info::anonymity::anonymous);
-                        std::string msg = fmt::format("{}{}[Room] Room is now fully-anonymous — JIDs are hidden from all occupants",
-                                                      weechat::RuntimePort::default_runtime().prefix("network"), weechat::RuntimePort::default_runtime().xmpp_color("gray").c_str());
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-    0, "xmpp_presence,notify_none,no_trigger", msg);
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                            0, "xmpp_presence,notify_none,no_trigger",
+                            fmt::format("{}[Room] Room is now fully-anonymous — JIDs are hidden from all occupants",
+                                weechat::RuntimePort::default_runtime().xmpp_color("gray")));
                     }
                     break;
                 case 201: // New room created — must accept default config to unlock it
                     is_new_room = true;
                     if (channel)
                     {
-                        std::string msg = fmt::format("{}{}[Room] New room created; accepting default configuration",
-                                                      weechat::RuntimePort::default_runtime().prefix("network"), weechat::RuntimePort::default_runtime().xmpp_color("gray").c_str());
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-    0, "xmpp_presence,notify_none,no_trigger", msg);
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                            0, "xmpp_presence,notify_none,no_trigger",
+                            fmt::format("{}[Room] New room created; accepting default configuration",
+                                weechat::RuntimePort::default_runtime().xmpp_color("gray")));
                     }
                     break;
                 case 210: // Server assigned/modified nick
@@ -463,15 +464,14 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                         const char *nick_tags = channel->smart_filter_nick(old_nick)
                             ? "xmpp_presence,nick,log4,xmpp_smart_filter,no_trigger"
                             : "xmpp_presence,nick,log4,no_trigger";
-                        std::string msg = fmt::format("{}{}{}{} is now known as {}{}",
-                                                      weechat::RuntimePort::default_runtime().prefix("network"),
-                                                      weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change").c_str(),
-                                                      old_nick,
-                                                      weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str(),
-                                                      weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change").c_str(),
-                                                      item.nick->data());
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-                            0, nick_tags, msg);
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                            0, nick_tags,
+                            fmt::format("{}{}{} is now known as {}{}",
+                                weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change"),
+                                old_nick,
+                                weechat::RuntimePort::default_runtime().xmpp_color("reset"),
+                                weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change"),
+                                item.nick->data()));
                         // Still remove from nicklist so the new presence can re-add
                         weechat::user *leaving = weechat::user::search(&account, binding->from->full.data());
                         if (leaving)
@@ -505,13 +505,13 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                         // Status 210: server assigned a different nick than requested
                         const char *assigned = binding->from->resource.size()
                             ? binding->from->resource.data() : binding->from->full.data();
-                        std::string msg = fmt::format("{}{}[Room] Server assigned you the nick: {}{}{}",
-                                                      weechat::RuntimePort::default_runtime().prefix("network"), weechat::RuntimePort::default_runtime().xmpp_color("gray").c_str(),
-                                                      weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change").c_str(),
-                                                      assigned,
-                                                      weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str());
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
-    0, "xmpp_presence,notify_none,no_trigger", msg);
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                            0, "xmpp_presence,notify_none,no_trigger",
+                            fmt::format("{}[Room] Server assigned you the nick: {}{}{}",
+                                weechat::RuntimePort::default_runtime().xmpp_color("gray"),
+                                weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change"),
+                                assigned,
+                                weechat::RuntimePort::default_runtime().xmpp_color("reset")));
                     }
                 }
             }
@@ -542,11 +542,10 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 auto get_iq = stanza::iq().type("get").to(room_jid).id(get_id);
                 get_iq.muc_owner(q);
                 account.connection.send(get_iq.build(account.context).get());
-                weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+                weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
                     0, "xmpp_presence,notify_none,no_trigger",
-                    fmt::format("{}{}[Room] reserved room created (locked) — use /setmodes, "
+                    fmt::format("{}[Room] reserved room created (locked) — use /setmodes, "
                         "/affiliation, or /destroy to configure",
-                        weechat::RuntimePort::default_runtime().prefix("network"),
                         weechat::RuntimePort::default_runtime().xmpp_color("yellow")));
             }
             else
@@ -674,13 +673,16 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             const char *new_jid = binding->from ? binding->from->bare.data() : nullptr;
              if (!old_jid_str.empty() && new_jid)
              {
-                 std::string msg = fmt::format("{}{}Contact {}{}{} has moved to {}{}{} — verify and update your roster",
-                                               weechat::RuntimePort::default_runtime().prefix("network"),
-                                               weechat::RuntimePort::default_runtime().xmpp_color("yellow").c_str(),
-                                               weechat::RuntimePort::default_runtime().xmpp_color("bold").c_str(), old_jid_str, weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str(),
-                                               weechat::RuntimePort::default_runtime().xmpp_color("bold").c_str(), new_jid, weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str());
-                 weechat::UiPort::for_buffer(account.buffer)->printf_date_tags(
-                     0, "xmpp_presence,notify_highlight", msg);
+                 weechat::UiPort::for_buffer(account.buffer)->printf_date_tags_network(
+                     0, "xmpp_presence,notify_highlight",
+                     fmt::format("{}Contact {}{}{} has moved to {}{}{} — verify and update your roster",
+                         weechat::RuntimePort::default_runtime().xmpp_color("yellow"),
+                         weechat::RuntimePort::default_runtime().xmpp_color("bold"),
+                         old_jid_str,
+                         weechat::RuntimePort::default_runtime().xmpp_color("reset"),
+                         weechat::RuntimePort::default_runtime().xmpp_color("bold"),
+                         new_jid,
+                         weechat::RuntimePort::default_runtime().xmpp_color("reset")));
              }
         }
     }

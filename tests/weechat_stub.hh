@@ -29,6 +29,8 @@ public:
     std::vector<std::string> info;
     std::vector<std::string> network;
     std::vector<dated_line> dated;
+    std::vector<dated_line> dated_network;
+    std::vector<dated_line> dated_error;
 
     void printf(std::string_view msg) override { lines.emplace_back(msg); }
     void printf_error(std::string_view msg) override { errors.emplace_back(msg); }
@@ -37,6 +39,14 @@ public:
     void printf_date_tags(std::time_t date, std::string_view tags, std::string_view msg) override
     {
         dated.push_back({date, std::string(tags), std::string(msg)});
+    }
+    void printf_date_tags_network(std::time_t date, std::string_view tags, std::string_view msg) override
+    {
+        dated_network.push_back({date, std::string(tags), std::string(msg)});
+    }
+    void printf_date_tags_error(std::time_t date, std::string_view tags, std::string_view msg) override
+    {
+        dated_error.push_back({date, std::string(tags), std::string(msg)});
     }
     void printf_y(int y, std::string_view msg) override
     {
@@ -50,6 +60,8 @@ public:
         info.clear();
         network.clear();
         dated.clear();
+        dated_network.clear();
+        dated_error.clear();
     }
 };
 
@@ -64,6 +76,8 @@ public:
     std::vector<search_call> searches;
     int nicklist_remove_all_count = 0;
     std::vector<std::string> nicklist_removed;
+    std::vector<std::string> nicklist_groups_added;
+    std::vector<std::string> nicklist_nicks_added;
 
     [[nodiscard]] struct t_gui_buffer *search(std::string_view plugin,
                                               std::string_view name) override
@@ -83,11 +97,57 @@ public:
         nicklist_removed.emplace_back(nick);
     }
 
+    [[nodiscard]] struct t_gui_nick_group *nicklist_search_group(
+        struct t_gui_buffer * /*buffer*/,
+        struct t_gui_nick_group * /*parent*/,
+        std::string_view /*name*/) override
+    {
+        return nullptr;
+    }
+
+    [[nodiscard]] struct t_gui_nick_group *nicklist_add_group(
+        struct t_gui_buffer * /*buffer*/,
+        struct t_gui_nick_group * /*parent*/,
+        std::string_view name,
+        std::string_view /*color*/,
+        int /*visible*/) override
+    {
+        nicklist_groups_added.emplace_back(name);
+        return nullptr;
+    }
+
+    [[nodiscard]] struct t_gui_nick *nicklist_search_nick(
+        struct t_gui_buffer * /*buffer*/,
+        struct t_gui_nick_group * /*group*/,
+        std::string_view /*name*/) override
+    {
+        return nullptr;
+    }
+
+    void nicklist_add_nick(struct t_gui_buffer * /*buffer*/,
+                           struct t_gui_nick_group * /*group*/,
+                           std::string_view name,
+                           std::string_view /*color*/,
+                           std::string_view /*prefix*/,
+                           std::string_view /*prefix_color*/,
+                           int /*visible*/) override
+    {
+        nicklist_nicks_added.emplace_back(name);
+    }
+
+    void nicklist_nick_set(struct t_gui_buffer * /*buffer*/,
+                           struct t_gui_nick * /*nick*/,
+                           std::string_view /*property*/,
+                           std::string_view /*value*/) override
+    {}
+
     void clear()
     {
         searches.clear();
         nicklist_remove_all_count = 0;
         nicklist_removed.clear();
+        nicklist_groups_added.clear();
+        nicklist_nicks_added.clear();
     }
 };
 

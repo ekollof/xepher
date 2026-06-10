@@ -9,6 +9,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/buffer_port.hh"
 #include "weechat/line_store.hh"
 #include "weechat/ui_port.hh"
 
@@ -97,14 +98,12 @@ std::optional<LineStoreLookupResult> apply_ui_action(struct t_gui_buffer *const 
         }
         if constexpr (std::is_same_v<T, NicklistRemoveAllAction>)
         {
-            weechat_nicklist_remove_all(buffer);
+            BufferPort::default_port_ref().nicklist_remove_all(buffer);
             return std::nullopt;
         }
         if constexpr (std::is_same_v<T, NicklistRemoveNickAction>)
         {
-            if (struct t_gui_nick *const nick = weechat_nicklist_search_nick(
-                    buffer, nullptr, act.nick.c_str()))
-                weechat_nicklist_remove_nick(buffer, nick);
+            BufferPort::default_port_ref().nicklist_remove_nick(buffer, act.nick);
             return std::nullopt;
         }
         return std::nullopt;

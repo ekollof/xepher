@@ -2,7 +2,8 @@
 
 Living task list for remaining implementation debt. Completed initiatives (OMEMO BTBV
 refactor, XEP compliance emission migration, XEP-0045 MUC features, port abstraction
-Waves 0–4) are removed from this file — see git history for archived phase-by-phase plans.
+Waves 0–4, Phase 4 BufferPort + prefix cleanup) are removed from this file — see git
+history for archived phase-by-phase plans.
 
 **Verification baseline:** `CXX="ccache clang++" make DEBUG=1` — 127 doctests, all assertions
 green. Manual WeeChat retest after user-visible changes (full restart; no `/plugin reload`).
@@ -34,12 +35,8 @@ when items land.
 
 | Priority | Gap | Location(s) | Remediation |
 |----------|-----|-------------|-------------|
-
 | High | Parse utilities on raw libstrophe | `atom.cpp`, `xhtml.cpp`, `util.cpp` | Migrate to `StanzaView` when those paths are next edited |
-
-| Medium | `BufferPort` underused | `nicklist.cpp`, `render_event.cpp`, buffer set/get in `channel.cpp` / `account.cpp` / commands | Extend port (nick add/search); migrate nicklist + render nicklist actions |
-| Medium | Manual prefix in dated messages | `message_handler.inl`, `presence_handler.inl` | Use `printf_network` / `printf_error` instead of embedding `RuntimePort::prefix()` in `printf_date_tags` bodies |
-
+| Medium | Manual prefix in dated messages | Other connection `.inl` files (`pep_handler`, `iq_*`, `helpers.cpp`) | Use typed `UiPort` methods when those paths are next edited |
 | Low | `debug.hh` bypasses ports | `XDEBUG` → raw `weechat_printf` | Optional: route through `UiPort` when refactoring debug path |
 | Low | `AGENTS.md` docs drift | Line 180 still cites `weechat_prefix()` | Align with `RuntimePort::default_runtime().prefix()` |
 
@@ -48,14 +45,8 @@ when items land.
 Port adapters (`ui_port.cpp`, `runtime_port.cpp`, `buffer_port.cpp`, `line_store.cpp`);
 `StanzaView` / builder impl (`stanza_view.cpp`, `node.cpp`, `node.hh`, `xep-0163.inl`);
 C-ABI glue (`connection.cpp` SM counting, buffer creation, hook callbacks); `strophe.hh`
-(parse-only alt wrapper, documented).
-
-### Phase 4 — BufferPort + prefix cleanup
-
-- [ ] Extend `BufferPort` (nicklist add/search; evaluate input/display setters)
-- [ ] Migrate `nicklist.cpp`; wire render nicklist actions through port
-- [ ] Replace embedded-prefix `printf_date_tags` with typed `UiPort` methods
-- [ ] `make DEBUG=1`; manual MUC nicklist + network message display retest
+(parse-only alt wrapper, documented). Action-prefix dated chat lines in `message_handler.inl`
+(`/me`, MAM mentions) intentionally embed `prefix("action")` in the message column.
 
 ### Phase 5 — Parse utilities (when touched)
 

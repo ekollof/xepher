@@ -271,12 +271,12 @@ void weechat::user::nicklist_add(weechat::account *account,
             : ".";
     ptr_group = nicklist::find_or_add_group(ptr_buffer, group_name);
     auto colour = get_colour_for_nicklist();
-    weechat_nicklist_add_nick(ptr_buffer, ptr_group,
-                              name,
-                              nicklist_color_name(*this, colour),
-                              nick_prefix,
-                              "bar_fg",
-                              1);
+    nicklist::add_nick(ptr_buffer,
+                       ptr_group,
+                       name,
+                       nicklist_color_name(*this, colour),
+                       nick_prefix,
+                       "bar_fg");
 
     if (channel && channel->type == weechat::channel::chat_type::MUC)
     {
@@ -319,19 +319,19 @@ void weechat::user::nicklist_set_color(weechat::account *account,
     }
 
     struct t_gui_buffer *ptr_buffer = channel ? channel->buffer : account->buffer;
-    struct t_gui_nick *ptr_nick = weechat_nicklist_search_nick(ptr_buffer, nullptr, name);
-    if (ptr_nick)
+    if (struct t_gui_nick *ptr_nick = nicklist::search_nick(ptr_buffer, name))
     {
         auto colour = get_colour_for_nicklist();
-        weechat_nicklist_nick_set(ptr_buffer, ptr_nick, "color",
-                                  nicklist_color_name(*this, colour));
+        nicklist::set_nick_property(ptr_buffer,
+                                    ptr_nick,
+                                    "color",
+                                    nicklist_color_name(*this, colour));
     }
 }
 
 void weechat::user::nicklist_remove(weechat::account *account,
                                     weechat::channel *channel)
 {
-    struct t_gui_nick *ptr_nick;
     struct t_gui_buffer *ptr_buffer;
 
     ptr_buffer = channel ? channel->buffer : account->buffer;
@@ -339,8 +339,7 @@ void weechat::user::nicklist_remove(weechat::account *account,
     auto try_remove = [&](const char *candidate) {
         if (!candidate)
             return;
-        if ((ptr_nick = weechat_nicklist_search_nick(ptr_buffer, nullptr, candidate)))
-            weechat_nicklist_remove_nick(ptr_buffer, ptr_nick);
+        nicklist::remove_nick(ptr_buffer, candidate);
     };
 
     if (channel && channel->type == weechat::channel::chat_type::MUC)

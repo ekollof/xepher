@@ -23,6 +23,7 @@
 #include <lmdb++.h>
 
 #include "plugin.hh"
+#include "weechat/buffer_port.hh"
 #include "weechat/runtime_port.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
@@ -569,12 +570,12 @@ void weechat::account::disconnect(int reconnect)
          * channel/private buffer
          */
         if (buffer)
-            weechat_nicklist_remove_all(buffer);
+            weechat::BufferPort::default_port_ref().nicklist_remove_all(buffer);
         for (auto& [_, ch] : channels)
         {
             if (ch.buffer)
             {
-                weechat_nicklist_remove_all(ch.buffer);
+                weechat::BufferPort::default_port_ref().nicklist_remove_all(ch.buffer);
                 weechat::UiPort::for_buffer(ch.buffer)->printf_network(
                     fmt::format(fmt::runtime(_("%s: disconnected from account")),
                                 WEECHAT_XMPP_PLUGIN_NAME));

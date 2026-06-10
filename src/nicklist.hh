@@ -5,8 +5,11 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 struct t_gui_buffer;
+struct t_gui_nick;
+struct t_gui_nick_group;
 
 namespace weechat::nicklist
 {
@@ -21,6 +24,23 @@ namespace weechat::nicklist
 
     struct t_gui_nick_group *find_or_add_group(struct t_gui_buffer *buffer,
                                                std::string_view group_name);
+
+    [[nodiscard]] struct t_gui_nick *search_nick(struct t_gui_buffer *buffer,
+                                                 std::string_view name);
+
+    void add_nick(struct t_gui_buffer *buffer,
+                  struct t_gui_nick_group *group,
+                  std::string_view name,
+                  std::string_view color,
+                  std::string_view prefix,
+                  std::string_view prefix_color);
+
+    void set_nick_property(struct t_gui_buffer *buffer,
+                           struct t_gui_nick *nick,
+                           std::string_view property,
+                           std::string_view value);
+
+    void remove_nick(struct t_gui_buffer *buffer, std::string_view name);
 
     void refresh_separator(struct t_gui_buffer *buffer,
                            bool has_online,
