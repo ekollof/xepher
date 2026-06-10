@@ -1425,6 +1425,74 @@ TEST_CASE("render_event ack builders")
     CHECK(weechat::build_incoming_displayed_render_event("", false).empty());
 }
 
+TEST_CASE("render_event line_store builders")
+{
+    const auto reactions = weechat::build_reactions_render_event("m1", "👍");
+    REQUIRE(reactions.size() == 1);
+    const auto *rx = std::get_if<weechat::ApplyReactionsByIdAction>(&reactions.front());
+    REQUIRE(rx != nullptr);
+    CHECK(rx->target_id == "m1");
+    CHECK(rx->emojis == "👍");
+
+    const auto correction = weechat::build_correction_render_event("m2", "fixed text");
+    REQUIRE(correction.size() == 1);
+    const auto *corr = std::get_if<weechat::UpdateMessageByIdAction>(&correction.front());
+    REQUIRE(corr != nullptr);
+    CHECK(corr->target_id == "m2");
+    CHECK(corr->new_message == "fixed text");
+
+    const auto moderation = weechat::build_moderation_tombstone_render_event(
+        "m3", "moderated", "xmpp_moderated,notify_none");
+    REQUIRE(moderation.size() == 1);
+    const auto *mod = std::get_if<weechat::TombstoneMessageByIdAction>(&moderation.front());
+    REQUIRE(mod != nullptr);
+    CHECK(mod->target_id == "m3");
+    CHECK(mod->tombstone_message == "moderated");
+
+    const auto retraction = weechat::build_retraction_tombstone_render_event(
+        "m4", "retracted", "xmpp_retracted,notify_none", "alice", "occ-1", true);
+    REQUIRE(retraction.size() == 1);
+    const auto *ret = std::get_if<weechat::TombstoneRetractionByIdAction>(&retraction.front());
+    REQUIRE(ret != nullptr);
+    CHECK(ret->target_id == "m4");
+    CHECK(ret->sender_key == "alice");
+    CHECK(ret->occupant_id == "occ-1");
+    CHECK(ret->prefer_occupant_id);
+
+    CHECK(weechat::build_reactions_render_event("", "👍").empty());
+    CHECK(weechat::build_correction_render_event("", "x").empty());
+}
+
+TEST_CASE("handler harness applies line_store render events")
+{
+    test_weechat::HandlerTestHarness harness;
+
+    harness.apply(weechat::build_reactions_render_event("m1", "❤️"));
+    REQUIRE(harness.line_store.reactions.size() == 1);
+    CHECK(harness.line_store.reactions.front().target_id == "m1");
+    CHECK(harness.line_store.reactions.front().emojis == "❤️");
+
+    harness.clear();
+
+    harness.apply(weechat::build_correction_render_event("m2", "updated"));
+    REQUIRE(harness.line_store.message_updates.size() == 1);
+    CHECK(harness.line_store.message_updates.front().new_message == "updated");
+
+    harness.clear();
+
+    harness.apply(weechat::build_moderation_tombstone_render_event(
+        "m3", "gone", "xmpp_moderated,notify_none"));
+    REQUIRE(harness.line_store.tombstones.size() == 1);
+    CHECK(harness.line_store.tombstones.front().target_id == "m3");
+
+    harness.clear();
+
+    harness.apply(weechat::build_retraction_tombstone_render_event(
+        "m4", "gone", "xmpp_retracted,notify_none", "bob", "", false));
+    REQUIRE(harness.line_store.retractions.size() == 1);
+    CHECK(harness.line_store.retractions.front().sender_key == "bob");
+}
+
 TEST_CASE("NullUiPort discards all output")
 {
     weechat::NullUiPort ui;

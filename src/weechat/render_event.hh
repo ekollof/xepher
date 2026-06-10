@@ -5,6 +5,7 @@
 #pragma once
 
 #include <ctime>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -13,6 +14,7 @@
 struct t_gui_buffer;
 
 #include "test_export.hh"
+#include "weechat/line_store.hh"
 
 namespace weechat {
 
@@ -83,8 +85,11 @@ using UiAction = std::variant<
 
 using RenderEvent = std::vector<UiAction>;
 
-void apply_ui_action(struct t_gui_buffer *buffer, const UiAction &action);
-void apply_render_event(struct t_gui_buffer *buffer, const RenderEvent &event);
+[[nodiscard]] XMPP_TEST_EXPORT std::optional<LineStoreLookupResult>
+apply_ui_action(struct t_gui_buffer *buffer, const UiAction &action);
+
+[[nodiscard]] XMPP_TEST_EXPORT std::optional<LineStoreLookupResult>
+apply_render_event(struct t_gui_buffer *buffer, const RenderEvent &event);
 
 [[nodiscard]] XMPP_TEST_EXPORT RenderEvent build_incoming_receipt_render_event(
     std::string_view acked_id,
@@ -93,5 +98,26 @@ void apply_render_event(struct t_gui_buffer *buffer, const RenderEvent &event);
 [[nodiscard]] XMPP_TEST_EXPORT RenderEvent build_incoming_displayed_render_event(
     std::string_view acked_id,
     bool muc_channel);
+
+[[nodiscard]] XMPP_TEST_EXPORT RenderEvent build_reactions_render_event(
+    std::string_view target_id,
+    std::string_view emojis);
+
+[[nodiscard]] XMPP_TEST_EXPORT RenderEvent build_correction_render_event(
+    std::string_view target_id,
+    std::string_view new_message);
+
+[[nodiscard]] XMPP_TEST_EXPORT RenderEvent build_moderation_tombstone_render_event(
+    std::string_view target_id,
+    std::string_view tombstone_message,
+    std::string_view replacement_tags);
+
+[[nodiscard]] XMPP_TEST_EXPORT RenderEvent build_retraction_tombstone_render_event(
+    std::string_view target_id,
+    std::string_view tombstone_message,
+    std::string_view replacement_tags,
+    std::string_view sender_key,
+    std::string_view occupant_id,
+    bool prefer_occupant_id);
 
 }  // namespace weechat

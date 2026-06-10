@@ -538,7 +538,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             ch->type == weechat::channel::chat_type::MUC;
                         const auto event = weechat::build_incoming_receipt_render_event(
                             ack->acked_id, muc_channel);
-                        weechat::apply_render_event(ch->buffer, event);
+                        (void)weechat::apply_render_event(ch->buffer, event);
                     }
                 }
                 return 1;
@@ -553,7 +553,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             ch->type == weechat::channel::chat_type::MUC;
                         const auto event = weechat::build_incoming_displayed_render_event(
                             ack->acked_id, muc_channel);
-                        weechat::apply_render_event(ch->buffer, event);
+                        (void)weechat::apply_render_event(ch->buffer, event);
                     }
                 }
                 return 1;
@@ -651,9 +651,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 {
                     if (rx_ch->buffer)
                     {
-                        [[maybe_unused]] const bool reactions_applied =
-                            weechat::line_store_apply_reactions_by_id(
-                                rx_ch->buffer, reactions->target_id, reactions->emojis);
+                        (void)weechat::apply_render_event(
+                            rx_ch->buffer,
+                            weechat::build_reactions_render_event(
+                                reactions->target_id, reactions->emojis));
                     }
                 }
                 return 1;
@@ -688,27 +689,29 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     const std::string retraction_sender = ::xmpp::retraction_sender_key(
                         rx_from, rx_from_bare.c_str(), is_muc_for_retraction);
 
-                    const auto retraction_lookup =
-                        weechat::line_store_tombstone_retraction_by_id(
-                            rx_ch->buffer,
+                    const auto retraction_lookup = weechat::apply_render_event(
+                        rx_ch->buffer,
+                        weechat::build_retraction_tombstone_render_event(
                             retraction->target_id,
                             ::xmpp::format_retraction_tombstone(),
                             "xmpp_retracted,notify_none",
                             retraction_sender,
                             {},
-                            false);
+                            false));
 
                     auto rx_ui = weechat::UiPort::for_buffer(rx_ch->buffer);
                     const std::string rx_from = rx_from_bare.empty()
                         ? own_jid_str : rx_from_bare;
-                    if (retraction_lookup == weechat::LineStoreLookupResult::Found)
+                    if (retraction_lookup
+                        && *retraction_lookup == weechat::LineStoreLookupResult::Found)
                     {
                         rx_ui->printf_date_tags(0, "notify_none",
                             fmt::format("{}{} retracted a message",
                                 weechat::RuntimePort::default_runtime().prefix("network"), rx_from));
                     }
-                    else if (retraction_lookup
-                             != weechat::LineStoreLookupResult::SenderRejected)
+                    else if (!retraction_lookup
+                             || *retraction_lookup
+                                    != weechat::LineStoreLookupResult::SenderRejected)
                     {
                         rx_ui->printf_date_tags(0, "notify_none",
                             fmt::format("{}{} retracted a message (not found in buffer)",
@@ -1251,11 +1254,11 @@ message_handler_after_omemo:
                 channel->buffer, correction_target_storage, sender_key)
                 == weechat::LineStoreLookupResult::Found)
         {
-            [[maybe_unused]] const bool correction_updated =
-                weechat::line_store_update_message_by_id(
-                    channel->buffer,
+            (void)weechat::apply_render_event(
+                channel->buffer,
+                weechat::build_correction_render_event(
                     correction_target_storage,
-                    ::xmpp::format_message_correction_text(text));
+                    ::xmpp::format_message_correction_text(text)));
         }
         return 1;
     }
@@ -1276,14 +1279,16 @@ message_handler_after_omemo:
         const std::string tombstone =
             ::xmpp::format_moderation_tombstone(moderate_reason_view);
 
-        const auto moderation_lookup = weechat::line_store_tombstone_message_by_id(
+        const auto moderation_lookup = weechat::apply_render_event(
             channel->buffer,
-            moderation->target_id,
-            tombstone,
-            "xmpp_retracted,xmpp_moderated,notify_none");
+            weechat::build_moderation_tombstone_render_event(
+                moderation->target_id,
+                tombstone,
+                "xmpp_retracted,xmpp_moderated,notify_none"));
 
         auto mod_ui = weechat::UiPort::for_buffer(channel->buffer);
-        if (moderation_lookup == weechat::LineStoreLookupResult::Found)
+        if (moderation_lookup
+            && *moderation_lookup == weechat::LineStoreLookupResult::Found)
         {
             if (moderation->reason)
             {
@@ -1338,23 +1343,26 @@ message_handler_after_omemo:
         const char *retraction_channel_id = channel_id;
         account.mam_cache_retract_message(retraction_channel_id, retraction->target_id.c_str());
 
-        const auto retraction_lookup = weechat::line_store_tombstone_retraction_by_id(
+        const auto retraction_lookup = weechat::apply_render_event(
             channel->buffer,
-            retraction->target_id,
-            ::xmpp::format_retraction_tombstone(),
-            "xmpp_retracted,notify_none",
-            retraction_sender,
-            retraction_occupant_id,
-            prefer_occupant_id);
+            weechat::build_retraction_tombstone_render_event(
+                retraction->target_id,
+                ::xmpp::format_retraction_tombstone(),
+                "xmpp_retracted,notify_none",
+                retraction_sender,
+                retraction_occupant_id,
+                prefer_occupant_id));
 
         auto retr_ui = weechat::UiPort::for_buffer(channel->buffer);
-        if (retraction_lookup == weechat::LineStoreLookupResult::Found)
+        if (retraction_lookup
+            && *retraction_lookup == weechat::LineStoreLookupResult::Found)
         {
             retr_ui->printf_date_tags(0, "notify_none",
                 fmt::format("{}{} retracted a message",
                     weechat::RuntimePort::default_runtime().prefix("network"), from_bare));
         }
-        else if (retraction_lookup != weechat::LineStoreLookupResult::SenderRejected)
+        else if (!retraction_lookup
+                 || *retraction_lookup != weechat::LineStoreLookupResult::SenderRejected)
         {
             retr_ui->printf_date_tags(0, "notify_none",
                 fmt::format("{}{} retracted a message (not found in buffer)",
@@ -1370,9 +1378,10 @@ message_handler_after_omemo:
     {
         if (channel)
         {
-            [[maybe_unused]] const bool reactions_applied =
-                weechat::line_store_apply_reactions_by_id(
-                    channel->buffer, reactions->target_id, reactions->emojis);
+            (void)weechat::apply_render_event(
+                channel->buffer,
+                weechat::build_reactions_render_event(
+                    reactions->target_id, reactions->emojis));
         }
         return 1;
     }

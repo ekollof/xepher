@@ -4,6 +4,7 @@
 
 #include "weechat/render_event.hh"
 
+#include <optional>
 #include <string>
 #include <weechat/weechat-plugin.h>
 
@@ -28,14 +29,22 @@ namespace {
     return event;
 }
 
+[[nodiscard]] RenderEvent single_action_render_event(UiAction action)
+{
+    RenderEvent event;
+    event.push_back(std::move(action));
+    return event;
+}
+
 }  // namespace
 
-void apply_ui_action(struct t_gui_buffer *const buffer, const UiAction &action)
+std::optional<LineStoreLookupResult> apply_ui_action(struct t_gui_buffer *const buffer,
+                                                     const UiAction &action)
 {
     if (!buffer)
-        return;
+        return std::nullopt;
 
-    std::visit([&](const auto &act) {
+    return std::visit([&](const auto &act) -> std::optional<LineStoreLookupResult> {
         using T = std::decay_t<decltype(act)>;
         if constexpr (std::is_same_v<T, PrintAction>)
         {
@@ -47,28 +56,32 @@ void apply_ui_action(struct t_gui_buffer *const buffer, const UiAction &action)
             case PrintStyle::Info:     ui->printf_info(act.message); break;
             case PrintStyle::Network:  ui->printf_network(act.message); break;
             }
+            return std::nullopt;
         }
-        else if constexpr (std::is_same_v<T, PrintDateTagsAction>)
+        if constexpr (std::is_same_v<T, PrintDateTagsAction>)
         {
             auto ui = UiPort::for_buffer(buffer);
             ui->printf_date_tags(act.date, act.tags, act.message);
+            return std::nullopt;
         }
-        else if constexpr (std::is_same_v<T, UpdateLineGlyphByTagAction>)
+        if constexpr (std::is_same_v<T, UpdateLineGlyphByTagAction>)
         {
             (void)line_store_update_line_glyph_by_tag(buffer, act.acked_id, act.glyph);
+            return std::nullopt;
         }
-        else if constexpr (std::is_same_v<T, UpdateMessageByIdAction>)
+        if constexpr (std::is_same_v<T, UpdateMessageByIdAction>)
         {
             (void)line_store_update_message_by_id(buffer, act.target_id, act.new_message);
+            return std::nullopt;
         }
-        else if constexpr (std::is_same_v<T, TombstoneMessageByIdAction>)
+        if constexpr (std::is_same_v<T, TombstoneMessageByIdAction>)
         {
-            (void)line_store_tombstone_message_by_id(
+            return line_store_tombstone_message_by_id(
                 buffer, act.target_id, act.tombstone_message, act.replacement_tags);
         }
-        else if constexpr (std::is_same_v<T, TombstoneRetractionByIdAction>)
+        if constexpr (std::is_same_v<T, TombstoneRetractionByIdAction>)
         {
-            (void)line_store_tombstone_retraction_by_id(
+            return line_store_tombstone_retraction_by_id(
                 buffer,
                 act.target_id,
                 act.tombstone_message,
@@ -77,27 +90,37 @@ void apply_ui_action(struct t_gui_buffer *const buffer, const UiAction &action)
                 act.occupant_id,
                 act.prefer_occupant_id);
         }
-        else if constexpr (std::is_same_v<T, ApplyReactionsByIdAction>)
+        if constexpr (std::is_same_v<T, ApplyReactionsByIdAction>)
         {
             (void)line_store_apply_reactions_by_id(buffer, act.target_id, act.emojis);
+            return std::nullopt;
         }
-        else if constexpr (std::is_same_v<T, NicklistRemoveAllAction>)
+        if constexpr (std::is_same_v<T, NicklistRemoveAllAction>)
         {
             weechat_nicklist_remove_all(buffer);
+            return std::nullopt;
         }
-        else if constexpr (std::is_same_v<T, NicklistRemoveNickAction>)
+        if constexpr (std::is_same_v<T, NicklistRemoveNickAction>)
         {
             if (struct t_gui_nick *const nick = weechat_nicklist_search_nick(
                     buffer, nullptr, act.nick.c_str()))
                 weechat_nicklist_remove_nick(buffer, nick);
+            return std::nullopt;
         }
+        return std::nullopt;
     }, action);
 }
 
-void apply_render_event(struct t_gui_buffer *const buffer, const RenderEvent &event)
+std::optional<LineStoreLookupResult> apply_render_event(struct t_gui_buffer *const buffer,
+                                                        const RenderEvent &event)
 {
+    std::optional<LineStoreLookupResult> result;
     for (const UiAction &action : event)
-        apply_ui_action(buffer, action);
+    {
+        if (auto lookup = apply_ui_action(buffer, action))
+            result = lookup;
+    }
+    return result;
 }
 
 RenderEvent build_incoming_receipt_render_event(
@@ -116,6 +139,62 @@ RenderEvent build_incoming_displayed_render_event(
     if (muc_channel || acked_id.empty())
         return {};
     return glyph_update_event(acked_id, k_glyph_seen);
+}
+
+RenderEvent build_reactions_render_event(const std::string_view target_id,
+                                         const std::string_view emojis)
+{
+    if (target_id.empty())
+        return {};
+    return single_action_render_event(ApplyReactionsByIdAction{
+        std::string(target_id),
+        std::string(emojis),
+    });
+}
+
+RenderEvent build_correction_render_event(const std::string_view target_id,
+                                          const std::string_view new_message)
+{
+    if (target_id.empty())
+        return {};
+    return single_action_render_event(UpdateMessageByIdAction{
+        std::string(target_id),
+        std::string(new_message),
+    });
+}
+
+RenderEvent build_moderation_tombstone_render_event(
+    const std::string_view target_id,
+    const std::string_view tombstone_message,
+    const std::string_view replacement_tags)
+{
+    if (target_id.empty())
+        return {};
+    return single_action_render_event(TombstoneMessageByIdAction{
+        std::string(target_id),
+        std::string(tombstone_message),
+        std::string(replacement_tags),
+    });
+}
+
+RenderEvent build_retraction_tombstone_render_event(
+    const std::string_view target_id,
+    const std::string_view tombstone_message,
+    const std::string_view replacement_tags,
+    const std::string_view sender_key,
+    const std::string_view occupant_id,
+    const bool prefer_occupant_id)
+{
+    if (target_id.empty())
+        return {};
+    return single_action_render_event(TombstoneRetractionByIdAction{
+        std::string(target_id),
+        std::string(tombstone_message),
+        std::string(replacement_tags),
+        std::string(sender_key),
+        std::string(occupant_id),
+        prefer_occupant_id,
+    });
 }
 
 }  // namespace weechat
