@@ -749,21 +749,20 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                 std::string occ_s;
                 std::string lang_s;
 
-                xmpp_stanza_t *identity = xmpp_stanza_get_child_by_name(query, "identity");
-                while (identity)
+                for (const ::xmpp::StanzaView identity : ::xmpp::StanzaView(query))
                 {
-                    const char *cat = xmpp_stanza_get_attribute(identity, "category");
-                    const char *typ = xmpp_stanza_get_attribute(identity, "type");
-                    const char *nam = xmpp_stanza_get_attribute(identity, "name");
-                    if (cat && typ
-                        && weechat_strcasecmp(cat, "conference") == 0
-                        && weechat_strcasecmp(typ, "text") == 0
-                        && nam && nam[0])
+                    if (identity.name() != "identity")
+                        continue;
+                    const std::string cat = identity.attr_string("category");
+                    const std::string typ = identity.attr_string("type");
+                    const std::string nam = identity.attr_string("name");
+                    if (!cat.empty() && !typ.empty() && !nam.empty()
+                        && weechat_strcasecmp(cat.c_str(), "conference") == 0
+                        && weechat_strcasecmp(typ.c_str(), "text") == 0)
                     {
                         name_s = nam;
                         break;
                     }
-                    identity = xmpp_stanza_get_next(identity);
                 }
 
                 xmpp_stanza_t *x = xmpp_stanza_get_child_by_name_and_ns(query, "x", "jabber:x:data");
@@ -1186,19 +1185,19 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                               from_jid ? from_jid : "server");
             }
             
-            xmpp_stanza_t *identity = xmpp_stanza_get_child_by_name(query, "identity");
-            while (identity)
+            for (const ::xmpp::StanzaView identity : ::xmpp::StanzaView(query))
             {
-                std::string category;
-                std::string name;
-                std::string type;
+                if (identity.name() != "identity")
+                    continue;
 
-                if (const char *attr = xmpp_stanza_get_attribute(identity, "category"))
-                    category = attr;
-                if (const char *attr = xmpp_stanza_get_attribute(identity, "name"))
-                    name = unescape(attr);
-                if (const char *attr = xmpp_stanza_get_attribute(identity, "type"))
-                    type = attr;
+                const std::string category = identity.attr_string("category");
+                std::string name;
+                if (auto nam = identity.attr("name"); nam && !nam->empty())
+                    name = unescape(*nam);
+                const std::string type = identity.attr_string("type");
+
+                if (category.empty() && type.empty() && name.empty())
+                    continue;
 
                 if (user_initiated)
                 {
@@ -1240,25 +1239,15 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                 // was removed. It generated request storms from disco identity
                 // traffic (notably MUC contexts) and is superseded by targeted
                 // roster/PM-driven request_devicelist() paths.
-                
-                identity = xmpp_stanza_get_next(identity);
             }
             
-            if (user_initiated)
+            if (user_initiated && !features.empty())
             {
-                xmpp_stanza_t *feature = xmpp_stanza_get_child_by_name(query, "feature");
-                if (feature)
-                {
-                    weechat_printf(account.buffer, "  %sFeatures:",
-                                  weechat_color("chat_prefix_network"));
-                    while (feature)
-                    {
-                        const char *var = xmpp_stanza_get_attribute(feature, "var");
-                        if (var)
-                            weechat_printf(account.buffer, "    %s", var);
-                        feature = xmpp_stanza_get_next(feature);
-                    }
-                }
+                weechat_printf(account.buffer, "  %sFeatures:",
+                              weechat_color("chat_prefix_network"));
+                std::ranges::for_each(features, [&](const std::string &var) {
+                    weechat_printf(account.buffer, "    %s", var.c_str());
+                });
             }
         }
     }
