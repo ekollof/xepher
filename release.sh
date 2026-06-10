@@ -115,7 +115,7 @@ repo_root() {
 packaging_version_from() {
     file=$1
     sed_expr=$2
-    sed -n "$sed_expr" "$file" | sed -n '1p'
+    sed -n "$sed_expr" "$file" | sed -n '1p' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
 check_packaging_versions() {
