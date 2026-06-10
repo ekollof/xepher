@@ -319,7 +319,7 @@
     </div>
     <div class="feature">
       <h3>Inline Images &amp; Stickers</h3>
-      <p>Kitty terminal graphics via vendored <code>icat.py</code> — SFS/SIMS/OOB uploads, XEP-0449 stickers, XEP-0514 custom emoji, and Movim stickers via XEP-0231 BoB (<code>cid:…@bob.xmpp.org</code>).</p>
+      <p>Kitty terminal graphics via vendored <code>icat.py</code> — SFS/SIMS/OOB uploads, XEP-0449 stickers, XEP-0514 custom emoji, and XEP-0231 BoB (<code>cid:…@bob.xmpp.org</code>) for Movim stickers and small plaintext <code>/upload</code> images (≤8&nbsp;KiB).</p>
     </div>
   </div>
 
@@ -397,7 +397,7 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
         <tr><td>XEP-0441</td><td>MAM Preferences</td><td>/mam prefs — view and set archiving policy</td></tr>
         <tr><td>XEP-0442</td><td>Pubsub MAM</td><td>Fetch feed history via MAM with RSM cursor persistence</td></tr>
         <tr><td>XEP-0444</td><td>Message Reactions</td><td></td></tr>
-        <tr><td>XEP-0231</td><td>Bits of Binary</td><td>Movim XHTML-IM <code>cid:…@bob.xmpp.org</code> stickers; IQ-fetch + icat</td></tr>
+        <tr><td>XEP-0231</td><td>Bits of Binary</td><td>Receive: inline <code>urn:xmpp:bob</code> + XHTML-IM cid IQ-fetch; send: plaintext <code>/upload</code> images ≤8&nbsp;KiB; caps + IQ hosting</td></tr>
         <tr><td>XEP-0447</td><td>Stateless File Sharing</td><td></td></tr>
         <tr><td>XEP-0448</td><td>Encrypted File Sharing</td><td>AES-256-GCM encrypt/decrypt for OMEMO channels</td></tr>
         <tr><td>XEP-0449</td><td>Stickers</td><td>Receive with SFS payloads; inline via icat</td></tr>
