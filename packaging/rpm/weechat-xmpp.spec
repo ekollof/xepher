@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        0.8.1
+Version:        0.9.0
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -70,6 +70,14 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Wed Jun 10 2026 Emiel Kollof <emiel@kollof.nl> - 0.9.0-1
+- Update to v0.9.0
+- Fix(omemo): MUC bundle prefetch, non-anonymous gating, PM key-transport routing
+- Fix(carbons): sent and plain-text carbon routing across clients
+- Fix(feed): pubsub discovery, /feed close, MAM push isolation for closed feeds
+- Feat: release.sh for GitHub releases and CI package builds
+- Feat(packaging): FreeBSD and OpenBSD port skeletons
+
 * Mon Jun 08 2026 Emiel Kollof <emiel@kollof.nl> - 0.8.1-1
 - Update to v0.8.1
 - Fix(packaging): skip .source ELF embed in distribution builds (fixes ~1.3 GB RPM/APK)
