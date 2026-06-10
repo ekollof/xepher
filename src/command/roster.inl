@@ -14,18 +14,17 @@ int command__block(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (argc < 2)
     {
-        weechat_printf(buffer, "%s%s: missing JID argument",
-                      weechat_prefix("error"),
-                      argv[0]);
+        ui->printf_error(fmt::format("{}: missing JID argument", argv[0]));
         return WEECHAT_RC_OK;
     }
 
@@ -37,8 +36,7 @@ int command__block(const void *pointer, void *data,
     for (int i = 0; i < count; i++)
     {
         blk.item(jids[i]);
-        weechat_printf(buffer, "%sBlocking %s...",
-                       weechat_prefix("network"), jids[i]);
+        ui->printf_network(fmt::format("Blocking {}...", jids[i]));
     }
 
     std::string id = stanza::uuid(ptr_account->context);
@@ -65,10 +63,11 @@ int command__unblock(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
@@ -83,15 +82,13 @@ int command__unblock(const void *pointer, void *data,
         for (int i = 0; i < count; i++)
         {
             ublk.item(jids[i]);
-            weechat_printf(buffer, "%sUnblocking %s...",
-                           weechat_prefix("network"), jids[i]);
+        ui->printf_network(fmt::format("Unblocking {}...", jids[i]));
         }
     }
     else
     {
         // Empty unblock = unblock all
-        weechat_printf(buffer, "%sUnblocking all JIDs...",
-                       weechat_prefix("network"));
+        ui->printf_network("Unblocking all JIDs...");
     }
 
     std::string id = stanza::uuid(ptr_account->context);
@@ -120,18 +117,18 @@ int command__blocklist(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     // If a picker is already open for this account, don't open another.
     if (ptr_account->blocklist_picker)
     {
-        weechat_printf(buffer, "%sxmpp: blocklist picker already open",
-                       weechat_prefix("network"));
+        ui->printf_network("xmpp: blocklist picker already open");
         return WEECHAT_RC_OK;
     }
 
@@ -152,8 +149,7 @@ int command__blocklist(const void *pointer, void *data,
             iq_s.unblock(ublk);
             acct->connection.send(iq_s.build(acct->context).get());
 
-            weechat_printf(acct->buffer, "%sUnblocking %s…",
-                           weechat_prefix("network"), std::string(jid).c_str());
+        weechat::UiPort::for_buffer(acct->buffer)->printf_network(fmt::format("Unblocking {}…", std::string(jid).c_str()));
         },
         [acct]() {
             // on_close: clear the non-owning pointer in account
@@ -190,11 +186,11 @@ int command__disco(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                       _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -227,8 +223,7 @@ int command__disco(const void *pointer, void *data,
     }
     ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
-    weechat_printf(buffer, "Querying service discovery (%s) for %s...",
-                   do_items ? "items" : "info", target);
+        ui->printf(fmt::format("Querying service discovery ({}) for {}...", do_items ? "items" : "info", target));
 
     return WEECHAT_RC_OK;
 }
@@ -249,11 +244,11 @@ int command__roster(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                       _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -262,7 +257,7 @@ int command__roster(const void *pointer, void *data,
     {
         if (ptr_account->roster.empty())
         {
-            weechat_printf(buffer, "%sRoster is empty", weechat_prefix("network"));
+        ui->printf_network("Roster is empty");
             return WEECHAT_RC_OK;
         }
 
@@ -318,8 +313,7 @@ int command__roster(const void *pointer, void *data,
         static_cast<stanza::rfc6121::iq&>(iq_s).query(q);
         ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
-        weechat_printf(buffer, "%sAdding %s to roster...",
-                      weechat_prefix("network"), jid);
+        ui->printf_network(fmt::format("Adding {} to roster...", jid));
 
         // Also send presence subscription request
         auto sub = stanza::presence().type("subscribe").to(jid);
@@ -344,15 +338,12 @@ int command__roster(const void *pointer, void *data,
         static_cast<stanza::rfc6121::iq&>(iq_s).query(q);
         ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
-        weechat_printf(buffer, "%sRemoving %s from roster...",
-                      weechat_prefix("network"), jid);
+        ui->printf_network(fmt::format("Removing {} from roster...", jid));
 
         return WEECHAT_RC_OK;
     }
 
-    weechat_printf(buffer,
-                   _("%s%s: unknown roster command (try /help roster)"),
-                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: unknown roster command (try /help roster)")), WEECHAT_XMPP_PLUGIN_NAME));
 
     return WEECHAT_RC_OK;
 }
@@ -373,11 +364,11 @@ int command__bookmark(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                       _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -386,7 +377,7 @@ int command__bookmark(const void *pointer, void *data,
     {
         if (ptr_account->bookmarks.empty())
         {
-            weechat_printf(buffer, "%sNo bookmarks", weechat_prefix("network"));
+        ui->printf_network("No bookmarks");
             return WEECHAT_RC_OK;
         }
 
@@ -436,8 +427,7 @@ int command__bookmark(const void *pointer, void *data,
         }
         else
         {
-            weechat_printf(buffer, "%sYou must specify a JID or be in a MUC buffer",
-                          weechat_prefix("error"));
+        ui->printf_error("You must specify a JID or be in a MUC buffer");
             return WEECHAT_RC_OK;
         }
 
@@ -449,8 +439,7 @@ int command__bookmark(const void *pointer, void *data,
         
         ptr_account->send_bookmarks();
         
-        weechat_printf(buffer, "%sBookmark added: %s", 
-                      weechat_prefix("network"), jid);
+        ui->printf_network(fmt::format("Bookmark added: {}", jid));
 
         return WEECHAT_RC_OK;
     }
@@ -464,16 +453,14 @@ int command__bookmark(const void *pointer, void *data,
         
         if (!ptr_account->bookmarks.contains(jid))
         {
-            weechat_printf(buffer, "%sBookmark not found: %s",
-                          weechat_prefix("error"), jid);
+        ui->printf_error(fmt::format("Bookmark not found: {}", jid));
             return WEECHAT_RC_OK;
         }
         
         ptr_account->bookmarks.erase(jid);
         ptr_account->retract_bookmark(jid);
         
-        weechat_printf(buffer, "%sBookmark removed: %s", 
-                      weechat_prefix("network"), jid);
+        ui->printf_network(fmt::format("Bookmark removed: {}", jid));
 
         return WEECHAT_RC_OK;
     }
@@ -486,8 +473,7 @@ int command__bookmark(const void *pointer, void *data,
         
         if (!ptr_account->bookmarks.contains(jid))
         {
-            weechat_printf(buffer, "%sBookmark not found: %s",
-                          weechat_prefix("error"), jid);
+        ui->printf_error(fmt::format("Bookmark not found: {}", jid));
             return WEECHAT_RC_OK;
         }
         
@@ -498,23 +484,18 @@ int command__bookmark(const void *pointer, void *data,
         ptr_account->bookmarks[jid].autojoin = autojoin;
         ptr_account->send_bookmarks();
         
-        weechat_printf(buffer, "%sAutojoin %s for %s", 
-                      weechat_prefix("network"),
-                      autojoin ? "enabled" : "disabled",
-                      jid);
+        ui->printf_network(fmt::format("Autojoin {} for {}", autojoin ? "enabled" : "disabled", jid));
 
         return WEECHAT_RC_OK;
     }
 
-    weechat_printf(buffer,
-                   _("%s%s: unknown bookmark command (try /help bookmark)"),
-                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: unknown bookmark command (try /help bookmark)")), WEECHAT_XMPP_PLUGIN_NAME));
 
     return WEECHAT_RC_OK;
 }
 
 // XEP-0433: Extended Channel Search
 // Send a search IQ to the given service JID with optional keywords.
-// Two steps: first request the form (type=get <search/>), then submit it.
+// Two steps: first request the form (type=get <search/>)), then submit it.
 // picker_ptr: non-owning pointer to a picker<std::string> to populate with
 //             results; nullptr to print inline.

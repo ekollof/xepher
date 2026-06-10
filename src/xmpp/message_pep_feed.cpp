@@ -14,6 +14,7 @@
 #include "channel.hh"
 #include "plugin.hh"
 #include "xmpp/iq_pubsub_feed.hh"
+#include "weechat/ui_port.hh"
 
 namespace xmpp {
 
@@ -45,6 +46,7 @@ void print_feed_header_line(struct t_gui_buffer *buffer,
                             std::string_view author,
                             std::string_view pubdate)
 {
+    auto ui = weechat::UiPort::for_buffer(buffer);
     const char *ag = alias_pfx.empty() ? "" : c.grn;
     const char *ar = alias_pfx.empty() ? "" : c.rst;
 
@@ -52,60 +54,56 @@ void print_feed_header_line(struct t_gui_buffer *buffer,
     {
         if (!author.empty() && !pubdate.empty())
         {
-            weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_message",
-                                     "%s%s%s%s %s%s%s  [%s%s%s] — %s",
-                                     c.pfx, ag, alias_pfx.data(), ar,
-                                     c.bold, title.data(), c.rst,
-                                     c.dim, author.data(), c.rst,
-                                     pubdate.data());
+            ui->printf_date_tags(0, "xmpp_feed,notify_message",
+                fmt::format("{}{}{}{} {}{}{}  [{}{}{}] — {}",
+                            c.pfx, ag, alias_pfx, ar,
+                            c.bold, title, c.rst,
+                            c.dim, author, c.rst, pubdate));
         }
         else if (!author.empty())
         {
-            weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_message",
-                                     "%s%s%s%s %s%s%s  [%s%s%s]",
-                                     c.pfx, ag, alias_pfx.data(), ar,
-                                     c.bold, title.data(), c.rst,
-                                     c.dim, author.data(), c.rst);
+            ui->printf_date_tags(0, "xmpp_feed,notify_message",
+                fmt::format("{}{}{}{} {}{}{}  [{}{}{}]",
+                            c.pfx, ag, alias_pfx, ar,
+                            c.bold, title, c.rst,
+                            c.dim, author, c.rst));
         }
         else if (!pubdate.empty())
         {
-            weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_message",
-                                     "%s%s%s%s %s%s%s — %s",
-                                     c.pfx, ag, alias_pfx.data(), ar,
-                                     c.bold, title.data(), c.rst,
-                                     pubdate.data());
+            ui->printf_date_tags(0, "xmpp_feed,notify_message",
+                fmt::format("{}{}{}{} {}{}{} — {}",
+                            c.pfx, ag, alias_pfx, ar,
+                            c.bold, title, c.rst, pubdate));
         }
         else
         {
-            weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_message",
-                                     "%s%s%s%s %s%s%s",
-                                     c.pfx, ag, alias_pfx.data(), ar,
-                                     c.bold, title.data(), c.rst);
+            ui->printf_date_tags(0, "xmpp_feed,notify_message",
+                fmt::format("{}{}{}{} {}{}{}",
+                            c.pfx, ag, alias_pfx, ar,
+                            c.bold, title, c.rst));
         }
         return;
     }
 
     if (!author.empty() && !pubdate.empty())
     {
-        weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_message",
-                                 "%s%s%s%s  [%s%s%s] — %s",
-                                 c.pfx, ag, alias_pfx.data(), ar,
-                                 c.dim, author.data(), c.rst,
-                                 pubdate.data());
+        ui->printf_date_tags(0, "xmpp_feed,notify_message",
+            fmt::format("{}{}{}{}  [{}{}{}] — {}",
+                        c.pfx, ag, alias_pfx, ar,
+                        c.dim, author, c.rst, pubdate));
     }
     else if (!author.empty())
     {
-        weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_message",
-                                 "%s%s%s%s  [%s%s%s]",
-                                 c.pfx, ag, alias_pfx.data(), ar,
-                                 c.dim, author.data(), c.rst);
+        ui->printf_date_tags(0, "xmpp_feed,notify_message",
+            fmt::format("{}{}{}{}  [{}{}{}]",
+                        c.pfx, ag, alias_pfx, ar,
+                        c.dim, author, c.rst));
     }
     else if (!pubdate.empty())
     {
-        weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_message",
-                                 "%s%s%s%s  — %s",
-                                 c.pfx, ag, alias_pfx.data(), ar,
-                                 pubdate.data());
+        ui->printf_date_tags(0, "xmpp_feed,notify_message",
+            fmt::format("{}{}{}{}  — {}",
+                        c.pfx, ag, alias_pfx, ar, pubdate));
     }
 }
 
@@ -114,16 +112,17 @@ void print_feed_body_lines(struct t_gui_buffer *buffer, const FeedColors &c, std
     if (body.empty())
         return;
 
-    weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_none",
-                             "  %s\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500%s",
-                             c.dim, c.rst);
+    auto ui = weechat::UiPort::for_buffer(buffer);
+    ui->printf_date_tags(0, "xmpp_feed,notify_none",
+        fmt::format("  {}\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500{}",
+                    c.dim, c.rst));
     for (auto line : body | std::views::split('\n'))
     {
         const std::string_view chunk(line.begin(), line.end());
-        weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_none",
-                                 "  %.*s", static_cast<int>(chunk.size()), chunk.data());
+        ui->printf_date_tags(0, "xmpp_feed,notify_none",
+            fmt::format("  {}", chunk));
     }
-    weechat_printf_date_tags(buffer, 0, "xmpp_feed,notify_none", "");
+    ui->printf_date_tags(0, "xmpp_feed,notify_none", "");
 }
 
 [[nodiscard]] std::string format_attachment_size(std::uint64_t size)
@@ -271,6 +270,7 @@ void render_atom_entry_to_feed(
 
     const FeedColors c = feed_colors();
     const std::string alias_pfx = feed_alias_prefix(item_alias);
+    auto ui = weechat::UiPort::for_buffer(feed_ch.buffer);
 
     std::string link = ae.link;
     if (link.empty() && !item_id.empty())
@@ -286,18 +286,18 @@ void render_atom_entry_to_feed(
             [&](std::string_view uuid) {
                 return account.feed_alias_lookup(feed_key, uuid);
             });
-        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                 "  %sIn reply to:%s %s", c.dim, c.rst, reply_label.c_str());
+        ui->printf_date_tags(0, "xmpp_feed,notify_none",
+            fmt::format("  {}In reply to:{} {}", c.dim, c.rst, reply_label));
     }
 
     if (!ae.via_link.empty())
     {
-        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                 "  %sRepeated from:%s %s", c.dim, c.rst, ae.via_link.c_str());
+        ui->printf_date_tags(0, "xmpp_feed,notify_none",
+            fmt::format("  {}Repeated from:{} {}", c.dim, c.rst, ae.via_link));
     }
 
     if (!link.empty())
-        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none", "  %s", link.c_str());
+        ui->printf_date_tags(0, "xmpp_feed,notify_none", fmt::format("  {}", link));
 
     if (!ae.replies_link.empty())
     {
@@ -306,15 +306,15 @@ void render_atom_entry_to_feed(
         {
             if (ae.comments_count >= 0)
             {
-                weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                         "  %sComments (%d):%s /feed comments %s",
-                                         c.dim, ae.comments_count, c.rst, comments_ref.c_str());
+                ui->printf_date_tags(0, "xmpp_feed,notify_none",
+                    fmt::format("  {}Comments ({}):{} /feed comments {}",
+                                c.dim, ae.comments_count, c.rst, comments_ref));
             }
             else
             {
-                weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                         "  %sComments:%s /feed comments %s",
-                                         c.dim, c.rst, comments_ref.c_str());
+                ui->printf_date_tags(0, "xmpp_feed,notify_none",
+                    fmt::format("  {}Comments:{} /feed comments {}",
+                                c.dim, c.rst, comments_ref));
             }
         }
     }
@@ -322,13 +322,13 @@ void render_atom_entry_to_feed(
     if (!ae.categories.empty())
     {
         const std::string tags = fmt::format("{}", fmt::join(ae.categories, ", "));
-        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                 "  %sTags:%s %s", c.dim, c.rst, tags.c_str());
+        ui->printf_date_tags(0, "xmpp_feed,notify_none",
+            fmt::format("  {}Tags:{} {}", c.dim, c.rst, tags));
     }
 
     std::ranges::for_each(ae.enclosures, [&](const std::string &enclosure) {
-        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                 "  %sAttachment:%s %s", c.dim, c.rst, enclosure.c_str());
+        ui->printf_date_tags(0, "xmpp_feed,notify_none",
+            fmt::format("  {}Attachment:{} {}", c.dim, c.rst, enclosure));
     });
 
     for (const auto &att : ae.attachments)
@@ -352,16 +352,15 @@ void render_atom_entry_to_feed(
         }
 
         const std::string meta_suffix = meta.empty() ? "" : fmt::format(" ({})", meta);
-        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                 "  %s[%s: %s%s] %s%s",
-                                 c.dim, kind_str.c_str(), att.filename.c_str(),
-                                 meta_suffix.c_str(), att.url.c_str(), c.rst);
+        ui->printf_date_tags(0, "xmpp_feed,notify_none",
+            fmt::format("  {}[{}: {}{}] {}{}",
+                        c.dim, kind_str, att.filename, meta_suffix, att.url, c.rst));
     }
 
     if (!ae.geoloc.empty())
     {
-        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                 "  %sLocation:%s %s", c.dim, c.rst, ae.geoloc.c_str());
+        ui->printf_date_tags(0, "xmpp_feed,notify_none",
+            fmt::format("  {}Location:{} {}", c.dim, c.rst, ae.geoloc));
     }
 
     print_feed_body_lines(feed_ch.buffer, c, ae.body());

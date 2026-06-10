@@ -33,5 +33,6 @@
 #include "util.hh"
 #include "weechat/icat_preview.hh"
 #include "debug.hh"
+#include "weechat/ui_port.hh"
 
 #include "account/callbacks.inl"

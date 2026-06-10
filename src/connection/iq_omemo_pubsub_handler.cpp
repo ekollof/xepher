@@ -18,6 +18,7 @@
 #include "xmpp/xep-0060.inl"
 
 #include "connection/internal.hh"
+#include "weechat/ui_port.hh"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"

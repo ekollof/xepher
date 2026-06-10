@@ -37,8 +37,8 @@ void weechat::account::mam_cache_init()
         caps_cache_load();
         feed_open_sync_from_cache();
     } catch (const lmdb::error& ex) {
-        weechat_printf(nullptr, "%sxmpp: MAM cache init failed - %s",
-                      weechat_prefix("error"), ex.what());
+        weechat::UiPort::for_buffer(nullptr)->printf_error(
+            fmt::format("xmpp: MAM cache init failed - {}", ex.what()));
     }
 }
 
@@ -53,8 +53,8 @@ void weechat::account::mam_cache_cleanup()
             mam_db_env = nullptr;
         }
     } catch (const lmdb::error& ex) {
-        weechat_printf(nullptr, "%sxmpp: MAM cache cleanup failed - %s",
-                      weechat_prefix("error"), ex.what());
+        weechat::UiPort::for_buffer(nullptr)->printf_error(
+            fmt::format("xmpp: MAM cache cleanup failed - {}", ex.what()));
     }
 }
 
@@ -218,20 +218,17 @@ void weechat::account::mam_cache_load_messages(std::string_view channel_jid, str
                     // Display cached message with gray prefix
                     if (is_retracted)
                     {
-                        weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
-                                                "%s%s\t%s[Message deleted]%s",
-                                                weechat_color("darkgray"),
-                                                from.c_str(),
-                                                weechat_color("darkgray"),
-                                                weechat_color("resetcolor"));
+                        weechat::UiPort::for_buffer(buffer)->printf_date_tags(timestamp, tags.c_str(),
+                            fmt::format("{}{}\t{}[Message deleted]{}",
+                                        weechat_color("darkgray"), from,
+                                        weechat_color("darkgray"),
+                                        weechat_color("resetcolor")));
                     }
                     else
                     {
-                        weechat_printf_date_tags(buffer, timestamp, tags.c_str(),
-                                                "%s%s\t%s",
-                                                weechat_color("darkgray"),
-                                                from.c_str(),
-                                                body.c_str());
+                        weechat::UiPort::for_buffer(buffer)->printf_date_tags(timestamp, tags.c_str(),
+                            fmt::format("{}{}\t{}",
+                                        weechat_color("darkgray"), from, body));
                     }
                     count++;
                 }
@@ -249,8 +246,8 @@ void weechat::account::mam_cache_load_messages(std::string_view channel_jid, str
         // channel during the join flood triggers expensive GUI redraws.
         if (count > 0)
         {
-            weechat_printf(buffer, "%s--- %d cached messages available (MAM fetch will refresh)",
-                          weechat_prefix("network"), count);
+            weechat::UiPort::for_buffer(buffer)->printf_network(
+                fmt::format("--- {} cached messages available (MAM fetch will refresh)", count));
         }
     } catch (const lmdb::error& ex) {
         // Silently ignore read errors
@@ -926,8 +923,8 @@ void weechat::account::caps_cache_load()
         
         if (count > 0)
         {
-            weechat_printf(buffer, "%sLoaded %d capability entries from cache",
-                          weechat_prefix("network"), count);
+            weechat::UiPort::for_buffer(buffer)->printf_network(
+                fmt::format("Loaded {} capability entries from cache", count));
         }
     } catch (const lmdb::error& ex) {
         // Silently ignore read errors

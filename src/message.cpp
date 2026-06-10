@@ -11,6 +11,7 @@
 #include <string>
 #include <algorithm>
 #include <ranges>
+#include <fmt/core.h>
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
@@ -18,6 +19,7 @@
 #include "channel.hh"
 #include "user.hh"
 #include "message.hh"
+#include "weechat/ui_port.hh"
 
 // RAII wrapper for POSIX regex_t — calls regfree() on scope exit.
 struct regex_guard {
@@ -177,11 +179,9 @@ std::string message__decode(weechat::account *account,
     {
         std::string msgbuf(100, '\0');
         regerror(rc, &rg.reg, msgbuf.data(), msgbuf.size());
-        weechat_printf(
-            account->buffer,
-            _("%s%s: error compiling message formatting regex: %s"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-            msgbuf.c_str());
+        weechat::UiPort::for_buffer(account->buffer)->printf_error(
+            fmt::format(fmt::runtime(_("%s: error compiling message formatting regex: %s")),
+                        WEECHAT_XMPP_PLUGIN_NAME, msgbuf));
         return std::string(text);
     }
 

@@ -58,6 +58,8 @@ int command__links(COMMAND_ARGS)
     if (!ptr_account || !ptr_channel)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     // ── Walk all buffer lines oldest-first, collect unique URLs ───────────────
 
     struct url_entry {
@@ -125,8 +127,7 @@ int command__links(COMMAND_ARGS)
 
     if (urls.empty())
     {
-        weechat_printf(buffer, "%sxmpp/links: no URLs found in this buffer",
-                       weechat_prefix("network"));
+        ui->printf_network("xmpp/links: no URLs found in this buffer");
         return WEECHAT_RC_OK;
     }
 
@@ -144,8 +145,7 @@ int command__links(COMMAND_ARGS)
     const char *dim  = weechat_color("darkgray");
     const char *cyan = weechat_color("cyan");
 
-    weechat_printf(buffer, "%sxmpp/links: %zu URL%s in this buffer:",
-                   pfx, urls.size(), urls.size() == 1 ? "" : "s");
+        ui->printf(fmt::format("{}xmpp/links: {} URL{} in this buffer:", pfx, urls.size(), urls.size() == 1 ? "" : "s"));
 
     for (auto &e : urls)
     {
@@ -156,25 +156,18 @@ int command__links(COMMAND_ARGS)
         {
             struct tm tm_local = {};
             localtime_r(&e.date, &tm_local);
-            time_str = fmt::format("{:%m-%d %H:%M}", tm_local);
+            time_str = fmt::format("{:02d}-{:02d} {:02d}:{:02d}",
+                                   tm_local.tm_mon + 1, tm_local.tm_mday,
+                                   tm_local.tm_hour, tm_local.tm_min);
         }
 
         if (cached && !cached->title.empty())
         {
-            weechat_printf(buffer,
-                "%s  %s%s%s  %s%s%s  %s%s%s",
-                pfx,
-                dim, time_str.c_str(), rst,
-                cyan, e.url.c_str(), rst,
-                bold, cached->title.c_str(), rst);
+        ui->printf(fmt::format("{}  {}{}{}  {}{}{}  {}{}{}", pfx, dim, time_str.c_str(), rst, cyan, e.url.c_str(), rst, bold, cached->title.c_str(), rst));
         }
         else
         {
-            weechat_printf(buffer,
-                "%s  %s%s%s  %s%s%s",
-                pfx,
-                dim, time_str.c_str(), rst,
-                cyan, e.url.c_str(), rst);
+        ui->printf(fmt::format("{}  {}{}{}  {}{}{}", pfx, dim, time_str.c_str(), rst, cyan, e.url.c_str(), rst));
         }
     }
 
@@ -215,7 +208,7 @@ int command__links(COMMAND_ARGS)
         if (inflight > 0)
             footer += fmt::format(", {} already in-flight", inflight);
         footer += " \xe2\x80\x94 re-run /links to see updated titles";
-        weechat_printf(buffer, "%s", footer.c_str());
+        ui->printf(footer.c_str());
     }
 
     return WEECHAT_RC_OK;

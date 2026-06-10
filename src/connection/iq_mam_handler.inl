@@ -14,10 +14,9 @@ void weechat::connection::handle_mam_query_iq_error(xmpp_stanza_t *stanza)
 
     if (is_global_query && ::xmpp::iq_has_item_not_found_error(::xmpp::StanzaView(stanza)))
     {
-        weechat_printf(account.buffer,
-                       "%sGlobal MAM cursor stale (item-not-found) — "
-                       "clearing cursor and retrying with time-based query",
-                       weechat_prefix("network"));
+        weechat::UiPort::for_buffer(account.buffer)->printf_network(
+            "Global MAM cursor stale (item-not-found) — "
+            "clearing cursor and retrying with time-based query");
         account.mam_cursor_clear("global");
         account.mam_query_remove(failed_mam_query.id);
         account.release_mam_slot();
@@ -53,11 +52,10 @@ void weechat::connection::handle_mam_query_iq_error(xmpp_stanza_t *stanza)
 
     if (!recovered)
     {
-        weechat_printf(account.buffer,
-                       "%sMAM query %s failed (IQ error) — ending catchup%s",
-                       weechat_prefix("error"),
-                       failed_mam_query.id.c_str(),
-                       is_global_query ? " and flushing deferred OMEMO key-transports" : "");
+        weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+            "MAM query {} failed (IQ error) — ending catchup{}",
+            failed_mam_query.id,
+            is_global_query ? " and flushing deferred OMEMO key-transports" : ""));
         account.mam_query_remove(failed_mam_query.id);
         account.release_mam_slot();
         if (is_global_query)
@@ -124,12 +122,11 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
 
     if (fin_has_abort)
     {
-        weechat_printf(account.buffer,
-                       "%sMAM query %s aborted by server (complete=%s stable=%s)",
-                       weechat_prefix("error"),
-                       mam_query.id.c_str(),
-                       fin_complete ? std::string(*fin_complete).c_str() : "(unset)",
-                       fin_stable ? std::string(*fin_stable).c_str() : "(unset)");
+        weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+            "MAM query {} aborted by server (complete={} stable={})",
+            mam_query.id,
+            fin_complete ? std::string(*fin_complete) : "(unset)",
+            fin_stable ? std::string(*fin_stable) : "(unset)"));
         account.mam_query_remove(mam_query.id);
         account.release_mam_slot();
         if (is_global_query)
@@ -181,11 +178,10 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
                 const std::string end_str = mam_query.end
                     ? format_local_timestamp(*mam_query.end)
                     : "now";
-                weechat_printf_date_tags(ch.buffer, 0,
-                                         "xmpp_mam_fin,notify_none,no_log",
-                                         "%sHistory loaded: %s → %s",
-                                         weechat_prefix("network"),
-                                         start_str.c_str(), end_str.c_str());
+                weechat::UiPort::for_buffer(ch.buffer)->printf_date_tags(
+                    0, "xmpp_mam_fin,notify_none,no_log",
+                    fmt::format("{}History loaded: {} → {}",
+                                weechat_prefix("network"), start_str, end_str));
             }
         }
     }

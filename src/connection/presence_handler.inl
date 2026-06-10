@@ -87,7 +87,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                               error->description ? " (" : "",
                                               error->description ? error->description->data() : "",
                                               error->description ? ")" : "");
-                weechat_printf(channel->buffer, "%s", msg.c_str());
+                weechat::UiPort::for_buffer(channel->buffer)->printf(msg);
                 if (binding->muc()
                     && std::string_view{error_reason} == "Not on Member List")
                 {
@@ -103,7 +103,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 // Debug: log unspecified errors with JID
                 std::string msg = fmt::format("{}[DEBUG] Received unspecified error from {} (presence)",
                                               weechat_prefix("network"), from_str);
-                weechat_printf(account.buffer, "%s", msg.c_str());
+                weechat::UiPort::for_buffer(account.buffer)->printf(msg);
             }
         }
         return 1;
@@ -126,7 +126,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     {
                         std::string msg = fmt::format("{}{}[Room] Your affiliation changed; your full JID is now visible to all occupants",
                                                       weechat_prefix("network"), weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 102: // : [message | Configuration change]: Inform occupants that room now shows unavailable members
@@ -301,7 +302,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                         std::string msg = fmt::format("{}{}[Room] Warning: room logging is now {}enabled{} — messages are being stored",
                                                       weechat_prefix("network"), weechat::xmpp_color("yellow").c_str(),
                                                       weechat::xmpp_color("yellow,bold").c_str(), weechat::xmpp_color("reset").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 171: // Logging disabled
@@ -309,7 +311,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     {
                         std::string msg = fmt::format("{}{}[Room] Room logging is now disabled",
                                                       weechat_prefix("network"), weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 172: // Room is now non-anonymous (full JIDs visible)
@@ -320,7 +323,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                         std::string msg = fmt::format("{}{}[Room] Room is now {}non-anonymous{} — full JIDs are visible to all occupants",
                                                       weechat_prefix("network"), weechat::xmpp_color("yellow").c_str(),
                                                       weechat::xmpp_color("yellow,bold").c_str(), weechat::xmpp_color("reset").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 173: // Room is now semi-anonymous
@@ -330,7 +334,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                             weechat::channel::muc_info::anonymity::semianonymous);
                         std::string msg = fmt::format("{}{}[Room] Room is now semi-anonymous — full JIDs visible to moderators only",
                                                       weechat_prefix("network"), weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 174: // Room is now fully-anonymous
@@ -340,7 +345,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                             weechat::channel::muc_info::anonymity::anonymous);
                         std::string msg = fmt::format("{}{}[Room] Room is now fully-anonymous — JIDs are hidden from all occupants",
                                                       weechat_prefix("network"), weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 201: // New room created — must accept default config to unlock it
@@ -349,7 +355,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     {
                         std::string msg = fmt::format("{}{}[Room] New room created; accepting default configuration",
                                                       weechat_prefix("network"), weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 210: // Server assigned/modified nick
@@ -359,7 +366,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     if (channel)
                     {
                         std::string msg = fmt::format("[!]\t{}Banned from Room", weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 303: // Nick change — this unavailable presence means occupant is changing nick
@@ -369,28 +377,32 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     if (channel)
                     {
                         std::string msg = fmt::format("[!]\t{}Kicked from room", weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 321: // : [presence | Removal from room]: Inform user that he or she is being removed from the room because of an affiliation change
                     if (channel)
                     {
                         std::string msg = fmt::format("[!]\t{}Room Affiliation changed, kicked", weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 322: // : [presence | Removal from room]: Inform user that he or she is being removed from the room because the room has been changed to members-only and the user is not a member
                     if (channel)
                     {
                         std::string msg = fmt::format("[!]\t{}Room now members-only, kicked", weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 case 332: // : [presence | Removal from room]: Inform user that he or she is being removed from the room because of a system shutdown
                     if (channel)
                     {
                         std::string msg = fmt::format("[!]\t{}Room Shutdown", weechat::xmpp_color("gray").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                     break;
                 default:
@@ -458,7 +470,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                                       weechat::xmpp_color("reset").c_str(),
                                                       weechat::xmpp_color("irc.color.nick_change").c_str(),
                                                       item.nick->data());
-                        weechat_printf_date_tags(channel->buffer, 0, nick_tags, "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+                            0, nick_tags, msg);
                         // Still remove from nicklist so the new presence can re-add
                         weechat::user *leaving = weechat::user::search(&account, binding->from->full.data());
                         if (leaving)
@@ -497,7 +510,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                                       weechat::xmpp_color("irc.color.nick_change").c_str(),
                                                       assigned,
                                                       weechat::xmpp_color("reset").c_str());
-                        weechat_printf_date_tags(channel->buffer, 0, "xmpp_presence,notify_none,no_trigger", "%s", msg.c_str());
+                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+    0, "xmpp_presence,notify_none,no_trigger", msg);
                     }
                 }
             }
@@ -528,12 +542,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 auto get_iq = stanza::iq().type("get").to(room_jid).id(get_id);
                 get_iq.muc_owner(q);
                 account.connection.send(get_iq.build(account.context).get());
-                weechat_printf_date_tags(channel->buffer, 0,
-                    "xmpp_presence,notify_none,no_trigger",
-                    "%s%s[Room] reserved room created (locked) — use /setmodes, "
-                    "/affiliation, or /destroy to configure",
-                    weechat_prefix("network"),
-                    weechat::xmpp_color("yellow").c_str());
+                weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+                    0, "xmpp_presence,notify_none,no_trigger",
+                    fmt::format("{}{}[Room] reserved room created (locked) — use /setmodes, "
+                        "/affiliation, or /destroy to configure",
+                        weechat_prefix("network"),
+                        weechat::xmpp_color("yellow")));
             }
             else
             {
@@ -667,8 +681,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                                weechat::xmpp_color("yellow").c_str(),
                                                weechat::xmpp_color("bold").c_str(), old_jid_str, weechat::xmpp_color("reset").c_str(),
                                                weechat::xmpp_color("bold").c_str(), new_jid, weechat::xmpp_color("reset").c_str());
-                 weechat_printf_date_tags(account.buffer, 0,
-                     "xmpp_presence,notify_highlight", "%s", msg.c_str());
+                 weechat::UiPort::for_buffer(account.buffer)->printf_date_tags(
+                     0, "xmpp_presence,notify_highlight", msg);
              }
         }
     }

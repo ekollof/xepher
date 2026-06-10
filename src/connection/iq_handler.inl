@@ -76,17 +76,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             const auto err_detail = ::xmpp::iq_error_text(
                 ::xmpp::StanzaView(stanza).child("error"));
             XDEBUG("Message carbons enable rejected: {}", err_detail);
-            weechat_printf(account.buffer,
-                           "%sMessage carbons: server rejected enable (%s)",
-                           weechat_prefix("error"),
-                           err_detail.c_str());
+            auto ui = weechat::UiPort::for_buffer(account.buffer);
+            ui->printf_error(fmt::format(
+                "Message carbons: server rejected enable ({})", err_detail));
         }
         else
         {
             XDEBUG("Message carbons enabled");
-            weechat_printf(account.buffer,
-                           "%sMessage carbons enabled",
-                           weechat_prefix("network"));
+            auto ui = weechat::UiPort::for_buffer(account.buffer);
+            ui->printf_network("Message carbons enabled");
         }
         return true;
     }
@@ -101,21 +99,21 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         xmpp_stanza_t *prefs_el = xmpp_stanza_get_child_by_name_and_ns(
             stanza, "prefs", "urn:xmpp:mam:2");
 
+        auto prefs_ui = weechat::UiPort::for_buffer(prefs_buf);
         if (type && weechat_strcasecmp(type, "error") == 0)
         {
             xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
             const char *err_type = err ? xmpp_stanza_get_attribute(err, "type") : "unknown";
-            weechat_printf(prefs_buf,
-                "%sMAM preferences: server returned error (%s) — feature may not be supported",
-                weechat_prefix("error"), err_type);
+            prefs_ui->printf_error(fmt::format(
+                "MAM preferences: server returned error ({}) — feature may not be supported",
+                err_type));
         }
         else if (prefs_el)
         {
             const char *def = xmpp_stanza_get_attribute(prefs_el, "default");
-            weechat_printf(prefs_buf,
-                "%sMAM preferences: default=%s%s%s",
-                weechat_prefix("network"),
-                weechat_color("bold"), def ? def : "(unset)", weechat_color("-bold"));
+            prefs_ui->printf_network(fmt::format(
+                "MAM preferences: default={}{}{}",
+                weechat_color("bold"), def ? def : "(unset)", weechat_color("-bold")));
 
             // Always list
             xmpp_stanza_t *always_el = xmpp_stanza_get_child_by_name(prefs_el, "always");
@@ -134,9 +132,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         jids_str += jid_txt;
                     }
                 }
-                weechat_printf(prefs_buf, "%s  always: %s",
-                    weechat_prefix("network"),
-                    jids_str.empty() ? "(empty)" : jids_str.c_str());
+                prefs_ui->printf_network(fmt::format(
+                    "  always: {}",
+                    jids_str.empty() ? "(empty)" : jids_str));
             }
 
             // Never list
@@ -156,13 +154,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         jids_str += jid_txt;
                     }
                 }
-                weechat_printf(prefs_buf, "%s  never:  %s",
-                    weechat_prefix("network"),
-                    jids_str.empty() ? "(empty)" : jids_str.c_str());
+                prefs_ui->printf_network(fmt::format(
+                    "  never:  {}",
+                    jids_str.empty() ? "(empty)" : jids_str));
             }
 
-            weechat_printf(prefs_buf, "%sMAM preferences updated successfully",
-                weechat_prefix("network"));
+            prefs_ui->printf_network("MAM preferences updated successfully");
         }
         return true;
     }
@@ -209,11 +206,10 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 const std::string error_cond = error_elem
                     ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
                 struct t_gui_buffer *err_buf = ctx.buffer ? ctx.buffer : account.buffer;
-                weechat_printf(err_buf,
-                    "%s%s: publish failed for %s/%s (item %s): %s",
-                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                    ctx.service.c_str(), ctx.node.c_str(), ctx.item_id.c_str(),
-                    error_cond.c_str());
+                weechat::UiPort::for_buffer(err_buf)->printf_error(fmt::format(
+                    "{}: publish failed for {}/{} (item {}): {}",
+                    WEECHAT_XMPP_PLUGIN_NAME,
+                    ctx.service, ctx.node, ctx.item_id, error_cond));
                 account.pubsub_publish_ids.erase(pub_it);
             }
         }
@@ -227,10 +223,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 const std::string error_cond = error_elem
                     ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
                 struct t_gui_buffer *fb = sub.buffer ? sub.buffer : account.buffer;
-                weechat_printf(fb,
-                    "%s%s: subscribe to %s failed: %s",
-                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                    sub.feed_key.c_str(), error_cond.c_str());
+                weechat::UiPort::for_buffer(fb)->printf_error(fmt::format(
+                    "{}: subscribe to {} failed: {}",
+                    WEECHAT_XMPP_PLUGIN_NAME, sub.feed_key, error_cond));
                 account.pubsub_subscribe_queries.erase(sub_it);
             }
         }
@@ -242,10 +237,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 const std::string error_cond = error_elem
                     ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
                 struct t_gui_buffer *fb = unsub.buffer ? unsub.buffer : account.buffer;
-                weechat_printf(fb,
-                    "%s%s: unsubscribe from %s failed: %s",
-                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                    unsub.feed_key.c_str(), error_cond.c_str());
+                weechat::UiPort::for_buffer(fb)->printf_error(fmt::format(
+                    "{}: unsubscribe from {} failed: {}",
+                    WEECHAT_XMPP_PLUGIN_NAME, unsub.feed_key, error_cond));
                 account.pubsub_unsubscribe_queries.erase(unsub_it);
             }
         }
@@ -272,11 +266,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     err_buf = ch.buffer;
                 }
 
-                weechat_printf(err_buf,
-                    "%s%s: cannot fetch feed %s/%s: %s",
-                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                    err_service.c_str(), err_node.c_str(),
-                    error_cond.c_str());
+                weechat::UiPort::for_buffer(err_buf)->printf_error(fmt::format(
+                    "{}: cannot fetch feed {}/{}: {}",
+                    WEECHAT_XMPP_PLUGIN_NAME, err_service, err_node, error_cond));
 
                 account.pubsub_fetch_ids.erase(fetch_it);
             }
@@ -321,22 +313,21 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         else
         {
             // Picker not open (e.g. called without /blocklist picker path) — print inline.
+            auto ui = weechat::UiPort::for_buffer(account.buffer);
             if (item)
             {
-                weechat_printf(account.buffer, "%sBlocked JIDs:",
-                              weechat_prefix("network"));
+                ui->printf_network("Blocked JIDs:");
                 while (item)
                 {
                     const char *jid = xmpp_stanza_get_attribute(item, "jid");
                     if (jid)
-                        weechat_printf(account.buffer, "  %s", jid);
+                        ui->printf(fmt::format("  {}", jid));
                     item = xmpp_stanza_get_next(item);
                 }
             }
             else
             {
-                weechat_printf(account.buffer, "%sNo JIDs blocked",
-                              weechat_prefix("network"));
+                ui->printf_network("No JIDs blocked");
             }
         }
 
@@ -345,28 +336,28 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     
     if (block && type && weechat_strcasecmp(type, "result") == 0)
     {
-        weechat_printf(account.buffer, "%sBlock request successful",
-                      weechat_prefix("network"));
+        weechat::UiPort::for_buffer(account.buffer)->printf_network(
+            "Block request successful");
         return true;
     }
     
     if (unblock && type && weechat_strcasecmp(type, "result") == 0)
     {
-        weechat_printf(account.buffer, "%sUnblock request successful",
-                      weechat_prefix("network"));
+        weechat::UiPort::for_buffer(account.buffer)->printf_network(
+            "Unblock request successful");
         return true;
     }
 
     // XEP-0191: server-pushed block/unblock IQ sets (§8.4, §8.5)
     if (block && type && weechat_strcasecmp(type, "set") == 0)
     {
+        auto ui = weechat::UiPort::for_buffer(account.buffer);
         xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(block, "item");
         while (item)
         {
             const char *jid = xmpp_stanza_get_attribute(item, "jid");
             if (jid)
-                weechat_printf(account.buffer, "%s%s was blocked",
-                               weechat_prefix("network"), jid);
+                ui->printf_network(fmt::format("{} was blocked", jid));
             item = xmpp_stanza_get_next(item);
         }
         // Acknowledge the server push
@@ -382,6 +373,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
     if (unblock && type && weechat_strcasecmp(type, "set") == 0)
     {
+        auto ui = weechat::UiPort::for_buffer(account.buffer);
         xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(unblock, "item");
         if (item)
         {
@@ -389,15 +381,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 const char *jid = xmpp_stanza_get_attribute(item, "jid");
                 if (jid)
-                    weechat_printf(account.buffer, "%s%s was unblocked",
-                                   weechat_prefix("network"), jid);
+                    ui->printf_network(fmt::format("{} was unblocked", jid));
                 item = xmpp_stanza_get_next(item);
             }
         }
         else
         {
-            weechat_printf(account.buffer, "%sAll JIDs unblocked",
-                           weechat_prefix("network"));
+            ui->printf_network("All JIDs unblocked");
         }
         // Acknowledge the server push
         account.connection.send(stanza::iq()
@@ -597,37 +587,34 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                             account.connection.send(
                                 set_iq.build(account.context).get());
 
-                            weechat_printf(out, "%s%s: room config form fetched and "
-                                           "/setmodes diff applied — submit sent",
-                                           weechat_prefix("network"),
-                                           WEECHAT_XMPP_PLUGIN_NAME);
+                            ui->printf_network(fmt::format(
+                                "{}: room config form fetched and "
+                                "/setmodes diff applied — submit sent",
+                                WEECHAT_XMPP_PLUGIN_NAME));
                             return true;
                         }
 
                         // No pending diff — just cache the form and
                         // tell the user.
                         ch.store_config_form(std::move(form));
-                        weechat_printf(out, "%s%s: room config form cached for %s — "
-                                       "use /setmodes to apply changes",
-                                       weechat_prefix("network"),
-                                       WEECHAT_XMPP_PLUGIN_NAME,
-                                       info.room_jid.c_str());
+                        ui->printf_network(fmt::format(
+                            "{}: room config form cached for {} — "
+                            "use /setmodes to apply changes",
+                            WEECHAT_XMPP_PLUGIN_NAME, info.room_jid));
                     }
                     else
                     {
-                        weechat_printf(out, "%s%s: room config received for %s but channel no longer exists",
-                                       weechat_prefix("error"),
-                                       WEECHAT_XMPP_PLUGIN_NAME,
-                                       info.room_jid.c_str());
+                        ui->printf_error(fmt::format(
+                            "{}: room config received for {} but channel no longer exists",
+                            WEECHAT_XMPP_PLUGIN_NAME, info.room_jid));
                     }
                     return true;
                 }
                 case weechat::account::muc_owner_kind::config_set:
                 {
-                    weechat_printf(out, "%s%s: room config submitted for %s",
-                                   weechat_prefix("network"),
-                                   WEECHAT_XMPP_PLUGIN_NAME,
-                                   info.room_jid.c_str());
+                    ui->printf_network(fmt::format(
+                        "{}: room config submitted for {}",
+                        WEECHAT_XMPP_PLUGIN_NAME, info.room_jid));
                     if (auto ch_it = account.channels.find(info.room_jid);
                         ch_it != account.channels.end())
                     {
@@ -649,10 +636,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
                 case weechat::account::muc_owner_kind::destroy:
                 {
-                    weechat_printf(out, "%s%s: room %s destroyed",
-                                   weechat_prefix("network"),
-                                   WEECHAT_XMPP_PLUGIN_NAME,
-                                   info.room_jid.c_str());
+                    ui->printf_network(fmt::format(
+                        "{}: room {} destroyed",
+                        WEECHAT_XMPP_PLUGIN_NAME, info.room_jid));
                     return true;
                 }
                 case weechat::account::muc_owner_kind::aff_set:
@@ -826,8 +812,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     account.roster.erase(jid);
                     if (weechat::user *removed = weechat::user::search(&account, jid))
                         removed->nicklist_remove(&account, nullptr);
-                    weechat_printf(account.buffer, "%sRoster: %s removed",
-                                   weechat_prefix("network"), jid);
+                    weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                        fmt::format("Roster: {} removed", jid));
                 }
                 else
                 {
@@ -837,14 +823,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     account.roster[jid].subscription = subscription ? subscription : "none";
                     parse_roster_groups(item, jid);
 
+                    auto roster_ui = weechat::UiPort::for_buffer(account.buffer);
                     if (is_new)
-                        weechat_printf(account.buffer, "%sRoster: %s added (%s)",
-                                       weechat_prefix("network"), jid,
-                                       subscription ? subscription : "none");
+                        roster_ui->printf_network(fmt::format(
+                            "Roster: {} added ({})",
+                            jid, subscription ? subscription : "none"));
                     else
-                        weechat_printf(account.buffer, "%sRoster: %s updated (subscription: %s)",
-                                       weechat_prefix("network"), jid,
-                                       subscription ? subscription : "none");
+                        roster_ui->printf_network(fmt::format(
+                            "Roster: {} updated (subscription: {})",
+                            jid, subscription ? subscription : "none"));
 
                     account.update_roster_nicklist_entry(jid);
                 }

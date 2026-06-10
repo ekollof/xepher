@@ -14,20 +14,17 @@ int command__msg(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(
-            ptr_account->buffer,
-            _("%s%s: \"%s\" command can not be executed on a account buffer"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "msg");
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can not be executed on a account buffer")), WEECHAT_XMPP_PLUGIN_NAME, "msg"));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -40,11 +37,12 @@ int command__msg(const void *pointer, void *data,
         auto msg_s = stanza::message().type(msg_type).to(ptr_channel->name).body(text);
         ptr_account->connection.send(msg_s.build(ptr_account->context).get());
         if (ptr_channel->type != weechat::channel::chat_type::MUC)
-            weechat_printf_date_tags(ptr_channel->buffer, 0,
-                                     "xmpp_message,message,private,notify_none,self_msg,log1",
-                                     "%s\t%s",
-                                     weechat::user::search(ptr_account, ptr_account->jid().data())->as_prefix_raw().data(),
-                                     text);
+            weechat::UiPort::for_buffer(ptr_channel->buffer)->printf_date_tags(
+                0, "xmpp_message,message,private,notify_none,self_msg,log1",
+                fmt::format("{}\t{}",
+                            weechat::user::search(ptr_account,
+                                ptr_account->jid().data())->as_prefix_raw().data(),
+                            text));
     }
 
     return WEECHAT_RC_OK;
@@ -66,20 +64,17 @@ int command__me(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(
-            ptr_account->buffer,
-            _("%s%s: \"%s\" command can not be executed on a account buffer"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "me");
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can not be executed on a account buffer")), WEECHAT_XMPP_PLUGIN_NAME, "me"));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 

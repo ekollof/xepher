@@ -17,24 +17,23 @@ int command__buzz(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%sxmpp: you must be in a channel to buzz someone",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you must be in a channel to buzz someone");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (ptr_channel->type == weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer, "%sxmpp: /buzz can only be used in PM channels",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: /buzz can only be used in PM channels");
         return WEECHAT_RC_OK;
     }
 
@@ -44,8 +43,7 @@ int command__buzz(const void *pointer, void *data,
     buzz_msg.attention();
     ptr_account->connection.send(buzz_msg.build(ptr_account->context).get());
 
-    weechat_printf(buffer, "%sxmpp: buzz sent to %s",
-                  weechat_prefix("network"), ptr_channel->id.data());
+        ui->printf_network(fmt::format("xmpp: buzz sent to {}", ptr_channel->id.data()));
 
     return WEECHAT_RC_OK;
 }
@@ -67,17 +65,17 @@ int command__spoiler(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%sxmpp: you must be in a channel to send spoiler messages",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you must be in a channel to send spoiler messages");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
@@ -85,8 +83,7 @@ int command__spoiler(const void *pointer, void *data,
     // If first arg ends with ':', treat it as a hint
     if (argc < 2)
     {
-        weechat_printf(buffer, "%sxmpp: missing message text",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: missing message text");
         return WEECHAT_RC_OK;
     }
 
@@ -121,8 +118,7 @@ int command__spoiler(const void *pointer, void *data,
         ptr_account->connection.send(spoiler_msg.build(ptr_account->context).get());
     }
 
-    weechat_printf(buffer, "%sxmpp: spoiler message sent",
-                  weechat_prefix("network"));
+        ui->printf_network("xmpp: spoiler message sent");
 
     return WEECHAT_RC_OK;
 }
@@ -148,17 +144,17 @@ int command__adhoc(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (argc < 2)
     {
-        weechat_printf(buffer, "%sxmpp: /adhoc <jid> [<node> [<sessionid> [field=value ...]]]",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: /adhoc <jid> [<node> [<sessionid> [field=value ...]]]");
         return WEECHAT_RC_OK;
     }
 
@@ -242,8 +238,7 @@ int command__adhoc(const void *pointer, void *data,
         } adhoc_exec_iq(exec_id, target_jid, node);
         ptr_account->connection.send(adhoc_exec_iq.build(ptr_account->context).get());
 
-        weechat_printf(buffer, "%sxmpp: executing command %s on %s…",
-                      weechat_prefix("network"), node, target_jid);
+        ui->printf_network(fmt::format("xmpp: executing command {} on {}…", node, target_jid));
         return WEECHAT_RC_OK;
     }
 
@@ -294,8 +289,7 @@ int command__adhoc(const void *pointer, void *data,
         ptr_account->connection.send(iq.build(ctx).get());
     }
 
-    weechat_printf(buffer, "%sxmpp: submitting form for command %s (session %s)…",
-                  weechat_prefix("network"), node, session_id);
+        ui->printf_network(fmt::format("xmpp: submitting form for command {} (session {})…", node, session_id));
     return WEECHAT_RC_OK;
 }
 
@@ -318,27 +312,23 @@ int command__kick(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer,
-                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "kick");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can only be executed in a MUC buffer")), WEECHAT_XMPP_PLUGIN_NAME, "kick"));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     if (argc < 2)
     {
-        weechat_printf(buffer,
-                        _("%s%s: missing argument for \"%s\" command"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "kick");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: missing argument for \"{}\" command")), WEECHAT_XMPP_PLUGIN_NAME, "kick"));
         return WEECHAT_RC_OK;
     }
 
@@ -356,11 +346,7 @@ int command__kick(const void *pointer, void *data,
     kick_iq.muc_admin(kick_query);
     ptr_account->connection.send(kick_iq.build(ptr_account->context).get());
 
-    weechat_printf(buffer, _("%sKicked %s from %s%s%s"),
-                   weechat_prefix("network"), nick,
-                   ptr_channel->id.data(),
-                   reason ? ": " : "",
-                   reason ? reason : "");
+        ui->printf_network(fmt::format(fmt::runtime(_("Kicked {} from {}{}{}")), nick, ptr_channel->id.data(), reason ? ": " : "", reason ? reason : ""));
 
     return WEECHAT_RC_OK;
 }
@@ -380,27 +366,23 @@ int command__ban(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer,
-                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "ban");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can only be executed in a MUC buffer")), WEECHAT_XMPP_PLUGIN_NAME, "ban"));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     if (argc < 2)
     {
-        weechat_printf(buffer,
-                        _("%s%s: missing argument for \"%s\" command"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "ban");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: missing argument for \"{}\" command")), WEECHAT_XMPP_PLUGIN_NAME, "ban"));
         return WEECHAT_RC_OK;
     }
 
@@ -418,11 +400,7 @@ int command__ban(const void *pointer, void *data,
     ban_iq.muc_admin(ban_query);
     ptr_account->connection.send(ban_iq.build(ptr_account->context).get());
 
-    weechat_printf(buffer, _("%sBanned %s from %s%s%s"),
-                   weechat_prefix("network"), target_jid,
-                   ptr_channel->id.data(),
-                   reason ? ": " : "",
-                   reason ? reason : "");
+        ui->printf_network(fmt::format(fmt::runtime(_("Banned {} from {}{}{}")), target_jid, ptr_channel->id.data(), reason ? ": " : "", reason ? reason : ""));
 
     return WEECHAT_RC_OK;
 }
@@ -546,6 +524,7 @@ int command__voice(const void *pointer, void *data,
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
+
     auto ui = weechat::UiPort::for_buffer(buffer);
     if (!muc_admin_precheck(*ui, ptr_account, ptr_channel, "voice"))
         return WEECHAT_RC_OK;
@@ -574,6 +553,7 @@ int command__devoice(const void *pointer, void *data,
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
+
     auto ui = weechat::UiPort::for_buffer(buffer);
     if (!muc_admin_precheck(*ui, ptr_account, ptr_channel, "devoice"))
         return WEECHAT_RC_OK;
@@ -602,6 +582,7 @@ int command__op(const void *pointer, void *data,
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
+
     auto ui = weechat::UiPort::for_buffer(buffer);
     if (!muc_admin_precheck(*ui, ptr_account, ptr_channel, "op"))
         return WEECHAT_RC_OK;
@@ -630,6 +611,7 @@ int command__deop(const void *pointer, void *data,
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
+
     auto ui = weechat::UiPort::for_buffer(buffer);
     if (!muc_admin_precheck(*ui, ptr_account, ptr_channel, "deop"))
         return WEECHAT_RC_OK;
@@ -660,19 +642,17 @@ int command__topic(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer,
-                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "topic");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can only be executed in a MUC buffer")), WEECHAT_XMPP_PLUGIN_NAME, "topic"));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -706,19 +686,17 @@ int command__muc_nick(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer,
-                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "nick");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can only be executed in a MUC buffer")), WEECHAT_XMPP_PLUGIN_NAME, "nick"));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -726,10 +704,7 @@ int command__muc_nick(const void *pointer, void *data,
     {
         /* Print current nick */
         std::string_view current_nick = ptr_account->nickname();
-        weechat_printf(buffer, _("%sCurrent nick in %s: %s"),
-                        weechat_prefix("network"),
-                        ptr_channel->id.data(),
-                        current_nick.empty() ? "(unknown)" : current_nick.data());
+        ui->printf_network(fmt::format(fmt::runtime(_("Current nick in {}: {}")), ptr_channel->id.data(), current_nick.empty() ? "(unknown)" : current_nick.data()));
         return WEECHAT_RC_OK;
     }
 
@@ -762,11 +737,11 @@ int command__feed(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                       _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -777,23 +752,16 @@ int command__feed(const void *pointer, void *data,
         const auto &kps = ptr_account->known_pubsub_services;
         if (kps.empty())
         {
-            weechat_printf(buffer,
-                           _("%s%s: no PubSub services discovered yet.\n"
+        ui->printf_network(fmt::format(fmt::runtime(_("{}: no PubSub services discovered yet.\n"
                              "  Your server may not have a pubsub component, or you may need to reconnect.\n"
-                             "  To fetch a specific service: /feed <service-jid>"),
-                           weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+                             "  To fetch a specific service: /feed <service-jid>")), WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
-        weechat_printf(buffer,
-                       _("%s%s: discovered %zu PubSub service(s). Fetching subscriptions…"),
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                       kps.size());
+        ui->printf_network(fmt::format(fmt::runtime(_("{}: discovered {} PubSub service(s). Fetching subscriptions…")), WEECHAT_XMPP_PLUGIN_NAME, kps.size()));
         for (const auto &svc : kps)
         {
-            weechat_printf(buffer,
-                           "%sFetching subscribed PubSub feeds from %s…",
-                           weechat_prefix("network"), svc.c_str());
+        ui->printf_network(fmt::format("Fetching subscribed PubSub feeds from {}…", svc.c_str()));
             std::string uid = stanza::uuid(ptr_account->context);
             ptr_account->pubsub_subscriptions_queries[uid] = svc;
             ptr_account->connection.send(
@@ -816,20 +784,14 @@ int command__feed(const void *pointer, void *data,
         const auto &kps = ptr_account->known_pubsub_services;
         if (kps.empty())
         {
-            weechat_printf(buffer,
-                           _("%s%s: no PubSub services discovered yet — "
-                             "reconnect or check that your server has a pubsub component"),
-                           weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_network(fmt::format(fmt::runtime(_("{}: no PubSub services discovered yet — "
+                             "reconnect or check that your server has a pubsub component")), WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
-        weechat_printf(buffer,
-                       _("%s%s: discovered %zu PubSub service(s) on your server:"),
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                       kps.size());
+        ui->printf_network(fmt::format(fmt::runtime(_("{}: discovered {} PubSub service(s) on your server:")), WEECHAT_XMPP_PLUGIN_NAME, kps.size()));
         for (const auto &svc : kps)
-            weechat_printf(buffer, "  %s  /feed %s",
-                           weechat_color("chat_server"), svc.c_str());
+        ui->printf(fmt::format("  {}  /feed {}", weechat_color("chat_server"), svc.c_str()));
 
         // If --all flag present, auto-fetch all nodes from every discovered service.
         bool fetch_all_svcs = false;
@@ -841,9 +803,7 @@ int command__feed(const void *pointer, void *data,
         {
             for (const auto &svc : kps)
             {
-                weechat_printf(buffer,
-                               "%sDiscovering all PubSub nodes on %s…",
-                               weechat_prefix("network"), svc.c_str());
+        ui->printf_network(fmt::format("Discovering all PubSub nodes on {}…", svc.c_str()));
                 std::string uid = stanza::uuid(ptr_account->context);
                 ptr_account->pubsub_disco_queries[uid] = svc;
                 ptr_account->connection.send(
@@ -857,9 +817,7 @@ int command__feed(const void *pointer, void *data,
             // Default: fetch subscribed nodes from each discovered service.
             for (const auto &svc : kps)
             {
-                weechat_printf(buffer,
-                               "%sFetching subscribed PubSub feeds from %s…",
-                               weechat_prefix("network"), svc.c_str());
+        ui->printf_network(fmt::format("Fetching subscribed PubSub feeds from {}…", svc.c_str()));
                 std::string uid = stanza::uuid(ptr_account->context);
                 ptr_account->pubsub_subscriptions_queries[uid] = svc;
                 ptr_account->connection.send(
@@ -886,15 +844,11 @@ int command__feed(const void *pointer, void *data,
 
         if (to_close.empty())
         {
-            weechat_printf(buffer,
-                           _("%s%s: no open feed buffers"),
-                           weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_network(fmt::format(fmt::runtime(_("{}: no open feed buffers")), WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
-        weechat_printf(buffer,
-                       _("%sClosing %zu feed buffer(s)…"),
-                       weechat_prefix("network"), to_close.size());
+        ui->printf_network(fmt::format(fmt::runtime(_("Closing {} feed buffer(s)…")), to_close.size()));
         for (auto *buf : to_close)
             weechat_buffer_close(buf);
 
@@ -906,10 +860,7 @@ int command__feed(const void *pointer, void *data,
     {
         if (argc < 4)
         {
-            weechat_printf(buffer,
-                           _("%s%s: usage: /feed %s <service-jid> <node>"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                           std::string(subcmd).c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /feed {} <service-jid> <node>")), WEECHAT_XMPP_PLUGIN_NAME, std::string(subcmd).c_str()));
             return WEECHAT_RC_OK;
         }
 
@@ -936,8 +887,7 @@ int command__feed(const void *pointer, void *data,
             ptr_account->pubsub_subscribe_queries[uid] = {feed_key, buffer};
             ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
-            weechat_printf(buffer, "%sSubscribing to %s/%s…",
-                           weechat_prefix("network"), svc.c_str(), node.c_str());
+        ui->printf_network(fmt::format("Subscribing to {}/{}…", svc.c_str(), node.c_str()));
         }
         else  // unsubscribe
         {
@@ -954,8 +904,7 @@ int command__feed(const void *pointer, void *data,
             ptr_account->pubsub_unsubscribe_queries[uid] = {feed_key, buffer};
             ptr_account->connection.send(iq_s.build(ptr_account->context).get());
 
-            weechat_printf(buffer, "%sUnsubscribing from %s/%s…",
-                           weechat_prefix("network"), svc.c_str(), node.c_str());
+        ui->printf_network(fmt::format("Unsubscribing from {}/{}…", svc.c_str(), node.c_str()));
         }
 
         return WEECHAT_RC_OK;
@@ -966,9 +915,7 @@ int command__feed(const void *pointer, void *data,
     {
         if (argc < 3)
         {
-            weechat_printf(buffer,
-                           _("%s%s: usage: /feed subscriptions <service-jid>"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /feed subscriptions <service-jid>")), WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
@@ -981,8 +928,7 @@ int command__feed(const void *pointer, void *data,
                 .subscriptions(stanza::xep0060::subscriptions()))
             .build(ptr_account->context).get());
 
-        weechat_printf(buffer, "%sFetching subscriptions from %s…",
-                       weechat_prefix("network"), svc.c_str());
+        ui->printf_network(fmt::format("Fetching subscriptions from {}…", svc.c_str()));
 
         return WEECHAT_RC_OK;
     }
@@ -1002,10 +948,8 @@ int command__feed(const void *pointer, void *data,
         int repeat_min_argc = repeat_short_form ? 3 : 5;
         if (argc < repeat_min_argc)
         {
-            weechat_printf(buffer,
-                           _("%s%s: usage: /feed repeat <service-jid> <node> <item-id> [comment]\n"
-                             "           or: /feed repeat #N [comment]  (from a feed buffer)"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /feed repeat <service-jid> <node> <item-id> [comment]\n"
+                             "           or: /feed repeat #N [comment]  (from a feed buffer)")), WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
@@ -1019,18 +963,14 @@ int command__feed(const void *pointer, void *data,
             // Infer feed from current FEED buffer.
             if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::FEED)
             {
-                weechat_printf(buffer,
-                               _("%s%s: /feed repeat short form requires running from a feed buffer"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: /feed repeat short form requires running from a feed buffer")), WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
             const std::string &fk = ptr_channel->name;
             auto slash = fk.find('/');
             if (slash == std::string::npos)
             {
-                weechat_printf(buffer, _("%s%s: cannot parse feed key '%s'"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                               fk.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: cannot parse feed key '{}'")), WEECHAT_XMPP_PLUGIN_NAME, fk.c_str()));
                 return WEECHAT_RC_OK;
             }
             rep_service = fk.substr(0, slash);
@@ -1040,9 +980,7 @@ int command__feed(const void *pointer, void *data,
             rep_item_id = ptr_account->feed_alias_resolve(fk, alias_arg);
             if (rep_item_id.empty())
             {
-                weechat_printf(buffer, _("%s%s: unknown alias %s in feed %s"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                               argv[2], fk.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: unknown alias {} in feed {}")), WEECHAT_XMPP_PLUGIN_NAME, argv[2], fk.c_str()));
                 return WEECHAT_RC_OK;
             }
             rep_comment = argc > 3 ? argv_eol[3] : "";
@@ -1111,10 +1049,7 @@ int command__feed(const void *pointer, void *data,
                     .item(stanza::xep0060::item().id(item_uuid).payload(entry_spec))));
         ptr_account->connection.send(repeat_iq.build(ptr_account->context).get());
 
-        weechat_printf(buffer, "%sRepeated %s/%s item %s (id: %s)",
-                       weechat_prefix("network"),
-                       rep_service.c_str(), rep_node.c_str(),
-                       rep_item_id.c_str(), item_uuid.c_str());
+        ui->printf_network(fmt::format("Repeated {}/{} item {} (id: {})", rep_service.c_str(), rep_node.c_str(), rep_item_id.c_str(), item_uuid.c_str()));
         return WEECHAT_RC_OK;
     }
 
@@ -1129,10 +1064,8 @@ int command__feed(const void *pointer, void *data,
 
         if (!short_form && argc < 5)
         {
-            weechat_printf(buffer,
-                           _("%s%s: usage: /feed comments <service-jid> <node> <item-id|#N>\n"
-                             "           or: /feed comments #N  (from a feed buffer)"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /feed comments <service-jid> <node> <item-id|#N>\n"
+                             "           or: /feed comments #N  (from a feed buffer)")), WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
@@ -1143,18 +1076,14 @@ int command__feed(const void *pointer, void *data,
             // Infer feed from current buffer.
             if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::FEED)
             {
-                weechat_printf(buffer,
-                               _("%s%s: /feed comments #N requires running from a feed buffer"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: /feed comments #N requires running from a feed buffer")), WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
             const std::string &feed_key_cur = ptr_channel->name;
             auto slash = feed_key_cur.find('/');
             if (slash == std::string::npos)
             {
-                weechat_printf(buffer, _("%s%s: cannot parse feed key '%s'"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                               feed_key_cur.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: cannot parse feed key '{}'")), WEECHAT_XMPP_PLUGIN_NAME, feed_key_cur.c_str()));
                 return WEECHAT_RC_OK;
             }
             service_jid = feed_key_cur.substr(0, slash);
@@ -1162,9 +1091,7 @@ int command__feed(const void *pointer, void *data,
             item_id     = ptr_account->feed_alias_resolve(feed_key_cur, argv[2]);
             if (item_id.empty())
             {
-                weechat_printf(buffer, _("%s%s: unknown alias %s in feed %s"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                               argv[2], feed_key_cur.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: unknown alias {} in feed {}")), WEECHAT_XMPP_PLUGIN_NAME, argv[2], feed_key_cur.c_str()));
                 return WEECHAT_RC_OK;
             }
         }
@@ -1180,9 +1107,7 @@ int command__feed(const void *pointer, void *data,
                 item_id = ptr_account->feed_alias_resolve(feed_key_tmp, arg4);
                 if (item_id.empty())
                 {
-                    weechat_printf(buffer, _("%s%s: unknown alias %s in feed %s"),
-                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                                   argv[4], feed_key_tmp.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: unknown alias {} in feed {}")), WEECHAT_XMPP_PLUGIN_NAME, argv[4], feed_key_tmp.c_str()));
                     return WEECHAT_RC_OK;
                 }
             }
@@ -1196,10 +1121,7 @@ int command__feed(const void *pointer, void *data,
         const std::string replies_uri = ptr_account->feed_replies_link_get(feed_key, item_id);
         if (replies_uri.empty())
         {
-            weechat_printf(buffer,
-                           _("%s%s: no cached comments link for %s/%s item %s; fetch the post first"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                           service_jid.c_str(), node_name.c_str(), item_id.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: no cached comments link for {}/{} item {}; fetch the post first")), WEECHAT_XMPP_PLUGIN_NAME, service_jid.c_str(), node_name.c_str(), item_id.c_str()));
             return WEECHAT_RC_OK;
         }
 
@@ -1253,10 +1175,7 @@ int command__feed(const void *pointer, void *data,
 
         if (comments_service.empty() || comments_node.empty())
         {
-            weechat_printf(buffer,
-                           _("%s%s: could not parse comments link: %s"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                           replies_uri.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: could not parse comments link: {}")), WEECHAT_XMPP_PLUGIN_NAME, replies_uri.c_str()));
             return WEECHAT_RC_OK;
         }
 
@@ -1305,10 +1224,7 @@ int command__feed(const void *pointer, void *data,
             ptr_account->connection.send(iq_s.build(ptr_account->context).get());
         }
 
-        weechat_printf(buffer, "%sFetching comments for %s/%s item %s from %s/%s…",
-                       weechat_prefix("network"),
-                       service_jid.c_str(), node_name.c_str(), item_id.c_str(),
-                       comments_service.c_str(), comments_node.c_str());
+        ui->printf_network(fmt::format("Fetching comments for {}/{} item {} from {}/{}…", service_jid.c_str(), node_name.c_str(), item_id.c_str(), comments_service.c_str(), comments_node.c_str()));
         return WEECHAT_RC_OK;
     }
 
@@ -1381,23 +1297,17 @@ int command__feed(const void *pointer, void *data,
         if (argc < min_argc)
         {
             if (subcmd == "post")
-                weechat_printf(buffer,
-                               _("%s%s: usage: /feed post <service-jid> <node> <text>\n"
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /feed post <service-jid> <node> <text>\n"
                                  "           or: /feed post <text>  (from a feed buffer)\n"
                                  "           or: /feed post -- <text>  (force short form when body starts with a JID-like word)\n"
-                                 "           or: /feed post --edit  (open $EDITOR, requires feed-compose.py)"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                                 "           or: /feed post --edit  (open $EDITOR, requires feed-compose.py)")), WEECHAT_XMPP_PLUGIN_NAME));
             else if (subcmd == "reply")
-                weechat_printf(buffer,
-                               _("%s%s: usage: /feed reply <service-jid> <node> <item-id|#N> <text>\n"
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /feed reply <service-jid> <node> <item-id|#N> <text>\n"
                                  "           or: /feed reply #N <text>  (from a feed buffer)\n"
-                                 "           or: /feed reply #N --edit  (open $EDITOR, requires feed-compose.py)"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                                 "           or: /feed reply #N --edit  (open $EDITOR, requires feed-compose.py)")), WEECHAT_XMPP_PLUGIN_NAME));
             else
-                weechat_printf(buffer,
-                               _("%s%s: usage: /feed retract <service-jid> <node> <item-id>\n"
-                                 "           or: /feed retract #N  (from a feed buffer)"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /feed retract <service-jid> <node> <item-id>\n"
+                                 "           or: /feed retract #N  (from a feed buffer)")), WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
@@ -1409,19 +1319,14 @@ int command__feed(const void *pointer, void *data,
             // Infer feed from current FEED buffer.
             if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::FEED)
             {
-                weechat_printf(buffer,
-                               _("%s%s: /feed %s short form requires running from a feed buffer"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                               std::string(subcmd).c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: /feed {} short form requires running from a feed buffer")), WEECHAT_XMPP_PLUGIN_NAME, std::string(subcmd).c_str()));
                 return WEECHAT_RC_OK;
             }
             const std::string &fk = ptr_channel->name;
             auto slash = fk.find('/');
             if (slash == std::string::npos)
             {
-                weechat_printf(buffer, _("%s%s: cannot parse feed key '%s'"),
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                               fk.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: cannot parse feed key '{}'")), WEECHAT_XMPP_PLUGIN_NAME, fk.c_str()));
                 return WEECHAT_RC_OK;
             }
             pub_service = fk.substr(0, slash);
@@ -1444,9 +1349,7 @@ int command__feed(const void *pointer, void *data,
                 retract_id = ptr_account->feed_alias_resolve(pub_feed_key, argv[2]);
                 if (retract_id.empty())
                 {
-                    weechat_printf(buffer, _("%s%s: unknown alias %s in feed %s"),
-                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                                   argv[2], pub_feed_key.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: unknown alias {} in feed {}")), WEECHAT_XMPP_PLUGIN_NAME, argv[2], pub_feed_key.c_str()));
                     return WEECHAT_RC_OK;
                 }
             }
@@ -1476,9 +1379,7 @@ int command__feed(const void *pointer, void *data,
                         .item(stanza::xep0060::item().id(retract_id))))
                 .build(ptr_account->context).get());
 
-            weechat_printf(buffer, "%sRetracted item %s from %s/%s",
-                           weechat_prefix("network"),
-                           retract_id.c_str(), pub_service.c_str(), pub_node.c_str());
+        ui->printf_network(fmt::format("Retracted item {} from {}/{}", retract_id.c_str(), pub_service.c_str(), pub_node.c_str()));
             return WEECHAT_RC_OK;
         }
 
@@ -1502,9 +1403,7 @@ int command__feed(const void *pointer, void *data,
                 reply_to_id = ptr_account->feed_alias_resolve(pub_feed_key, alias_arg);
                 if (reply_to_id.empty())
                 {
-                    weechat_printf(buffer, _("%s%s: unknown alias %s in feed %s"),
-                                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                                   argv[2], pub_feed_key.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: unknown alias {} in feed {}")), WEECHAT_XMPP_PLUGIN_NAME, argv[2], pub_feed_key.c_str()));
                     return WEECHAT_RC_OK;
                 }
                 if (argc > 3 && std::string_view(argv[3]) == "--open")
@@ -1524,9 +1423,7 @@ int command__feed(const void *pointer, void *data,
                     reply_to_id = ptr_account->feed_alias_resolve(pub_feed_key, arg4);
                     if (reply_to_id.empty())
                     {
-                        weechat_printf(buffer, _("%s%s: unknown alias %s in feed %s"),
-                                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                                       argv[4], pub_feed_key.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: unknown alias {} in feed {}")), WEECHAT_XMPP_PLUGIN_NAME, argv[4], pub_feed_key.c_str()));
                         return WEECHAT_RC_OK;
                     }
                 }
@@ -1655,8 +1552,7 @@ int command__feed(const void *pointer, void *data,
 
          if (!body_raw || !*body_raw)
          {
-             weechat_printf(buffer, _("%s%s: post text must not be empty"),
-                            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: post text must not be empty")), WEECHAT_XMPP_PLUGIN_NAME));
              return WEECHAT_RC_OK;
          }
 
@@ -1690,9 +1586,7 @@ int command__feed(const void *pointer, void *data,
          auto embed_tags = xepher::parse_embed_tags(body);
          if (is_comments_post && !embed_tags.empty())
          {
-             weechat_printf(buffer,
-                 "%s%s: embed tags ({{ embed/attach/video }}) are not supported in comments",
-                 weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: embed tags ({{ embed/attach/video }}) are not supported in comments", WEECHAT_XMPP_PLUGIN_NAME));
              return WEECHAT_RC_OK;
          }
 
@@ -1743,9 +1637,7 @@ int command__feed(const void *pointer, void *data,
             // Phase 1: validate files, check upload service, kick off first upload.
             if (ptr_account->upload_service.empty())
             {
-                weechat_printf(buffer,
-                    "%s%s: embed tags require an upload service — none discovered yet (try reconnecting)",
-                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: embed tags require an upload service — none discovered yet (try reconnecting)", WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
 
@@ -1771,16 +1663,11 @@ int command__feed(const void *pointer, void *data,
                 }
                 if (emb.filepath.empty())
                 {
-                    weechat_printf(buffer,
-                        "%s%s: embed file not found: %s",
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                        emb.filename.c_str());
+        ui->printf_error(fmt::format("{}: embed file not found: {}", WEECHAT_XMPP_PLUGIN_NAME, emb.filename.c_str()));
                     // Save draft so user doesn't lose the post
                     std::string draft_path = ptr_account->save_feed_draft(pfp);
                     if (!draft_path.empty())
-                        weechat_printf(buffer,
-                            "%sDraft saved: %s",
-                            weechat_prefix("network"), draft_path.c_str());
+        ui->printf_network(fmt::format("Draft saved: {}", draft_path.c_str()));
                     return WEECHAT_RC_OK;
                 }
             }
@@ -1811,14 +1698,10 @@ int command__feed(const void *pointer, void *data,
             FILE *ff = fopen(first_emb.filepath.c_str(), "rb");
             if (!ff)
             {
-                weechat_printf(buffer,
-                    "%s%s: cannot open embed file: %s",
-                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                    first_emb.filepath.c_str());
+        ui->printf_error(fmt::format("{}: cannot open embed file: {}", WEECHAT_XMPP_PLUGIN_NAME, first_emb.filepath.c_str()));
                 std::string draft_path = ptr_account->save_feed_draft(pfp);
                 if (!draft_path.empty())
-                    weechat_printf(buffer, "%sDraft saved: %s",
-                        weechat_prefix("network"), draft_path.c_str());
+        ui->printf_network(fmt::format("Draft saved: {}", draft_path.c_str()));
                 return WEECHAT_RC_OK;
             }
             fseek(ff, 0, SEEK_END);
@@ -1887,9 +1770,7 @@ int command__feed(const void *pointer, void *data,
                 ptr_account->connection.send(slot_iq_spec.build(ptr_account->context).get());
             }
 
-            weechat_printf(buffer,
-                "%sUploading %zu embed file(s) before posting…",
-                weechat_prefix("network"), ptr_account->pending_feed_posts[slot_id].embeds.size());
+        ui->printf_network(fmt::format("Uploading {} embed file(s) before posting…", ptr_account->pending_feed_posts[slot_id].embeds.size()));
             return WEECHAT_RC_OK;
         }
 
@@ -1959,19 +1840,13 @@ int command__feed(const void *pointer, void *data,
         if (fetch_latest)
         {
             ptr_account->mam_cursor_clear(cursor_key);
-            weechat_printf(buffer,
-                           "%sCleared saved cursor for %s/%s; fetching latest page…",
-                           weechat_prefix("network"),
-                           service_jid.c_str(), node_name.c_str());
+        ui->printf_network(fmt::format("Cleared saved cursor for {}/{}; fetching latest page…", service_jid.c_str(), node_name.c_str()));
         }
         else if (before_cursor.empty())
         {
             before_cursor = ptr_account->mam_cursor_get(cursor_key);
             if (!before_cursor.empty())
-                weechat_printf(buffer,
-                               "%sResuming from saved cursor for %s/%s…",
-                               weechat_prefix("network"),
-                               service_jid.c_str(), node_name.c_str());
+        ui->printf_network(fmt::format("Resuming from saved cursor for {}/{}…", service_jid.c_str(), node_name.c_str()));
         }
 
         // Ensure the FEED buffer exists before we send the IQ so the result
@@ -1984,8 +1859,7 @@ int command__feed(const void *pointer, void *data,
             feed_key);
         ptr_account->feed_open_register(feed_key);
 
-        weechat_printf(buffer, "%sFetching PubSub feed %s from %s (XEP-0060)…",
-                       weechat_prefix("network"), node_name.c_str(), service_jid.c_str());
+        ui->printf_network(fmt::format("Fetching PubSub feed {} from {} (XEP-0060)…", node_name.c_str(), service_jid.c_str()));
 
         // Build: <pubsub><items node=".." max_items="N"/><set xmlns=RSM><max>N</max><before>cursor</before></set></pubsub>
         {
@@ -2010,8 +1884,7 @@ int command__feed(const void *pointer, void *data,
     else if (fetch_all)
     {
         // --all: discover all nodes via disco#items and fetch each one.
-        weechat_printf(buffer, "%sDiscovering all PubSub nodes on %s…",
-                       weechat_prefix("network"), service_jid.c_str());
+        ui->printf_network(fmt::format("Discovering all PubSub nodes on {}…", service_jid.c_str()));
 
         std::string uid = stanza::uuid(ptr_account->context);
         ptr_account->pubsub_disco_queries[uid] = service_jid;
@@ -2023,8 +1896,7 @@ int command__feed(const void *pointer, void *data,
     else
     {
         // Default: query subscriptions and fetch only subscribed nodes.
-        weechat_printf(buffer, "%sFetching subscribed PubSub feeds from %s…",
-                       weechat_prefix("network"), service_jid.c_str());
+        ui->printf_network(fmt::format("Fetching subscribed PubSub feeds from {}…", service_jid.c_str()));
 
         std::string uid = stanza::uuid(ptr_account->context);
         ptr_account->pubsub_subscriptions_queries[uid] = service_jid;
@@ -2057,11 +1929,11 @@ int command__names(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer,
-                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "names");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can only be executed in a MUC buffer")), WEECHAT_XMPP_PLUGIN_NAME, "names"));
         return WEECHAT_RC_OK;
     }
 
@@ -2121,27 +1993,24 @@ int command__names(const void *pointer, void *data,
         ? ptr_channel->id
         : ptr_channel->name;
 
-    weechat_printf(buffer, "");
+        ui->printf("");
     if (entries.empty())
     {
-        weechat_printf(buffer,
-                       "%s%sNo occupants known in %s%s%s yet "
-                       "(join presence or disco#items may still be in flight).%s",
-                       net_prefix, key_clr, val_clr, room_label.c_str(), key_clr, rst);
-        weechat_printf(buffer, "%sEnd of /NAMES list.%s", net_prefix, rst);
+        ui->printf(fmt::format("{}{}No occupants known in {}{}{} yet "
+                       "(join presence or disco#items may still be in flight).{}",
+                       net_prefix, key_clr, val_clr, room_label.c_str(), key_clr, rst));
+        ui->printf(fmt::format("{}End of /NAMES list.{}", net_prefix, rst));
         return WEECHAT_RC_OK;
     }
 
-    weechat_printf(buffer, "%s%sNames in %s%s%s (%zu):%s",
-                   net_prefix, key_clr, val_clr, room_label.c_str(), key_clr,
-                   entries.size(), rst);
+        ui->printf(fmt::format("{}{}Names in {}{}{} ({}):{}", net_prefix, key_clr, val_clr, room_label.c_str(), key_clr, entries.size(), rst));
 
     std::string line = fmt::format("= {} :", room_label);
     constexpr std::size_t wrap_at = 76;
 
     auto flush_line = [&]() {
         if (line.size() > 2)
-            weechat_printf(buffer, "%s%s%s", net_prefix, line.c_str(), rst);
+        ui->printf(fmt::format("{}{}{}", net_prefix, line.c_str(), rst));
         line = fmt::format("= {} :", room_label);
     };
 
@@ -2159,7 +2028,7 @@ int command__names(const void *pointer, void *data,
     }
     flush_line();
 
-    weechat_printf(buffer, "%sEnd of /NAMES list.%s", net_prefix, rst);
+        ui->printf(fmt::format("{}End of /NAMES list.{}", net_prefix, rst));
     return WEECHAT_RC_OK;
 }
 
@@ -2184,11 +2053,11 @@ int command__modes(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer,
-                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "modes");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can only be executed in a MUC buffer")), WEECHAT_XMPP_PLUGIN_NAME, "modes"));
         return WEECHAT_RC_OK;
     }
 
@@ -2218,13 +2087,11 @@ int command__modes(const void *pointer, void *data,
     const char *sep     = weechat_color("chat_delimiters");
     const char *rst     = weechat_color("reset");
 
-    weechat_printf(buffer, "");
-    weechat_printf(buffer, "%s%sRoom modes for %s%s%s:",
-                   prefix, key_clr, val_clr, ptr_channel->id.data(), rst);
+        ui->printf("");
+        ui->printf(fmt::format("{}{}Room modes for {}{}{}:", prefix, key_clr, val_clr, ptr_channel->id.data(), rst));
 
     auto row = [&](const char *label, std::string value) {
-        weechat_printf(buffer, "  %s%-20s%s %s%s%s",
-                       key_clr, label, rst, val_clr, value.c_str(), rst);
+        ui->printf(fmt::format("  {}{:<20}{} {}{}{}", key_clr, label, rst, val_clr, value.c_str(), rst));
     };
     auto yesno = [](bool b) -> std::string { return b ? "yes" : "no"; };
 
@@ -2266,10 +2133,9 @@ int command__modes(const void *pointer, void *data,
     else if (info.anon == weechat::channel::muc_info::anonymity::semianonymous) modes += 'S';
     if (modes == "+") modes = "(none)";
 
-    weechat_printf(buffer, "  %s%-20s%s %s%s%s", key_clr, "modes", rst, val_clr, modes.c_str(), rst);
-    weechat_printf(buffer, "  %s(legend: m=moderated, i=members-only, k=password, "
-                          "p=hidden, P=persistent, N=non-anon, S=semi-anon)%s",
-                   sep, rst);
+        ui->printf(fmt::format("  {}{:<20}{} {}{}{}", key_clr, "modes", rst, val_clr, modes.c_str(), rst));
+        ui->printf(fmt::format("  {}(legend: m=moderated, i=members-only, k=password, "
+                          "p=hidden, P=persistent, N=non-anon, S=semi-anon){}", sep, rst));
 
     return WEECHAT_RC_OK;
 }
@@ -2306,19 +2172,18 @@ int command__create([[maybe_unused]] const void *pointer,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     if (argc < 2)
     {
-        weechat_printf(buffer,
-            _("%s%s: usage: /create <room@server> [nick] [--reserved] "
-              "[--password <secret> | -k <secret>]"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /create <room@server> [nick] [--reserved] "
+              "[--password <secret> | -k <secret>]")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -2327,9 +2192,7 @@ int command__create([[maybe_unused]] const void *pointer,
     std::string room_bare = jid_parsed.bare;
     if (room_bare.empty() || jid_parsed.domain.empty())
     {
-        weechat_printf(buffer,
-            _("%s%s: invalid room JID '%s' (expected: room@server)"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[1]);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: invalid room JID '{}' (expected: room@server)")), WEECHAT_XMPP_PLUGIN_NAME, argv[1]));
         return WEECHAT_RC_OK;
     }
 
@@ -2397,17 +2260,14 @@ int command__create([[maybe_unused]] const void *pointer,
 
     if (reserved)
     {
-        weechat_printf(buffer, "%sCreating reserved room %s as %s…",
-                       weechat_prefix("network"), room_bare.c_str(), nick.c_str());
-        weechat_printf(buffer, "%s%s: the room will be created and locked. "
+        ui->printf_network(fmt::format("Creating reserved room {} as {}…", room_bare.c_str(), nick.c_str()));
+        ui->printf_error(fmt::format("{}: the room will be created and locked. "
                               "Use /setmodes, /affiliation, /destroy to "
-                              "configure it before anyone joins.",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                              "configure it before anyone joins.", WEECHAT_XMPP_PLUGIN_NAME));
     }
     else
     {
-        weechat_printf(buffer, "%sCreating instant room %s as %s…",
-                       weechat_prefix("network"), room_bare.c_str(), nick.c_str());
+        ui->printf_network(fmt::format("Creating instant room {} as {}…", room_bare.c_str(), nick.c_str()));
     }
 
     int num = weechat_buffer_get_integer(ptr_channel->buffer, "number");
@@ -2493,26 +2353,23 @@ int command__setmodes([[maybe_unused]] const void *pointer,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer,
-                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "setmodes");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can only be executed in a MUC buffer")), WEECHAT_XMPP_PLUGIN_NAME, "setmodes"));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     if (argc < 2)
     {
-        weechat_printf(buffer,
-            _("%s%s: usage: /setmodes [+/-][m][i][k][p][P][N][S] [secret] [--confirm]"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /setmodes [+/-][m][i][k][p][P][N][S] [secret] [--confirm]")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -2536,10 +2393,7 @@ int command__setmodes([[maybe_unused]] const void *pointer,
             case 'N': idx = 5; break;
             case 'S': idx = 6; break;
             default:
-                weechat_printf(buffer,
-                    _("%s%s: unknown mode letter '%c' in '%s' (valid: m i k p P N S)"),
-                    weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                    c, spec.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: unknown mode letter '%c' in '{}' (valid: m i k p P N S)")), WEECHAT_XMPP_PLUGIN_NAME, c, spec.c_str()));
                 return WEECHAT_RC_OK;
         }
         if (pending_plus)  { want_set[idx]   = true; any = true; pending_plus = false; }
@@ -2547,9 +2401,7 @@ int command__setmodes([[maybe_unused]] const void *pointer,
     }
     if (!any)
     {
-        weechat_printf(buffer,
-            _("%s%s: no mode letters in '%s'"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, spec.c_str());
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: no mode letters in '{}'")), WEECHAT_XMPP_PLUGIN_NAME, spec.c_str()));
         return WEECHAT_RC_OK;
     }
 
@@ -2560,9 +2412,7 @@ int command__setmodes([[maybe_unused]] const void *pointer,
     {
         if (argc < 3 || argv[2][0] == '-')
         {
-            weechat_printf(buffer,
-                _("%s%s: +k requires a password: /setmodes +k <password>"),
-                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: +k requires a password: /setmodes +k <password>")), WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
         password = argv[2];
@@ -2575,52 +2425,25 @@ int command__setmodes([[maybe_unused]] const void *pointer,
         if (std::string_view(argv[i]) == "--confirm") { confirm = true; break; }
     }
 
-    weechat_printf(buffer, "");
-    weechat_printf(buffer, "%sPlanned changes to %s%s%s:",
-                   weechat_prefix("network"), weechat_color("chat_server"),
-                   ptr_channel->id.data(), weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-16s%s %s%s%s",
-                   weechat_color("chat_nick"), "moderated", weechat_color("reset"),
-                   weechat_color("chat_value"),
-                   (want_set[0]   ? "on" : (want_clear[0] ? "off" : "(unchanged)")),
-                   weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-16s%s %s%s%s",
-                   weechat_color("chat_nick"), "members-only", weechat_color("reset"),
-                   weechat_color("chat_value"),
-                   (want_set[1]   ? "on" : (want_clear[1] ? "off" : "(unchanged)")),
-                   weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-16s%s %s%s%s%s",
-                   weechat_color("chat_nick"), "password", weechat_color("reset"),
-                   weechat_color("chat_value"),
-                   (want_set[2]   ? "on" : (want_clear[2] ? "off" : "(unchanged)")),
-                   want_set[2] ? fmt::format(" (secret set to {} chars)", password.size()).c_str() : "",
-                   weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-16s%s %s%s%s",
-                   weechat_color("chat_nick"), "hidden", weechat_color("reset"),
-                   weechat_color("chat_value"),
-                   (want_set[3]   ? "on" : (want_clear[3] ? "off" : "(unchanged)")),
-                   weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-16s%s %s%s%s",
-                   weechat_color("chat_nick"), "persistent", weechat_color("reset"),
-                   weechat_color("chat_value"),
-                   (want_set[4]   ? "on" : (want_clear[4] ? "off" : "(unchanged)")),
-                   weechat_color("reset"));
+        ui->printf("");
+        ui->printf_network(fmt::format("Planned changes to {}{}{}:", weechat_color("chat_server"), ptr_channel->id.data(), weechat_color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "moderated", weechat_color("reset"), weechat_color("chat_value"), (want_set[0]   ? "on" : (want_clear[0] ? "off" : "(unchanged)")), weechat_color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "members-only", weechat_color("reset"), weechat_color("chat_value"), (want_set[1]   ? "on" : (want_clear[1] ? "off" : "(unchanged)")), weechat_color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}{}", weechat_color("chat_nick"), "password", weechat_color("reset"), weechat_color("chat_value"), (want_set[2]   ? "on" : (want_clear[2] ? "off" : "(unchanged)")), want_set[2] ? fmt::format(" (secret set to {} chars)", password.size()).c_str() : "", weechat_color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "hidden", weechat_color("reset"), weechat_color("chat_value"), (want_set[3]   ? "on" : (want_clear[3] ? "off" : "(unchanged)")), weechat_color("reset")));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "persistent", weechat_color("reset"), weechat_color("chat_value"), (want_set[4]   ? "on" : (want_clear[4] ? "off" : "(unchanged)")), weechat_color("reset")));
     {
         const char *anon = "(unchanged)";
         if (want_set[5])   anon = "non-anonymous (anyone sees real JIDs)";
         if (want_set[6])   anon = "semi-anonymous (mods see real JIDs)";
         if (want_clear[5] || want_clear[6]) anon = "default (server-defined)";
-        weechat_printf(buffer, "  %s%-16s%s %s%s%s",
-                       weechat_color("chat_nick"), "anonymity", weechat_color("reset"),
-                       weechat_color("chat_value"), anon, weechat_color("reset"));
+        ui->printf(fmt::format("  {}{:<16}{} {}{}{}", weechat_color("chat_nick"), "anonymity", weechat_color("reset"), weechat_color("chat_value"), anon, weechat_color("reset")));
     }
 
     if (!confirm)
     {
-        weechat_printf(buffer, "");
-        weechat_printf(buffer, "%s%s: re-run with %s--confirm%s to apply.",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                       weechat_color("bold"), weechat_color("reset"));
+        ui->printf("");
+        ui->printf_error(fmt::format("{}: re-run with {}--confirm{} to apply.", WEECHAT_XMPP_PLUGIN_NAME, weechat_color("bold"), weechat_color("reset")));
         return WEECHAT_RC_OK;
     }
 
@@ -2695,8 +2518,7 @@ int command__setmodes([[maybe_unused]] const void *pointer,
         iq.muc_owner(q);
         ptr_account->connection.send(iq.build(ptr_account->context).get());
 
-        weechat_printf(buffer, "%sSubmitting room config (full form)…",
-                       weechat_prefix("network"));
+        ui->printf_network("Submitting room config (full form)…");
     }
     else
     {
@@ -2715,11 +2537,9 @@ int command__setmodes([[maybe_unused]] const void *pointer,
 
         send_config_form_get(ptr_account, ptr_channel);
 
-        weechat_printf(buffer, "%s%s: no cached config form — fetching…",
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
-        weechat_printf(buffer, "%s%s: form will arrive in a moment; the "
-                              "diff will be applied automatically",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_network(fmt::format("{}: no cached config form — fetching…", WEECHAT_XMPP_PLUGIN_NAME));
+        ui->printf_error(fmt::format("{}: form will arrive in a moment; the "
+                              "diff will be applied automatically", WEECHAT_XMPP_PLUGIN_NAME));
     }
 
     return WEECHAT_RC_OK;
@@ -2743,18 +2563,17 @@ int command__destroy([[maybe_unused]] const void *pointer,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer,
-                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "destroy");
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: \"{}\" command can only be executed in a MUC buffer")), WEECHAT_XMPP_PLUGIN_NAME, "destroy"));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -2779,39 +2598,18 @@ int command__destroy([[maybe_unused]] const void *pointer,
     for (int i = 1; i < argc; ++i)
         if (std::string_view(argv[i]) == "--confirm") { confirm = true; break; }
 
-    weechat_printf(buffer, "");
-    weechat_printf(buffer, "%s%sAbout to destroy room %s%s%s:",
-                   weechat_prefix("error"),
-                   weechat_color("bold"),
-                   weechat_color("chat_server"),
-                   ptr_channel->id.data(),
-                   weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-18s%s %s%s%s",
-                   weechat_color("chat_nick"), "reason", weechat_color("reset"),
-                   weechat_color("chat_value"),
-                   reason.empty() ? "(none)" : reason.c_str(),
-                   weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-18s%s %s%s%s",
-                   weechat_color("chat_nick"), "alt room jid", weechat_color("reset"),
-                   weechat_color("chat_value"),
-                   alt_jid.empty() ? "(none)" : alt_jid.c_str(),
-                   weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-18s%s %s%s%s",
-                   weechat_color("chat_nick"), "alt room password", weechat_color("reset"),
-                   weechat_color("chat_value"),
-                   alt_password.empty() ? "(none)" : "(set)",
-                   weechat_color("reset"));
-    weechat_printf(buffer, "");
-    weechat_printf(buffer, "%s%sThis will kick all occupants and the room "
-                          "cannot be recovered.%s",
-                   weechat_color("bold"), weechat_color("red"),
-                   weechat_color("reset"));
+    ui->printf("");
+    ui->printf_error(fmt::format("About to destroy room {}{}{}:", weechat_color("bold"), weechat_color("chat_server"), ptr_channel->id.data(), weechat_color("reset")));
+    ui->printf(fmt::format("  {}{:<18}{} {}{}{}", weechat_color("chat_nick"), "reason", weechat_color("reset"), weechat_color("chat_value"), reason.empty() ? "(none)" : reason.c_str(), weechat_color("reset")));
+    ui->printf(fmt::format("  {}{:<18}{} {}{}{}", weechat_color("chat_nick"), "alt room jid", weechat_color("reset"), weechat_color("chat_value"), alt_jid.empty() ? "(none)" : alt_jid.c_str(), weechat_color("reset")));
+    ui->printf(fmt::format("  {}{:<18}{} {}{}{}", weechat_color("chat_nick"), "alt room password", weechat_color("reset"), weechat_color("chat_value"), alt_password.empty() ? "(none)" : "(set)", weechat_color("reset")));
+    ui->printf("");
+    ui->printf(fmt::format("{}{}This will kick all occupants and the room "
+                      "cannot be recovered.{}", weechat_color("bold"), weechat_color("red"), weechat_color("reset")));
 
     if (!confirm)
     {
-        weechat_printf(buffer, "%s%s: re-run with %s--confirm%s to destroy the room.",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                       weechat_color("bold"), weechat_color("reset"));
+        ui->printf_error(fmt::format("{}: re-run with {}--confirm{} to destroy the room.", WEECHAT_XMPP_PLUGIN_NAME, weechat_color("bold"), weechat_color("reset")));
         return WEECHAT_RC_OK;
     }
 
@@ -2834,8 +2632,7 @@ int command__destroy([[maybe_unused]] const void *pointer,
     iq.muc_owner(q);
     ptr_account->connection.send(iq.build(ptr_account->context).get());
 
-    weechat_printf(buffer, "%sDestroying room %s…",
-                   weechat_prefix("network"), ptr_channel->id.data());
+        ui->printf_network(fmt::format("Destroying room {}…", ptr_channel->id.data()));
     return WEECHAT_RC_OK;
 }
 

@@ -65,12 +65,12 @@ int command__ephemeral(const void *pointer, void *data,
     // Echo locally for PM buffers (not MUC — server echoes those back)
     if (ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf_date_tags(ptr_channel->buffer, 0,
-                                 "xmpp_message,message,private,notify_none,self_msg,log1",
-                                 "%s\t[⏱ %lds] %s",
-                                 weechat::user::search(ptr_account,
-                                     ptr_account->jid().data())->as_prefix_raw().data(),
-                                 timer_secs, text);
+        weechat::UiPort::for_buffer(ptr_channel->buffer)->printf_date_tags(
+            0, "xmpp_message,message,private,notify_none,self_msg,log1",
+            fmt::format("{}\t[⏱ {}s] {}",
+                        weechat::user::search(ptr_account,
+                            ptr_account->jid().data())->as_prefix_raw().data(),
+                        timer_secs, text));
     }
 
     return WEECHAT_RC_OK;

@@ -352,8 +352,7 @@ struct axolotl_omemo_payload {
     auto authtag_span = std::span(authtag);
     if (gcry_cipher_checktag(cipher.get(), authtag_span.data(), authtag_span.size()) != 0)
     {
-        weechat_printf(nullptr, "%somemo: legacy OMEMO payload GCM authentication failed",
-                       weechat_prefix("error"));
+        print_error(nullptr, "omemo: legacy OMEMO payload GCM authentication failed");
         return std::unexpected("auth tag failed");
     }
 
@@ -434,10 +433,9 @@ struct axolotl_omemo_payload {
     session_cipher *cipher_raw = nullptr;
     if (int rc = session_cipher_create(&cipher_raw, self.store_context, &address.address, self.context); rc != 0)
     {
-        weechat_printf(nullptr, "%somemo: (legacy) session_cipher_create failed for %.*s/%u: rc=%d",
-                       weechat_prefix("error"),
-                       static_cast<int>(jid.size()), jid.data(),
-                       remote_device_id, rc);
+        print_error(nullptr,
+                    fmt::format("omemo: (legacy) session_cipher_create failed for {}/{}: rc={}",
+                                jid, remote_device_id, rc));
         return std::nullopt;
     }
     libsignal::unique_session_cipher cipher {cipher_raw};
@@ -462,10 +460,9 @@ struct axolotl_omemo_payload {
             rc = pre_key_signal_message_deserialize(&message_raw, ser_span.data(), ser_span.size(), self.context);
         if (rc != 0)
         {
-            weechat_printf(nullptr, "%somemo: (legacy) pre_key_signal_message_deserialize failed for %.*s/%u: rc=%d",
-                           weechat_prefix("error"),
-                           static_cast<int>(jid.size()), jid.data(),
-                           remote_device_id, rc);
+            print_error(nullptr,
+                        fmt::format("omemo: (legacy) pre_key_signal_message_deserialize failed for {}/{}: rc={}",
+                                    jid, remote_device_id, rc));
             return std::nullopt;
         }
         libsignal::object<pre_key_signal_message> message {message_raw};
@@ -489,10 +486,9 @@ struct axolotl_omemo_payload {
         // return nullopt so the caller can silently discard it per XEP-0384 §6.
         if (result != 0 && plaintext_raw == nullptr)
         {
-            weechat_printf(nullptr, "%somemo: (legacy) prekey decrypt failed for %.*s/%u: rc=%d; trying inner SignalMessage",
-                           weechat_prefix("error"),
-                           static_cast<int>(jid.size()), jid.data(),
-                           remote_device_id, result);
+            print_error(nullptr,
+                        fmt::format("omemo: (legacy) prekey decrypt failed for {}/{}: rc={}; trying inner SignalMessage",
+                                    jid, remote_device_id, result));
             signal_message *inner = pre_key_signal_message_get_signal_message(message.get());
             if (inner)
             {
@@ -508,10 +504,9 @@ struct axolotl_omemo_payload {
             rc = signal_message_deserialize(&message_raw, ser_span.data(), ser_span.size(), self.context);
         if (rc != 0)
         {
-            weechat_printf(nullptr, "%somemo: (legacy) signal_message_deserialize failed for %.*s/%u: rc=%d",
-                           weechat_prefix("error"),
-                           static_cast<int>(jid.size()), jid.data(),
-                           remote_device_id, rc);
+            print_error(nullptr,
+                        fmt::format("omemo: (legacy) signal_message_deserialize failed for {}/{}: rc={}",
+                                    jid, remote_device_id, rc));
             return std::nullopt;
         }
         libsignal::object<signal_message> message {message_raw};
@@ -536,10 +531,9 @@ struct axolotl_omemo_payload {
                 *out_is_duplicate = true;
             return std::nullopt;
         }
-        weechat_printf(nullptr, "%somemo: (legacy) session_cipher_decrypt failed for %.*s/%u: rc=%d",
-                       weechat_prefix("error"),
-                       static_cast<int>(jid.size()), jid.data(),
-                       remote_device_id, result);
+        print_error(nullptr,
+                    fmt::format("omemo: (legacy) session_cipher_decrypt failed for {}/{}: rc={}",
+                                jid, remote_device_id, result));
         return std::nullopt;
     }
 
@@ -547,8 +541,9 @@ struct axolotl_omemo_payload {
         plaintext_raw, signal_buffer_bzero_free);
     if (signal_buffer_len(plaintext.get()) != 32)
     {
-        weechat_printf(nullptr, "%somemo: (legacy) decrypted transport key has wrong length %zu (expected 32)",
-                       weechat_prefix("error"), signal_buffer_len(plaintext.get()));
+        print_error(nullptr,
+                    fmt::format("omemo: (legacy) decrypted transport key has wrong length {} (expected 32)",
+                                signal_buffer_len(plaintext.get())));
         return std::nullopt;
     }
 

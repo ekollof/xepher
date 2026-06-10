@@ -23,6 +23,7 @@
 #include "xmpp/stanza.hh"
 #include "xmpp/stanza_view.hh"
 #include "xmpp/iq_mam.hh"
+#include "weechat/ui_port.hh"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"

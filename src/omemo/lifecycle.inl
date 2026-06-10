@@ -41,26 +41,25 @@ XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ct
     const auto signed_pre_key_id = parse_uint32(bundle->signed_pre_key_id).value_or(0);
     if (!is_valid_omemo_device_id(device_id))
     {
-        weechat_printf(nullptr,
-                       "%somemo: refusing to publish legacy bundle: invalid local device id %u",
-                       weechat_prefix("error"), device_id);
+        print_error(nullptr,
+                    fmt::format("omemo: refusing to publish legacy bundle: invalid local device id {}",
+                                device_id));
         return nullptr;
     }
     if (signed_pre_key_id == 0)
     {
-        weechat_printf(nullptr,
-                       "%somemo: refusing to publish legacy bundle for device %u: invalid signed prekey id '%s'",
-                       weechat_prefix("error"), device_id, bundle->signed_pre_key_id.c_str());
+        print_error(nullptr,
+                    fmt::format("omemo: refusing to publish legacy bundle for device {}: invalid signed prekey id '{}'",
+                                device_id, bundle->signed_pre_key_id));
         return nullptr;
     }
     if (bundle->prekeys.size() < kMinPreKeyCount)
     {
-        weechat_printf(nullptr,
-                       "%somemo: refusing to publish legacy bundle for device %u: only %zu prekeys available (minimum %u required by XEP-0384)",
-                       weechat_prefix("error"),
-                       device_id,
-                       bundle->prekeys.size(),
-                       kMinPreKeyCount);
+        print_error(nullptr,
+                    fmt::format("omemo: refusing to publish legacy bundle for device {}: only {} prekeys available (minimum {} required by XEP-0384)",
+                                device_id,
+                                bundle->prekeys.size(),
+                                kMinPreKeyCount));
         return nullptr;
     }
 
@@ -172,10 +171,9 @@ static void migrate_legacy_keys(omemo &self)
     self.dbi.omemo.put(wtxn, "legacy_migration_done", "1");
     wtxn.commit();
 
-    weechat_printf(nullptr,
-                   "%somemo: migrated %zu LMDB key(s) from legacy_* to axolotl_* prefix",
-                   weechat_prefix("network"),
-                   to_rename.size());
+    print_info(nullptr,
+               fmt::format("omemo: migrated {} LMDB key(s) from legacy_* to axolotl_* prefix",
+                           to_rename.size()));
 }
 
 XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, const char *account_name)
@@ -241,9 +239,9 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, co
                  attempt < kMaxCollisionRetries && id_in_cached_list(device_id);
                  ++attempt)
             {
-                weechat_printf(buffer,
-                               "%somemo: generated device id %u already present in cached devicelist; retrying",
-                               weechat_prefix("network"), device_id);
+                print_info(buffer,
+                           fmt::format("omemo: generated device id {} already present in cached devicelist; retrying",
+                                       device_id));
                 device_id = random_device_id();
             }
             store_string(*this, kDeviceIdKey, fmt::format("{}", device_id));

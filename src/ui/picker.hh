@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <fmt/core.h>
 #include <algorithm>
 #include <ranges>
 #include <string>
@@ -12,6 +13,7 @@
 #include <functional>
 #include <memory>
     #include "../plugin.hh"
+#include "../weechat/ui_port.hh"
 #include <weechat/weechat-plugin.h>
 
 namespace weechat::ui {
@@ -180,12 +182,12 @@ public:
         header += weechat_color("darkgray");
         header += "[Enter=select  ↑↓=navigate  q=cancel  type to search]";
         header += weechat_color("reset");
-        weechat_printf_y(buf_, 0, "%s", header.c_str());
+        weechat::UiPort::for_buffer(buf_)->printf_y(0, header);
 
         if (visible_.empty()) {
-            weechat_printf_y(buf_, 1,
-                "  %s(no matches)%s",
-                weechat_color("darkgray"), weechat_color("reset"));
+            weechat::UiPort::for_buffer(buf_)->printf_y(1,
+                fmt::format("  {}(no matches){}",
+                            weechat_color("darkgray"), weechat_color("reset")));
             return;
         }
 
@@ -224,7 +226,7 @@ public:
                     line += weechat_color("reset");
             }
 
-            weechat_printf_y(buf_, row + 1, "%s", line.c_str());
+            weechat::UiPort::for_buffer(buf_)->printf_y(row + 1, line);
         }
     }
 

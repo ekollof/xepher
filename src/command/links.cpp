@@ -29,5 +29,6 @@
 #include "buffer.hh"
 #include "command.hh"
 #include "connection/internal.hh"
+#include "weechat/ui_port.hh"
 
 #include "command/links.inl"

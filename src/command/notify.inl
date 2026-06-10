@@ -35,9 +35,7 @@ int command__notify(const void *pointer, void *data,
     }
     else
     {
-        weechat_printf(ptr_account->buffer,
-                       "%s%s: /notify [<jid>] [always|on-mention|never]",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_error(fmt::format("{}: /notify [<jid>] [always|on-mention|never]", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -47,9 +45,7 @@ int command__notify(const void *pointer, void *data,
         // Validate level
         if (level != "always" && level != "on-mention" && level != "never")
         {
-            weechat_printf(ptr_account->buffer,
-                           "%s%s: /notify: level must be 'always', 'on-mention', or 'never'",
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_error(fmt::format("{}: /notify: level must be 'always', 'on-mention', or 'never'", WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
     }
@@ -64,10 +60,7 @@ int command__notify(const void *pointer, void *data,
             if (!bm.notify_setting.empty())
                 setting = bm.notify_setting;
         }
-        weechat_printf(ptr_account->buffer,
-                       "%s%s: notification setting for %s: %s",
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                       target_jid.c_str(), setting.c_str());
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_network(fmt::format("{}: notification setting for {}: {}", WEECHAT_XMPP_PLUGIN_NAME, target_jid.c_str(), setting.c_str()));
         return WEECHAT_RC_OK;
     }
 
@@ -80,10 +73,7 @@ int command__notify(const void *pointer, void *data,
 
     ptr_account->bookmarks[target_jid].notify_setting = level;
 
-    weechat_printf(ptr_account->buffer,
-                   "%s%s: notification setting for %s set to '%s'",
-                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                   target_jid.c_str(), level.c_str());
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_network(fmt::format("{}: notification setting for {} set to '{}'", WEECHAT_XMPP_PLUGIN_NAME, target_jid.c_str(), level.c_str()));
 
     ptr_account->send_bookmarks();
 

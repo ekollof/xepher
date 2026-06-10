@@ -36,6 +36,7 @@
 #include "buffer.hh"
 #include "debug.hh"
 #include "util.hh"
+#include "weechat/ui_port.hh"
 
 // Use a pointer that's never freed to prevent destructor running at program exit
 // when plugin is already unloaded. Memory is leaked intentionally; OS reclaims it.
@@ -55,12 +56,11 @@ void weechat::log_emit(void *const userdata, const xmpp_log_level_t level,
 
     const char *tags = level > XMPP_LEVEL_DEBUG ? "no_log" : nullptr;
 
-    weechat_printf_date_tags(
-        account ? account->buffer : nullptr,
-        0, tags,
-        _("%s%s (%s): %s"),
-        weechat_prefix("network"), area,
-        log_level_name[level], msg);
+    weechat::UiPort::for_buffer(account ? account->buffer : nullptr)->printf_date_tags(
+        0, tags ? tags : "",
+        fmt::format(fmt::runtime(_("%s%s (%s): %s")),
+                    weechat_prefix("network"), area,
+                    log_level_name[level], msg));
 }
 
 bool weechat::account::search(weechat::account* &out,
@@ -110,9 +110,9 @@ void weechat::account::add_device(weechat::account::device *device)
 {
     if (!device || device->id == 0 || device->id > 0x7fffffffU)
     {
-        weechat_printf(buffer,
-                       "%somemo: ignoring invalid cached device id %u",
-                       weechat_prefix("error"), device ? device->id : 0);
+        weechat::UiPort::for_buffer(buffer)->printf_error(
+            fmt::format("omemo: ignoring invalid cached device id {}",
+                        device ? device->id : 0));
         return;
     }
 
@@ -133,9 +133,9 @@ std::shared_ptr<xmpp_stanza_t> weechat::account::get_devicelist()
 {
     if (omemo.device_id == 0 || omemo.device_id > 0x7fffffffU)
     {
-        weechat_printf(buffer,
-                       "%somemo: refusing to publish legacy devicelist: invalid local device id %u",
-                       weechat_prefix("error"), omemo.device_id);
+        weechat::UiPort::for_buffer(buffer)->printf_error(
+            fmt::format("omemo: refusing to publish legacy devicelist: invalid local device id {}",
+                        omemo.device_id));
         return nullptr;
     }
 
@@ -217,10 +217,9 @@ std::shared_ptr<xmpp_stanza_t> weechat::account::get_devicelist()
     auto iq_s = stanza::iq().type("set").id(stanza::uuid(context));
     static_cast<stanza::xep0060::iq&>(iq_s).pubsub(pubsub_el);
 
-    weechat_printf(buffer,
-                   "%somemo: publishing legacy devicelist for device %u (%zu total device(s)) with open access model",
-                   weechat_prefix("network"), omemo.device_id,
-                   cached_ids.size() + 1);
+    weechat::UiPort::for_buffer(buffer)->printf_network(
+        fmt::format("omemo: publishing legacy devicelist for device {} ({} total device(s)) with open access model",
+                    omemo.device_id, cached_ids.size() + 1));
 
     return iq_s.build(context);
 }
@@ -344,9 +343,8 @@ int weechat::account::process_deferred_mam_page_cb(const void *pointer, void *da
     {
         if (page.after.empty())
         {
-            weechat_printf(acct->buffer,
-                           "%sxmpp: deferred global MAM page has no <after> token — skipping",
-                           weechat_prefix("error"));
+            weechat::UiPort::for_buffer(acct->buffer)->printf_error(
+                "xmpp: deferred global MAM page has no <after> token — skipping");
             return WEECHAT_RC_OK;
         }
 
@@ -576,10 +574,9 @@ void weechat::account::disconnect(int reconnect)
             if (ch.buffer)
             {
                 weechat_nicklist_remove_all(ch.buffer);
-                weechat_printf(
-                    ch.buffer,
-                    _("%s%s: disconnected from account"),
-                    weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+                weechat::UiPort::for_buffer(ch.buffer)->printf_network(
+                    fmt::format(fmt::runtime(_("%s: disconnected from account")),
+                                WEECHAT_XMPP_PLUGIN_NAME));
             }
         }
     }
@@ -588,10 +585,9 @@ void weechat::account::disconnect(int reconnect)
 
     if (buffer)
     {
-        weechat_printf(
-            buffer,
-            _("%s%s: disconnected from account"),
-            weechat_prefix ("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(buffer)->printf_network(
+            fmt::format(fmt::runtime(_("%s: disconnected from account")),
+                        WEECHAT_XMPP_PLUGIN_NAME));
     }
 
     // On manual disconnect, close all channel buffers (PM, MUC, FEED)
@@ -623,11 +619,9 @@ void weechat::account::disconnect(int reconnect)
             reconnect_delay = std::min(reconnect_delay * 2, 120);
         current_retry++;
         reconnect_start = time(nullptr) + reconnect_delay;
-        weechat_printf(buffer,
-                       "%sxmpp: reconnecting in %ds (attempt %d)…",
-                       weechat_prefix("network"),
-                       reconnect_delay,
-                       current_retry);
+        weechat::UiPort::for_buffer(buffer)->printf_network(
+            fmt::format("xmpp: reconnecting in {}s (attempt {})…",
+                        reconnect_delay, current_retry));
     }
     else
     {
@@ -791,7 +785,7 @@ struct t_gui_buffer *weechat::account::create_buffer()
                                 &buffer__close_cb, nullptr, nullptr);
     if (!buffer)
         return nullptr;
-    weechat_printf(buffer, "xmpp: %s", name.data());
+    weechat::UiPort::for_buffer(buffer)->printf(fmt::format("xmpp: {}", name));
 
     if (!weechat_buffer_get_integer(buffer, "short_name_is_set"))
         weechat_buffer_set(buffer, "short_name", name.data());
@@ -1165,11 +1159,11 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     pubsub_publish_ids[uid] = {target_service, target_node, item_uuid, post.buffer};
 
     if (post.is_reply)
-        weechat_printf(post.buffer, "%sPosted reply to %s on %s/%s",
-                       weechat_prefix("network"),
-                       reply_to_id.c_str(), target_service.c_str(), target_node.c_str());
+        weechat::UiPort::for_buffer(post.buffer)->printf_network(
+            fmt::format("Posted reply to {} on {}/{}",
+                        reply_to_id, target_service, target_node));
     else
-        weechat_printf(post.buffer, "%sPosted to %s/%s (id: %s)",
-                       weechat_prefix("network"),
-                       pub_service.c_str(), pub_node.c_str(), item_uuid.c_str());
+        weechat::UiPort::for_buffer(post.buffer)->printf_network(
+            fmt::format("Posted to {}/{} (id: {})",
+                        pub_service, pub_node, item_uuid));
 }

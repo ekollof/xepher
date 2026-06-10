@@ -67,10 +67,11 @@ int command__mood(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
@@ -138,10 +139,8 @@ int command__mood(const void *pointer, void *data,
 
     if (!valid)
     {
-        weechat_printf(buffer, "%sxmpp: invalid mood '%s'",
-                      weechat_prefix("error"), mood);
-        weechat_printf(buffer, "%sValid moods: happy, sad, angry, excited, tired, etc.",
-                      weechat_prefix("error"));
+        ui->printf_error(fmt::format("xmpp: invalid mood '{}'", mood));
+        ui->printf_error("Valid moods: happy, sad, angry, excited, tired, etc.");
         return WEECHAT_RC_OK;
     }
 
@@ -192,11 +191,9 @@ int command__mood(const void *pointer, void *data,
     ptr_account->connection.send(iq.build(ptr_account->context).get());
 
     if (text)
-        weechat_printf(buffer, "%sxmpp: mood set to '%s': %s",
-                      weechat_prefix("network"), mood, text);
+        ui->printf_network(fmt::format("xmpp: mood set to '{}': {}", mood, text));
     else
-        weechat_printf(buffer, "%sxmpp: mood set to '%s'",
-                      weechat_prefix("network"), mood);
+        ui->printf_network(fmt::format("xmpp: mood set to '{}'", mood));
 
     return WEECHAT_RC_OK;
 }
@@ -217,10 +214,11 @@ int command__activity(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
@@ -292,10 +290,8 @@ int command__activity(const void *pointer, void *data,
 
     if (!valid)
     {
-        weechat_printf(buffer, "%sxmpp: invalid activity category '%s'",
-                      weechat_prefix("error"), category);
-        weechat_printf(buffer, "%sValid categories: working, relaxing, eating, drinking, traveling, etc.",
-                      weechat_prefix("error"));
+        ui->printf_error(fmt::format("xmpp: invalid activity category '{}'", category));
+        ui->printf_error("Valid categories: working, relaxing, eating, drinking, traveling, etc.");
         return WEECHAT_RC_OK;
     }
 
@@ -359,17 +355,13 @@ int command__activity(const void *pointer, void *data,
     ptr_account->connection.send(iq.build(ptr_account->context).get());
 
     if (specific && text)
-        weechat_printf(buffer, "%sxmpp: activity set to '%s/%s': %s",
-                      weechat_prefix("network"), argv[1], specific, text);
+        ui->printf_network(fmt::format("xmpp: activity set to '{}/{}': {}", argv[1], specific, text));
     else if (specific)
-        weechat_printf(buffer, "%sxmpp: activity set to '%s/%s'",
-                      weechat_prefix("network"), argv[1], specific);
+        ui->printf_network(fmt::format("xmpp: activity set to '{}/{}'", argv[1], specific));
     else if (text)
-        weechat_printf(buffer, "%sxmpp: activity set to '%s': %s",
-                      weechat_prefix("network"), argv[1], text);
+        ui->printf_network(fmt::format("xmpp: activity set to '{}': {}", argv[1], text));
     else
-        weechat_printf(buffer, "%sxmpp: activity set to '%s'",
-                      weechat_prefix("network"), argv[1]);
+        ui->printf_network(fmt::format("xmpp: activity set to '{}'", argv[1]));
 
     return WEECHAT_RC_OK;
 }
@@ -392,35 +384,31 @@ int command__selfping(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%s%s: this command must be used in a MUC buffer",
-                      weechat_prefix("error"),
-                      argv[0]);
+        ui->printf_error(fmt::format("{}: this command must be used in a MUC buffer", argv[0]));
         return WEECHAT_RC_OK;
     }
 
     // Check if this is a MUC channel
     if (ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer, "%s%s: this command must be used in a MUC buffer",
-                      weechat_prefix("error"),
-                      argv[0]);
+        ui->printf_error(fmt::format("{}: this command must be used in a MUC buffer", argv[0]));
         return WEECHAT_RC_OK;
     }
 
     // Construct our full MUC JID (room@server/nickname)
     std::string muc_jid = std::string(ptr_channel->id) + "/" + std::string(ptr_account->nickname());
 
-    weechat_printf(buffer, "%sSending MUC self-ping to %s...",
-                   weechat_prefix("network"), muc_jid.c_str());
+        ui->printf_network(fmt::format("Sending MUC self-ping to {}...", muc_jid.c_str()));
 
     // Send self-ping to our own MUC nickname
     auto iq = stanza::iq()
@@ -449,10 +437,11 @@ int command__whois(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
@@ -463,8 +452,7 @@ int command__whois(const void *pointer, void *data,
         const char *arg_raw = argv_eol[1];
         if (!arg_raw || !*arg_raw)
         {
-            weechat_printf(buffer, "%s%s: missing JID argument",
-                           weechat_prefix("error"), argv[0]);
+        ui->printf_error(fmt::format("{}: missing JID argument", argv[0]));
             return WEECHAT_RC_OK;
         }
 
@@ -477,8 +465,7 @@ int command__whois(const void *pointer, void *data,
             target_storage = ptr_channel->find_member_by_nick(arg);
             if (target_storage.empty())
             {
-                weechat_printf(buffer, "%s%s: nick '%s' not found in this MUC",
-                               weechat_prefix("error"), argv[0], arg_raw);
+        ui->printf_error(fmt::format("{}: nick '{}' not found in this MUC", argv[0], arg_raw));
                 return WEECHAT_RC_OK;
             }
             target = target_storage.c_str();
@@ -492,9 +479,7 @@ int command__whois(const void *pointer, void *data,
         target = ptr_channel->id.data();
     else
     {
-        weechat_printf(buffer, "%s%s: missing JID argument",
-                      weechat_prefix("error"),
-                      argv[0]);
+        ui->printf_error(fmt::format("{}: missing JID argument", argv[0]));
         return WEECHAT_RC_OK;
     }
 
@@ -507,40 +492,31 @@ int command__whois(const void *pointer, void *data,
             ? weechat::user::search(ptr_account, (*member_opt)->id.c_str())
             : nullptr;
 
-        weechat_printf(buffer, "%sPresence for %s:",
-                       weechat_prefix("network"), target);
+        ui->printf_network(fmt::format("Presence for {}:", target));
 
         if (user)
         {
             auto fmt_opt = [](const std::optional<std::string>& v) -> std::string_view {
                 return v ? std::string_view(*v) : std::string_view{"-"};
             };
-            weechat_printf(buffer, "  Role:        %s",
-                           fmt_opt(user->profile.role).data());
-            weechat_printf(buffer, "  Affiliation: %s",
-                           fmt_opt(user->profile.affiliation).data());
-            weechat_printf(buffer, "  Status:      %s%s%s",
-                           user->profile.status.has_value() ? user->profile.status->c_str() : "online",
-                           user->profile.status_text.has_value() ? " [" : "",
-                           user->profile.status_text.has_value() ? user->profile.status_text->c_str() : "",
-                           user->profile.status_text.has_value() ? "]" : "");
+        ui->printf(fmt::format("  Role:        {}", fmt_opt(user->profile.role).data()));
+        ui->printf(fmt::format("  Affiliation: {}", fmt_opt(user->profile.affiliation).data()));
+        ui->printf(fmt::format("  Status:      {}{}{}", user->profile.status.has_value() ? user->profile.status->c_str() : "online", user->profile.status_text.has_value() ? " [" : "", user->profile.status_text.has_value() ? user->profile.status_text->c_str() : "", user->profile.status_text.has_value() ? "]" : ""));
             if (user->profile.idle)
-                weechat_printf(buffer, "  Idle:        %s",
-                               user->profile.idle->c_str());
+        ui->printf(fmt::format("  Idle:        {}", user->profile.idle->c_str()));
         }
 
         if (member_opt && (*member_opt)->real_jid)
         {
             std::string_view real_jid = *(*member_opt)->real_jid;
-            weechat_printf(buffer, "  Real JID:    %s", real_jid.data());
+        ui->printf(fmt::format("  Real JID:    {}", real_jid.data()));
             // vCard requests must target the bare JID (XEP-0054 §3.2, XEP-0292 §4.1.1)
             target_storage = ::jid(nullptr, std::string(real_jid)).bare;
             target = target_storage.c_str();
         }
         else
         {
-            weechat_printf(buffer, "  %sRoom is anonymous — vCard request sent to room JID",
-                           weechat_color("darkgray"));
+        ui->printf(fmt::format("  {}Room is anonymous — vCard request sent to room JID", weechat_color("darkgray")));
         }
     }
 
@@ -557,8 +533,7 @@ int command__whois(const void *pointer, void *data,
     if (req_id4)
         ptr_account->whois_queries[req_id4] = { buffer, std::string(target) };
 
-    weechat_printf(buffer, "%sRequesting vCard for %s...",
-                   weechat_prefix("network"), target);
+    ui->printf_network(fmt::format("Requesting vCard for {}...", target));
 
     ptr_account->connection.send(iq);
     xmpp_stanza_release(iq);
@@ -587,19 +562,18 @@ int command__setvcard(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                       weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (argc < 3)
     {
-        weechat_printf(buffer,
-                       "%s%s: usage: /setvcard <field> <value>\n"
-                       "  fields: fn, nickname, email, url, desc, org, title, tel, bday, note",
-                       weechat_prefix("error"), argv[0]);
+        ui->printf_error(fmt::format("{}: usage: /setvcard <field> <value>\n"
+                       "  fields: fn, nickname, email, url, desc, org, title, tel, bday, note", argv[0]));
         return WEECHAT_RC_OK;
     }
 
@@ -612,10 +586,8 @@ int command__setvcard(const void *pointer, void *data,
     };
     if (!std::ranges::contains(valid_fields, field))
     {
-        weechat_printf(buffer,
-                       "%s%s: unknown vCard field '%s'\n"
-                       "  valid fields: fn, nickname, email, url, desc, org, title, tel, bday, note",
-                       weechat_prefix("error"), argv[0], argv[1]);
+        ui->printf_error(fmt::format("{}: unknown vCard field '{}'\n"
+                       "  valid fields: fn, nickname, email, url, desc, org, title, tel, bday, note", argv[0], argv[1]));
         return WEECHAT_RC_OK;
     }
 
@@ -625,8 +597,7 @@ int command__setvcard(const void *pointer, void *data,
     const char *req_id = xmpp_stanza_get_id(iq);
     if (req_id)
         ptr_account->setvcard_queries[req_id] = { buffer, field, value };
-    weechat_printf(buffer, "%sFetching current vCard before updating %s...",
-                   weechat_prefix("network"), field.c_str());
+    ui->printf_network(fmt::format("Fetching current vCard before updating {}...", field.c_str()));
     ptr_account->connection.send(iq);
     xmpp_stanza_release(iq);
 
@@ -652,19 +623,18 @@ int command__setavatar(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                       weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (argc < 2)
     {
-        weechat_printf(buffer,
-                       "%s%s: usage: /setavatar <filepath>\n"
-                       "  filepath: path to a PNG, JPEG, GIF, or WEBP image file",
-                       weechat_prefix("error"), argv[0]);
+        ui->printf_error(fmt::format("{}: usage: /setavatar <filepath>\n"
+                       "  filepath: path to a PNG, JPEG, GIF, or WEBP image file", argv[0]));
         return WEECHAT_RC_OK;
     }
 

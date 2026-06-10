@@ -94,18 +94,16 @@ void store_bundle(omemo &self, std::string_view jid, std::uint32_t remote_device
 
     if (bundle.signed_pre_key_id.empty() || !parse_uint32(bundle.signed_pre_key_id))
     {
-        weechat_printf(nullptr,
-                       "%somemo: local bundle metadata has invalid signed prekey id '%s'",
-                       weechat_prefix("error"),
-                       bundle.signed_pre_key_id.c_str());
+        print_error(nullptr,
+                    fmt::format("omemo: local bundle metadata has invalid signed prekey id '{}'",
+                                bundle.signed_pre_key_id));
         return std::nullopt;
     }
     if (bundle.signed_pre_key.empty() || bundle.signed_pre_key_signature.empty()
         || bundle.identity_key.empty())
     {
-        weechat_printf(nullptr,
-                       "%somemo: local bundle metadata is missing spk/spks/ik payloads",
-                       weechat_prefix("error"));
+        print_error(nullptr,
+                    "omemo: local bundle metadata is missing spk/spks/ik payloads");
         return std::nullopt;
     }
 
@@ -120,10 +118,9 @@ void store_bundle(omemo &self, std::string_view jid, std::uint32_t remote_device
         const auto parsed_id = parse_uint32(id);
         if (!parsed_id || key.empty())
         {
-            weechat_printf(nullptr,
-                           "%somemo: local bundle metadata contains invalid prekey entry '%s'",
-                           weechat_prefix("error"),
-                           entry.c_str());
+            print_error(nullptr,
+                        fmt::format("omemo: local bundle metadata contains invalid prekey entry '{}'",
+                                    entry));
             return std::nullopt;
         }
 
@@ -134,10 +131,9 @@ void store_bundle(omemo &self, std::string_view jid, std::uint32_t remote_device
             });
         if (duplicate_id)
         {
-            weechat_printf(nullptr,
-                           "%somemo: local bundle metadata contains duplicate prekey id '%s'",
-                           weechat_prefix("error"),
-                           id.c_str());
+            print_error(nullptr,
+                        fmt::format("omemo: local bundle metadata contains duplicate prekey id '{}'",
+                                    id));
             return std::nullopt;
         }
 
@@ -149,11 +145,10 @@ void store_bundle(omemo &self, std::string_view jid, std::uint32_t remote_device
 
     if (bundle.prekeys.size() < kMinPreKeyCount)
     {
-        weechat_printf(nullptr,
-                       "%somemo: local bundle metadata has only %zu prekeys (XEP-0384 minimum is %u)",
-                       weechat_prefix("error"),
-                       bundle.prekeys.size(),
-                       kMinPreKeyCount);
+        print_error(nullptr,
+                    fmt::format("omemo: local bundle metadata has only {} prekeys (XEP-0384 minimum is {})",
+                                bundle.prekeys.size(),
+                                kMinPreKeyCount));
     }
 
     store_bundle(self, "self", self.device_id, bundle);
@@ -288,10 +283,9 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
         return 0;
 
     store_string(self, kPrekeys, join(index_entries, ";"));
-    weechat_printf(nullptr,
-                   "%somemo: repaired prekeys index — rebuilt %zu entries",
-                   weechat_prefix("network"),
-                   index_entries.size());
+    print_info(nullptr,
+               fmt::format("omemo: repaired prekeys index — rebuilt {} entries",
+                           index_entries.size()));
     return index_entries.size();
 }
 
@@ -342,10 +336,8 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     // Record the generation timestamp so rotation logic knows when to rotate next.
     store_string(self, kSignedPreKeyTimestamp, fmt::format("{}", now_secs));
 
-    weechat_printf(nullptr,
-                   "%somemo: signed prekey rotated to id %u",
-                   weechat_prefix("network"),
-                   new_spk_id);
+    print_info(nullptr,
+               fmt::format("omemo: signed prekey rotated to id {}", new_spk_id));
     return true;
 }
 
@@ -406,11 +398,10 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
                 //      their records).  The repair will confirm the same count as
                 //      the index, meaning nothing changed on disk — no republish.
                 const auto old_count = parts.size();
-                weechat_printf(nullptr,
-                               "%somemo: prekeys index has only %zu entries (expected %u); repairing",
-                               weechat_prefix("network"),
-                               old_count,
-                               kPreKeyCount);
+                print_info(nullptr,
+                           fmt::format("omemo: prekeys index has only {} entries (expected {}); repairing",
+                                       old_count,
+                                       kPreKeyCount));
                 const auto repaired_count = repair_prekeys_index(self, context);
                 // Only republish if the repair found more records than were in
                 // the index (case a).  If the count is the same or lower the
@@ -488,11 +479,10 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
 
     if (serialized_prekeys.size() < kMinPreKeyCount)
     {
-        weechat_printf(nullptr,
-                       "%somemo: generated only %zu prekeys (XEP-0384 minimum is %u)",
-                       weechat_prefix("error"),
-                       serialized_prekeys.size(),
-                       kMinPreKeyCount);
+        print_error(nullptr,
+                    fmt::format("omemo: generated only {} prekeys (XEP-0384 minimum is {})",
+                                serialized_prekeys.size(),
+                                kMinPreKeyCount));
     }
 
     store_string(self, kPrekeys, join(serialized_prekeys, ";"));
@@ -602,10 +592,9 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     const auto bundle = load_bundle(self, jid, remote_device_id);
     if (!bundle || bundle->prekeys.empty())
     {
-        weechat_printf(nullptr,
-                       "%somemo: session bootstrap failed for %.*s/%u: no cached bundle or bundle has no prekeys",
-                       weechat_prefix("error"),
-                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        print_error(nullptr,
+                    fmt::format("omemo: session bootstrap failed for {}/{}: no cached bundle or bundle has no prekeys",
+                                jid, remote_device_id));
         return false;
     }
 
@@ -627,11 +616,10 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     const auto pre_key_id_opt = parse_uint32(chosen_prekey.first);
     if (!signed_pre_key_id_opt || !pre_key_id_opt)
     {
-        weechat_printf(nullptr,
-                       "%somemo: session bootstrap failed for %.*s/%u: invalid signed-prekey id '%s' or prekey id '%s'",
-                       weechat_prefix("error"),
-                       static_cast<int>(jid.size()), jid.data(), remote_device_id,
-                       bundle->signed_pre_key_id.c_str(), chosen_prekey.first.c_str());
+        print_error(nullptr,
+                    fmt::format("omemo: session bootstrap failed for {}/{}: invalid signed-prekey id '{}' or prekey id '{}'",
+                                jid, remote_device_id,
+                                bundle->signed_pre_key_id, chosen_prekey.first));
         return false;
     }
     const auto signed_pre_key_id = *signed_pre_key_id_opt;
@@ -642,30 +630,27 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     auto one_time_pre_key = deserialize_public_key(chosen_prekey.second, self.context);
     if (!identity_key || !signed_pre_key || !one_time_pre_key)
     {
-        weechat_printf(nullptr,
-                       "%somemo: session bootstrap failed for %.*s/%u: could not deserialize identity/signed-prekey/prekey public keys",
-                       weechat_prefix("error"),
-                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        print_error(nullptr,
+                    fmt::format("omemo: session bootstrap failed for {}/{}: could not deserialize identity/signed-prekey/prekey public keys",
+                                jid, remote_device_id));
         return false;
     }
 
     auto signature = base64_decode(nullptr, bundle->signed_pre_key_signature);
     if (signature.empty())
     {
-        weechat_printf(nullptr,
-                       "%somemo: session bootstrap failed for %.*s/%u: signed prekey signature is empty/invalid base64",
-                       weechat_prefix("error"),
-                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        print_error(nullptr,
+                    fmt::format("omemo: session bootstrap failed for {}/{}: signed prekey signature is empty/invalid base64",
+                                jid, remote_device_id));
         return false;
     }
 
     const auto signed_pre_key_raw = base64_decode(nullptr, bundle->signed_pre_key);
     if (signed_pre_key_raw.empty())
     {
-        weechat_printf(nullptr,
-                       "%somemo: session bootstrap failed for %.*s/%u: signed prekey payload is empty/invalid base64",
-                       weechat_prefix("error"),
-                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        print_error(nullptr,
+                    fmt::format("omemo: session bootstrap failed for {}/{}: signed prekey payload is empty/invalid base64",
+                                jid, remote_device_id));
         return false;
     }
 
@@ -678,10 +663,9 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
                                spk_span.data(), spk_span.size(),
                                sig_span.data(), sig_span.size()) <= 0)
     {
-        weechat_printf(nullptr,
-                       "%somemo: session bootstrap rejected invalid signed-prekey signature for %.*s/%u",
-                       weechat_prefix("error"),
-                       static_cast<int>(jid.size()), jid.data(), remote_device_id);
+        print_error(nullptr,
+                    fmt::format("omemo: session bootstrap rejected invalid signed-prekey signature for {}/{}",
+                                jid, remote_device_id));
         return false;
     }
 
@@ -709,11 +693,10 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     }
     catch (const std::exception &ex)
     {
-        weechat_printf(nullptr,
-                       "%somemo: session bootstrap failed for %.*s/%u during process_pre_key_bundle: %s",
-                       weechat_prefix("error"),
-                       static_cast<int>(jid.size()), jid.data(), remote_device_id,
-                       ex.what());
+        print_error(nullptr,
+                    fmt::format("omemo: session bootstrap failed for {}/{} during process_pre_key_bundle: {}",
+                                jid, remote_device_id,
+                                ex.what()));
         return false;
     }
     XDEBUG("omemo: session bootstrap succeeded for {}/{}",

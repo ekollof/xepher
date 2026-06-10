@@ -21,6 +21,7 @@
 #include "xmpp/iq_bookmarks.hh"
 #include "xmpp/xep-0054.inl"
 #include "xmpp/xep-0292.inl"
+#include "weechat/ui_port.hh"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"

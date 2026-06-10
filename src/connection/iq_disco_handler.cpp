@@ -29,6 +29,7 @@
 #include "xmpp/iq_pubsub_feed.hh"
 #include "xmpp/iq_disco.hh"
 #include "xmpp/iq_caps.hh"
+#include "weechat/ui_port.hh"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"

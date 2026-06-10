@@ -6,12 +6,14 @@
 #include <stdint.h>
 #include <string.h>
 #include <sstream>
+#include <fmt/core.h>
 #include <weechat/weechat-plugin.h>
 #include <strophe.h>
 
 #include "plugin.hh"
 #include "account.hh"
 #include "config.hh"
+#include "weechat/ui_port.hh"
 
 bool account_read_cb(weechat::config_section& /* section */,
                      const char *option_name, const char *value)
@@ -89,19 +91,16 @@ bool account_read_cb(weechat::config_section& /* section */,
     }
     else
     {
-        weechat_printf(
-            nullptr,
-            _("%s%s: error adding account \"%s\""),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-            account_name.data());
+        weechat::UiPort::for_buffer(nullptr)->printf_error(
+            fmt::format(fmt::runtime(_("%s: error adding account \"%s\"")),
+                        WEECHAT_XMPP_PLUGIN_NAME, account_name));
     }
 
     if (!rc)
     {
-        weechat_printf(
-            nullptr,
-            _("%s%s: error creating account option \"%s\""),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, option_name);
+        weechat::UiPort::for_buffer(nullptr)->printf_error(
+            fmt::format(fmt::runtime(_("%s: error creating account option \"%s\"")),
+                        WEECHAT_XMPP_PLUGIN_NAME, option_name));
     }
     return rc;
 }

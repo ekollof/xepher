@@ -64,8 +64,9 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         // Retransmit all remaining unacknowledged stanzas
         if (!account.sm_outqueue.empty())
         {
-            weechat_printf(account.buffer, "%sRetransmitting %zu unacknowledged stanza(s)…",
-                          weechat_prefix("network"), account.sm_outqueue.size());
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                "Retransmitting {} unacknowledged stanza(s)…",
+                account.sm_outqueue.size()));
             for (auto& [seq, stanza_copy] : account.sm_outqueue)
             {
                 m_conn.send(stanza_copy.get());
@@ -81,16 +82,16 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         if (!error)
             error = xmpp_stanza_get_child_by_name_and_ns(stanza, "item-not-found", xmlns_err);
         
+        auto ui = weechat::UiPort::for_buffer(account.buffer);
         if (error)
         {
             const char *error_name = xmpp_stanza_get_name(error);
-            weechat_printf(account.buffer, "%sSM error: %s",
-                          weechat_prefix("error"), error_name ? error_name : "unknown");
+            ui->printf_error(fmt::format(
+                "SM error: {}", error_name ? error_name : "unknown"));
         }
         else
         {
-            weechat_printf(account.buffer, "%sStream Management failed",
-                          weechat_prefix("error"));
+            ui->printf_error("Stream Management failed");
         }
 
         // Reset SM state for this session. We deliberately do *not* poison
@@ -104,8 +105,8 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         account.sm_last_ack = 0;
         account.sm_outqueue.clear();
         
-        weechat_printf(account.buffer, "%sStream Management session ended (will retry on next connect)",
-                      weechat_prefix("network"));
+        ui->printf_network(
+            "Stream Management session ended (will retry on next connect)");
     }
     else if (element_name == "a")
     {
@@ -141,8 +142,8 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         }
         else
         {
-            weechat_printf(account.buffer, "%sSM error: 'a' stanza missing 'h' attribute",
-                          weechat_prefix("error"));
+            weechat::UiPort::for_buffer(account.buffer)->printf_error(
+                "SM error: 'a' stanza missing 'h' attribute");
         }
     }
     else if (element_name == "r")

@@ -23,6 +23,7 @@
 #include "xmpp/stanza.hh"
 #include "xmpp/node.hh"
 #include "xmpp/xep-0084.inl"
+#include "weechat/ui_port.hh"
 
 std::string weechat::avatar::calculate_hash(std::span<const uint8_t> data)
 {
@@ -278,11 +279,9 @@ void weechat::avatar::load_for_user(account& acc, user& user)
         );
         user.cached_prefix_raw.clear();
         
-        weechat_printf_date_tags(acc.buffer, 0, "xmpp_avatar",
-                                "%sLoaded cached avatar for %s (hash: %.8s...)",
-                                weechat_prefix("network"),
-                                user.id.c_str(),
-                                hash.c_str());
+        weechat::UiPort::for_buffer(acc.buffer)->printf_date_tags(0, "xmpp_avatar",
+            fmt::format("{}Loaded cached avatar for {} (hash: {:.8}...)",
+                        weechat_prefix("network"), user.id, hash));
     }
 }
 
@@ -294,16 +293,16 @@ bool weechat::avatar::publish(account& acc, std::string_view filepath)
     std::ifstream file(filepath_str, std::ios::binary | std::ios::ate);
     if (!file)
     {
-        weechat_printf(acc.buffer, "%sxmpp: /setavatar: cannot open file: %s",
-                       weechat_prefix("error"), filepath_str.c_str());
+        weechat::UiPort::for_buffer(acc.buffer)->printf_error(
+            fmt::format("xmpp: /setavatar: cannot open file: {}", filepath_str));
         return false;
     }
 
     std::streamsize file_size = file.tellg();
     if (file_size <= 0 || file_size > 8 * 1024 * 1024)  // 8 MB sanity limit
     {
-        weechat_printf(acc.buffer, "%sxmpp: /setavatar: file too large or empty: %s",
-                       weechat_prefix("error"), filepath_str.c_str());
+        weechat::UiPort::for_buffer(acc.buffer)->printf_error(
+            fmt::format("xmpp: /setavatar: file too large or empty: {}", filepath_str));
         return false;
     }
     file.seekg(0, std::ios::beg);
@@ -311,8 +310,8 @@ bool weechat::avatar::publish(account& acc, std::string_view filepath)
     std::vector<uint8_t> image_bytes(static_cast<size_t>(file_size));
     if (!file.read(reinterpret_cast<char*>(image_bytes.data()), file_size))
     {
-        weechat_printf(acc.buffer, "%sxmpp: /setavatar: failed to read file: %s",
-                       weechat_prefix("error"), filepath_str.c_str());
+        weechat::UiPort::for_buffer(acc.buffer)->printf_error(
+            fmt::format("xmpp: /setavatar: failed to read file: {}", filepath_str));
         return false;
     }
 
@@ -385,8 +384,8 @@ bool weechat::avatar::publish(account& acc, std::string_view filepath)
 
     if (b64.empty())
     {
-        weechat_printf(acc.buffer, "%sxmpp: /setavatar: base64 encoding failed",
-                       weechat_prefix("error"));
+        weechat::UiPort::for_buffer(acc.buffer)->printf_error(
+            "xmpp: /setavatar: base64 encoding failed");
         return false;
     }
 
@@ -429,10 +428,8 @@ bool weechat::avatar::publish(account& acc, std::string_view filepath)
         self->cached_prefix_raw.clear();
     }
 
-    weechat_printf(acc.buffer,
-                   "%sAvatar published: %s (%zu bytes, %ux%u, hash %.8s...)",
-                   weechat_prefix("network"),
-                   mime_type.c_str(), image_bytes.size(),
-                   img_width, img_height, hash.c_str());
+    weechat::UiPort::for_buffer(acc.buffer)->printf_network(
+        fmt::format("Avatar published: {} ({} bytes, {}x{}, hash {:.8}...)",
+                    mime_type, image_bytes.size(), img_width, img_height, hash));
     return true;
 }

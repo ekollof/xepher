@@ -24,11 +24,11 @@ int command__enter([[maybe_unused]] const void *pointer,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -184,11 +184,11 @@ int command__open([[maybe_unused]] const void *pointer,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                        _("%s%s: you are not connected to server"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 

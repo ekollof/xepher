@@ -32,6 +32,7 @@
 #include "avatar.hh"
 #include "debug.hh"
 #include "connection/internal.hh"
+#include "weechat/ui_port.hh"
 
 #include "connection/stream_management.inl"
 #include "connection/connect_lifecycle.inl"

@@ -50,11 +50,11 @@ int command__list(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer,
-                       _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: you are not connected to server")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -84,13 +84,11 @@ int command__list(const void *pointer, void *data,
     if (weechat_strcasecmp(service_jid, "search.jabber.network") == 0)
         service_jid = "api@search.jabber.network";
 
-    weechat_printf(buffer, "");
+    ui->printf("");
     if (keywords[0])
-        weechat_printf(buffer, "%sSearching for MUC rooms matching \"%s\" via %s (XEP-0433)…",
-                      weechat_prefix("network"), keywords, service_jid);
+        ui->printf_network(fmt::format("Searching for MUC rooms matching \"{}\" via {} (XEP-0433)…", keywords, service_jid));
     else
-        weechat_printf(buffer, "%sSearching for popular MUC rooms via %s (XEP-0433)…",
-                      weechat_prefix("network"), service_jid);
+        ui->printf_network(fmt::format("Searching for popular MUC rooms via {} (XEP-0433)…", service_jid));
 
     // Create an interactive picker that will be populated as results stream in.
     // On select: join the chosen room.
@@ -216,17 +214,17 @@ int command__upload(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%s%s: command \"upload\" must be executed in an xmpp buffer",
-                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: command \"upload\" must be executed in an xmpp buffer", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%s%s: you are not connected to server",
-                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: you are not connected to server", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 
@@ -239,15 +237,12 @@ int command__upload(const void *pointer, void *data,
         if (picked)
         {
             filename = *picked;
-            weechat_printf(buffer, "%sSelected file: %s",
-                          weechat_prefix("network"), filename.c_str());
+        ui->printf_network(fmt::format("Selected file: {}", filename.c_str()));
         }
         else
         {
-            weechat_printf(buffer, "%s%s: no file selected. Usage: /upload <filename>",
-                          weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-            weechat_printf(buffer, "%sNote: Install zenity, kdialog, or fzf for interactive file picker",
-                          weechat_prefix("error"));
+        ui->printf_error(fmt::format("{}: no file selected. Usage: /upload <filename>", WEECHAT_XMPP_PLUGIN_NAME));
+        ui->printf_error("Note: Install zenity, kdialog, or fzf for interactive file picker");
             return WEECHAT_RC_OK;
         }
     }
@@ -267,9 +262,7 @@ int command__upload(const void *pointer, void *data,
     FILE *file = fopen(filename.c_str(), "rb");
     if (!file)
     {
-        weechat_printf(buffer, "%s%s: cannot open file: %s",
-                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                      filename.c_str());
+        ui->printf_error(fmt::format("{}: cannot open file: {}", WEECHAT_XMPP_PLUGIN_NAME, filename.c_str()));
         return WEECHAT_RC_OK;
     }
     
@@ -280,18 +273,14 @@ int command__upload(const void *pointer, void *data,
     
     if (filesize <= 0)
     {
-        weechat_printf(buffer, "%s%s: file is empty: %s",
-                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                      filename.c_str());
+        ui->printf_error(fmt::format("{}: file is empty: {}", WEECHAT_XMPP_PLUGIN_NAME, filename.c_str()));
         return WEECHAT_RC_OK;
     }
     
     // Check against server max size if known
     if (ptr_account->upload_max_size > 0 && (size_t)filesize > ptr_account->upload_max_size)
     {
-        weechat_printf(buffer, "%s%s: file too large (max: %zu bytes, file: %ld bytes)",
-                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                      ptr_account->upload_max_size, filesize);
+        ui->printf_error(fmt::format("{}: file too large (max: {} bytes, file: {} bytes)", WEECHAT_XMPP_PLUGIN_NAME, ptr_account->upload_max_size, filesize));
         return WEECHAT_RC_OK;
     }
 
@@ -337,9 +326,7 @@ int command__upload(const void *pointer, void *data,
         FILE *bob_file = fopen(filename.c_str(), "rb");
         if (!bob_file)
         {
-            weechat_printf(buffer, "%s%s: cannot read image for BoB send: %s",
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                           filename.c_str());
+        ui->printf_error(fmt::format("{}: cannot read image for BoB send: {}", WEECHAT_XMPP_PLUGIN_NAME, filename.c_str()));
             return WEECHAT_RC_OK;
         }
         const std::size_t read_n = fread(
@@ -347,14 +334,13 @@ int command__upload(const void *pointer, void *data,
         fclose(bob_file);
         if (read_n != image_bytes.size())
         {
-            weechat_printf(buffer, "%s%s: failed to read image for BoB send",
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: failed to read image for BoB send", WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
-        weechat_printf_date_tags(buffer, 0, "no_trigger,notify_none",
-                                 "%sSending image via XEP-0231 BoB (%ld bytes)...",
-                                 weechat_prefix("network"), filesize);
+        ui->printf_date_tags(0, "no_trigger,notify_none",
+            fmt::format("{}Sending image via XEP-0231 BoB ({} bytes)...",
+                        weechat_prefix("network"), filesize));
         ptr_channel->send_bob_image(
             ptr_channel->id, image_bytes, content_type, sanitized_basename);
         return WEECHAT_RC_OK;
@@ -363,21 +349,19 @@ int command__upload(const void *pointer, void *data,
     // Check if we have discovered upload service
     if (ptr_account->upload_service.empty())
     {
-        weechat_printf(buffer, "%s%s: upload service not discovered yet (try reconnecting)",
-                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: upload service not discovered yet (try reconnecting)", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
     
-    weechat_printf_date_tags(buffer, 0, "no_trigger,notify_none",
-                  "%sRequesting upload slot for %s (%ld bytes)...",
-                  weechat_prefix("network"), filename.c_str(), filesize);
+    ui->printf_date_tags(0, "no_trigger,notify_none",
+                         fmt::format("Requesting upload slot for {} ({} bytes)...",
+                                     filename, filesize));
     
     // Generate request ID
     std::string upload_id = stanza::uuid(ptr_account->context);
     const char *id = upload_id.c_str();
 
-    weechat_printf(buffer, "%sUsing sanitized filename: %s",
-                  weechat_prefix("network"), sanitized_basename.c_str());
+        ui->printf_network(fmt::format("Using sanitized filename: {}", sanitized_basename.c_str()));
     
     // Use the size from the early probe (printed in "Requesting..." and used for max check).
     // Snapshot happens immediately after this, so the snapshotted bytes (and thus uploaded
@@ -402,8 +386,7 @@ int command__upload(const void *pointer, void *data,
     int src_fd = ::mkstemp(src_tmpl);
     if (src_fd < 0)
     {
-        weechat_printf(buffer, "%s%s: failed to create temp snapshot for upload",
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: failed to create temp snapshot for upload", WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
     std::string src_tmp_path = src_tmpl;
@@ -413,8 +396,7 @@ int command__upload(const void *pointer, void *data,
         {
             ::close(src_fd);
             ::unlink(src_tmp_path.c_str());
-            weechat_printf(buffer, "%s%s: cannot reopen selected file for snapshot: %s",
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, src_path.c_str());
+        ui->printf_error(fmt::format("{}: cannot reopen selected file for snapshot: {}", WEECHAT_XMPP_PLUGIN_NAME, src_path.c_str()));
             return WEECHAT_RC_OK;
         }
         FILE *dst_f = fdopen(src_fd, "wb");
@@ -423,8 +405,7 @@ int command__upload(const void *pointer, void *data,
             fclose(src_f);
             ::close(src_fd);
             ::unlink(src_tmp_path.c_str());
-            weechat_printf(buffer, "%s%s: failed to fdopen upload temp",
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: failed to fdopen upload temp", WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
         char cbuf[8192];
@@ -436,8 +417,7 @@ int command__upload(const void *pointer, void *data,
                 fclose(src_f);
                 fclose(dst_f);
                 ::unlink(src_tmp_path.c_str());
-                weechat_printf(buffer, "%s%s: failed to write upload snapshot",
-                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: failed to write upload snapshot", WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
         }
@@ -445,8 +425,7 @@ int command__upload(const void *pointer, void *data,
         if (fflush(dst_f) != 0 || fclose(dst_f) != 0)
         {
             ::unlink(src_tmp_path.c_str());
-            weechat_printf(buffer, "%s%s: failed to finalize upload snapshot",
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format("{}: failed to finalize upload snapshot", WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
     }

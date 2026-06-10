@@ -212,10 +212,9 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
 {
     if (!db_env || !jid)
     {
-        weechat_printf(nullptr,
-                       "%somemo: handle_axolotl_devicelist: invalid args (jid=%s)",
-                       weechat_prefix("error"),
-                       jid ? jid : "(null)");
+        print_error(account ? account->buffer : nullptr,
+                    fmt::format("omemo: handle_axolotl_devicelist: invalid args (jid={})",
+                                jid ? jid : "(null)"));
         return;
     }
 

@@ -38,6 +38,10 @@ public:
     {
         dated.push_back({date, std::string(tags), std::string(msg)});
     }
+    void printf_y(int y, std::string_view msg) override
+    {
+        lines.emplace_back("[y=" + std::to_string(y) + "] " + std::string(msg));
+    }
 
     void clear()
     {

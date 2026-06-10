@@ -33,5 +33,6 @@
 #include "buffer.hh"
 #include "debug.hh"
 #include "util.hh"
+#include "weechat/ui_port.hh"
 
 #include "account/lmdb_cache.inl"

@@ -38,6 +38,7 @@
 #include "debug.hh"
 #include "util.hh"
 #include "weechat/icat_preview.hh"
+#include "weechat/ui_port.hh"
 #include "connection/internal.hh"
 
 // ── parse_omemo_device_id ─────────────────────────────────────────────────────
@@ -374,8 +375,8 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
 
     if (ctx.success)
     {
-        weechat_printf(ctx.buffer, "%s[ESFS] Saved decrypted file: %s",
-                       weechat_prefix("network"), ctx.saved_path.c_str());
+        weechat::UiPort::for_buffer(ctx.buffer)->printf_network(fmt::format(
+            "[ESFS] Saved decrypted file: {}", ctx.saved_path));
         if (ctx.account_ptr && !ctx.channel_jid.empty() && !ctx.stable_id.empty())
         {
             ctx.account_ptr->mam_cache_store_esfs_download(
@@ -395,8 +396,8 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
         }
     }
     else
-        weechat_printf(ctx.buffer, "%s[ESFS] Download/decrypt failed: %s",
-                       weechat_prefix("error"), ctx.error_msg.c_str());
+        weechat::UiPort::for_buffer(ctx.buffer)->printf_error(fmt::format(
+            "[ESFS] Download/decrypt failed: {}", ctx.error_msg));
 
     g_esfs_downloads.erase(it);
     return WEECHAT_RC_OK;
@@ -421,8 +422,8 @@ void esfs_start_download(std::string_view cipher_url,
     int pipe_fds[2];
     if (pipe(pipe_fds) != 0)
     {
-        weechat_printf(buf, "%s[ESFS] Failed to create pipe for download",
-                       weechat_prefix("error"));
+        weechat::UiPort::for_buffer(buf)->printf_error(
+            "[ESFS] Failed to create pipe for download");
         return;
     }
 
@@ -719,20 +720,18 @@ static int og_fetch_cb(const void * /*pointer*/, void * /*data*/, int fd)
             std::string line = format_og_preview_card(
                 p.title, p.description, p.url, p.image, ctx.url);
 
-            weechat_printf_date_tags(ctx.buffer, ctx.date,
-                "notify_none,no_log,xmpp_og_preview",
-                "%s\t%s", ctx.display_prefix.c_str(), line.c_str());
+            weechat::UiPort::for_buffer(ctx.buffer)->printf_date_tags(
+                ctx.date, "notify_none,no_log,xmpp_og_preview",
+                fmt::format("{}\t{}", ctx.display_prefix, line));
         }
         else
         {
             // Silent fetch: print a one-line progress note to the account buffer.
             struct t_gui_buffer *acct_buf = ctx.account_ptr->buffer;
             const std::string &title_str = p.title.empty() ? display_url : p.title;
-            weechat_printf(acct_buf,
-                "%sxmpp/links: fetched %s \u2014 %s",
-                weechat_prefix("network"),
-                ctx.url.c_str(),
-                title_str.c_str());
+            weechat::UiPort::for_buffer(acct_buf)->printf_network(fmt::format(
+                "xmpp/links: fetched {} \u2014 {}",
+                ctx.url, title_str));
         }
     }
 

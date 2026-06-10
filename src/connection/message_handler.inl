@@ -273,13 +273,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
                             if (mmn_text && *mmn_text)
                             {
-                                weechat_printf_date_tags(
-                                    muc_buf, mmn_ts,
-                                    "xmpp_message,notify_highlight,log1",
-                                    "%s%s\t%s",
-                                    weechat_prefix("action"),
-                                    mmn_nick,
-                                    mmn_text);
+                                weechat::UiPort::for_buffer(muc_buf)->printf_date_tags(
+                                    mmn_ts, "xmpp_message,notify_highlight,log1",
+                                    fmt::format("{}{}\t{}",
+                                        weechat_prefix("action"),
+                                        mmn_nick, mmn_text));
                             }
                         }
                     }
@@ -571,10 +569,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         auto& [_, c] = *it_ch;
                         ch = &c;
                     }
-                    weechat_printf_date_tags(ch->buffer, 0, "xmpp_attention,notify_highlight",
-                                            "%s%s is requesting your attention! (/buzz)",
-                                            weechat_prefix("network"),
-                                            bare_s.c_str());
+                    weechat::UiPort::for_buffer(ch->buffer)->printf_date_tags(
+                        0, "xmpp_attention,notify_highlight",
+                        fmt::format("{}{} is requesting your attention! (/buzz)",
+                            weechat_prefix("network"), bare_s));
                 }
                 return 1;
             }
@@ -612,19 +610,18 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     {
                         weechat_buffer_set(rai_ch->buffer, "hotlist",
                                            WEECHAT_HOTLIST_MESSAGE);
-                        weechat_printf_date_tags(rai_ch->buffer, 0,
-                                                   "xmpp_rai,notify_message",
-                                                   _("%sRoom activity detected"),
-                                                   weechat_prefix("network"));
+                        weechat::UiPort::for_buffer(rai_ch->buffer)->printf_date_tags(
+                            0, "xmpp_rai,notify_message",
+                            _("Room activity detected"));
                     }
                     else
                     {
-                        weechat_printf(account.buffer,
-                                       _("%sRoom activity: %s%s%s"),
-                                       weechat_prefix("network"),
-                                       weechat_color("chat_nick_self"),
-                                       jid,
-                                       weechat_color("reset"));
+                        weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                            "{}{}{}{}",
+                            _("Room activity: "),
+                            weechat_color("chat_nick_self"),
+                            jid,
+                            weechat_color("reset")));
                     }
                 }
                 return 1;
@@ -687,20 +684,21 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             {},
                             false);
 
+                    auto rx_ui = weechat::UiPort::for_buffer(rx_ch->buffer);
+                    const std::string rx_from = rx_from_bare.empty()
+                        ? own_jid_str : rx_from_bare;
                     if (retraction_lookup == weechat::LineStoreLookupResult::Found)
                     {
-                        weechat_printf_date_tags(rx_ch->buffer, 0, "notify_none",
-                            "%s%s retracted a message",
-                            weechat_prefix("network"),
-                            rx_from_bare.empty() ? own_jid_str.c_str() : rx_from_bare.c_str());
+                        rx_ui->printf_date_tags(0, "notify_none",
+                            fmt::format("{}{} retracted a message",
+                                weechat_prefix("network"), rx_from));
                     }
                     else if (retraction_lookup
                              != weechat::LineStoreLookupResult::SenderRejected)
                     {
-                        weechat_printf_date_tags(rx_ch->buffer, 0, "notify_none",
-                            "%s%s retracted a message (not found in buffer)",
-                            weechat_prefix("network"),
-                            rx_from_bare.empty() ? own_jid_str.c_str() : rx_from_bare.c_str());
+                        rx_ui->printf_date_tags(0, "notify_none",
+                            fmt::format("{}{} retracted a message (not found in buffer)",
+                                weechat_prefix("network"), rx_from));
                     }
                 }
                 return 1;
@@ -1006,8 +1004,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             encrypted != nullptr, is_self_outbound_copy, channel->omemo.enabled,
             is_mam_replay))
     {
-        weechat_printf(channel->buffer, "%s", fmt::format("{}Auto-enabling OMEMO (received encrypted message)",
-                       weechat_prefix("network")).c_str());
+        weechat::UiPort::for_buffer(channel->buffer)->printf_network(
+            "Auto-enabling OMEMO (received encrypted message)");
         channel->omemo.enabled = 1;
         channel->set_transport(weechat::channel::transport::OMEMO, 0);
     }
@@ -1016,8 +1014,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // Auto-enable PGP for PM channels when receiving PGP encrypted messages
     if (x && channel && channel->type == weechat::channel::chat_type::PM && !channel->pgp.enabled)
     {
-        weechat_printf(channel->buffer, "%s", fmt::format("{}Auto-enabling PGP (received encrypted message)",
-                       weechat_prefix("network")).c_str());
+        weechat::UiPort::for_buffer(channel->buffer)->printf_network(
+            "Auto-enabling PGP (received encrypted message)");
         channel->pgp.enabled = 1;
         channel->set_transport(weechat::channel::transport::PGP, 0);
     }
@@ -1142,8 +1140,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             case ::xmpp::OmemoDecryptFailureDisposition::AbortSilent:
                 return 1;
             case ::xmpp::OmemoDecryptFailureDisposition::ShowDecryptionError:
-                weechat_printf_date_tags(channel->buffer, 0, "notify_none", "%s%s (%s)",
-                                         weechat_prefix("error"), "OMEMO Decryption Error", from);
+                weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags(
+                    0, "notify_none",
+                    fmt::format("{}OMEMO Decryption Error ({})",
+                        weechat_prefix("error"), from));
                 return 1;
             }
         }
@@ -1151,8 +1151,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     else
     {
         if (encrypted && !is_self_outbound_copy)
-            weechat_printf(nullptr, "%sOMEMO: encrypted message but account.omemo is nullptr/false",
-                           weechat_prefix("error"));
+            weechat::UiPort::for_buffer(nullptr)->printf_error(
+                "OMEMO: encrypted message but account.omemo is nullptr/false");
     }
 message_handler_after_omemo:
     // If OMEMO decryption produced no cleartext and this is a self-outbound copy
@@ -1260,36 +1260,33 @@ message_handler_after_omemo:
             tombstone,
             "xmpp_retracted,xmpp_moderated,notify_none");
 
+        auto mod_ui = weechat::UiPort::for_buffer(channel->buffer);
         if (moderation_lookup == weechat::LineStoreLookupResult::Found)
         {
             if (moderation->reason)
             {
-                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                    "%s%s moderated a message: %s",
-                    weechat_prefix("network"),
-                    from_bare, moderation->reason->c_str());
+                mod_ui->printf_date_tags(0, "notify_none",
+                    fmt::format("{}{} moderated a message: {}",
+                        weechat_prefix("network"), from_bare, *moderation->reason));
             }
             else
             {
-                weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                    "%s%s moderated a message",
-                    weechat_prefix("network"),
-                    from_bare);
+                mod_ui->printf_date_tags(0, "notify_none",
+                    fmt::format("{}{} moderated a message",
+                        weechat_prefix("network"), from_bare));
             }
         }
         else if (moderation->reason)
         {
-            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                "%s%s moderated a message (not found in buffer): %s",
-                weechat_prefix("network"),
-                from_bare, moderation->reason->c_str());
+            mod_ui->printf_date_tags(0, "notify_none",
+                fmt::format("{}{} moderated a message (not found in buffer): {}",
+                    weechat_prefix("network"), from_bare, *moderation->reason));
         }
         else
         {
-            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                "%s%s moderated a message (not found in buffer)",
-                weechat_prefix("network"),
-                from_bare);
+            mod_ui->printf_date_tags(0, "notify_none",
+                fmt::format("{}{} moderated a message (not found in buffer)",
+                    weechat_prefix("network"), from_bare));
         }
 
         return 1;
@@ -1328,19 +1325,18 @@ message_handler_after_omemo:
             retraction_occupant_id,
             prefer_occupant_id);
 
+        auto retr_ui = weechat::UiPort::for_buffer(channel->buffer);
         if (retraction_lookup == weechat::LineStoreLookupResult::Found)
         {
-            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                "%s%s retracted a message",
-                weechat_prefix("network"),
-                from_bare);
+            retr_ui->printf_date_tags(0, "notify_none",
+                fmt::format("{}{} retracted a message",
+                    weechat_prefix("network"), from_bare));
         }
         else if (retraction_lookup != weechat::LineStoreLookupResult::SenderRejected)
         {
-            weechat_printf_date_tags(channel->buffer, 0, "notify_none",
-                "%s%s retracted a message (not found in buffer)",
-                weechat_prefix("network"),
-                from_bare);
+            retr_ui->printf_date_tags(0, "notify_none",
+                fmt::format("{}{} retracted a message (not found in buffer)",
+                    weechat_prefix("network"), from_bare));
         }
 
         return 1;
@@ -2048,13 +2044,14 @@ message_handler_after_omemo:
     // Nick column shows the replying user (same as the message line below it).
     // Body shows  │ quotedNick: excerpt  in dim/cyan so it reads as a quote block.
     // notify_none,no_log: no highlight, no duplicate log entry.
+    auto ch_ui = weechat::UiPort::for_buffer(channel->buffer);
     if (!reply_prefix.empty())
     {
         const std::string quote_line =
             ::xmpp::format_reply_quote_body(reply_quote_nick, reply_prefix);
         std::string msg = fmt::format("{}\t{}", display_prefix, quote_line);
-        weechat_printf_date_tags(channel->buffer, date,
-            "notify_none,no_log,xmpp_reply_quote", "%s", msg.c_str());
+        ch_ui->printf_date_tags(date,
+            "notify_none,no_log,xmpp_reply_quote", msg);
     }
 
     // XEP-0382: Spoiler Messages — prepend spoiler warning before the body
@@ -2108,7 +2105,7 @@ message_handler_after_omemo:
                                       display_prefix,
                                       edit, to, encrypted_glyph,
                                       display_text ? display_text : "");
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s", msg.c_str());
+        ch_ui->printf_date_tags(date, *dyn_tags, msg);
     }
     else if (weechat_string_match(text, "/me *", 0))
     {
@@ -2117,7 +2114,7 @@ message_handler_after_omemo:
                                       edit, display_prefix,
                                       encrypted_glyph,
                                       display_text ? display_text+4 : "");
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s", msg.c_str());
+        ch_ui->printf_date_tags(date, *dyn_tags, msg);
     }
     else
     {
@@ -2125,7 +2122,7 @@ message_handler_after_omemo:
                                       display_prefix,
                                       edit, encrypted_glyph,
                                       display_text ? display_text : "");
-        weechat_printf_date_tags(channel->buffer, date, *dyn_tags, "%s", msg.c_str());
+        ch_ui->printf_date_tags(date, *dyn_tags, msg);
     }
 
     // weechat-icat: display inline image after the message line (local path during
@@ -2214,8 +2211,8 @@ message_handler_after_omemo:
             std::string line = format_og_preview_card(
                 p.title, p.description, p.url, p.image, "");
              std::string msg = fmt::format("{}\t{}", display_prefix, line);
-             weechat_printf_date_tags(channel->buffer, date,
-                 "notify_none,no_log,xmpp_og_preview", "%s", msg.c_str());
+             ch_ui->printf_date_tags(date,
+                 "notify_none,no_log,xmpp_og_preview", msg);
         }
     }
 
@@ -2536,21 +2533,22 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
     const std::string instr = stanza_element_text(
         xmpp_stanza_get_child_by_name(x_form, "instructions"));
 
-    weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
-                             "%s%s── Ad-Hoc Form%s%s%s ──%s",
-                             weechat_prefix("network"),
-                             weechat_color("bold"),
-                             title.empty() ? "" : ": ",
-                             title.empty() ? "" : title.c_str(),
-                             title.empty() ? "" : "",
-                             weechat_color("-bold"));
+    auto form_ui = weechat::UiPort::for_buffer(buf);
+    form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+        fmt::format("{}{}── Ad-Hoc Form{}{}{} ──{}",
+            weechat_prefix("network"),
+            weechat_color("bold"),
+            title.empty() ? "" : ": ",
+            title.empty() ? "" : title,
+            title.empty() ? "" : "",
+            weechat_color("-bold")));
     if (!instr.empty())
-        weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
-                                 "%s  %s%s%s",
-                                 weechat_prefix("network"),
-                                 weechat_color("italic"),
-                                 instr.c_str(),
-                                 weechat_color("-italic"));
+        form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+            fmt::format("{}  {}{}{}",
+                weechat_prefix("network"),
+                weechat_color("italic"),
+                instr,
+                weechat_color("-italic")));
 
     int field_index = 0;
 
@@ -2593,12 +2591,12 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         if (is_fixed)
         {
             for (auto &v : values)
-                weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
-                                         "%s  %s%s%s",
-                                         weechat_prefix("network"),
-                                         weechat_color("darkgray"),
-                                         v.c_str(),
-                                         weechat_color("resetcolor"));
+                form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+                    fmt::format("{}  {}{}{}",
+                        weechat_prefix("network"),
+                        weechat_color("darkgray"),
+                        v,
+                        weechat_color("resetcolor")));
             continue;
         }
 
@@ -2699,37 +2697,32 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         }
 
         // Print: "  N. Label [var/type] = value"
-        weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
-                                 "%s  %s%d.%s %s%s%s%s %s[%s%s%s%s%s]%s = %s%s",
-                                 weechat_prefix("network"),
-                                 // index
-                                 weechat_color("darkgray"), field_index, weechat_color("resetcolor"),
-                                 // label (bold), required marker
-                                 weechat_color("bold"),
-                                 label ? label : (var ? var : "?"),
-                                 required ? "*" : "",
-                                 weechat_color("-bold"),
-                                 // [var/type]
-                                 weechat_color("darkgray"),
-                                 weechat_color(type_color),
-                                 var ? var : "?",
-                                 ftype ? "/" : "",
-                                 ftype ? ftype : "",
-                                 weechat_color("darkgray"),
-                                 weechat_color("resetcolor"),
-                                 // value
-                                 val_display.c_str(),
-                                 // options on same line for lists
-                                 options_str.empty() ? "" : (std::string("  ") + options_str).c_str());
+        form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+            fmt::format("{}  {}{}.{} {}{}{}{} {}{}{}{}{}{} = {}{}",
+                weechat_prefix("network"),
+                weechat_color("darkgray"), field_index, weechat_color("resetcolor"),
+                weechat_color("bold"),
+                label ? label : (var ? var : "?"),
+                required ? "*" : "",
+                weechat_color("-bold"),
+                weechat_color("darkgray"),
+                weechat_color(type_color),
+                var ? var : "?",
+                ftype ? "/" : "",
+                ftype ? ftype : "",
+                weechat_color("darkgray"),
+                weechat_color("resetcolor"),
+                val_display,
+                options_str.empty() ? "" : (std::string("  ") + options_str)));
     }
 
     // Show how to submit
     if (session_id && node && jid)
-        weechat_printf_date_tags(buf, 0, "xmpp_adhoc,notify_none",
-                                 "%s  %sSubmit:%s /adhoc %s %s %s %svar%s=%svalue%s ...",
-                                 weechat_prefix("network"),
-                                 weechat_color("gray"), weechat_color("resetcolor"),
-                                 jid, node, session_id,
-                                 weechat_color("cyan"), weechat_color("resetcolor"),
-                                 weechat_color("yellow"), weechat_color("resetcolor"));
+        form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+            fmt::format("{}  {}Submit:{} /adhoc {} {} {} {}var{}={}value{} ...",
+                weechat_prefix("network"),
+                weechat_color("gray"), weechat_color("resetcolor"),
+                jid, node, session_id,
+                weechat_color("cyan"), weechat_color("resetcolor"),
+                weechat_color("yellow"), weechat_color("resetcolor")));
 }

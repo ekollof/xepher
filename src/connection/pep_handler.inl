@@ -126,9 +126,8 @@ if (event)
                         auto& [_, ch] = *ch_it;
                         if (ch.buffer)
                         {
-                            weechat_printf(ch.buffer,
-                                           "%sBookmark removed — leaving room",
-                                           weechat_prefix("network"));
+                            weechat::UiPort::for_buffer(ch.buffer)->printf_network(
+                                "Bookmark removed — leaving room");
                             weechat_buffer_close(ch.buffer);
                         }
                     }
@@ -246,9 +245,8 @@ if (event)
                      }
                     else if (is_biboumi)
                     {
-                        weechat_printf(account.buffer,
-                                      "%sSkipping autojoin for IRC gateway room: %s",
-                                      weechat_prefix("network"), item_id);
+                        weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                            "Skipping autojoin for IRC gateway room: {}", item_id));
                     }
                     // else: already_joined — PEP echo of our own publish, ignore silently
                 }
@@ -266,9 +264,8 @@ if (event)
                         auto& [_, ch] = *ch_it;
                         if (ch.buffer && !ch.joining)
                         {
-                            weechat_printf(ch.buffer,
-                                           "%sBookmark autojoin disabled — leaving room",
-                                           weechat_prefix("network"));
+                            weechat::UiPort::for_buffer(ch.buffer)->printf_network(
+                                "Bookmark autojoin disabled — leaving room");
                             weechat_buffer_close(ch.buffer);
                         }
                     }
@@ -431,21 +428,24 @@ if (event)
                             if (!af.title.empty())
                             {
                                 feed_ch.update_name(af.title.c_str());
-                                weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                    "%sFeed title:%s %s",
-                                    weechat_prefix("network"),
-                                    weechat_color("reset"),
-                                    af.title.c_str());
+                                weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                    0, "xmpp_feed,notify_none",
+                                    fmt::format("{}Feed title:{} {}",
+                                        weechat_prefix("network"),
+                                        weechat_color("reset"),
+                                        af.title));
                             }
                             if (!af.author.empty())
-                                weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                    "  %sAuthor:%s %s",
-                                    weechat_color("darkgray"),
-                                    weechat_color("reset"),
-                                    af.author.c_str());
+                                weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                    0, "xmpp_feed,notify_none",
+                                    fmt::format("  {}Author:{} {}",
+                                        weechat_color("darkgray"),
+                                        weechat_color("reset"),
+                                        af.author));
                             if (!af.subtitle.empty())
-                                weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                    "  %s", af.subtitle.c_str());
+                                weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                    0, "xmpp_feed,notify_none",
+                                    fmt::format("  {}", af.subtitle));
                         }
                         if (item_id_raw)
                             account.feed_item_mark_seen(feed_key, item_id_raw);
@@ -497,10 +497,11 @@ if (event)
                         else
                         {
                             // No ID at all — nothing useful to show or fetch
-                            weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_message",
-                                "%s[%s] New item (no content)",
-                                weechat_prefix("network"),
-                                std::string(node_sv).c_str());
+                            weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                0, "xmpp_feed,notify_message",
+                                fmt::format("{}[{}] New item (no content)",
+                                    weechat_prefix("network"),
+                                    std::string(node_sv)));
                         }
                     }
                     else

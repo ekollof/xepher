@@ -37,8 +37,8 @@ bool weechat::connection::handle_vcard_iq_event(xmpp_stanza_t *stanza, std::stri
             xmpp_stanza_t *set_iq = ::xmpp::xep0054::vcard_set(account.context, out);
             account.connection.send(set_iq);
             xmpp_stanza_release(set_iq);
-            weechat_printf(sv_buf, "%svCard field %s updated",
-                           weechat_prefix("network"), sv.field.c_str());
+            weechat::UiPort::for_buffer(sv_buf)->printf_network(fmt::format(
+                "vCard field {} updated", sv.field));
 
             account.setvcard_queries.erase(sv_it);
             return true;
@@ -66,18 +66,20 @@ bool weechat::connection::handle_vcard_iq_event(xmpp_stanza_t *stanza, std::stri
         return child ? stanza_element_text(child) : std::string {};
     };
 
+    auto target_ui = weechat::UiPort::for_buffer(target_buf);
+
     // Helper: print a labelled line only if value is non-empty
     auto print_field = [&](const char *label, const std::string &val) {
         if (!val.empty())
-            weechat_printf(target_buf, "  %s%s%s %s",
-                           weechat_color("bold"), label,
-                           weechat_color("reset"), val.c_str());
+            target_ui->printf(fmt::format(
+                "  {}{}{} {}",
+                weechat_color("bold"), label,
+                weechat_color("reset"), val));
     };
 
     if (is_whois)
     {
-        weechat_printf(target_buf, "%svCard for %s:",
-                       weechat_prefix("network"), from_jid);
+        target_ui->printf_network(fmt::format("vCard for {}:", from_jid));
     }
     else
     {
@@ -252,9 +254,8 @@ bool weechat::connection::handle_bookmarks_iq_event(xmpp_stanza_t *stanza)
                 // or have 'biboumi' in the server component
                 if (::xmpp::is_biboumi_gateway_room(jid))
                 {
-                    weechat_printf(account.buffer,
-                                  "%sSkipping autojoin for IRC gateway room: %s",
-                                  weechat_prefix("network"), jid);
+                    weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                        "Skipping autojoin for IRC gateway room: {}", jid));
                 }
                 else
                 {

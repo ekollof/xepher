@@ -133,17 +133,17 @@ int command__edit(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%sxmpp: you must be in a channel to edit messages",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you must be in a channel to edit messages");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
@@ -153,8 +153,7 @@ int command__edit(const void *pointer, void *data,
         auto own_messages = collect_own_messages(buffer, 1);
         if (own_messages.empty())
         {
-            weechat_printf(buffer, "%sxmpp: no message found to edit",
-                          weechat_prefix("error"));
+        ui->printf_error("xmpp: no message found to edit");
             return WEECHAT_RC_OK;
         }
 
@@ -172,8 +171,7 @@ int command__edit(const void *pointer, void *data,
 
     if (own_messages.empty())
     {
-        weechat_printf(buffer, "%sxmpp: no message found to edit",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: no message found to edit");
         return WEECHAT_RC_OK;
     }
 
@@ -243,24 +241,23 @@ int command__edit_to(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%sxmpp: you must be in a channel to edit messages",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you must be in a channel to edit messages");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (argc < 3)
     {
-        weechat_printf(buffer, "%sxmpp: usage: /edit-to <message-id> <new text>",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: usage: /edit-to <message-id> <new text>");
         return WEECHAT_RC_OK;
     }
 
@@ -293,7 +290,7 @@ int command__edit_to(const void *pointer, void *data,
         buffer__update_line_by_id(buffer, target_id, new_msg.c_str());
     }
 
-    weechat_printf(buffer, "%sxmpp: message edit sent", weechat_prefix("network"));
+        ui->printf_network("xmpp: message edit sent");
     return WEECHAT_RC_OK;
 }
 
@@ -323,8 +320,7 @@ do_retract_send(weechat::account *account, weechat::channel *channel,
 
     account->connection.send(msg_s.build(account->context).get());
 
-    weechat_printf(buffer, "%sxmpp: message retraction sent",
-                  weechat_prefix("network"));
+    weechat::UiPort::for_buffer(buffer)->printf_network("xmpp: message retraction sent");
 }
 
 // Send a XEP-0425 moderation request for `msg_id` on `account`/`channel`.
@@ -349,9 +345,8 @@ do_moderate_send(weechat::account *account, weechat::channel *channel,
 
     account->connection.send(msg_s.build(account->context).get());
 
-    weechat_printf(buffer, "%sxmpp: moderation request sent%s",
-                  weechat_prefix("network"),
-                  reason ? " with reason" : "");
+    weechat::UiPort::for_buffer(buffer)->printf_network(
+        fmt::format("xmpp: moderation request sent{}", reason ? " with reason" : ""));
 }
 
 int command__retract(const void *pointer, void *data,
@@ -371,24 +366,23 @@ int command__retract(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%sxmpp: you must be in a channel to retract messages",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you must be in a channel to retract messages");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (argc > 2)
     {
-        weechat_printf(buffer, "%sxmpp: too many arguments (use /retract with no arguments)",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: too many arguments (use /retract with no arguments)");
         return WEECHAT_RC_OK;
     }
 
@@ -397,8 +391,7 @@ int command__retract(const void *pointer, void *data,
 
     if (own_messages.empty())
     {
-        weechat_printf(buffer, "%sxmpp: no message found to retract",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: no message found to retract");
         return WEECHAT_RC_OK;
     }
 
@@ -443,24 +436,23 @@ int command__react(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%sxmpp: you must be in a channel to react to messages",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you must be in a channel to react to messages");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (argc < 2)
     {
-        weechat_printf(buffer, "%sxmpp: missing emoji reaction",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: missing emoji reaction");
         return WEECHAT_RC_OK;
     }
 
@@ -474,8 +466,7 @@ int command__react(const void *pointer, void *data,
     
     if (!own_lines)
     {
-        weechat_printf(buffer, "%sxmpp: cannot access buffer lines",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: cannot access buffer lines");
         return WEECHAT_RC_OK;
     }
 
@@ -535,8 +526,7 @@ int command__react(const void *pointer, void *data,
     
     if (target_msg_id.empty())
     {
-        weechat_printf(buffer, "%sxmpp: no message found to react to",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: no message found to react to");
         return WEECHAT_RC_OK;
     }
 
@@ -556,8 +546,7 @@ int command__react(const void *pointer, void *data,
 
     ptr_account->connection.send(msg_s.build(ptr_account->context).get());
 
-    weechat_printf(buffer, "%sxmpp: reaction %s sent",
-                  weechat_prefix("network"), emoji);
+        ui->printf_network(fmt::format("xmpp: reaction {} sent", emoji));
 
     return WEECHAT_RC_OK;
 }
@@ -578,17 +567,17 @@ int command__reply(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%sxmpp: you must be in a channel to reply to messages",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you must be in a channel to reply to messages");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
@@ -618,8 +607,7 @@ int command__reply(const void *pointer, void *data,
 
         if (entries.empty())
         {
-            weechat_printf(buffer, "%sxmpp: no message found to reply to",
-                          weechat_prefix("error"));
+        ui->printf_error("xmpp: no message found to reply to");
             return WEECHAT_RC_OK;
         }
 
@@ -660,8 +648,7 @@ int command__reply(const void *pointer, void *data,
 
     if (!target)
     {
-        weechat_printf(buffer, "%sxmpp: no message found to reply to",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: no message found to reply to");
         return WEECHAT_RC_OK;
     }
 
@@ -703,8 +690,7 @@ int command__reply(const void *pointer, void *data,
 
     ptr_account->connection.send(msg_s.build(ptr_account->context).get());
 
-    weechat_printf(buffer, "%sxmpp: reply sent",
-                  weechat_prefix("network"));
+        ui->printf_network("xmpp: reply sent");
 
     return WEECHAT_RC_OK;
 }
@@ -725,24 +711,23 @@ int command__reply_to(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%sxmpp: you must be in a channel to reply to messages",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you must be in a channel to reply to messages");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
     if (argc < 3)
     {
-        weechat_printf(buffer, "%sxmpp: usage: /reply-to <message-id> <text>",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: usage: /reply-to <message-id> <text>");
         return WEECHAT_RC_OK;
     }
 
@@ -776,7 +761,7 @@ int command__reply_to(const void *pointer, void *data,
 
     ptr_account->connection.send(msg_s.build(ptr_account->context).get());
 
-    weechat_printf(buffer, "%sxmpp: reply sent", weechat_prefix("network"));
+        ui->printf_network("xmpp: reply sent");
     return WEECHAT_RC_OK;
 }
 
@@ -797,25 +782,24 @@ int command__moderate(const void *pointer, void *data,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
+    auto ui = weechat::UiPort::for_buffer(buffer);
+
     if (!ptr_channel)
     {
-        weechat_printf(buffer, "%sxmpp: you must be in a MUC channel to moderate messages",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you must be in a MUC channel to moderate messages");
         return WEECHAT_RC_OK;
     }
 
     // XEP-0425 is only for MUC moderation
     if (ptr_channel->type != weechat::channel::chat_type::MUC)
     {
-        weechat_printf(buffer, "%sxmpp: message moderation is only available in MUC rooms",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: message moderation is only available in MUC rooms");
         return WEECHAT_RC_OK;
     }
 
     if (!ptr_account->connected())
     {
-        weechat_printf(buffer, "%sxmpp: you are not connected to server",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: you are not connected to server");
         return WEECHAT_RC_OK;
     }
 
@@ -839,8 +823,7 @@ int command__moderate(const void *pointer, void *data,
 
     if (entries.empty())
     {
-        weechat_printf(buffer, "%sxmpp: no message found to moderate",
-                      weechat_prefix("error"));
+        ui->printf_error("xmpp: no message found to moderate");
         return WEECHAT_RC_OK;
     }
 

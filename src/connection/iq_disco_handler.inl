@@ -225,14 +225,16 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
         struct t_gui_buffer *adhoc_buf = adhoc_info.buffer
             ? adhoc_info.buffer : account.buffer;
 
+        auto adhoc_ui = weechat::UiPort::for_buffer(adhoc_buf);
+
         // For inline (non-picker) path, print header first.
         if (!adhoc_info.picker)
-            weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
-                                     "%s%sCommands available on %s%s:",
-                                     weechat_prefix("network"),
-                                     weechat_color("bold"),
-                                     adhoc_info.target_jid.c_str(),
-                                     weechat_color("reset"));
+            adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+                fmt::format("{}{}Commands available on {}{}:",
+                    weechat_prefix("network"),
+                    weechat_color("bold"),
+                    adhoc_info.target_jid,
+                    weechat_color("reset")));
 
         xmpp_stanza_t *cmd_item = xmpp_stanza_get_child_by_name(items_query, "item");
         int count = 0;
@@ -255,15 +257,15 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
             else
             {
                 // Inline print path
-                weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
-                                         "%s  %s%-40s%s  %s%s",
-                                         weechat_prefix("network"),
-                                         weechat_color("bold"),
-                                         cmd_name ? cmd_name : "(unnamed)",
-                                         weechat_color("reset"),
-                                         cmd_node ? cmd_node : "",
-                                         cmd_jid && cmd_jid != adhoc_info.target_jid
-                                             ? fmt::format(" [{}]", cmd_jid).c_str() : "");
+                adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+                    fmt::format("{}  {}{:<40}{}  {}{}",
+                        weechat_prefix("network"),
+                        weechat_color("bold"),
+                        cmd_name ? cmd_name : "(unnamed)",
+                        weechat_color("reset"),
+                        cmd_node ? cmd_node : "",
+                        cmd_jid && cmd_jid != adhoc_info.target_jid
+                            ? fmt::format(" [{}]", cmd_jid) : ""));
             }
             count++;
             cmd_item = xmpp_stanza_get_next(cmd_item);
@@ -272,14 +274,14 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
         if (!adhoc_info.picker)
         {
             if (count == 0)
-                weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
-                                         "%s  (no commands available)",
-                                         weechat_prefix("network"));
+                adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+                    fmt::format("{}  (no commands available)",
+                        weechat_prefix("network")));
             else
-                weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
-                                         "%s  Use /adhoc %s <node> to execute a command",
-                                         weechat_prefix("network"),
-                                         adhoc_info.target_jid.c_str());
+                adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+                    fmt::format("{}  Use /adhoc {} <node> to execute a command",
+                        weechat_prefix("network"),
+                        adhoc_info.target_jid));
         }
         else if (count == 0)
         {
@@ -354,10 +356,9 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
             disco_item = xmpp_stanza_get_next(disco_item);
         }
 
-        weechat_printf(account.buffer,
-                       "%sFeed discovery on %s: fetching %d node(s)",
-                       weechat_prefix("network"),
-                       feed_service.c_str(), node_count);
+        weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+            "Feed discovery on {}: fetching {} node(s)",
+            feed_service, node_count));
     }
 
     return false;
@@ -383,12 +384,13 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
     const char *session_id = xmpp_stanza_get_attribute(adhoc_command, "sessionid");
     const char *from_jid = xmpp_stanza_get_from(stanza);
 
+    auto adhoc_ui = weechat::UiPort::for_buffer(adhoc_buf);
     if (weechat_strcasecmp(type, "error") == 0)
     {
-        weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
-                                 "%s[adhoc] Error executing command %s",
-                                 weechat_prefix("error"),
-                                 cmd_node ? cmd_node : "(unknown)");
+        adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+            fmt::format("{}[adhoc] Error executing command {}",
+                weechat_prefix("error"),
+                cmd_node ? cmd_node : "(unknown)"));
     }
     else if (weechat_strcasecmp(type, "result") == 0)
     {
@@ -415,19 +417,19 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
             // Command completed with no form — check for <note>
             xmpp_stanza_t *note = xmpp_stanza_get_child_by_name(adhoc_command, "note");
             const std::string note_text = stanza_element_text(note);
-            weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
-                                     "%s[adhoc] Command %s completed%s%s",
-                                     weechat_prefix("network"),
-                                     cmd_node ? cmd_node : "",
-                                     note_text.empty() ? "" : ": ",
-                                     note_text.empty() ? "" : note_text.c_str());
+            adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+                fmt::format("{}[adhoc] Command {} completed{}{}",
+                    weechat_prefix("network"),
+                    cmd_node ? cmd_node : "",
+                    note_text.empty() ? "" : ": ",
+                    note_text.empty() ? "" : note_text));
         }
         else if (cmd_status && std::string_view(cmd_status) == "executing" && !x_form)
         {
-            weechat_printf_date_tags(adhoc_buf, 0, "xmpp_adhoc,notify_none",
-                                     "%s[adhoc] Command %s in progress (no form)",
-                                     weechat_prefix("network"),
-                                     cmd_node ? cmd_node : "");
+            adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
+                fmt::format("{}[adhoc] Command {} in progress (no form)",
+                    weechat_prefix("network"),
+                    cmd_node ? cmd_node : ""));
         }
     }
 
@@ -446,6 +448,7 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
     {
         auto &cs_info = account.channel_search_queries[cs_id];
         struct t_gui_buffer *cs_buf = cs_info.buffer ? cs_info.buffer : account.buffer;
+        auto cs_ui = weechat::UiPort::for_buffer(cs_buf);
 
         if (weechat_strcasecmp(type, "error") == 0)
         {
@@ -479,12 +482,13 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                     }
                 }
             }
-            weechat_printf_date_tags(cs_buf, 0, "xmpp_channel_search,notify_none",
-                                     "%s[search] Error from %s: %s",
-                                     weechat_prefix("error"),
-                                     cs_info.service_jid.c_str(),
-                                     !err_text_str.empty() ? err_text_str.c_str()
-                                              : (err_condition ? err_condition : "unknown error"));
+            weechat::UiPort::for_buffer(cs_buf)->printf_date_tags(
+                0, "xmpp_channel_search,notify_none",
+                fmt::format("{}[search] Error from {}: {}",
+                    weechat_prefix("error"),
+                    cs_info.service_jid,
+                    !err_text_str.empty() ? err_text_str
+                        : (err_condition ? err_condition : "unknown error")));
             account.channel_search_queries.erase(cs_id);
         }
         else if (weechat_strcasecmp(type, "result") == 0)
@@ -500,10 +504,11 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
 
                 if (!search_el || !x_form)
                 {
-                    weechat_printf_date_tags(cs_buf, 0, "xmpp_channel_search,notify_none",
-                                             "%s[search] Unexpected response from %s (missing form)",
-                                             weechat_prefix("error"),
-                                             cs_info.service_jid.c_str());
+                    cs_ui->printf_date_tags(
+                        0, "xmpp_channel_search,notify_none",
+                        fmt::format("{}[search] Unexpected response from {} (missing form)",
+                            weechat_prefix("error"),
+                            cs_info.service_jid));
                     account.channel_search_queries.erase(cs_id);
                     return true;
                 }
@@ -581,10 +586,10 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                 {
                     if (count == 0 && !cs_info.picker)
                     {
-                        weechat_printf_date_tags(cs_buf, 0, "xmpp_channel_search,notify_none",
-                                                 "%sMUC Rooms (via %s):",
-                                                 weechat_prefix("network"),
-                                                 cs_info.service_jid.c_str());
+                        cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
+                            fmt::format("{}MUC Rooms (via {}):",
+                                weechat_prefix("network"),
+                                cs_info.service_jid));
                     }
 
                     const char *address = xmpp_stanza_get_attribute(item, "address");
@@ -682,12 +687,12 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                     {
                         // Inline print path (legacy / non-picker).
                         std::string info_bracketed = info_str.empty() ? "" : " " + info_str;
-                        weechat_printf_date_tags(cs_buf, 0, "xmpp_channel_search,notify_none",
-                                                 "  %s%s%s%s",
-                                                 weechat_color("chat_nick"),
-                                                 display.c_str(),
-                                                 weechat_color("reset"),
-                                                 info_bracketed.c_str());
+                        cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
+                            fmt::format("  {}{}{}{}",
+                                weechat_color("chat_nick"),
+                                display,
+                                weechat_color("reset"),
+                                info_bracketed));
 
                         // Truncate long descriptions
                         if (!desc_raw.empty())
@@ -695,8 +700,8 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                             std::string desc = desc_raw;
                             if (desc.length() > 120)
                                 desc = desc.substr(0, 117) + "...";
-                            weechat_printf_date_tags(cs_buf, 0, "xmpp_channel_search,notify_none",
-                                                     "    %s", desc.c_str());
+                            cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
+                                fmt::format("    {}", desc));
                         }
 
                         // If the directory result is sparse, query room disco#info for
@@ -732,15 +737,15 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                 {
                     if (count == 0)
                     {
-                        weechat_printf_date_tags(cs_buf, 0, "xmpp_channel_search,notify_none",
-                                                 "%sNo rooms found matching your query",
-                                                 weechat_prefix("network"));
+                        cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
+                            fmt::format("{}No rooms found matching your query",
+                                weechat_prefix("network")));
                     }
                     else
                     {
-                        weechat_printf_date_tags(cs_buf, 0, "xmpp_channel_search,notify_none",
-                                                 "%sUse /enter <address> to join a room",
-                                                 weechat_prefix("network"));
+                        cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
+                            fmt::format("{}Use /enter <address> to join a room",
+                                weechat_prefix("network")));
                     }
                 }
                 else if (count == 0)
@@ -753,10 +758,10 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
             }
             else
             {
-                weechat_printf_date_tags(cs_buf, 0, "xmpp_channel_search,notify_none",
-                                         "%s[search] Unexpected response from %s (missing <result>)",
-                                         weechat_prefix("error"),
-                                         cs_info.service_jid.c_str());
+                cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
+                    fmt::format("{}[search] Unexpected response from {} (missing <result>)",
+                        weechat_prefix("error"),
+                        cs_info.service_jid));
             }
 
             account.channel_search_queries.erase(cs_id);
@@ -867,18 +872,19 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                         meta_s += "]";
                     }
 
-                    weechat_printf_date_tags(out, 0, "xmpp_channel_search,notify_none",
-                                             "    %s%s%s",
-                                             weechat_color("chat_delimiters"),
-                                             header.c_str(),
-                                             meta_s.c_str());
+                    weechat::UiPort::for_buffer(out)->printf_date_tags(
+                        0, "xmpp_channel_search,notify_none",
+                        fmt::format("    {}{}{}",
+                            weechat_color("chat_delimiters"),
+                            header, meta_s));
 
                     if (!desc_s.empty())
                     {
                         if (desc_s.size() > 140)
                             desc_s = desc_s.substr(0, 137) + "...";
-                        weechat_printf_date_tags(out, 0, "xmpp_channel_search,notify_none",
-                                                 "      %s", desc_s.c_str());
+                        weechat::UiPort::for_buffer(out)->printf_date_tags(
+                            0, "xmpp_channel_search,notify_none",
+                            fmt::format("      {}", desc_s));
                     }
                 }
             }
@@ -1222,11 +1228,12 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                 const char *from_jid = xmpp_stanza_get_from(stanza);
                 struct t_gui_buffer *output_buffer = account.buffer;
                 
-                weechat_printf(output_buffer, "");
-                weechat_printf(output_buffer, "%sService Discovery for %s%s:", 
-                              weechat_color("chat_prefix_network"),
-                              weechat_color("chat_server"), 
-                              from_jid ? from_jid : "server");
+                auto disco_ui = weechat::UiPort::for_buffer(output_buffer);
+                disco_ui->printf("");
+                disco_ui->printf(fmt::format("{}Service Discovery for {}{}:",
+                    weechat_color("chat_prefix_network"),
+                    weechat_color("chat_server"),
+                    from_jid ? from_jid : "server"));
             }
             
             for (const ::xmpp::StanzaView identity : ::xmpp::StanzaView(query))
@@ -1245,13 +1252,14 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
 
                 if (user_initiated)
                 {
-                    weechat_printf(account.buffer, "  %sIdentity:%s %s/%s %s%s%s",
-                                  weechat_color("chat_prefix_network"),
-                                  weechat_color("reset"),
-                                  category.c_str(), type.c_str(),
-                                  weechat_color("chat_delimiters"),
-                                  name.empty() ? "" : name.c_str(),
-                                  weechat_color("reset"));
+                    weechat::UiPort::for_buffer(account.buffer)->printf(fmt::format(
+                        "  {}Identity:{} {}/{} {}{}{}",
+                        weechat_color("chat_prefix_network"),
+                        weechat_color("reset"),
+                        category, type,
+                        weechat_color("chat_delimiters"),
+                        name.empty() ? "" : name,
+                        weechat_color("reset")));
                 }
 
                 if (category == "conference")
@@ -1287,10 +1295,11 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
             
             if (user_initiated && !features.empty())
             {
-                weechat_printf(account.buffer, "  %sFeatures:",
-                              weechat_color("chat_prefix_network"));
+                auto feat_ui = weechat::UiPort::for_buffer(account.buffer);
+                feat_ui->printf(fmt::format("  {}Features:",
+                    weechat_color("chat_prefix_network")));
                 std::ranges::for_each(features, [&](const std::string &var) {
-                    weechat_printf(account.buffer, "    %s", var.c_str());
+                    feat_ui->printf(fmt::format("    {}", var));
                 });
             }
         }

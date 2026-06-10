@@ -621,8 +621,9 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                                 pm_jid, pm_jid
                             }));
                 } catch (const std::exception &ex) {
-                    weechat_printf(nullptr, "%sxmpp: failed to restore PM channel %s: %s",
-                                   weechat_prefix("error"), pm_jid.c_str(), ex.what());
+                    weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(
+                        "xmpp: failed to restore PM channel {}: {}",
+                        pm_jid, ex.what()));
                 }
             }
         }
@@ -658,13 +659,18 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                                   status == event::raw_connect ? "raw-connect" :
                                   "unknown";
 
-        weechat_printf(account.buffer,
-                       "%sconnection event: %s (error=%d%s%s)",
-                       weechat_prefix(stream_error ? "error" : "network"),
-                       status_text,
-                       error,
-                       error != 0 ? ", " : "",
-                       error != 0 ? std::strerror(error) : "");
+        {
+            auto ui = weechat::UiPort::for_buffer(account.buffer);
+            const std::string conn_msg = fmt::format(
+                "connection event: {} (error={}{}{})",
+                status_text, error,
+                error != 0 ? ", " : "",
+                error != 0 ? std::strerror(error) : "");
+            if (stream_error)
+                ui->printf_error(conn_msg);
+            else
+                ui->printf_network(conn_msg);
+        }
 
         if (stream_error)
         {
@@ -695,11 +701,11 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                                    stream_error->type == XMPP_SE_XML_NOT_WELL_FORMED ? "xml-not-well-formed" :
                                    "unknown";
             
-            weechat_printf(account.buffer, "%sStream error: %s%s%s",
-                          weechat_prefix("error"),
-                          err_type,
-                          err_text ? " - " : "",
-                          err_text ? err_text : "");
+            weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+                "Stream error: {}{}{}",
+                err_type,
+                err_text ? " - " : "",
+                err_text ? err_text : ""));
         }
         
         // Clear SM session on clean disconnect (server-initiated or normal close)
@@ -708,8 +714,8 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         {
             if (!account.sm_id.empty())
             {
-                weechat_printf(account.buffer, "%sSM session %s closed by server",
-                              weechat_prefix("network"), account.sm_id.data());
+                weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                    "SM session {} closed by server", account.sm_id));
             }
             account.sm_id = "";
             account.sm_h_inbound = 0;
@@ -724,10 +730,9 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         // account. We still reconnect so the user's session is restored.
         if (stream_error && stream_error->type == XMPP_SE_CONFLICT)
         {
-            weechat_printf(account.buffer,
-                           "%s<conflict>: resource collision — will reconnect with "
-                           "a new resource",
-                           weechat_prefix("network"));
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                "<conflict>: resource collision — will reconnect with "
+                "a new resource");
             account.resource("");
         }
 
@@ -824,13 +829,12 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
         const char *host = dnsname ? dnsname
                          : subject ? subject
                          : (conn ? xmpp_conn_get_bound_jid(conn) : nullptr);
-        weechat_printf(
-            nullptr,
-            _("%s%s: TLS certificate warning for %s (expires %s): %s — connecting anyway"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(
+            "{}: TLS certificate warning for {} (expires {}): {} — connecting anyway",
+            WEECHAT_XMPP_PLUGIN_NAME,
             host     ? host     : "(unknown host)",
             notafter ? notafter : "?",
-            errormsg ? errormsg : "(no details)");
+            errormsg ? errormsg : "(no details)"));
         return 1; // accept cert, keep conn->tls valid, avoid nullptr-deref crash
     });
 
@@ -843,11 +847,9 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
                 connection.conn_handler(static_cast<event>(status), error, stream_error);
             }))
     {
-        weechat_printf(
-            nullptr,
-            _("%s%s: error connecting to %s"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-            jid.data());
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(
+            "{}: error connecting to {}",
+            WEECHAT_XMPP_PLUGIN_NAME, jid));
         return false;
     }
 

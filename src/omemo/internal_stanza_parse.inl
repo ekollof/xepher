@@ -4,7 +4,7 @@ void signal_log_emit(int level, const char *message, std::size_t length, void *u
 
     std::string text {message, length};
     if (level <= SG_LOG_WARNING)
-        weechat_printf(nullptr, "%somemo: %s", weechat_prefix("error"), text.c_str());
+        print_error(nullptr, fmt::format("omemo: {}", text));
     else
         XDEBUG("omemo: {}", text);
 }

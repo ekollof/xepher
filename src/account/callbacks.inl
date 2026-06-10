@@ -62,11 +62,9 @@ int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaini
         for (auto &pid : stale_ids)
         {
             account->user_ping_queries.erase(pid);
-            weechat_printf(account->buffer,
-                           "%sPing %s timed out (no response within %ld s)",
-                           weechat_prefix("error"),
-                           pid.c_str(),
-                           PING_TIMEOUT_SECS);
+            weechat::UiPort::for_buffer(account->buffer)->printf_error(
+                fmt::format("Ping {} timed out (no response within {} s)",
+                            pid, PING_TIMEOUT_SECS));
         }
     }
 
@@ -204,15 +202,13 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         {
             // Upload failed — save draft, notify user, erase
             std::string draft_path = ptr_account->save_feed_draft(post);
-            weechat_printf(post.buffer,
-                "%s%s: embed upload failed (HTTP %ld): %s",
-                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                ctx->http_code,
-                ctx->curl_error.empty() ? "unknown error" : ctx->curl_error.c_str());
+            weechat::UiPort::for_buffer(post.buffer)->printf_error(
+                fmt::format("{}: embed upload failed (HTTP {}): {}",
+                            WEECHAT_XMPP_PLUGIN_NAME, ctx->http_code,
+                            ctx->curl_error.empty() ? "unknown error" : ctx->curl_error));
             if (!draft_path.empty())
-                weechat_printf(post.buffer,
-                    "%sDraft saved: %s",
-                    weechat_prefix("network"), draft_path.c_str());
+                weechat::UiPort::for_buffer(post.buffer)->printf_network(
+                    fmt::format("Draft saved: {}", draft_path));
             ptr_account->pending_feed_posts.erase(post_it);
             return WEECHAT_RC_OK;
         }
@@ -336,9 +332,8 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         // All uploads done — build and publish the Atom entry
         xepher::pending_feed_post finished_post = std::move(post);
         ptr_account->pending_feed_posts.erase(post_it);
-        weechat_printf_date_tags(finished_post.buffer, 0, "no_trigger,notify_none",
-                       "%sAll embeds uploaded, publishing post…",
-                       weechat_prefix("network"));
+        weechat::UiPort::for_buffer(finished_post.buffer)->printf_date_tags(0, "no_trigger,notify_none",
+            fmt::format("{}All embeds uploaded, publishing post…", weechat_prefix("network")));
         ptr_account->build_and_publish_post(finished_post);
         return WEECHAT_RC_OK;
     }
@@ -354,10 +349,10 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             auto& [_, ch] = *ch_it;
             err_buf = ch.buffer;
         }
-        weechat_printf(err_buf,
-                        "%s%s: file upload failed (%s)",
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                        ctx->curl_error.empty() ? "unknown error" : ctx->curl_error.c_str());
+        weechat::UiPort::for_buffer(err_buf)->printf_error(
+            fmt::format("{}: file upload failed ({})",
+                        WEECHAT_XMPP_PLUGIN_NAME,
+                        ctx->curl_error.empty() ? "unknown error" : ctx->curl_error));
         return WEECHAT_RC_OK;
     }
 
@@ -444,9 +439,8 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         }
     }
 
-    weechat_printf_date_tags(status_buf, 0, "no_trigger,notify_none",
-                  "%sFile uploaded! Sharing link… %s",
-                  weechat_prefix("network"), visible_link.c_str());
+    weechat::UiPort::for_buffer(status_buf)->printf_date_tags(0, "no_trigger,notify_none",
+        fmt::format("{}File uploaded! Sharing link… {}", weechat_prefix("network"), visible_link));
 
     if (!ctx->local_path.empty())
     {

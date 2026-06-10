@@ -64,7 +64,7 @@ int command__omemo(const void *pointer, void *data,
             if (devicelist_stanza)
             {
                 ptr_account->connection.send(devicelist_stanza.get());
-                ui->printf_network(fmt::format("Devicelist published (device ID: {})",
+        ui->printf_network(fmt::format("Devicelist published (device ID: {})",
                     ptr_account->omemo.device_id));
             }
 
@@ -76,12 +76,12 @@ int command__omemo(const void *pointer, void *data,
             {
                 ptr_account->connection.send(bundle_stanza);
                 xmpp_stanza_release(bundle_stanza);
-                ui->printf_network(fmt::format("Bundle published for device {}",
+        ui->printf_network(fmt::format("Bundle published for device {}",
                     ptr_account->omemo.device_id));
             }
             else
             {
-                ui->printf_error(fmt::format("{}: failed to generate OMEMO bundle",
+        ui->printf_error(fmt::format("{}: failed to generate OMEMO bundle",
                     WEECHAT_XMPP_PLUGIN_NAME));
             }
 
@@ -102,11 +102,11 @@ int command__omemo(const void *pointer, void *data,
                     lmdb::txn txn = lmdb::txn::begin(ptr_account->omemo.db_env);
                     mdb_drop(txn.handle(), ptr_account->omemo.dbi.omemo, 0);
                     txn.commit();
-                    ui->printf_info(fmt::format("{}: OMEMO key database cleared. Session keys will be renegotiated.",
+        ui->printf_info(fmt::format("{}: OMEMO key database cleared. Session keys will be renegotiated.",
                         WEECHAT_XMPP_PLUGIN_NAME));
                 }
             } catch (const lmdb::error& ex) {
-                ui->printf_error(fmt::format("{}: Failed to reset OMEMO keys: {}",
+        ui->printf_error(fmt::format("{}: Failed to reset OMEMO keys: {}",
                     WEECHAT_XMPP_PLUGIN_NAME, ex.what()));
             }
 
@@ -140,7 +140,7 @@ int command__omemo(const void *pointer, void *data,
             if (!require_omemo()) return WEECHAT_RC_OK;
             if (argc < 3)
             {
-                ui->printf_error(fmt::format("{}: usage: /omemo trust <jid> [<device-id>]",
+        ui->printf_error(fmt::format("{}: usage: /omemo trust <jid> [<device-id>]",
                     WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
@@ -151,7 +151,7 @@ int command__omemo(const void *pointer, void *data,
                     device_id = *v;
                 else
                 {
-                    ui->printf_error(fmt::format("{}: /omemo trust: device id must be a positive integer",
+        ui->printf_error(fmt::format("{}: /omemo trust: device id must be a positive integer",
                         WEECHAT_XMPP_PLUGIN_NAME));
                     return WEECHAT_RC_OK;
                 }
@@ -165,7 +165,7 @@ int command__omemo(const void *pointer, void *data,
             if (!require_omemo()) return WEECHAT_RC_OK;
             if (argc < 3)
             {
-                ui->printf_error(fmt::format("{}: usage: /omemo distrust <jid> [<fingerprint>]",
+        ui->printf_error(fmt::format("{}: usage: /omemo distrust <jid> [<fingerprint>]",
                     WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
@@ -176,7 +176,7 @@ int command__omemo(const void *pointer, void *data,
                     device_id = *v;
                 else
                 {
-                    ui->printf_error(fmt::format("{}: /omemo distrust: device id must be a positive integer",
+        ui->printf_error(fmt::format("{}: /omemo distrust: device id must be a positive integer",
                         WEECHAT_XMPP_PLUGIN_NAME));
                     return WEECHAT_RC_OK;
                 }
@@ -196,7 +196,7 @@ int command__omemo(const void *pointer, void *data,
                 jid = ptr_channel->name.data();
             if (!jid)
             {
-                ui->printf_error(fmt::format("{}: usage: /omemo devices <jid>  (or run in a channel buffer)",
+        ui->printf_error(fmt::format("{}: usage: /omemo devices <jid>  (or run in a channel buffer)",
                     WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
@@ -216,7 +216,7 @@ int command__omemo(const void *pointer, void *data,
 
             if (!jid)
             {
-                ui->printf_error(fmt::format("{}: usage: /omemo fetch [<jid>] [<device-id>]",
+        ui->printf_error(fmt::format("{}: usage: /omemo fetch [<jid>] [<device-id>]",
                     WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
@@ -228,7 +228,7 @@ int command__omemo(const void *pointer, void *data,
                     device_id = *parsed;
                 else
                 {
-                    ui->printf_error(fmt::format("{}: invalid device id '{}'",
+        ui->printf_error(fmt::format("{}: invalid device id '{}'",
                         WEECHAT_XMPP_PLUGIN_NAME, argv[3]));
                     return WEECHAT_RC_OK;
                 }
@@ -250,7 +250,7 @@ int command__omemo(const void *pointer, void *data,
 
             if (!jid)
             {
-                ui->printf_error(fmt::format("{}: usage: /omemo kex [<jid>] [<device-id>]",
+        ui->printf_error(fmt::format("{}: usage: /omemo kex [<jid>] [<device-id>]",
                     WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
@@ -262,7 +262,7 @@ int command__omemo(const void *pointer, void *data,
                     device_id = *parsed;
                 else
                 {
-                    ui->printf_error(fmt::format("{}: invalid device id '{}'",
+        ui->printf_error(fmt::format("{}: invalid device id '{}'",
                         WEECHAT_XMPP_PLUGIN_NAME, argv[3]));
                     return WEECHAT_RC_OK;
                 }
@@ -362,29 +362,19 @@ int command__pgp(const void *pointer, void *data,
     {
         if (weechat_strcasecmp(argv[1], "status") == 0)
         {
-            weechat_printf(ptr_account->buffer,
-                           _("%sPGP Status for channel %s:"),
-                           weechat_prefix("info"), ptr_channel->name.data());
-            weechat_printf(ptr_account->buffer,
-                           _("%s  Encryption: %s"),
-                           weechat_prefix("info"), ptr_channel->pgp.enabled ? "ENABLED" : "disabled");
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_info(fmt::format(fmt::runtime(_("PGP Status for channel {}:")), ptr_channel->name.data()));
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_info(fmt::format(fmt::runtime(_("  Encryption: {}")), ptr_channel->pgp.enabled ? "ENABLED" : "disabled"));
 
             if (ptr_channel->pgp.ids.empty())
             {
-                weechat_printf(ptr_account->buffer,
-                               _("%s  No PGP keys configured"),
-                               weechat_prefix("info"));
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_info(_("  No PGP keys configured"));
             }
             else
             {
-                weechat_printf(ptr_account->buffer,
-                               _("%s  Configured keys:"),
-                               weechat_prefix("info"));
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_info(_("  Configured keys:"));
                 for (const auto& key_id : ptr_channel->pgp.ids)
                 {
-                    weechat_printf(ptr_account->buffer,
-                                   _("%s    - %s"),
-                                   weechat_prefix("info"), key_id.data());
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_info(fmt::format(fmt::runtime(_("    - {}")), key_id.data()));
                 }
             }
 
@@ -395,9 +385,7 @@ int command__pgp(const void *pointer, void *data,
         {
             if (ptr_channel->pgp.ids.empty())
             {
-                weechat_printf(ptr_account->buffer,
-                               _("%s%s: No PGP keys configured for this channel"),
-                               weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_info(fmt::format(fmt::runtime(_("{}: No PGP keys configured for this channel")), WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
             }
 
@@ -406,10 +394,7 @@ int command__pgp(const void *pointer, void *data,
             ptr_account->save_pgp_keys();
             weechat::config::write();
 
-            weechat_printf(ptr_account->buffer,
-                           _("%s%s: Removed %zu PGP key(s) from channel '%s'"),
-                           weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME,
-                           count, ptr_channel->name.data());
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_info(fmt::format(fmt::runtime(_("{}: Removed {} PGP key(s) from channel '{}'")), WEECHAT_XMPP_PLUGIN_NAME, count, ptr_channel->name.data()));
 
             return WEECHAT_RC_OK;
         }
@@ -420,10 +405,7 @@ int command__pgp(const void *pointer, void *data,
         ptr_account->save_pgp_keys();
         weechat::config::write();
 
-        weechat_printf(ptr_account->buffer,
-                       _("%s%s: Added PGP key '%s' to channel '%s'"),
-                       weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME,
-                       keyid, ptr_channel->name.data());
+        weechat::UiPort::for_buffer(ptr_account->buffer)->printf_info(fmt::format(fmt::runtime(_("{}: Added PGP key '{}' to channel '{}'")), WEECHAT_XMPP_PLUGIN_NAME, keyid, ptr_channel->name.data()));
 
         return WEECHAT_RC_OK;
     }
@@ -508,8 +490,8 @@ int command__xml(const void *pointer, void *data,
             }
             catch (const std::invalid_argument& ex) {
                 while (std::getline(ss, line))
-                    weechat_printf(nullptr, "%s", fmt::format("{}sxml: {}", weechat_prefix("info"), line).c_str());
-                weechat_printf(nullptr, "%s", fmt::format("{}sxml: {}", weechat_prefix("error"), ex.what()).c_str());
+        weechat::UiPort::for_buffer(nullptr)->printf_info("");
+        weechat::UiPort::for_buffer(nullptr)->printf_error("");
                 return false;
             }
         };
@@ -526,8 +508,7 @@ int command__xml(const void *pointer, void *data,
             auto stanza = stanza_from_string(ptr_account->context, argv_eol[1]);
             if (!stanza)
             {
-                weechat_printf(nullptr, _("%s%s: Bad XML"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: Bad XML")), WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_ERROR;
             }
 
@@ -549,10 +530,7 @@ int command__xmpp(const void *pointer, void *data,
     (void) argv;
     (void) argv_eol;
 
-    weechat_printf(nullptr,
-                   _("%s%s %s [%s]"),
-                   weechat_prefix("info"), WEECHAT_XMPP_PLUGIN_NAME,
-                   WEECHAT_XMPP_PLUGIN_VERSION, XMPP_PLUGIN_COMMIT);
+        weechat::UiPort::for_buffer(nullptr)->printf_info(fmt::format(fmt::runtime(_(" {} [{}]")), WEECHAT_XMPP_PLUGIN_NAME, WEECHAT_XMPP_PLUGIN_VERSION, XMPP_PLUGIN_COMMIT));
 
     return WEECHAT_RC_OK;
 }

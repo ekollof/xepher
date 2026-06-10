@@ -5,6 +5,7 @@
 #include <strophe.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <fmt/core.h>
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
@@ -13,6 +14,7 @@
 #include "buffer.hh"
 #include "message.hh"
 #include "input.hh"
+#include "weechat/ui_port.hh"
 
 int input__data(struct t_gui_buffer *buffer, const char *text)
 {
@@ -28,9 +30,9 @@ int input__data(struct t_gui_buffer *buffer, const char *text)
     {
         if (!account->connected())
         {
-            weechat_printf(buffer,
-                           _("%s%s: you are not connected to server"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            weechat::UiPort::for_buffer(buffer)->printf_error(
+                fmt::format(fmt::runtime(_("%s: you are not connected to server")),
+                            WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
@@ -43,9 +45,9 @@ int input__data(struct t_gui_buffer *buffer, const char *text)
     }
     else
     {
-        weechat_printf(buffer,
-                       _("%s%s: this buffer is not a channel!"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(buffer)->printf_error(
+            fmt::format(fmt::runtime(_("%s: this buffer is not a channel!")),
+                        WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
 }

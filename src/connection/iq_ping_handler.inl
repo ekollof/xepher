@@ -37,17 +37,19 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
         });
     const std::string room_jid = muc_from ? muc_from->room_jid : std::string{};
 
+    auto ui = weechat::UiPort::for_buffer(account.buffer);
+
     if (weechat_strcasecmp(type, "result") == 0)
     {
         if (is_muc_selfping)
         {
-            weechat_printf(account.buffer, "%sMUC self-ping OK: still in %s",
-                           weechat_prefix("network"), room_jid.c_str());
+            ui->printf_network(fmt::format(
+                "MUC self-ping OK: still in {}", room_jid));
         }
         else
         {
-            weechat_printf(account.buffer, "%sPong from %s (RTT: %ld ms)",
-                           weechat_prefix("network"), from_jid, rtt_ms);
+            ui->printf_network(fmt::format(
+                "Pong from {} (RTT: {} ms)", from_jid, rtt_ms));
         }
         return true;
     }
@@ -60,23 +62,21 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
         switch (::xmpp::classify_muc_self_ping_error(err_view))
         {
         case ::xmpp::MucSelfPingErrorOutcome::still_joined:
-            weechat_printf(account.buffer,
-                           "%sMUC self-ping: still in %s (reflected error)",
-                           weechat_prefix("network"), room_jid.c_str());
+            ui->printf_network(fmt::format(
+                "MUC self-ping: still in {} (reflected error)", room_jid));
             break;
         case ::xmpp::MucSelfPingErrorOutcome::ambiguous:
         {
             const char *etype = err_elem
                 ? xmpp_stanza_get_attribute(err_elem, "type") : "unknown";
-            weechat_printf(account.buffer,
-                           "%sMUC self-ping to %s: network error (%s), skipping rejoin",
-                           weechat_prefix("network"), room_jid.c_str(), etype);
+            ui->printf_network(fmt::format(
+                "MUC self-ping to {}: network error ({}), skipping rejoin",
+                room_jid, etype));
             break;
         }
         case ::xmpp::MucSelfPingErrorOutcome::not_joined:
-            weechat_printf(account.buffer,
-                           "%sMUC self-ping FAILED: no longer in %s — rejoining",
-                           weechat_prefix("error"), room_jid.c_str());
+            ui->printf_error(fmt::format(
+                "MUC self-ping FAILED: no longer in {} — rejoining", room_jid));
             {
                 const std::string rejoin_jid = fmt::format("{}/{}",
                                                            room_jid,
@@ -94,7 +94,6 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
 
     const char *error_type = err_elem
         ? xmpp_stanza_get_attribute(err_elem, "type") : "unknown";
-    weechat_printf(account.buffer, "%sPing failed to %s: %s",
-                   weechat_prefix("error"), from_jid, error_type);
+    ui->printf_error(fmt::format("Ping failed to {}: {}", from_jid, error_type));
     return true;
 }

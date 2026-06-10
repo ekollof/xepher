@@ -36,6 +36,7 @@
 #include "command.hh"
 #include "sexp/driver.hh"
 #include "ui/picker.hh"
+#include "weechat/ui_port.hh"
 
 #define MAM_DEFAULT_DAYS 2
 #define STR(X) #X

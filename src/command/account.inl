@@ -66,9 +66,7 @@ static int prompt_input_return_cb(const void * /*pointer*/, void * /*data*/,
     g_prompt = nullptr;
 
     if (password.empty()) {
-        weechat_printf(ctx->buffer,
-                       _("%s%s: password prompt cancelled (empty input)"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(ctx->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: password prompt cancelled (empty input)")), WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK_EAT; // eat the Enter so nothing is sent
     }
 
@@ -89,10 +87,7 @@ static int prompt_input_return_cb(const void * /*pointer*/, void * /*data*/,
             account->password(sec_ref);
             command__connect_account(account);
         } else {
-            weechat_printf(ctx->buffer,
-                           _("%s%s: account \"%s\" not found"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                           ctx->account_name.c_str());
+        weechat::UiPort::for_buffer(ctx->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: account \"{}\" not found")), WEECHAT_XMPP_PLUGIN_NAME, ctx->account_name.c_str()));
         }
     }
 
@@ -106,10 +101,9 @@ static void prompt_password(struct t_gui_buffer *buffer,
                             std::string account_name,
                             std::string jid = {})
 {
+    auto ui = weechat::UiPort::for_buffer(buffer);
     if (g_prompt) {
-        weechat_printf(buffer,
-                       _("%s%s: a password prompt is already active"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: a password prompt is already active")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
 
@@ -129,9 +123,7 @@ static void prompt_password(struct t_gui_buffer *buffer,
 
     g_prompt = ctx.release();
 
-    weechat_printf(buffer,
-                   _("%s%s: enter password (hidden): "),
-                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_network(fmt::format(fmt::runtime(_("{}: enter password (hidden): ")), WEECHAT_XMPP_PLUGIN_NAME));
     // Switch focus to the buffer so the user types there
     weechat_buffer_set(buffer, "display", "1");
     // Clear any leftover input
@@ -146,38 +138,11 @@ void command__display_account(weechat::account *account)
     {
         num_channels = 0;
         num_pv = 0;
-        weechat_printf(
-            nullptr,
-            " %s %s%s%s %s(%s%s%s) [%s%s%s]%s, %d %s, %d pv",
-            (account->connected()) ? "*" : " ",
-            weechat_color("chat_server"),
-            account->name.data(),
-            weechat_color("reset"),
-            weechat_color("chat_delimiters"),
-            weechat_color("chat_server"),
-            account->jid().data(),
-            weechat_color("chat_delimiters"),
-            weechat_color("reset"),
-            (account->connected()) ? _("connected") : _("not connected"),
-            weechat_color("chat_delimiters"),
-            weechat_color("reset"),
-            num_channels,
-            NG_("channel", "channels", num_channels),
-            num_pv);
+        weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(" {} {}{}{} {}({}{}{}) [{}{}{}]{}, {} {}, {} pv", (account->connected()) ? "*" : " ", weechat_color("chat_server"), account->name.data(), weechat_color("reset"), weechat_color("chat_delimiters"), weechat_color("chat_server"), account->jid().data(), weechat_color("chat_delimiters"), weechat_color("reset"), (account->connected()) ? _("connected") : _("not connected"), weechat_color("chat_delimiters"), weechat_color("reset"), num_channels, NG_("channel", "channels", num_channels), num_pv));
     }
     else
     {
-        weechat_printf(
-            nullptr,
-            "   %s%s%s %s(%s%s%s)%s",
-            weechat_color("chat_server"),
-            account->name.data(),
-            weechat_color("reset"),
-            weechat_color("chat_delimiters"),
-            weechat_color("chat_server"),
-            account->jid().data(),
-            weechat_color("chat_delimiters"),
-            weechat_color("reset"));
+        weechat::UiPort::for_buffer(nullptr)->printf(fmt::format("   {}{}{} {}({}{}{}){}", weechat_color("chat_server"), account->name.data(), weechat_color("reset"), weechat_color("chat_delimiters"), weechat_color("chat_server"), account->jid().data(), weechat_color("chat_delimiters"), weechat_color("reset")));
     }
 }
 
@@ -195,15 +160,15 @@ void command__account_list(int argc, char **argv)
     {
         if (!weechat::accounts.empty())
         {
-            weechat_printf(nullptr, "");
-            weechat_printf(nullptr, _("All accounts:"));
+        weechat::UiPort::for_buffer(nullptr)->printf("");
+        weechat::UiPort::for_buffer(nullptr)->printf(_("All accounts:"));
             for (auto& [_, acc2] : weechat::accounts)
             {
                 command__display_account(&acc2);
             }
         }
         else
-            weechat_printf(nullptr, _("No account"));
+        weechat::UiPort::for_buffer(nullptr)->printf(_("No account"));
     }
     else
     {
@@ -214,19 +179,15 @@ void command__account_list(int argc, char **argv)
             {
                 if (!one_account_found)
                 {
-                    weechat_printf(nullptr, "");
-                    weechat_printf(nullptr,
-                                   _("Servers with \"%s\":"),
-                                   account_name);
+        weechat::UiPort::for_buffer(nullptr)->printf("");
+        weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("Servers with \"{}\":")), account_name));
                 }
                 one_account_found = 1;
                 command__display_account(&acc2);
             }
         }
         if (!one_account_found)
-            weechat_printf(nullptr,
-                           _("No account found with \"%s\""),
-                           account_name);
+        weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("No account found with \"{}\"")), account_name));
     }
 }
 
@@ -263,9 +224,7 @@ struct ibr_state {
               [](void * /*userdata*/, xmpp_log_level_t level,
                  const char *area, const char *msg) {
                   if (level >= XMPP_LEVEL_WARN)
-                      weechat_printf(nullptr, _("%s%s (IBR/%s): %s"),
-                                     weechat_prefix("network"),
-                                     WEECHAT_XMPP_PLUGIN_NAME, area, msg);
+        weechat::UiPort::for_buffer(nullptr)->printf_network(fmt::format(fmt::runtime(_(" (IBR/{}): {}")), WEECHAT_XMPP_PLUGIN_NAME, area, msg));
               },
               nullptr
           },
@@ -309,10 +268,7 @@ static int ibr_set_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
 
     const char *type = xmpp_stanza_get_type(stanza);
     if (type && std::string_view(type) == "result") {
-        weechat_printf(st->buffer,
-                       _("%s%s: registration successful for %s — adding account"),
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                       st->jid.c_str());
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: registration successful for {} — adding account")), WEECHAT_XMPP_PLUGIN_NAME, st->jid.c_str()));
         command__add_account(st->account_name.c_str(), st->jid.c_str(), st->password.c_str());
     } else {
         // Error
@@ -326,10 +282,7 @@ static int ibr_set_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
             if (!cond) cond = xmpp_stanza_get_child_by_name(err, "bad-request");
             if (cond)  condition = xmpp_stanza_get_name(cond);
         }
-        weechat_printf(st->buffer,
-                       _("%s%s: registration failed: %s"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                       condition);
+        weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: registration failed: {}")), WEECHAT_XMPP_PLUGIN_NAME, condition));
     }
 
     xmpp_disconnect(conn);
@@ -353,10 +306,7 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
             if (!cond) cond = xmpp_stanza_get_child_by_name(err, "forbidden");
             if (cond) condition = xmpp_stanza_get_name(cond);
         }
-        weechat_printf(st->buffer,
-                       _("%s%s: server rejected IBR query: %s"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                       condition);
+        weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: server rejected IBR query: {}")), WEECHAT_XMPP_PLUGIN_NAME, condition));
         xmpp_disconnect(conn);
         st->done = true;
         return 1;
@@ -364,9 +314,7 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
 
     xmpp_stanza_t *query = xmpp_stanza_get_child_by_ns(stanza, "jabber:iq:register");
     if (!query) {
-        weechat_printf(st->buffer,
-                       _("%s%s: IBR: server response missing <query xmlns='jabber:iq:register'>"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR: server response missing <query xmlns='jabber:iq:register'>")), WEECHAT_XMPP_PLUGIN_NAME));
         xmpp_disconnect(conn);
         st->done = true;
         return 1;
@@ -374,10 +322,7 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
 
     // Already registered?
     if (xmpp_stanza_get_child_by_name(query, "registered")) {
-        weechat_printf(st->buffer,
-                       _("%s%s: IBR: already registered on %s"),
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                       st->server.c_str());
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR: already registered on {}")), WEECHAT_XMPP_PLUGIN_NAME, st->server.c_str()));
         xmpp_disconnect(conn);
         st->done = true;
         return 1;
@@ -389,27 +334,21 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     // with a helpful message directing the user to the server's web registration.
     xmpp_stanza_t *xdata = xmpp_stanza_get_child_by_ns(query, "jabber:x:data");
     if (xdata) {
-        weechat_printf(st->buffer,
-                       _("%s%s: IBR: server requires a data form for registration"
-                         " — web registration required"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR: server requires a data form for registration"
+                         " — web registration required")), WEECHAT_XMPP_PLUGIN_NAME));
 
         // Print the form title/instructions if present
         xmpp_stanza_t *title_el = xmpp_stanza_get_child_by_name(xdata, "title");
         if (title_el) {
             const std::string title = stanza_element_text(title_el);
             if (!title.empty())
-                weechat_printf(st->buffer, _("%s%s: IBR form title: %s"),
-                               weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                               title.c_str());
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form title: {}")), WEECHAT_XMPP_PLUGIN_NAME, title.c_str()));
         }
         xmpp_stanza_t *instr_el = xmpp_stanza_get_child_by_name(xdata, "instructions");
         if (instr_el) {
             const std::string instructions = stanza_element_text(instr_el);
             if (!instructions.empty())
-                weechat_printf(st->buffer, _("%s%s: IBR form instructions: %s"),
-                               weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                               instructions.c_str());
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form instructions: {}")), WEECHAT_XMPP_PLUGIN_NAME, instructions.c_str()));
         }
 
         // Print each field's var and label so the user can identify what's needed
@@ -421,19 +360,13 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
             const char *label = xmpp_stanza_get_attribute(field, "label");
             if (var) {
                 if (label)
-                    weechat_printf(st->buffer, _("%s%s: IBR form field: %s (%s)"),
-                                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                                   var, label);
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form field: {} ({})")), WEECHAT_XMPP_PLUGIN_NAME, var, label));
                 else
-                    weechat_printf(st->buffer, _("%s%s: IBR form field: %s"),
-                                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                                   var);
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form field: {}")), WEECHAT_XMPP_PLUGIN_NAME, var));
             }
         }
 
-        weechat_printf(st->buffer,
-                       _("%s%s: IBR: use the server's web interface to register an account"),
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR: use the server's web interface to register an account")), WEECHAT_XMPP_PLUGIN_NAME));
         xmpp_disconnect(conn);
         st->done = true;
         return 1;
@@ -454,11 +387,8 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
             if (std::string_view sv{cname};
                 sv == "registered" || sv == "instructions" || sv == "x") continue;
             if (!is_known) {
-                weechat_printf(st->buffer,
-                               _("%s%s: IBR: server requires unknown field <%s/>"
-                                 " — registration may fail"),
-                               weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                               cname);
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR: server requires unknown field <{}/>"
+                                 " — registration may fail")), WEECHAT_XMPP_PLUGIN_NAME, cname));
             }
         }
     }
@@ -469,10 +399,7 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     if (oob) {
         xmpp_stanza_t *url_el = xmpp_stanza_get_child_by_name(oob, "url");
         const std::string oob_url = stanza_element_text(url_el);
-        weechat_printf(st->buffer,
-                       _("%s%s: IBR: server requires out-of-band registration: %s"),
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                       oob_url.empty() ? "(no URL provided)" : oob_url.c_str());
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR: server requires out-of-band registration: {}")), WEECHAT_XMPP_PLUGIN_NAME, oob_url.empty() ? "(no URL provided)" : oob_url.c_str()));
         xmpp_disconnect(conn);
         st->done = true;
         return 1;
@@ -553,10 +480,7 @@ static void ibr_conn_handler(xmpp_conn_t *conn, xmpp_conn_event_t status,
     // Disconnect or failure
     if (!st->done) {
         if (error != 0) {
-            weechat_printf(st->buffer,
-                           _("%s%s: IBR: connection failed (error %d: %s)"),
-                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                           error, strerror(error));
+        weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR: connection failed (error {}: {})")), WEECHAT_XMPP_PLUGIN_NAME, error, strerror(error)));
         }
         st->done = true;
     }
@@ -567,11 +491,10 @@ static void ibr_conn_handler(xmpp_conn_t *conn, xmpp_conn_event_t status,
 static void ibr_register(const char *account_name, const char *jid, const char *password,
                           struct t_gui_buffer *buffer)
 {
+    auto ui = weechat::UiPort::for_buffer(buffer);
     // Validate basic args
     if (!account_name || !*account_name || !jid || !*jid || !password || !*password) {
-        weechat_printf(buffer,
-                       _("%s%s: /account register requires <name> <jid> <password>"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: /account register requires <name> <jid> <password>")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
 
@@ -579,18 +502,14 @@ static void ibr_register(const char *account_name, const char *jid, const char *
     xmpp_log_t nolog = { nullptr, nullptr };
     xmpp_ctx_t *tmp_ctx = xmpp_ctx_new(nullptr, &nolog);
     if (!tmp_ctx) {
-        weechat_printf(buffer,
-                       _("%s%s: IBR: failed to create xmpp context"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: IBR: failed to create xmpp context")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
     std::string server = ::jid(nullptr, jid).domain;
     xmpp_ctx_free(tmp_ctx);
 
     if (server.empty()) {
-        weechat_printf(buffer,
-                       _("%s%s: IBR: could not extract server domain from JID '%s'"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, jid);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: IBR: could not extract server domain from JID '{}'")), WEECHAT_XMPP_PLUGIN_NAME, jid));
         return;
     }
 
@@ -600,17 +519,13 @@ static void ibr_register(const char *account_name, const char *jid, const char *
 
     st->ctx = xmpp_ctx_new(nullptr, &st->logger);
     if (!st->ctx) {
-        weechat_printf(buffer,
-                       _("%s%s: IBR: failed to create xmpp context"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: IBR: failed to create xmpp context")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
 
     st->conn = xmpp_conn_new(st->ctx);
     if (!st->conn) {
-        weechat_printf(buffer,
-                       _("%s%s: IBR: failed to create xmpp connection"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: IBR: failed to create xmpp connection")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
 
@@ -622,16 +537,11 @@ static void ibr_register(const char *account_name, const char *jid, const char *
     // Set a dummy JID (server domain) so libstrophe knows what stream to open
     xmpp_conn_set_jid(st->conn, server.c_str());
 
-    weechat_printf(buffer,
-                   _("%s%s: IBR: connecting to %s for registration of %s..."),
-                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME,
-                   server.c_str(), jid);
+        ui->printf_network(fmt::format(fmt::runtime(_("{}: IBR: connecting to {} for registration of {}...")), WEECHAT_XMPP_PLUGIN_NAME, server.c_str(), jid));
 
     int rc = xmpp_connect_raw(st->conn, nullptr, 0, ibr_conn_handler, st.get());
     if (rc != XMPP_EOK) {
-        weechat_printf(buffer,
-                       _("%s%s: IBR: xmpp_connect_raw failed (rc=%d)"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, rc);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: IBR: xmpp_connect_raw failed (rc={})")), WEECHAT_XMPP_PLUGIN_NAME, rc));
         return;
     }
 
@@ -639,9 +549,7 @@ static void ibr_register(const char *account_name, const char *jid, const char *
     // Transfer ownership to the timer callback — it will delete st when done.
     st->timer_hook = weechat_hook_timer(10, 0, 0, ibr_timer_cb, st.get(), nullptr);
     if (!st->timer_hook) {
-        weechat_printf(buffer,
-                       _("%s%s: IBR: failed to register timer hook"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: IBR: failed to register timer hook")), WEECHAT_XMPP_PLUGIN_NAME));
         return; // st destroyed by unique_ptr on scope exit
     }
     st.release(); // ownership transferred to timer callback
@@ -649,10 +557,9 @@ static void ibr_register(const char *account_name, const char *jid, const char *
 
 void command__account_register(struct t_gui_buffer *buffer, int argc, char **argv)
 {
+    auto ui = weechat::UiPort::for_buffer(buffer);
     if (argc < 5) {
-        weechat_printf(buffer,
-                       _("%s%s: usage: /account register <name> <jid> <password>"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /account register <name> <jid> <password>")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
     ibr_register(argv[2], argv[3], argv[4], buffer);
@@ -663,19 +570,12 @@ void command__add_account(const char *name, const char *jid, const char *passwor
     weechat::account *account = nullptr;
     if (weechat::account::search(account, name, true))
     {
-        weechat_printf(
-            nullptr,
-            _("%s%s: account \"%s\" already exists, can't add it!"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-            name);
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: account \"{}\" already exists, can't add it!")), WEECHAT_XMPP_PLUGIN_NAME, name));
         return;
     }
 
     if (!jid || !password) {
-        weechat_printf(
-            nullptr,
-            _("%s%s: jid and password required"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: jid and password required")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
 
@@ -687,10 +587,7 @@ void command__add_account(const char *name, const char *jid, const char *passwor
     account = &acc;
     if (!account)
     {
-        weechat_printf(
-            nullptr,
-            _("%s%s: unable to add account"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: unable to add account")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
 
@@ -708,18 +605,7 @@ void command__add_account(const char *name, const char *jid, const char *passwor
     if (jid)
         account->nickname(::jid(nullptr, jid).local);
 
-    weechat_printf(
-        nullptr,
-        _("%s: account %s%s%s %s(%s%s%s)%s added"),
-        WEECHAT_XMPP_PLUGIN_NAME,
-        weechat_color("chat_server"),
-        account->name.data(),
-        weechat_color("reset"),
-        weechat_color("chat_delimiters"),
-        weechat_color("chat_server"),
-        jid ? jid : "???",
-        weechat_color("chat_delimiters"),
-        weechat_color("reset"));
+            weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("{}: account {}{}{} {}({}{}{}){} added")), weechat_color("chat_server"), account->name.data(), weechat_color("reset"), weechat_color("chat_delimiters"), weechat_color("chat_server"), jid ? jid : "???", weechat_color("chat_delimiters"), weechat_color("reset")));
 }
 
 void command__account_add(struct t_gui_buffer *buffer, int argc, char **argv)
@@ -740,7 +626,7 @@ void command__account_add(struct t_gui_buffer *buffer, int argc, char **argv)
             command__add_account(argv[2], nullptr, nullptr);
             break;
         default:
-            weechat_printf(nullptr, _("account add: wrong number of arguments"));
+        weechat::UiPort::for_buffer(nullptr)->printf(_("account add: wrong number of arguments"));
             break;
     }
 }
@@ -752,11 +638,7 @@ int command__connect_account(weechat::account *account)
 
     if (account->connected())
     {
-        weechat_printf(
-            nullptr,
-            _("%s%s: already connected to account \"%s\"!"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-            account->name.data());
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: already connected to account \"{}\"!")), WEECHAT_XMPP_PLUGIN_NAME, account->name.data()));
     }
 
     account->connect(true);  // Manual connect from user command
@@ -790,12 +672,8 @@ int command__account_connect(struct t_gui_buffer *buffer, int argc, char **argv)
         }
         else
         {
-            weechat_printf(
-                nullptr,
-                _("%s%s: account not found \"%s\" "
-                  "(add one first with: /account add)"),
-                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                argv[i]);
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: account not found \"{}\" "
+                  "(add one first with: /account add)")), WEECHAT_XMPP_PLUGIN_NAME, argv[i]));
         }
     }
 
@@ -809,11 +687,7 @@ int command__disconnect_account(weechat::account *account)
 
     if (!account->connected())
     {
-        weechat_printf(
-            nullptr,
-            _("%s%s: not connected to account \"%s\"!"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-            account->name.data());
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: not connected to account \"{}\"!")), WEECHAT_XMPP_PLUGIN_NAME, account->name.data()));
     }
 
     account->disconnect(0);
@@ -856,11 +730,7 @@ int command__account_disconnect(struct t_gui_buffer *buffer, int argc, char **ar
         }
         else
         {
-            weechat_printf(
-                nullptr,
-                _("%s%s: account not found \"%s\" "),
-                weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                argv[i]);
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: account not found \"{}\" ")), WEECHAT_XMPP_PLUGIN_NAME, argv[i]));
         }
     }
 
@@ -890,9 +760,7 @@ static int ibr_unregister_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *
 
     const char *type = xmpp_stanza_get_type(stanza);
     if (type && std::string_view(type) == "result") {
-        weechat_printf(ctx->buffer,
-                       _("%s%s: account cancelled on server — deleting local account"),
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(ctx->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: account cancelled on server — deleting local account")), WEECHAT_XMPP_PLUGIN_NAME));
         std::string name = ctx->account->name;
         ctx->account->disconnect(0);
         weechat::accounts.erase(name);
@@ -910,9 +778,7 @@ static int ibr_unregister_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *
                 if (c) { condition = xmpp_stanza_get_name(c); break; }
             }
         }
-        weechat_printf(ctx->buffer,
-                       _("%s%s: IBR unregister failed: %s"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, condition);
+        weechat::UiPort::for_buffer(ctx->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR unregister failed: {}")), WEECHAT_XMPP_PLUGIN_NAME, condition));
     }
 
     return 1; // consume
@@ -920,27 +786,23 @@ static int ibr_unregister_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *
 
 void command__account_unregister(struct t_gui_buffer *buffer, int argc, char **argv)
 {
+    auto ui = weechat::UiPort::for_buffer(buffer);
     if (argc < 3) {
-        weechat_printf(buffer,
-                       _("%s%s: usage: /account unregister <account>"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /account unregister <account>")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
 
     weechat::account *account = nullptr;
     if (!weechat::account::search(account, argv[2])) {
-        weechat_printf(buffer,
-                       _("%s%s: account \"%s\" not found"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[2]);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: account \"{}\" not found")), WEECHAT_XMPP_PLUGIN_NAME, argv[2]));
         return;
     }
 
     if (!account->connected()) {
-        weechat_printf(buffer,
-                       _("%s%s: account \"%s\" is not connected"
-                         " — connect first with /account connect %s"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                       argv[2], argv[2]);
+        ui->printf_error(fmt::format(fmt::runtime(
+            _("{}: account \"{}\" is not connected"
+              " — connect first with /account connect {}")),
+            WEECHAT_XMPP_PLUGIN_NAME, argv[2], argv[2]));
         return;
     }
 
@@ -972,9 +834,7 @@ void command__account_unregister(struct t_gui_buffer *buffer, int argc, char **a
                         "ibr-unregister", uctx.release());
     account->connection.send(built.get());
 
-    weechat_printf(buffer,
-                   _("%s%s: IBR: sending account cancellation request..."),
-                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_network(fmt::format(fmt::runtime(_("{}: IBR: sending account cancellation request...")), WEECHAT_XMPP_PLUGIN_NAME));
 }
 
 // ---------------------------------------------------------------------------
@@ -997,9 +857,7 @@ static int ibr_passwd_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *stan
     if (type && std::string_view(type) == "result") {
         ctx->account->password(ctx->new_password);
         weechat::config::write();
-        weechat_printf(ctx->buffer,
-                       _("%s%s: password changed successfully"),
-                       weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat::UiPort::for_buffer(ctx->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: password changed successfully")), WEECHAT_XMPP_PLUGIN_NAME));
     } else {
         const char *condition = "unknown";
         xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
@@ -1013,9 +871,7 @@ static int ibr_passwd_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *stan
                 if (c) { condition = xmpp_stanza_get_name(c); break; }
             }
         }
-        weechat_printf(ctx->buffer,
-                       _("%s%s: IBR password change failed: %s"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, condition);
+        weechat::UiPort::for_buffer(ctx->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR password change failed: {}")), WEECHAT_XMPP_PLUGIN_NAME, condition));
     }
 
     return 1; // consume
@@ -1023,34 +879,28 @@ static int ibr_passwd_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *stan
 
 void command__account_passwd(struct t_gui_buffer *buffer, int argc, char **argv)
 {
+    auto ui = weechat::UiPort::for_buffer(buffer);
     if (argc < 4) {
-        weechat_printf(buffer,
-                       _("%s%s: usage: /account password <account> <new-password>"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: usage: /account password <account> <new-password>")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
 
     weechat::account *account = nullptr;
     if (!weechat::account::search(account, argv[2])) {
-        weechat_printf(buffer,
-                       _("%s%s: account \"%s\" not found"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, argv[2]);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: account \"{}\" not found")), WEECHAT_XMPP_PLUGIN_NAME, argv[2]));
         return;
     }
 
     if (!account->connected()) {
-        weechat_printf(buffer,
-                       _("%s%s: account \"%s\" is not connected"
-                         " — connect first with /account connect %s"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                       argv[2], argv[2]);
+        ui->printf_error(fmt::format(fmt::runtime(
+            _("{}: account \"{}\" is not connected"
+              " — connect first with /account connect {}")),
+            WEECHAT_XMPP_PLUGIN_NAME, argv[2], argv[2]));
         return;
     }
 
     if (!xmpp_conn_is_secured(account->connection)) {
-        weechat_printf(buffer,
-                       _("%s%s: password change requires an encrypted (TLS) connection"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_error(fmt::format(fmt::runtime(_("{}: password change requires an encrypted (TLS) connection")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
 
@@ -1088,9 +938,7 @@ void command__account_passwd(struct t_gui_buffer *buffer, int argc, char **argv)
                         "ibr-passwd", pctx.release());
     account->connection.send(built.get());
 
-    weechat_printf(buffer,
-                   _("%s%s: IBR: sending password change request..."),
-                   weechat_prefix("network"), WEECHAT_XMPP_PLUGIN_NAME);
+        ui->printf_network(fmt::format(fmt::runtime(_("{}: IBR: sending password change request...")), WEECHAT_XMPP_PLUGIN_NAME));
 }
 
 void command__account_delete(struct t_gui_buffer *buffer, int argc, char **argv)
@@ -1099,12 +947,8 @@ void command__account_delete(struct t_gui_buffer *buffer, int argc, char **argv)
 
     if (argc < 3)
     {
-        weechat_printf(
-            nullptr,
-            _("%sToo few arguments for command\"%s %s\" "
-              "(help on command: /help %s)"),
-            weechat_prefix("error"),
-            argv[0], argv[1], argv[0] + 1);
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("Too few arguments for command\"{} {}\" "
+              "(help on command: /help {})")), argv[0], argv[1], argv[0] + 1));
         return;
     }
 
@@ -1112,21 +956,14 @@ void command__account_delete(struct t_gui_buffer *buffer, int argc, char **argv)
 
     if (!weechat::account::search(account, argv[2]))
     {
-        weechat_printf(
-            nullptr,
-            _("%s%s: account \"%s\" not found for \"%s\" command"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-            argv[2], "xmpp delete");
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: account \"{}\" not found for \"{}\" command")), WEECHAT_XMPP_PLUGIN_NAME, argv[2], "xmpp delete"));
         return;
     }
     if (account->connected())
     {
-        weechat_printf(
-            nullptr,
-            _("%s%s: you cannot delete account \"%s\" because you"
-              "are connected. Try \"/xmpp disconnect %s\" first."),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-            argv[2], argv[2]);
+        weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(fmt::runtime(_("{}: you cannot delete account \"{}\" because you"
+              "are connected. Try \"/xmpp disconnect {}\" first.")),
+              WEECHAT_XMPP_PLUGIN_NAME, argv[2], argv[2]));
         return;
     }
 
@@ -1138,13 +975,8 @@ void command__account_delete(struct t_gui_buffer *buffer, int argc, char **argv)
         weechat_command(nullptr, sec_cmd.c_str());
     }
     weechat::accounts.erase(account->name);
-    weechat_printf(
-        nullptr,
-        _("%s: account %s%s%s has been deleted"),
-        WEECHAT_XMPP_PLUGIN_NAME,
-        weechat_color("chat_server"),
-        !account_name.empty() ? account_name.data() : "???",
-        weechat_color("reset"));
+    weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("{}: account {}{}{} has been deleted")),
+        weechat_color("chat_server"), !account_name.empty() ? account_name.data() : "???", weechat_color("reset")));
 }
 
 int command__account(const void *pointer, void *data,

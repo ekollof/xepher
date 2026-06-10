@@ -56,17 +56,18 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
             
             if (put_url && get_url)
             {
-                weechat_printf_date_tags(account.buffer, 0, "no_trigger,notify_none",
-                              "%sUpload slot received, uploading file...",
-                              weechat_prefix("network"));
+                weechat::UiPort::for_buffer(account.buffer)->printf_date_tags(
+                    0, "no_trigger,notify_none",
+                    fmt::format("{}Upload slot received, uploading file...",
+                                weechat_prefix("network")));
                 
                 // Verify file exists (non-blocking, no FILE* needed)
                 if (access(req.filepath.c_str(), R_OK) != 0)
                 {
                     XDEBUG("Upload: file not found/readable: {}", req.filepath);
-                    weechat_printf(account.buffer, "%s%s: failed to open file for upload: %s",
-                                  weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                                  req.filepath.c_str());
+                    weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+                        "{}: failed to open file for upload: {}",
+                        WEECHAT_XMPP_PLUGIN_NAME, req.filepath));
                     account.upload_requests.erase(req_it);
                     return true;
                 }
@@ -86,8 +87,9 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                 if (pipe(pipe_fds) != 0)
                 {
                     XDEBUG("Upload: pipe() failed");
-                    weechat_printf(account.buffer, "%s%s: failed to create pipe for upload",
-                                  weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                    weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+                        "{}: failed to create pipe for upload",
+                        WEECHAT_XMPP_PLUGIN_NAME));
                     account.upload_requests.erase(req_it);
                     return true;
                 }
@@ -612,21 +614,24 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
             }
             else
             {
-                weechat_printf(account.buffer, "%s%s: upload failed - missing PUT or GET URL",
-                              weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+                weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+                    "{}: upload failed - missing PUT or GET URL",
+                    WEECHAT_XMPP_PLUGIN_NAME));
                 account.upload_requests.erase(req_it);
             }
         }
         else
         {
-            weechat_printf(account.buffer, "%s%s: upload slot response for unknown request ID: %s",
-                          weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, id);
+            weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+                "{}: upload slot response for unknown request ID: {}",
+                WEECHAT_XMPP_PLUGIN_NAME, id));
         }
     }
     else if (id && account.upload_requests.contains(id))
     {
-        weechat_printf(account.buffer, "%s%s: upload slot response malformed or wrong type (type: %s)",
-                      weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, type ? type : "(null)");
+        weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+            "{}: upload slot response malformed or wrong type (type: {})",
+            WEECHAT_XMPP_PLUGIN_NAME, type ? type : "(null)"));
     }
     
     return false;
@@ -648,9 +653,10 @@ bool weechat::connection::handle_upload_slot_iq_error(xmpp_stanza_t *stanza)
     const std::string error_msg = ::xmpp::format_upload_slot_error_message(
         ::xmpp::StanzaView(error_elem));
 
-    weechat_printf(account.buffer, "%s%s: %s (type: %s)",
-                   weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
-                   error_msg.c_str(), error_type ? error_type : "unknown");
+    weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+        "{}: {} (type: {})",
+        WEECHAT_XMPP_PLUGIN_NAME, error_msg,
+        error_type ? error_type : "unknown"));
 
     account.upload_requests.erase(req_it);
     return true;

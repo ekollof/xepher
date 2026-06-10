@@ -46,10 +46,9 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
     
                     if (!target_node.empty())
                     {
-                        weechat_printf(account.buffer,
-                            "%somemo: publish to '%s' rejected (precondition-not-met) — "
-                            "configuring node and retrying",
-                            weechat_prefix("network"), target_node.c_str());
+                        weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                            "omemo: publish to '{}' rejected (precondition-not-met) — "
+                            "configuring node and retrying", target_node));
     
                         // Build node configure IQ using fluent builders.
                         const std::string cfg_uuid = stanza::uuid(account.context);
@@ -126,12 +125,10 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                         auto& [_, dl_ch] = *dl_ch_it;
                         if (!dl_ch.pending_omemo_messages.empty() && first_legacy_miss)
                         {
-                            weechat_printf(dl_ch.buffer,
-                                "%sOMEMO: %s has no legacy OMEMO device list either. "
-                                "Keeping %zu queued message(s).",
-                                weechat_prefix("error"),
-                                dl_target_jid.c_str(),
-                                dl_ch.pending_omemo_messages.size());
+                            weechat::UiPort::for_buffer(dl_ch.buffer)->printf_error(fmt::format(
+                                "OMEMO: {} has no legacy OMEMO device list either. "
+                                "Keeping {} queued message(s).",
+                                dl_target_jid, dl_ch.pending_omemo_messages.size()));
                         }
                     }
                 }
@@ -162,12 +159,11 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                 // Log the transient error so the user has visibility.
                     const std::string err_text = dl_err_elem
                         ? stanza_element_text(dl_err_elem) : std::string {};
-                    weechat_printf(account.buffer,
-                        "%somemo: transient devicelist fetch error for %s (%s) — "
+                    weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                        "omemo: transient devicelist fetch error for {} ({}) — "
                         "guard cleared, will retry on next send",
-                        weechat_prefix("network"),
-                        dl_target_jid.c_str(),
-                        err_text.empty() ? "unknown error" : err_text.c_str());
+                        dl_target_jid,
+                        err_text.empty() ? "unknown error" : err_text));
                 }
             }
         }
@@ -182,9 +178,8 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
             auto& [_, retry_node] = *cfg_it;
             account.omemo.pending_configure_retry.erase(cfg_it);
     
-                weechat_printf(account.buffer,
-                    "%somemo: node '%s' configured — re-publishing",
-                    weechat_prefix("network"), retry_node.c_str());
+                weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                    "omemo: node '{}' configured — re-publishing", retry_node));
     
                 if (retry_node == "eu.siacs.conversations.axolotl.devicelist")
                 {
@@ -290,9 +285,9 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
     
                         if (!found_self)
                         {
-                            weechat_printf(account.buffer,
-                                "%somemo: our device %u missing from server legacy devicelist — re-publishing",
-                                weechat_prefix("network"), account.omemo.device_id);
+                            weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                                "omemo: our device {} missing from server legacy devicelist — re-publishing",
+                                account.omemo.device_id));
     
                             auto dl_stanza = account.get_devicelist();
                             if (dl_stanza)
@@ -404,17 +399,15 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                                                                bundle_device_id,
                                                                items);
                         else
-                            weechat_printf(account.buffer,
-                                           "%somemo: legacy bundle result for %s has missing/invalid device id",
-                                           weechat_prefix("error"),
-                                           bundle_jid.c_str());
+                            weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+                                "omemo: legacy bundle result for {} has missing/invalid device id",
+                                bundle_jid));
                     }
                     else if (type && weechat_strcasecmp(type, "error") == 0)
                     {
-                        weechat_printf(account.buffer,
-                                       "%somemo: legacy bundle fetch for %s/%u returned error",
-                                       weechat_prefix("error"),
-                                       bundle_jid.c_str(), bundle_device_id);
+                        weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+                            "omemo: legacy bundle fetch for {}/{} returned error",
+                            bundle_jid, bundle_device_id));
                         if (bundle_device_id != 0 && !bundle_jid.empty())
                         {
                             for (auto &[_, ch] : account.channels)

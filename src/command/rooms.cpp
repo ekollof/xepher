@@ -37,6 +37,7 @@
 #include "command.hh"
 #include "sexp/driver.hh"
 #include "ui/picker.hh"
+#include "weechat/ui_port.hh"
 #include "xmpp/message_bob.hh"
 #include "xmpp/iq_upload.hh"
 

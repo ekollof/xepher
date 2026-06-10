@@ -22,6 +22,7 @@ public:
     virtual void printf_info(std::string_view msg) = 0;
     virtual void printf_network(std::string_view msg) = 0;
     virtual void printf_date_tags(std::time_t date, std::string_view tags, std::string_view msg) = 0;
+    virtual void printf_y(int y, std::string_view msg) = 0;
 
     [[nodiscard]] static std::unique_ptr<UiPort> for_buffer(struct t_gui_buffer *buffer);
 };
@@ -35,6 +36,7 @@ public:
     void printf_info(std::string_view msg) override;
     void printf_network(std::string_view msg) override;
     void printf_date_tags(std::time_t date, std::string_view tags, std::string_view msg) override;
+    void printf_y(int y, std::string_view msg) override;
 
 private:
     struct t_gui_buffer *buffer_;
@@ -48,6 +50,7 @@ public:
     void printf_info(std::string_view) override {}
     void printf_network(std::string_view) override {}
     void printf_date_tags(std::time_t, std::string_view, std::string_view) override {}
+    void printf_y(int, std::string_view) override {}
 };
 
 }  // namespace weechat

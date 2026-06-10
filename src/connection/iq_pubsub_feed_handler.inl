@@ -240,21 +240,24 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                                         if (!af.title.empty())
                                         {
                                             feed_ch.update_name(af.title.c_str());
-                                            weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                                "%sFeed title:%s %s",
-                                                weechat_prefix("network"),
-                                                weechat_color("reset"),
-                                                af.title.c_str());
+                                            weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                                0, "xmpp_feed,notify_none",
+                                                fmt::format("{}Feed title:{} {}",
+                                                    weechat_prefix("network"),
+                                                    weechat_color("reset"),
+                                                    af.title));
                                         }
                                         if (!af.author.empty())
-                                            weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                                "  %sAuthor:%s %s",
-                                                weechat_color("darkgray"),
-                                                weechat_color("reset"),
-                                                af.author.c_str());
+                                            weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                                0, "xmpp_feed,notify_none",
+                                                fmt::format("  {}Author:{} {}",
+                                                    weechat_color("darkgray"),
+                                                    weechat_color("reset"),
+                                                    af.author));
                                         if (!af.subtitle.empty())
-                                            weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                                "  %s", af.subtitle.c_str());
+                                            weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                                0, "xmpp_feed,notify_none",
+                                                fmt::format("  {}", af.subtitle));
                                     }
                                     continue;
                                 }
@@ -307,14 +310,16 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                                         "/feed {} {} --before {}",
                                         feed_service, node_name, first_text2);
                                     if (rsm_total_count > 0)
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                            "%s%d item(s) total — for older entries: %s",
-                                            weechat_prefix("network"),
-                                            rsm_total_count, hint.c_str());
+                                        weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                            0, "xmpp_feed,notify_none",
+                                            fmt::format("{}{} item(s) total — for older entries: {}",
+                                                weechat_prefix("network"),
+                                                rsm_total_count, hint));
                                     else
-                                        weechat_printf_date_tags(feed_ch.buffer, 0, "xmpp_feed,notify_none",
-                                            "%sFor older entries: %s",
-                                            weechat_prefix("network"), hint.c_str());
+                                        weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                            0, "xmpp_feed,notify_none",
+                                            fmt::format("{}For older entries: {}",
+                                                weechat_prefix("network"), hint));
                                 }
                             }
                         }
@@ -396,17 +401,14 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                     }
     
                     if (node_count == 0)
-                        weechat_printf(account.buffer,
-                                       "%sNo subscribed feeds found on %s. "
-                                       "Try: /feed %s --all",
-                                       weechat_prefix("network"),
-                                       feed_service.c_str(),
-                                       feed_service.c_str());
+                        weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                            "No subscribed feeds found on {}. "
+                            "Try: /feed {} --all",
+                            feed_service, feed_service));
                     else
-                        weechat_printf(account.buffer,
-                                       "%sFeed subscriptions on %s: fetching %d subscribed node(s)",
-                                       weechat_prefix("network"),
-                                       feed_service.c_str(), node_count);
+                        weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                            "Feed subscriptions on {}: fetching {} subscribed node(s)",
+                            feed_service, node_count));
                 }
             }
         }
@@ -421,9 +423,8 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                 {
                     auto& [_, sub] = *sub_ok_it;
                     struct t_gui_buffer *fb = sub.buffer ? sub.buffer : account.buffer;
-                    weechat_printf(fb,
-                        "%sSubscribed to %s",
-                        weechat_prefix("network"), sub.feed_key.c_str());
+                    weechat::UiPort::for_buffer(fb)->printf_network(fmt::format(
+                        "Subscribed to {}", sub.feed_key));
                     account.pubsub_subscribe_queries.erase(sub_ok_it);
                     handled = true;
                 }
@@ -432,9 +433,8 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                 {
                     auto& [_, unsub] = *unsub_ok_it;
                     struct t_gui_buffer *fb = unsub.buffer ? unsub.buffer : account.buffer;
-                    weechat_printf(fb,
-                        "%sUnsubscribed from %s",
-                        weechat_prefix("network"), unsub.feed_key.c_str());
+                    weechat::UiPort::for_buffer(fb)->printf_network(fmt::format(
+                        "Unsubscribed from {}", unsub.feed_key));
                     account.pubsub_unsubscribe_queries.erase(unsub_ok_it);
                     handled = true;
                 }
