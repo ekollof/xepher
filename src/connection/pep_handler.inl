@@ -415,7 +415,7 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
                     if (!feed.valid()) feed = child.child("feed");
                     if (!entry.valid() && feed.valid())
                     {
-                        atom_feed af = parse_atom_feed(account.context, feed.raw());
+                        atom_feed af = parse_atom_feed(feed);
                         if (!af.empty())
                         {
                             if (!af.title.empty())
@@ -446,7 +446,7 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
                     }
 
                     const std::string publisher = child.attr_string("publisher");
-                    atom_entry ae = parse_atom_entry(account.context, entry.raw(), publisher.empty() ? nullptr : publisher.c_str());
+                    atom_entry ae = parse_atom_entry(entry, publisher);
                     if (item_id_raw && !ae.item_id.empty())
                         account.feed_atom_id_set(feed_key, item_id_raw, ae.item_id);
                     if (item_id_raw && !ae.replies_link.empty())

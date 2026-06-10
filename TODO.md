@@ -2,10 +2,10 @@
 
 Living task list for remaining implementation debt. Completed initiatives (OMEMO BTBV
 refactor, XEP compliance emission migration, XEP-0045 MUC features, port abstraction
-Waves 0–4, Phase 4 BufferPort + prefix cleanup) are removed from this file — see git
-history for archived phase-by-phase plans.
+Waves 0–4, Phase 4 BufferPort + prefix cleanup, Phase 5 parse utilities) are removed
+from this file — see git history for archived phase-by-phase plans.
 
-**Verification baseline:** `CXX="ccache clang++" make DEBUG=1` — 127 doctests, all assertions
+**Verification baseline:** `CXX="ccache clang++" make DEBUG=1` — 132 doctests, all assertions
 green. Manual WeeChat retest after user-visible changes (full restart; no `/plugin reload`).
 
 ---
@@ -35,7 +35,6 @@ when items land.
 
 | Priority | Gap | Location(s) | Remediation |
 |----------|-----|-------------|-------------|
-| High | Parse utilities on raw libstrophe | `atom.cpp`, `xhtml.cpp`, `util.cpp` | Migrate to `StanzaView` when those paths are next edited |
 | Medium | Manual prefix in dated messages | Other connection `.inl` files (`pep_handler`, `iq_*`, `helpers.cpp`) | Use typed `UiPort` methods when those paths are next edited |
 | Low | `debug.hh` bypasses ports | `XDEBUG` → raw `weechat_printf` | Optional: route through `UiPort` when refactoring debug path |
 | Low | `AGENTS.md` docs drift | Line 180 still cites `weechat_prefix()` | Align with `RuntimePort::default_runtime().prefix()` |
@@ -47,15 +46,11 @@ Port adapters (`ui_port.cpp`, `runtime_port.cpp`, `buffer_port.cpp`, `line_store
 C-ABI glue (`connection.cpp` SM counting, buffer creation, hook callbacks); `strophe.hh`
 (parse-only alt wrapper, documented). Action-prefix dated chat lines in `message_handler.inl`
 (`/me`, MAM mentions) intentionally embed `prefix("action")` in the message column.
-
-### Phase 5 — Parse utilities (when touched)
-
-- [ ] `atom.cpp`, `xhtml.cpp`, `util.cpp` → `StanzaView`
-- [ ] Add/adjust doctests as needed
+`get_text(child.raw())` in `xhtml.cpp` for XHTML-IM text nodes (libstrophe text-node C API).
 
 ### Phase 6 — Docs hygiene
 
-- [ ] `AGENTS.md`: align prefix guidance with `RuntimePort`; update stale TODO.md pointer (BTBV refactor complete)
+- [ ] `AGENTS.md`: align prefix guidance with `RuntimePort`; update stale TODO.md pointer (BTBV refactor complete); doctest count → 132
 
 ### New XEP support
 

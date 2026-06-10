@@ -25,6 +25,8 @@
 #include "strophe.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza_view.hh"
+#include "xmpp/atom.hh"
+#include "xmpp/xhtml.hh"
 #include "xmpp/iq_handlers.hh"
 #include "xmpp/iq_error.hh"
 #include "xmpp/iq_ping.hh"
@@ -227,6 +229,93 @@ TEST_CASE("stanza_element_text reads element body")
     CHECK(stanza_element_text(el) == "hello world");
     CHECK(stanza_element_text(nullptr).empty());
     xmpp_stanza_release(el);
+}
+
+TEST_CASE("StanzaView is_text detects text nodes")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *root = xmpp_stanza_new_from_string(
+        env.ctx,
+        "<body xmlns='http://www.w3.org/1999/xhtml'>"
+        "<p>hello</p></body>");
+    REQUIRE(root != nullptr);
+
+    const xmpp::StanzaView body(root);
+    CHECK_FALSE(body.is_text());
+
+    bool saw_text = false;
+    for (const xmpp::StanzaView child : body.child("p"))
+        if (child.is_text())
+            saw_text = true;
+    CHECK(saw_text);
+
+    xmpp_stanza_release(root);
+}
+
+TEST_CASE("html_strip_to_plain strips tags and decodes entities")
+{
+    CHECK(html_strip_to_plain("<p>Hello &amp; world</p>") == "Hello & world");
+    CHECK(html_strip_to_plain("") == "");
+}
+
+TEST_CASE("parse_atom_entry reads Atom entry fields")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *entry = xmpp_stanza_new_from_string(
+        env.ctx,
+        "<entry xmlns='http://www.w3.org/2005/Atom'>"
+        "<title>Post title</title>"
+        "<content type='html'>&lt;p&gt;Body text&lt;/p&gt;</content>"
+        "<author><name>Alice</name><uri>xmpp:alice@example.org</uri></author>"
+        "<id>tag:example,2024:1</id>"
+        "<link rel='alternate' href='https://example.org/post/1'/>"
+        "</entry>");
+    REQUIRE(entry != nullptr);
+
+    const atom_entry ae = parse_atom_entry(xmpp::StanzaView(entry));
+    CHECK(ae.title == "Post title");
+    CHECK(ae.content == "Body text");
+    CHECK(ae.content_type == "html");
+    CHECK(ae.author == "Alice");
+    CHECK(ae.author_uri == "xmpp:alice@example.org");
+    CHECK(ae.item_id == "tag:example,2024:1");
+    CHECK(ae.link == "https://example.org/post/1");
+
+    xmpp_stanza_release(entry);
+}
+
+TEST_CASE("xhtml_to_weechat accepts StanzaView input")
+{
+    CHECK(xhtml_to_weechat(xmpp::StanzaView(nullptr)).empty());
+
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *body = xmpp_stanza_new_from_string(
+        env.ctx,
+        "<body xmlns='http://www.w3.org/1999/xhtml'/>");
+    REQUIRE(body != nullptr);
+    CHECK(xhtml_to_weechat(xmpp::StanzaView(body)).empty());
+    xmpp_stanza_release(body);
+}
+
+TEST_CASE("apply_xep394_markup accepts StanzaView input")
+{
+    CHECK(apply_xep394_markup(xmpp::StanzaView(nullptr), "Hello world").empty());
+
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(
+        env.ctx,
+        "<message xmlns='jabber:client'><body>Hello world</body></message>");
+    REQUIRE(msg != nullptr);
+    CHECK(apply_xep394_markup(xmpp::StanzaView(msg), "Hello world").empty());
+    xmpp_stanza_release(msg);
 }
 
 TEST_CASE("StanzaView child_iterator terminates on last child")

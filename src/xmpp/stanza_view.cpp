@@ -5,8 +5,14 @@
 #include "stanza_view.hh"
 
 #include "node.hh"
+#include "test_export.hh"
 
 namespace xmpp {
+
+XMPP_TEST_EXPORT bool StanzaView::is_text() const
+{
+    return stanza_ && xmpp_stanza_is_text(stanza_);
+}
 
 std::string_view StanzaView::name() const
 {

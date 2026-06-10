@@ -22,6 +22,7 @@
 #include "plugin.hh"
 #include "weechat/runtime_port.hh"
 #include "util.hh"
+#include "xmpp/stanza_view.hh"
 
 XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2)
 {
@@ -259,13 +260,16 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text)
 // Applies <markup xmlns='urn:xmpp:markup:0'> to `plain_text`, returning a
 // WeeChat colour-coded string.  Returns empty string if no <markup> child
 // exists in `stanza`.
-std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_text)
+XMPP_TEST_EXPORT std::string apply_xep394_markup(
+    const xmpp::StanzaView stanza,
+    const std::string_view plain_text)
 {
-    if (!stanza || plain_text.empty()) return {};
+    if (!stanza.valid() || plain_text.empty())
+        return {};
 
-    xmpp_stanza_t *markup_elem = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "markup", "urn:xmpp:markup:0");
-    if (!markup_elem) return {};
+    const xmpp::StanzaView markup_elem = stanza.child("markup", "urn:xmpp:markup:0");
+    if (!markup_elem.valid())
+        return {};
 
     // Build a table mapping unicode-codepoint index → UTF-8 byte offset.
     // XEP-0394 start/end are in unicode codepoints; we need byte positions.
@@ -306,45 +310,45 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_te
     std::vector<Event> events;
 
     // Helper to get start/end codepoint attributes
-    auto get_long_attr = [](xmpp_stanza_t *el, const char *attr, long fallback) -> long {
-        const char *v = xmpp_stanza_get_attribute(el, attr);
-        if (!v) return fallback;
+    const auto get_long_attr = [](const xmpp::StanzaView el,
+                                  const std::string_view attr,
+                                  const long fallback) -> long {
+        const std::string v = el.attr_string(attr);
+        if (v.empty())
+            return fallback;
         if (auto val = parse_int64(v); val)
             return static_cast<long>(*val);
         return fallback;
     };
 
-    for (xmpp_stanza_t *child = xmpp_stanza_get_children(markup_elem);
-         child; child = xmpp_stanza_get_next(child))
+    for (const xmpp::StanzaView child : markup_elem)
     {
-        const char *child_name = xmpp_stanza_get_name(child);
-        if (!child_name) continue;
-
-        std::string_view child_name_sv(child_name);
+        const std::string_view child_name_sv = child.name();
+        if (child_name_sv.empty())
+            continue;
 
         if (child_name_sv == "span")
         {
-            long start = get_long_attr(child, "start", -1);
-            long end   = get_long_attr(child, "end",   -1);
+            const long start = get_long_attr(child, "start", -1);
+            const long end   = get_long_attr(child, "end", -1);
             if (start < 0 || end <= start) continue;
 
             // Determine which style this span applies (first child wins)
             std::string open_code, close_code;
-            for (xmpp_stanza_t *sp = xmpp_stanza_get_children(child);
-                 sp; sp = xmpp_stanza_get_next(sp))
+            for (const xmpp::StanzaView sp : child)
             {
-                const char *sp_name = xmpp_stanza_get_name(sp);
-                if (!sp_name) continue;
-                if (std::string_view(sp_name) == "emphasis") {
+                const std::string_view sp_name = sp.name();
+                if (sp_name.empty()) continue;
+                if (sp_name == "emphasis") {
                     open_code  = weechat::RuntimePort::default_runtime().color("italic");
                     close_code = weechat::RuntimePort::default_runtime().color("-italic");
-                } else if (std::string_view(sp_name) == "strong") {
+                } else if (sp_name == "strong") {
                     open_code  = weechat::RuntimePort::default_runtime().color("bold");
                     close_code = weechat::RuntimePort::default_runtime().color("-bold");
-                } else if (std::string_view(sp_name) == "code") {
+                } else if (sp_name == "code") {
                     open_code  = weechat::RuntimePort::default_runtime().color("cyan");
                     close_code = weechat::RuntimePort::default_runtime().color("resetcolor");
-                } else if (std::string_view(sp_name) == "deleted") {
+                } else if (sp_name == "deleted") {
                     open_code  = weechat::RuntimePort::default_runtime().color("8");   // dark grey ≈ strikethrough hint
                     close_code = weechat::RuntimePort::default_runtime().color("resetcolor");
                 }
@@ -383,12 +387,10 @@ std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_te
         else if (child_name_sv == "list")
         {
             // Each <li start="N"/> inserts a bullet marker at that codepoint.
-            for (xmpp_stanza_t *li = xmpp_stanza_get_children(child);
-                 li; li = xmpp_stanza_get_next(li))
+            for (const xmpp::StanzaView li : child)
             {
-                const char *li_name = xmpp_stanza_get_name(li);
-                if (!li_name || std::string_view(li_name) != "li") continue;
-                long li_start = get_long_attr(li, "start", -1);
+                if (li.name() != "li") continue;
+                const long li_start = get_long_attr(li, "start", -1);
                 if (li_start < 0) continue;
                 // Insert "• " before the list item start
                 events.push_back({cp_byte(li_start), -1, "• "});

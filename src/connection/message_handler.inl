@@ -360,13 +360,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     "entry", "http://www.w3.org/2005/Atom");
                                 if (!entry_view.valid())
                                     entry_view = fwd_item.child("entry");
-                                xmpp_stanza_t *entry = entry_view.raw();
-                                if (!entry) continue;
+                                if (!entry_view.valid()) continue;
 
                                 const std::string pub_s = fwd_item.attr_string("publisher");
-                                const char *pub = pub_s.empty() ? publisher_jid : pub_s.c_str();
+                                const std::string_view pub_sv =
+                                    pub_s.empty() ? std::string_view(publisher_jid) : std::string_view(pub_s);
 
-                                atom_entry ae = parse_atom_entry(account.context, entry, pub);
+                                atom_entry ae = parse_atom_entry(entry_view, pub_sv);
                                 if (item_id_raw && !ae.item_id.empty())
                                     account.feed_atom_id_set(feed_key, item_id_raw, ae.item_id);
                                 if (item_id_raw && !ae.replies_link.empty())
@@ -1000,7 +1000,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             const auto html_body = html_view.child("body");
             if (html_body.valid())
             {
-                xhtml_fallback = xhtml_to_weechat(html_body.raw());
+                xhtml_fallback = xhtml_to_weechat(html_body);
                 // Trim leading/trailing whitespace
                 auto trim_pos = xhtml_fallback.find_first_not_of(" \t\n\r");
                 if (trim_pos != std::string::npos)

@@ -6,8 +6,11 @@
 
 #include <cstdint>
 #include <string>
-#include <strophe.h>
+#include <string_view>
 #include <vector>
+
+#include "test_export.hh"
+#include "xmpp/stanza_view.hh"
 
 // XEP-0447 Stateless File Sharing attachment parsed from <file-sharing> children.
 struct sfs_attachment
@@ -78,8 +81,8 @@ struct atom_feed
 };
 
 // Parse an Atom <entry> stanza into an atom_entry.
-// Returns a default-constructed (empty) atom_entry when entry is nullptr.
-atom_entry parse_atom_entry(xmpp_ctx_t *ctx, xmpp_stanza_t *entry,
-                            const char *publisher = nullptr);
+[[nodiscard]] XMPP_TEST_EXPORT atom_entry parse_atom_entry(
+    xmpp::StanzaView entry,
+    std::string_view publisher = {});
 
-atom_feed parse_atom_feed(xmpp_ctx_t *ctx, xmpp_stanza_t *feed);
+[[nodiscard]] XMPP_TEST_EXPORT atom_feed parse_atom_feed(xmpp::StanzaView feed);

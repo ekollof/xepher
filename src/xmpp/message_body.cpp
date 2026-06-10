@@ -26,7 +26,7 @@ std::string format_inbound_message_body(xmpp_stanza_t *stanza, std::string_view 
     if (stanza_has_unstyled_hint(StanzaView(stanza)))
         return std::string(text);
 
-    std::string styled = apply_xep394_markup(stanza, text);
+    std::string styled = apply_xep394_markup(xmpp::StanzaView(stanza), text);
     if (styled.empty())
         styled = apply_xep393_styling(text);
     return styled;

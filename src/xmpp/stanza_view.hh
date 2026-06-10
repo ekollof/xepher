@@ -19,6 +19,7 @@ public:
     explicit StanzaView(xmpp_stanza_t *stanza = nullptr) : stanza_(stanza) {}
 
     [[nodiscard]] bool valid() const { return stanza_ != nullptr; }
+    [[nodiscard]] XMPP_TEST_EXPORT bool is_text() const;
     [[nodiscard]] xmpp_stanza_t *raw() const { return stanza_; }
 
     [[nodiscard]] XMPP_TEST_EXPORT std::string_view name() const;

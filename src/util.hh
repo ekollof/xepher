@@ -9,8 +9,8 @@
 #include <expected>
 #include <string>
 #include <string_view>
-#include <strophe.h>
 #include "test_export.hh"
+#include "xmpp/stanza_view.hh"
 
 XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2);
 
@@ -35,7 +35,9 @@ XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text);
 // Returns a WeeChat-colour-coded string derived from `plain_text` using the
 // <markup xmlns='urn:xmpp:markup:0'> child of `stanza`, or an empty string
 // if no <markup> element is found.
-std::string apply_xep394_markup(xmpp_stanza_t *stanza, std::string_view plain_text);
+[[nodiscard]] XMPP_TEST_EXPORT std::string apply_xep394_markup(
+    xmpp::StanzaView stanza,
+    std::string_view plain_text);
 
 // Markdown renderer for Atom feed plain-text content.
 // Converts a barebones subset of Markdown to WeeChat colour/attribute codes.

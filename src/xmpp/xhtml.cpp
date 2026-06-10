@@ -7,6 +7,7 @@
 // other translation unit) can render XHTML stanza content and strip raw HTML.
 
 #include "xhtml.hh"
+#include "test_export.hh"
 
 #include <array>
 #include <cctype>
@@ -17,12 +18,12 @@
 #include <string_view>
 #include <utility>
 
-#include <strophe.h>
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
 #include "weechat/runtime_port.hh"
 #include "node.hh"
+#include "stanza_view.hh"
 
 // ---------------------------------------------------------------------------
 // css_color_to_weechat
@@ -162,15 +163,19 @@ std::pair<std::string, std::string> css_style_to_weechat(const char *style)
 // xhtml_to_weechat
 // ---------------------------------------------------------------------------
 
-std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
+XMPP_TEST_EXPORT std::string xhtml_to_weechat(
+    const xmpp::StanzaView stanza,
+    const bool in_blockquote)
 {
     std::string result;
-    for (xmpp_stanza_t *child = xmpp_stanza_get_children(stanza);
-         child; child = xmpp_stanza_get_next(child))
+    if (!stanza.valid())
+        return result;
+
+    for (const xmpp::StanzaView child : stanza)
     {
-        if (xmpp_stanza_is_text(child))
+        if (child.is_text())
         {
-            const std::string txt = get_text(child);
+            const std::string txt = get_text(child.raw());
             if (txt.empty()) continue;
             if (in_blockquote)
             {
@@ -203,10 +208,8 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
             continue;
         }
 
-        const char *name = xmpp_stanza_get_name(child);
-        if (!name) continue;
-
-        std::string_view name_sv(name);
+        const std::string_view name_sv = child.name();
+        if (name_sv.empty()) continue;
 
         bool is_block = (name_sv == "p"
                       || name_sv == "div"
@@ -299,8 +302,9 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
 
         if (name_sv == "span")
         {
-            const char *style_attr = xmpp_stanza_get_attribute(child, "style");
-            auto [open, close] = css_style_to_weechat(style_attr);
+            const std::string style_attr = child.attr_string("style");
+            auto [open, close] = css_style_to_weechat(
+                style_attr.empty() ? nullptr : style_attr.c_str());
             result += open;
             result += xhtml_to_weechat(child, in_blockquote);
             result += close;
@@ -309,9 +313,9 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
 
         if (name_sv == "a")
         {
-            const char *href = xmpp_stanza_get_attribute(child, "href");
+            const std::string href = child.attr_string("href");
             std::string link_text = xhtml_to_weechat(child, in_blockquote);
-            if (href && *href)
+            if (!href.empty())
             {
                 auto sanitize_url = [](const char *url) -> std::string {
                     std::string out;
@@ -322,7 +326,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
                     }
                     return out;
                 };
-                std::string safe_href = sanitize_url(href);
+                std::string safe_href = sanitize_url(href.c_str());
                 if (link_text == safe_href)
                 {
                     result += weechat::RuntimePort::default_runtime().color("blue");
@@ -349,10 +353,10 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
 
         if (name_sv == "img")
         {
-            const char *alt = xmpp_stanza_get_attribute(child, "alt");
+            const std::string alt = child.attr_string("alt");
             result += weechat::RuntimePort::default_runtime().color("darkgray");
             result += '[';
-            result += (alt && *alt) ? alt : "image";
+            result += alt.empty() ? "image" : alt;
             result += ']';
             result += weechat::RuntimePort::default_runtime().color("resetcolor");
             continue;
@@ -370,7 +374,7 @@ std::string xhtml_to_weechat(xmpp_stanza_t *stanza, bool in_blockquote)
 // Strip HTML tags from a raw HTML string and decode basic entities.
 // This is a best-effort plain-text approximation for Atom <content type='html'>.
 
-std::string html_strip_to_plain(std::string_view html)
+XMPP_TEST_EXPORT std::string html_strip_to_plain(const std::string_view html)
 {
     std::string out;
     out.reserve(html.size());
