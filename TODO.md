@@ -311,7 +311,7 @@ Bump `DOAP.xml` `xmpp:version` to **1.35.5** when work lands.
 
 ### Verification
 
-- `CXX="ccache clang++" make DEBUG=1` — 109 doctests pass
+- `CXX="ccache clang++" make DEBUG=1` — 123 doctests pass
 - Manual WeeChat (full restart): join moderated room as mod; `/voice`/`/devoice`/`/op`/`/deop`; `/affiliation list member`; `/affiliation set` with nick; `/invite --mediated`; receive mediated invite; `/mucregister` on members-only room; PM with `x:conference` shows hint only
 - Enable `xmpp.look.debug` + `xmpp.look.raw_xml_log`; cross-check stanzas against `docs/specs/xep-0045.txt` examples
 - Retest critical regressions: PM no-recreate, typing indicators, MUC nicklist, `/kick`/`/ban`, `/setmodes`/`/destroy`
