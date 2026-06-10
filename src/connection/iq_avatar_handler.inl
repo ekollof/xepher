@@ -2,34 +2,35 @@ bool weechat::connection::handle_avatar_pubsub_iq_event(
     xmpp_stanza_t *stanza,
     std::string_view own_jid_str)
 {
-    const char *from = xmpp_stanza_get_from(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
     if (!type || weechat_strcasecmp(type, "result") != 0)
         return false;
 
-    xmpp_stanza_t *pubsub = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "pubsub", "http://jabber.org/protocol/pubsub");
-    if (!pubsub)
+    const auto pubsub = view.child("pubsub", "http://jabber.org/protocol/pubsub");
+    if (!pubsub.valid())
         return false;
 
-    xmpp_stanza_t *items = xmpp_stanza_get_child_by_name(pubsub, "items");
-    if (!items)
+    const auto items = pubsub.child("items");
+    if (!items.valid())
         return false;
 
-    const char *items_node = xmpp_stanza_get_attribute(items, "node");
-    if (!items_node || std::string_view(items_node) != ::xmpp::k_pep_avatar_data)
+    const std::string items_node = items.attr_string("node");
+    if (items_node.empty() || std::string_view(items_node) != ::xmpp::k_pep_avatar_data)
         return false;
 
-    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items, "item");
-    if (!item)
+    const auto item = items.child("item");
+    if (!item.valid())
         return false;
 
-    xmpp_stanza_t *data_elem = xmpp_stanza_get_child_by_name_and_ns(
-        item, "data", ::xmpp::k_pep_avatar_data.data());
-    if (!data_elem)
+    const auto data_elem = item.child("data", ::xmpp::k_pep_avatar_data);
+    if (!data_elem.valid())
         return false;
 
-    const std::string b64_data = stanza_element_text(data_elem);
+    const std::string b64_data = data_elem.text();
     if (b64_data.empty())
         return false;
 

@@ -522,15 +522,15 @@ int command__whois(const void *pointer, void *data,
 
     // Request vCard using XEP-0054 (legacy)
     xmpp_stanza_t *iq = xmpp::xep0054::vcard_request(ptr_account->context, target);
-    const char *req_id = xmpp_stanza_get_id(iq);
-    if (req_id)
+    const std::string req_id = ::xmpp::StanzaView(iq).attr_string("id");
+    if (!req_id.empty())
         ptr_account->whois_queries[req_id] = { buffer, std::string(target) };
 
     // Also request vCard4 via PubSub (XEP-0292) — servers that support it will
     // respond; others will return an error which we silently ignore.
     xmpp_stanza_t *iq4 = xmpp::xep0292::vcard4_request(ptr_account->context, target);
-    const char *req_id4 = xmpp_stanza_get_id(iq4);
-    if (req_id4)
+    const std::string req_id4 = ::xmpp::StanzaView(iq4).attr_string("id");
+    if (!req_id4.empty())
         ptr_account->whois_queries[req_id4] = { buffer, std::string(target) };
 
     ui->printf_network(fmt::format("Requesting vCard for {}...", target));
@@ -594,8 +594,8 @@ int command__setvcard(const void *pointer, void *data,
     // Fetch our own vCard first so we can merge the single field change without
     // clobbering the rest of the vCard (XEP-0054 IQ set replaces the entire vCard).
     xmpp_stanza_t *iq = xmpp::xep0054::vcard_request(ptr_account->context, nullptr);
-    const char *req_id = xmpp_stanza_get_id(iq);
-    if (req_id)
+    const std::string req_id = ::xmpp::StanzaView(iq).attr_string("id");
+    if (!req_id.empty())
         ptr_account->setvcard_queries[req_id] = { buffer, field, value };
     ui->printf_network(fmt::format("Fetching current vCard before updating {}...", field.c_str()));
     ptr_account->connection.send(iq);

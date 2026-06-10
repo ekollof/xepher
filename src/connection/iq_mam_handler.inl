@@ -1,7 +1,15 @@
 void weechat::connection::handle_mam_query_iq_error(xmpp_stanza_t *stanza)
 {
-    const char *id = xmpp_stanza_get_id(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)from; (void)to;
     if (!id || !type || weechat_strcasecmp(type, "error") != 0)
         return;
 
@@ -69,15 +77,22 @@ void weechat::connection::handle_mam_query_iq_error(xmpp_stanza_t *stanza)
 
 bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
 {
-    const char *id = xmpp_stanza_get_id(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)from; (void)to;
 
     // XEP-0442: PubSub MAM <fin> — marks end of a pubsub node MAM query.
     // The <fin> arrives as a child of the IQ result with id= matching our query IQ.
     {
-        xmpp_stanza_t *pmam_fin = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "fin", "urn:xmpp:mam:2");
-        if (pmam_fin && id && type && weechat_strcasecmp(type, "result") == 0)
+        const ::xmpp::StanzaView pmam_fin = view.child("fin", "urn:xmpp:mam:2");
+        if (pmam_fin.valid() && id && type && weechat_strcasecmp(type, "result") == 0)
         {
             if (auto pq_it = account.pubsub_mam_queries.find(id); pq_it != account.pubsub_mam_queries.end())
             {
@@ -99,9 +114,8 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
         }
     }
 
-    xmpp_stanza_t *fin = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "fin", "urn:xmpp:mam:2");
-    if (!fin)
+    const ::xmpp::StanzaView fin = view.child("fin", "urn:xmpp:mam:2");
+    if (!fin.valid())
         return false;
 
     weechat::account::mam_query mam_query;

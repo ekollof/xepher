@@ -1,12 +1,19 @@
 bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
 {
-    const char *id = xmpp_stanza_get_id(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)from; (void)to;
     // XEP-0363: HTTP File Upload - handle upload slot response
-    xmpp_stanza_t *slot = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "slot", "urn:xmpp:http:upload:0");
+    const ::xmpp::StanzaView slot = view.child("slot", "urn:xmpp:http:upload:0");
     
-    if (slot && id && type && weechat_strcasecmp(type, "result") == 0)
+    if (slot.valid() && id && type && weechat_strcasecmp(type, "result") == 0)
     {
         XDEBUG("Upload slot response received (id: {})", id);
         
@@ -15,11 +22,13 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
             auto& [_, req] = *req_it;
             XDEBUG("Found matching upload request");
             // Extract PUT and GET URLs
-            xmpp_stanza_t *put_elem = xmpp_stanza_get_child_by_name(slot, "put");
-            xmpp_stanza_t *get_elem = xmpp_stanza_get_child_by_name(slot, "get");
+            const ::xmpp::StanzaView put_elem = slot.child("put");
+            const ::xmpp::StanzaView get_elem = slot.child("get");
             
-            const char *put_url = put_elem ? xmpp_stanza_get_attribute(put_elem, "url") : nullptr;
-            const char *get_url = get_elem ? xmpp_stanza_get_attribute(get_elem, "url") : nullptr;
+            const std::string put_url_str = put_elem.valid() ? put_elem.attr_string("url") : std::string{};
+            const char *put_url = put_url_str.empty() ? nullptr : put_url_str.c_str();
+            const std::string get_url_str = get_elem.valid() ? get_elem.attr_string("url") : std::string{};
+            const char *get_url = get_url_str.empty() ? nullptr : get_url_str.c_str();
             
             XDEBUG("PUT URL: {}", put_url ? put_url : "(null)");
             XDEBUG("GET URL: {}", get_url ? get_url : "(null)");
@@ -28,14 +37,14 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
             // are permitted — forwarding arbitrary headers is a header-injection risk).
             // Also strip any CR/LF from values to prevent HTTP header injection.
             std::vector<std::string> put_headers;
-            if (put_elem)
+            if (put_elem.valid())
             {
-                xmpp_stanza_t *header = xmpp_stanza_get_child_by_name(put_elem, "header");
-                while (header)
+                ::xmpp::StanzaView header = put_elem.child("header");
+                while (header.valid())
                 {
-                    const char *name = xmpp_stanza_get_attribute(header, "name");
-                    const std::string value = stanza_element_text(header);
-                    if (name)
+                    const std::string name = header.attr_string("name");
+                    const std::string value = header.text();
+                    if (!name.empty())
                     {
                         if (::xmpp::is_allowed_http_upload_put_header(name))
                         {
@@ -50,7 +59,7 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
                             XDEBUG("PUT header '{}' not in XEP-0363 §9.2 allowlist — dropped", name);
                         }
                     }
-                    header = xmpp_stanza_get_next(header);
+                    header = header.next_sibling();
                 }
             }
             
@@ -639,7 +648,16 @@ bool weechat::connection::handle_upload_slot_iq_event(xmpp_stanza_t *stanza)
 
 bool weechat::connection::handle_upload_slot_iq_error(xmpp_stanza_t *stanza)
 {
-    const char *id = xmpp_stanza_get_id(stanza);
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)from; (void)to; (void)type;
     if (!id)
         return false;
 
@@ -647,9 +665,10 @@ bool weechat::connection::handle_upload_slot_iq_error(xmpp_stanza_t *stanza)
     if (req_it == account.upload_requests.end())
         return false;
 
-    xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-    const char *error_type = error_elem
-        ? xmpp_stanza_get_attribute(error_elem, "type") : nullptr;
+    const ::xmpp::StanzaView error_elem = view.child("error");
+    const std::string error_type_str = error_elem.valid()
+        ? error_elem.attr_string("type") : std::string{};
+    const char *error_type = error_type_str.empty() ? nullptr : error_type_str.c_str();
     const std::string error_msg = ::xmpp::format_upload_slot_error_message(
         ::xmpp::StanzaView(error_elem));
 

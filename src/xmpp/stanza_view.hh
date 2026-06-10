@@ -34,6 +34,13 @@ public:
     [[nodiscard]] XMPP_TEST_EXPORT StanzaView child(std::string_view name, std::string_view ns) const;
     [[nodiscard]] XMPP_TEST_EXPORT std::string text() const;
 
+    [[nodiscard]] StanzaView next_sibling() const
+    {
+        if (!stanza_)
+            return StanzaView(nullptr);
+        return StanzaView(xmpp_stanza_get_next(stanza_));
+    }
+
     class child_iterator {
     public:
         using iterator_category = std::forward_iterator_tag;
@@ -87,7 +94,7 @@ private:
     xmpp_stanza_t *stanza_;
 };
 
-inline auto begin(StanzaView view) { return view.children_begin(); }
-inline auto end(StanzaView view) { return view.children_end(); }
+inline auto begin(const StanzaView &view) { return view.children_begin(); }
+inline auto end(const StanzaView &view) { return view.children_end(); }
 
 }  // namespace xmpp

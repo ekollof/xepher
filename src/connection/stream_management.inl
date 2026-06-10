@@ -1,14 +1,24 @@
 bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
 {
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)id; (void)from; (void)to; (void)type;
     // CRITICAL: Verify this is actually an SM stanza by checking xmlns
-    const char *xmlns = xmpp_stanza_get_ns(stanza);
-    if (!xmlns || std::string_view(xmlns) != "urn:xmpp:sm:3")
+    const auto xmlns_opt = view.xmlns();
+    if (!xmlns_opt || *xmlns_opt != "urn:xmpp:sm:3")
     {
         // Not an SM stanza, ignore
         return true;
     }
 
-    const char *name = xmpp_stanza_get_name(stanza);
+    const char *name = view.name().data();
     if (!name)
         return true;
 
@@ -23,8 +33,8 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         account.sm_last_ack = 0;
         account.sm_outqueue.clear();
 
-        const char *id = xmpp_stanza_get_attribute(stanza, "id");
-        if (id)
+        const std::string id = view.attr_string("id");
+        if (!id.empty())
         {
             account.sm_id = id;
             XDEBUG("Stream Management enabled (resumable, id={})", id);
@@ -41,9 +51,9 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
     else if (element_name == "resumed")
     {
         // Stream resumed successfully
-        const char *h = xmpp_stanza_get_attribute(stanza, "h");
+        const std::string h = view.attr_string("h");
         uint32_t ack_h = 0;
-        if (h)
+        if (!h.empty())
         {
             ack_h = parse_uint32(h).value_or(0);
             account.sm_last_ack = ack_h;
@@ -77,15 +87,14 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
     {
         // Stream management failed or resume failed
         const char *xmlns_err = "urn:ietf:params:xml:ns:xmpp-stanzas";
-        xmpp_stanza_t *error = xmpp_stanza_get_child_by_name_and_ns(stanza, "unexpected-request", xmlns_err);
-        
-        if (!error)
-            error = xmpp_stanza_get_child_by_name_and_ns(stanza, "item-not-found", xmlns_err);
-        
+        ::xmpp::StanzaView error = view.child("unexpected-request", xmlns_err);
+        if (!error.valid())
+            error = view.child("item-not-found", xmlns_err);
+
         auto ui = weechat::UiPort::for_buffer(account.buffer);
-        if (error)
+        if (error.valid())
         {
-            const char *error_name = xmpp_stanza_get_name(error);
+            const char *error_name = error.name().data();
             ui->printf_error(fmt::format(
                 "SM error: {}", error_name ? error_name : "unknown"));
         }
@@ -111,8 +120,8 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
     else if (element_name == "a")
     {
         // Acknowledgement from server
-        const char *h = xmpp_stanza_get_attribute(stanza, "h");
-        if (h)
+        const std::string h = view.attr_string("h");
+        if (!h.empty())
         {
             const uint32_t ack_count = parse_uint32(h).value_or(0);
             account.sm_last_ack = ack_count;

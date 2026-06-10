@@ -1,22 +1,31 @@
 void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::string_view own_jid_str)
 {
-    xmpp_stanza_t *event = nullptr, *items = nullptr, *item = nullptr;
-    const char *from = nullptr, *to = nullptr;
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)id; (void)type;
     const std::string own_jid_storage(own_jid_str);
     const char *own_jid = own_jid_storage.c_str();
-event = xmpp_stanza_get_child_by_name_and_ns(
-    stanza, "event", "http://jabber.org/protocol/pubsub#event");
-if (event)
-{
-    items = xmpp_stanza_get_child_by_name(event, "items");
-    if (items)
-    {
-        const char *items_node = xmpp_stanza_get_attribute(items, "node");
-        from = xmpp_stanza_get_from(stanza);
-        to = xmpp_stanza_get_to(stanza);
+    const ::xmpp::StanzaView event = view.child("event", "http://jabber.org/protocol/pubsub#event");
+    if (!event.valid())
+        return;
+
+    const ::xmpp::StanzaView items = event.child("items");
+        if (!items.valid())
+        return;
+
+    const std::string items_node = items.attr_string("node");
+        
+        
         
         // Log all PEP events for debugging/future features (XEP-0163)
-        if (items_node)
+        if (!items_node.empty())
         {
             XDEBUG("PEP event from {}: {}",
                    from ? from : own_jid,
@@ -24,23 +33,22 @@ if (event)
         }
         
         // XEP-0084: User Avatar - Metadata  
-        if (items_node
-            && weechat_strcasecmp(items_node, "urn:xmpp:avatar:metadata") == 0)
+        if (!items_node.empty() && weechat_strcasecmp(items_node.c_str(), "urn:xmpp:avatar:metadata") == 0)
         {
-            item = xmpp_stanza_get_child_by_name(items, "item");
-            if (item)
+            const ::xmpp::StanzaView item = items.child("item");
+            if (item.valid())
             {
-                xmpp_stanza_t *metadata = xmpp_stanza_get_child_by_name_and_ns(
-                    item, "metadata", "urn:xmpp:avatar:metadata");
+                const ::xmpp::StanzaView metadata = item.child("metadata", "urn:xmpp:avatar:metadata");
                 
-                if (metadata)
+                if (metadata.valid())
                 {
-                    xmpp_stanza_t *info = xmpp_stanza_get_child_by_name(metadata, "info");
-                    if (info)
+                    const ::xmpp::StanzaView info = metadata.child("info");
+                    if (info.valid())
                     {
-                        const char *info_id = xmpp_stanza_get_id(info);
-                        const char *info_type = xmpp_stanza_get_attribute(info, "type");
-                        const char *info_bytes = xmpp_stanza_get_attribute(info, "bytes");
+                        const std::string info_id_str = info.attr_string("id");
+                const char *info_id = info_id_str.empty() ? nullptr : info_id_str.c_str();
+                        const std::string info_type = info.attr_string("type");
+                        const std::string info_bytes = info.attr_string("bytes");
                         
                          if (info_id)
                          {
@@ -61,8 +69,8 @@ if (event)
                                  XDEBUG("Avatar update from {} (hash: {:.8}..., type: {}, bytes: {})",
                                         from_jid,
                                         info_id,
-                                        info_type ? info_type : "unknown",
-                                        info_bytes ? info_bytes : "unknown");
+                                        info_type.empty() ? "unknown" : info_type.c_str(),
+                                        info_bytes.empty() ? "unknown" : info_bytes.c_str());
 
                                  // request_data() checks cache before sending IQ
                                  weechat::avatar::request_data(account, from_jid, info_id);
@@ -74,18 +82,16 @@ if (event)
         }
         
         // XEP-0084: User Avatar - Data
-        if (items_node
-            && weechat_strcasecmp(items_node, "urn:xmpp:avatar:data") == 0)
+        if (!items_node.empty() && weechat_strcasecmp(items_node.c_str(), "urn:xmpp:avatar:data") == 0)
         {
-            item = xmpp_stanza_get_child_by_name(items, "item");
-            if (item)
+            const ::xmpp::StanzaView item = items.child("item");
+            if (item.valid())
             {
-                xmpp_stanza_t *data_elem = xmpp_stanza_get_child_by_name_and_ns(
-                    item, "data", "urn:xmpp:avatar:data");
+                const ::xmpp::StanzaView data_elem = item.child("data", "urn:xmpp:avatar:data");
                 
-                    if (data_elem)
+                    if (data_elem.valid())
                     {
-                const std::string b64_data = stanza_element_text(data_elem);
+                const std::string b64_data = data_elem.text();
                 if (!b64_data.empty())
                 {
                     const char *from_jid = from ? from : own_jid;
@@ -101,13 +107,11 @@ if (event)
         // XEP-0402: PEP Native Bookmarks — incremental push notification.
         // The server sends individual <item> or <retract> events; this is
         // NOT a full dump, so we MUST NOT clear the bookmarks map here.
-        if (items_node
-            && weechat_strcasecmp(items_node, "urn:xmpp:bookmarks:1") == 0)
+        if (!items_node.empty() && weechat_strcasecmp(items_node.c_str(), "urn:xmpp:bookmarks:1") == 0)
         {
-            for (item = xmpp_stanza_get_children(items);
-                 item; item = xmpp_stanza_get_next(item))
+            for (const ::xmpp::StanzaView item : ::xmpp::StanzaView(items))
             {
-                const char *item_name = xmpp_stanza_get_name(item);
+                const char *item_name = item.name().data();
                 if (!item_name)
                     continue;
 
@@ -115,7 +119,8 @@ if (event)
                 // immediately and remove the bookmark from the local map.
                 if (weechat_strcasecmp(item_name, "retract") == 0)
                 {
-                    const char *retract_id = xmpp_stanza_get_id(item);
+                    const std::string retract_id_str = item.attr_string("id");
+                const char *retract_id = retract_id_str.empty() ? nullptr : retract_id_str.c_str();
                     if (!retract_id)
                         continue;
 
@@ -145,20 +150,21 @@ if (event)
                 //   </conference>
                 // </item>
                 
-                const char *item_id = xmpp_stanza_get_id(item);
+                const std::string item_id_str = item.attr_string("id");
+                const char *item_id = item_id_str.empty() ? nullptr : item_id_str.c_str();
                 if (!item_id)
                     continue;  // Item ID is the room JID
                 
-                xmpp_stanza_t *conference = xmpp_stanza_get_child_by_name_and_ns(
-                    item, "conference", "urn:xmpp:bookmarks:1");
-                if (!conference)
+                const ::xmpp::StanzaView conference = item.child("conference", "urn:xmpp:bookmarks:1");
+                if (!conference.valid())
                     continue;
                 
-                const char *name = xmpp_stanza_get_attribute(conference, "name");
-                const char *autojoin = xmpp_stanza_get_attribute(conference, "autojoin");
+                const std::string name = conference.attr_string("name");
+                const std::string autojoin_str = conference.attr_string("autojoin");
+                const char *autojoin = autojoin_str.empty() ? nullptr : autojoin_str.c_str();
                 
-                xmpp_stanza_t *nick_elem = xmpp_stanza_get_child_by_name(conference, "nick");
-                const std::string nick_text_str = stanza_element_text(nick_elem);
+                const ::xmpp::StanzaView nick_elem = conference.child("nick");
+                const std::string nick_text_str = nick_elem.text();
                 const char *nick_text = nick_text_str.empty()
                     ? nullptr : nick_text_str.c_str();
 
@@ -168,35 +174,31 @@ if (event)
                 
                 // Upsert bookmark
                 account.bookmarks[item_id].jid = item_id;
-                account.bookmarks[item_id].name = name ? name : "";
+                account.bookmarks[item_id].name = conference.attr_string("name");
                 account.bookmarks[item_id].nick = nick_text ? nick_text : "";
                 account.bookmarks[item_id].autojoin = do_autojoin;
 
                 // XEP-0492: read notification setting from <extensions><notify>.
-                xmpp_stanza_t *extensions_elem = xmpp_stanza_get_child_by_name(
-                    conference, "extensions");
-                if (extensions_elem)
+                const ::xmpp::StanzaView extensions_elem = conference.child("extensions");
+                if (extensions_elem.valid())
                 {
-                    xmpp_stanza_t *notify_elem = xmpp_stanza_get_child_by_name_and_ns(
-                        extensions_elem, "notify", "urn:xmpp:notification-settings:1");
-                    if (notify_elem)
+                    const ::xmpp::StanzaView notify_elem = extensions_elem.child("notify", "urn:xmpp:notification-settings:1");
+                    if (notify_elem.valid())
                     {
                         // Pick the most specific fallback element (no identity attrs).
                         // Priority: <always>, <on-mention>, <never> (fallback without attrs).
                         static constexpr const char *levels[] = { "always", "on-mention", "never" };
                         for (const char *lvl : levels)
                         {
-                            xmpp_stanza_t *child = xmpp_stanza_get_children(notify_elem);
-                            while (child)
+                            for (const ::xmpp::StanzaView notify_child : ::xmpp::StanzaView(notify_elem))
                             {
-                                const char *cname = xmpp_stanza_get_name(child);
+                                const char *cname = notify_child.name().data();
                                 if (cname && weechat_strcasecmp(cname, lvl) == 0
-                                    && !xmpp_stanza_get_attribute(child, "identity-category"))
+                                    && notify_child.attr_string("identity-category").empty())
                                 {
                                     account.bookmarks[item_id].notify_setting = lvl;
                                     goto xep0492_done;
                                 }
-                                child = xmpp_stanza_get_next(child);
                             }
                         }
                         xep0492_done:;
@@ -283,29 +285,26 @@ if (event)
         //     </displayed>
         //   </item>
         // </items>
-        if (items_node
-            && weechat_strcasecmp(items_node, "urn:xmpp:mds:displayed:0") == 0)
+        if (!items_node.empty() && weechat_strcasecmp(items_node.c_str(), "urn:xmpp:mds:displayed:0") == 0)
         {
-            for (item = xmpp_stanza_get_children(items);
-                 item; item = xmpp_stanza_get_next(item))
+            for (const ::xmpp::StanzaView item : ::xmpp::StanzaView(items))
             {
-                if (weechat_strcasecmp(xmpp_stanza_get_name(item), "item") != 0)
+                if (weechat_strcasecmp(item.name().data(), "item") != 0)
                     continue;
 
-                const char *peer_jid = xmpp_stanza_get_id(item);
+                const std::string peer_jid_str = item.attr_string("id");
+                const char *peer_jid = peer_jid_str.empty() ? nullptr : peer_jid_str.c_str();
                 if (!peer_jid)
                     continue;
 
-                xmpp_stanza_t *displayed_elem = xmpp_stanza_get_child_by_name_and_ns(
-                    item, "displayed", "urn:xmpp:mds:displayed:0");
-                if (!displayed_elem)
+                const ::xmpp::StanzaView displayed_elem = item.child("displayed", "urn:xmpp:mds:displayed:0");
+                if (!displayed_elem.valid())
                     continue;
 
                 // Extract the stanza-id of the last displayed message
-                xmpp_stanza_t *sid_elem = xmpp_stanza_get_child_by_name_and_ns(
-                    displayed_elem, "stanza-id", "urn:xmpp:sid:0");
-                const char *last_id = sid_elem
-                    ? xmpp_stanza_get_id(sid_elem) : nullptr;
+                const ::xmpp::StanzaView sid_elem = displayed_elem.child("stanza-id", "urn:xmpp:sid:0");
+                const std::string last_id_str = sid_elem.valid() ? sid_elem.attr_string("id") : std::string{};
+                const char *last_id = last_id_str.empty() ? nullptr : last_id_str.c_str();
 
                 // Only act on events from other devices of our own account
                 const char *event_from = from ? from : own_jid;
@@ -360,7 +359,7 @@ if (event)
         //      — PEP events from self are internal protocol nodes (nick, mood, …)
         //
         const std::string_view feed_service_sv = from ? std::string_view(from) : std::string_view{};
-        const std::string_view node_sv = items_node ? std::string_view(items_node) : std::string_view{};
+        const std::string_view node_sv = !items_node.empty() ? std::string_view(items_node) : std::string_view{};
 
         const auto feed_gate = ::xmpp::classify_generic_pubsub_feed(
             node_sv, feed_service_sv, own_jid_str);
@@ -393,10 +392,9 @@ if (event)
             bool has_item    = false;
             bool has_retract = false;
 
-            for (xmpp_stanza_t *child = xmpp_stanza_get_children(items);
-                 child; child = xmpp_stanza_get_next(child))
+            for (const ::xmpp::StanzaView child : ::xmpp::StanzaView(items))
             {
-                const char *child_name = xmpp_stanza_get_name(child);
+                const char *child_name = child.name().data();
                 if (!child_name)
                     continue;
 
@@ -405,24 +403,19 @@ if (event)
                     has_item = true;
 
                     // Dedup: skip items we have already rendered (XEP-0060 push)
-                    const char *item_id_raw = xmpp_stanza_get_id(child);
+                    const std::string item_id_raw_str = child.attr_string("id");
+                const char *item_id_raw = item_id_raw_str.empty() ? nullptr : item_id_raw_str.c_str();
                     if (item_id_raw && account.feed_item_seen(feed_key, item_id_raw))
                         continue;
 
                     // Extract Atom payload (http://www.w3.org/2005/Atom)
-                    xmpp_stanza_t *entry = xmpp_stanza_get_child_by_name_and_ns(
-                        child, "entry", "http://www.w3.org/2005/Atom");
-                    if (!entry)
-                        entry = xmpp_stanza_get_child_by_name(child, "entry");
-
-                    xmpp_stanza_t *feed = xmpp_stanza_get_child_by_name_and_ns(
-                        child, "feed", "http://www.w3.org/2005/Atom");
-                    if (!feed)
-                        feed = xmpp_stanza_get_child_by_name(child, "feed");
-
-                    if (!entry && feed)
+                    ::xmpp::StanzaView entry = child.child("entry", "http://www.w3.org/2005/Atom");
+                    if (!entry.valid()) entry = child.child("entry");
+                    ::xmpp::StanzaView feed = child.child("feed", "http://www.w3.org/2005/Atom");
+                    if (!feed.valid()) feed = child.child("feed");
+                    if (!entry.valid() && feed.valid())
                     {
-                        atom_feed af = parse_atom_feed(account.context, feed);
+                        atom_feed af = parse_atom_feed(account.context, feed.raw());
                         if (!af.empty())
                         {
                             if (!af.title.empty())
@@ -452,8 +445,8 @@ if (event)
                         continue;
                     }
 
-                    const char *publisher = xmpp_stanza_get_attribute(child, "publisher");
-                    atom_entry ae = parse_atom_entry(account.context, entry, publisher);
+                    const std::string publisher = child.attr_string("publisher");
+                    atom_entry ae = parse_atom_entry(account.context, entry.raw(), publisher.empty() ? nullptr : publisher.c_str());
                     if (item_id_raw && !ae.item_id.empty())
                         account.feed_atom_id_set(feed_key, item_id_raw, ae.item_id);
                     if (item_id_raw && !ae.replies_link.empty())
@@ -550,5 +543,3 @@ if (event)
             }
         }
     }
-}
-}

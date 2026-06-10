@@ -1,10 +1,19 @@
 void weechat::connection::handle_pubsub_mam_disco_iq_error(xmpp_stanza_t *stanza)
 {
-    const char *id = xmpp_stanza_get_id(stanza);
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)from; (void)to; (void)type;
         // XEP-0442: if a disco#info IQ to a pubsub service returned an error,
         // flush deferred feeds via XEP-0060 plain items IQ (fallback path).
         // Without this, the deferred feeds hang forever since the success path
-        // (inside the `if (query && type)` block) is only entered for type=result.
+        // (inside the `if (query.valid() && type)` block) is only entered for type=result.
         if (id && account.pubsub_mam_disco_queries.contains(id))
         {
             std::string svc_jid = account.pubsub_mam_disco_queries[id];
@@ -46,13 +55,20 @@ void weechat::connection::handle_pubsub_mam_disco_iq_error(xmpp_stanza_t *stanza
 
 bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
 {
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
-    const char *from = xmpp_stanza_get_from(stanza);
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)to;
 
-    xmpp_stanza_t *items_query = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "query", "http://jabber.org/protocol/disco#items");
+    const ::xmpp::StanzaView items_query = view.child("query", "http://jabber.org/protocol/disco#items");
 
-    if (!(items_query && type && weechat_strcasecmp(type, "result") == 0))
+    if (!(items_query.valid() && type && weechat_strcasecmp(type, "result") == 0))
         return false;
 
     // docs/planning-muc-omemo.md §2.2: disco#items result for a joined MUC?
@@ -68,11 +84,11 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
             auto& [_, ch] = *ch_it;
             if (ch.type == weechat::channel::chat_type::MUC)
             {
-                xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items_query, "item");
-                while (item)
+                ::xmpp::StanzaView item = items_query.child("item");
+                while (item.valid())
                 {
-                    const char *item_jid = xmpp_stanza_get_attribute(item, "jid");
-                    if (item_jid)
+                    const std::string item_jid = item.attr_string("jid");
+                    if (!item_jid.empty())
                     {
                         std::string nick = ::jid(nullptr, item_jid).resource;
                         if (!nick.empty())
@@ -80,7 +96,7 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                             ch.add_member(nick.c_str(), nullptr, std::nullopt);
                         }
                     }
-                    item = xmpp_stanza_get_next(item);
+                    item = item.next_sibling();
                 }
 
             // docs/planning-muc-omemo.md §2.3: Now that we have the full occupant
@@ -105,9 +121,8 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
     // contain real JIDs (jid attr) + nicks when the requester has sufficient
     // affiliation. Feed them through add_member so the central real_jid logic
     // (and automatic devicelist request) runs.
-    xmpp_stanza_t *admin_query = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "query", "http://jabber.org/protocol/muc#admin");
-    if (admin_query && type && weechat_strcasecmp(type, "result") == 0)
+    const ::xmpp::StanzaView admin_query = view.child("query", "http://jabber.org/protocol/muc#admin");
+    if (admin_query.valid() && type && weechat_strcasecmp(type, "result") == 0)
     {
         if (from)
         {
@@ -117,16 +132,16 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                 auto& [_, ch] = *ch_it;
                 if (ch.type == weechat::channel::chat_type::MUC)
                 {
-                    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(admin_query, "item");
-                    while (item)
+                    ::xmpp::StanzaView item = admin_query.child("item");
+                    while (item.valid())
                     {
-                        const char *nick = xmpp_stanza_get_attribute(item, "nick");
-                        const char *real_jid = xmpp_stanza_get_attribute(item, "jid");
-                        const char *affiliation = xmpp_stanza_get_attribute(item, "affiliation");
-                        if (real_jid && *real_jid)
+                        const std::string nick = item.attr_string("nick");
+                        const std::string real_jid = item.attr_string("jid");
+                        const std::string affiliation = item.attr_string("affiliation");
+                        if (!real_jid.empty() )
                         {
-                            ch.register_omemo_recipient(real_jid);
-                            if (nick && *nick)
+                            ch.register_omemo_recipient(real_jid.c_str());
+                            if (!nick.empty() )
                             {
                                 const std::string full_id =
                                     fmt::format("{}/{}", from_bare, nick);
@@ -157,12 +172,11 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                                 else if (auto member = ch.member_search(full_id.c_str());
                                          member && (*member)->present)
                                     online = true;
-                                else if (auto member = ch.member_search(nick);
+                                else if (auto member = ch.member_search(nick.c_str());
                                          member && (*member)->present)
                                     online = true;
 
-                                if (occupant && affiliation && *affiliation
-                                    && weechat_strcasecmp(affiliation, "none") != 0)
+                                if (occupant && !affiliation.empty()                                     && weechat_strcasecmp(affiliation.c_str(), "none") != 0)
                                 {
                                     occupant->profile.affiliation = affiliation;
                                 }
@@ -179,7 +193,7 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                                 account.omemo.request_axolotl_devicelist(account, real_jid);
                             }
                         }
-                        item = xmpp_stanza_get_next(item);
+                        item = item.next_sibling();
                     }
                 }
                 // Do not return here — let other admin result processing (if any)
@@ -189,11 +203,11 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
     }
 
     // Look for HTTP upload service in items
-    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items_query, "item");
-    while (item)
+    ::xmpp::StanzaView item = items_query.child("item");
+    while (item.valid())
     {
-        const char *item_jid = xmpp_stanza_get_attribute(item, "jid");
-        if (item_jid)
+        const std::string item_jid = item.attr_string("jid");
+        if (!item_jid.empty())
         {
             // Query this item for its features
             std::string disco_info_id = stanza::uuid(account.context);
@@ -209,14 +223,13 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                         .build(account.context)
                         .get());
         }
-        item = xmpp_stanza_get_next(item);
+        item = item.next_sibling();
     }
 
     // XEP-0050: Ad-Hoc Commands — handle list and execute/form results
-    const char *items_node = xmpp_stanza_get_attribute(items_query, "node");
-    const bool is_commands_node = items_node
-        && ::xmpp::is_adhoc_commands_disco_node(items_node);
-    const char *iq_id = xmpp_stanza_get_id(stanza);
+    const std::string items_node = items_query.attr_string("node");
+    const bool is_commands_node = !items_node.empty() && ::xmpp::is_adhoc_commands_disco_node(items_node);
+    const char *iq_id = id;
     bool is_adhoc_query = iq_id && account.adhoc_queries.contains(iq_id);
 
     if (is_commands_node && is_adhoc_query)
@@ -236,23 +249,22 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                     adhoc_info.target_jid,
                     weechat_color("reset")));
 
-        xmpp_stanza_t *cmd_item = xmpp_stanza_get_child_by_name(items_query, "item");
+        ::xmpp::StanzaView cmd_item = items_query.child("item");
         int count = 0;
-        while (cmd_item)
+        while (cmd_item.valid())
         {
-            const char *cmd_node = xmpp_stanza_get_attribute(cmd_item, "node");
-            const char *cmd_name = xmpp_stanza_get_attribute(cmd_item, "name");
-            const char *cmd_jid  = xmpp_stanza_get_attribute(cmd_item, "jid");
+            const std::string cmd_node = cmd_item.attr_string("node");
+            const std::string cmd_name = cmd_item.attr_string("name");
+            const std::string cmd_jid = cmd_item.attr_string("jid");
 
             if (adhoc_info.picker)
             {
                 // Picker path: add entry (value = node URI, label = friendly name)
                 using picker_t = weechat::ui::picker<std::string>;
-                std::string label = cmd_name ? cmd_name : (cmd_node ? cmd_node : "(unnamed)");
-                std::string sublabel = cmd_node ? cmd_node : "";
+                std::string label = !cmd_name.empty() ? cmd_name : (!cmd_node.empty() ? cmd_node : "(unnamed)");
+                std::string sublabel = !cmd_node.empty() ? cmd_node : "";
                 adhoc_info.picker->add_entry(
-                    picker_t::entry{cmd_node ? std::string(cmd_node) : "",
-                                    label, sublabel, true});
+                    picker_t::entry{cmd_node, label, sublabel, true});
             }
             else
             {
@@ -261,14 +273,14 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                     fmt::format("{}  {}{:<40}{}  {}{}",
                         weechat_prefix("network"),
                         weechat_color("bold"),
-                        cmd_name ? cmd_name : "(unnamed)",
+                        !cmd_name.empty() ? cmd_name : "(unnamed)",
                         weechat_color("reset"),
-                        cmd_node ? cmd_node : "",
-                        cmd_jid && cmd_jid != adhoc_info.target_jid
+                        !cmd_node.empty() ? cmd_node : "",
+                        !cmd_jid.empty() && cmd_jid != adhoc_info.target_jid
                             ? fmt::format(" [{}]", cmd_jid) : ""));
             }
             count++;
-            cmd_item = xmpp_stanza_get_next(cmd_item);
+            cmd_item = cmd_item.next_sibling();
         }
 
         if (!adhoc_info.picker)
@@ -300,11 +312,11 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
         account.pubsub_disco_queries.erase(iq_id);
 
         int node_count = 0;
-        xmpp_stanza_t *disco_item = xmpp_stanza_get_child_by_name(items_query, "item");
-        while (disco_item)
+        ::xmpp::StanzaView disco_item = items_query.child("item");
+        while (disco_item.valid())
         {
-            const char *node_attr = xmpp_stanza_get_attribute(disco_item, "node");
-            if (node_attr)
+            const std::string node_attr = disco_item.attr_string("node");
+            if (!node_attr.empty())
             {
                 std::string node_name(node_attr);
 
@@ -313,7 +325,7 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                 // top-level disco level.
                 if (::xmpp::is_microblog_comments_node(node_name))
                 {
-                    disco_item = xmpp_stanza_get_next(disco_item);
+                    disco_item = disco_item.next_sibling();
                     continue;
                 }
 
@@ -353,7 +365,7 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                     .get());
                 node_count++;
             }
-            disco_item = xmpp_stanza_get_next(disco_item);
+            disco_item = disco_item.next_sibling();
         }
 
         weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
@@ -366,23 +378,30 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
 
 void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
 {
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)to;
 
-    xmpp_stanza_t *adhoc_command = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "command", "http://jabber.org/protocol/commands");
-    if (!adhoc_command || !type)
+    const ::xmpp::StanzaView adhoc_command = view.child("command", "http://jabber.org/protocol/commands");
+    if (!adhoc_command.valid() || !type)
         return;
-
-    const char *iq_id = xmpp_stanza_get_id(stanza);
+    const char *iq_id = id;
     bool is_adhoc_query = iq_id && account.adhoc_queries.contains(iq_id);
     struct t_gui_buffer *adhoc_buf = is_adhoc_query
         ? (account.adhoc_queries[iq_id].buffer
            ? account.adhoc_queries[iq_id].buffer : account.buffer)
         : account.buffer;
-    const char *cmd_node = xmpp_stanza_get_attribute(adhoc_command, "node");
-    const char *cmd_status = xmpp_stanza_get_attribute(adhoc_command, "status");
-    const char *session_id = xmpp_stanza_get_attribute(adhoc_command, "sessionid");
-    const char *from_jid = xmpp_stanza_get_from(stanza);
+    const std::string cmd_node = adhoc_command.attr_string("node");
+    const std::string cmd_status = adhoc_command.attr_string("status");
+    const std::string session_id = adhoc_command.attr_string("sessionid");
+    const char *from_jid = from;
 
     auto adhoc_ui = weechat::UiPort::for_buffer(adhoc_buf);
     if (weechat_strcasecmp(type, "error") == 0)
@@ -390,46 +409,45 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
         adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
             fmt::format("{}[adhoc] Error executing command {}",
                 weechat_prefix("error"),
-                cmd_node ? cmd_node : "(unknown)"));
+                !cmd_node.empty() ? cmd_node : "(unknown)"));
     }
     else if (weechat_strcasecmp(type, "result") == 0)
     {
         // Check for a data form to display
-        xmpp_stanza_t *x_form = xmpp_stanza_get_child_by_name_and_ns(
-            adhoc_command, "x", "jabber:x:data");
+        const ::xmpp::StanzaView x_form = adhoc_command.child("x", "jabber:x:data");
 
-        if (x_form)
+        if (x_form.valid())
         {
-            const char *form_type = xmpp_stanza_get_attribute(x_form, "type");
-            if (form_type && std::string_view(form_type) == "result")
+            const std::string form_type = x_form.attr_string("type");
+            if (!form_type.empty() && std::string_view(form_type) == "result")
             {
                 // Display result form (read-only)
-                render_data_form(adhoc_buf, x_form, from_jid, cmd_node, nullptr);
+                render_data_form(adhoc_buf, x_form.raw(), from_jid, cmd_node.c_str(), nullptr);
             }
             else
             {
                 // Input form — render and prompt for submission
-                render_data_form(adhoc_buf, x_form, from_jid, cmd_node, session_id);
+                render_data_form(adhoc_buf, x_form.raw(), from_jid, cmd_node.c_str(), session_id.empty() ? nullptr : session_id.c_str());
             }
         }
-        else if (cmd_status && std::string_view(cmd_status) == "completed")
+        else if (!cmd_status.empty() && std::string_view(cmd_status) == "completed")
         {
             // Command completed with no form — check for <note>
-            xmpp_stanza_t *note = xmpp_stanza_get_child_by_name(adhoc_command, "note");
-            const std::string note_text = stanza_element_text(note);
+            const ::xmpp::StanzaView note = adhoc_command.child("note");
+            const std::string note_text = note.text();
             adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
                 fmt::format("{}[adhoc] Command {} completed{}{}",
                     weechat_prefix("network"),
-                    cmd_node ? cmd_node : "",
+                    !cmd_node.empty() ? cmd_node : "",
                     note_text.empty() ? "" : ": ",
                     note_text.empty() ? "" : note_text));
         }
-        else if (cmd_status && std::string_view(cmd_status) == "executing" && !x_form)
+        else if (!cmd_status.empty() && std::string_view(cmd_status) == "executing" && !x_form.valid())
         {
             adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
                 fmt::format("{}[adhoc] Command {} in progress (no form)",
                     weechat_prefix("network"),
-                    cmd_node ? cmd_node : ""));
+                    !cmd_node.empty() ? cmd_node : ""));
         }
     }
 
@@ -439,9 +457,17 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
 
 bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
 {
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
-
-    const char *cs_id = xmpp_stanza_get_id(stanza);
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)from; (void)to;
+    const char *cs_id = id;
     bool is_cs_query = cs_id && account.channel_search_queries.contains(cs_id);
 
     if (is_cs_query && type)
@@ -453,32 +479,29 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
         if (weechat_strcasecmp(type, "error") == 0)
         {
             // Try to extract a human-readable error
-            xmpp_stanza_t *error_el = xmpp_stanza_get_child_by_name(stanza, "error");
+            const ::xmpp::StanzaView error_el = view.child("error");
             std::string err_text_str;
             const char *err_condition = nullptr;
-            if (error_el)
+            if (error_el.valid())
             {
-                if (xmpp_stanza_t *text_el = xmpp_stanza_get_child_by_name(error_el, "text"))
-                    err_text_str = stanza_element_text(text_el);
+                if (const ::xmpp::StanzaView text_el = error_el.child("text"); text_el.valid())
+                    err_text_str = text_el.text();
 
                 // XMPP stanza errors usually encode the condition as a child in
                 // urn:ietf:params:xml:ns:xmpp-stanzas (e.g. <bad-request/>).
                 if (err_text_str.empty())
                 {
-                    xmpp_stanza_t *cond = xmpp_stanza_get_children(error_el);
-                    while (cond)
+                    for (const ::xmpp::StanzaView cond : ::xmpp::StanzaView(error_el))
                     {
-                        const char *cond_ns = xmpp_stanza_get_ns(cond);
-                        const char *cond_name = xmpp_stanza_get_name(cond);
-                        if (cond_name
-                            && cond_ns
-                            && std::string_view(cond_ns) == "urn:ietf:params:xml:ns:xmpp-stanzas"
+                        const auto cond_ns = cond.xmlns();
+                        const char *cond_name = cond.name().data();
+                        if (cond_name && cond_ns
+                            && *cond_ns == "urn:ietf:params:xml:ns:xmpp-stanzas"
                             && std::string_view(cond_name) != "text")
                         {
                             err_condition = cond_name;
                             break;
                         }
-                        cond = xmpp_stanza_get_next(cond);
                     }
                 }
             }
@@ -496,13 +519,12 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
             if (cs_info.form_requested)
             {
                 // Step 1 response: service returned a search form.
-                xmpp_stanza_t *search_el = xmpp_stanza_get_child_by_name_and_ns(
-                    stanza, "search", "urn:xmpp:channel-search:0:search");
-                xmpp_stanza_t *x_form = search_el
-                    ? xmpp_stanza_get_child_by_name_and_ns(search_el, "x", "jabber:x:data")
-                    : nullptr;
+                const ::xmpp::StanzaView search_el = view.child("search", "urn:xmpp:channel-search:0:search");
+                const ::xmpp::StanzaView x_form = search_el.valid()
+                    ? search_el.child("x", "jabber:x:data")
+                    : ::xmpp::StanzaView{};
 
-                if (!search_el || !x_form)
+                if (!search_el.valid() || !x_form.valid())
                 {
                     cs_ui->printf_date_tags(
                         0, "xmpp_channel_search,notify_none",
@@ -571,18 +593,15 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
             }
 
             // Response wraps results in <result xmlns='urn:xmpp:channel-search:0:search'>
-            xmpp_stanza_t *result_el = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "result", "urn:xmpp:channel-search:0:search");
-            // Some services may reply with <search> instead of <result>
-            if (!result_el)
-                result_el = xmpp_stanza_get_child_by_name_and_ns(
-                    stanza, "search", "urn:xmpp:channel-search:0:search");
+            ::xmpp::StanzaView result_el = view.child("result", "urn:xmpp:channel-search:0:search");
+            if (!result_el.valid())
+                result_el = view.child("search", "urn:xmpp:channel-search:0:search");
 
-            if (result_el)
+            if (result_el.valid())
             {
                 int count = 0;
-                xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(result_el, "item");
-                while (item)
+                ::xmpp::StanzaView item = result_el.child("item");
+                while (item.valid())
                 {
                     if (count == 0 && !cs_info.picker)
                     {
@@ -592,29 +611,29 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                                 cs_info.service_jid));
                     }
 
-                    const char *address = xmpp_stanza_get_attribute(item, "address");
-                    if (!address)
+                    const std::string address = item.attr_string("address");
+                    if (address.empty())
                     {
-                        item = xmpp_stanza_get_next(item);
+                        item = item.next_sibling();
                         continue;
                     }
 
                     // Child elements may include: <name>, <nusers>, <description>,
                     // <is-open>, <language>, <service-type>, <anonymity-mode>.
-                    xmpp_stanza_t *name_el  = xmpp_stanza_get_child_by_name(item, "name");
-                    xmpp_stanza_t *nusers_el = xmpp_stanza_get_child_by_name(item, "nusers");
-                    xmpp_stanza_t *desc_el  = xmpp_stanza_get_child_by_name(item, "description");
-                    xmpp_stanza_t *open_el  = xmpp_stanza_get_child_by_name(item, "is-open");
-                    xmpp_stanza_t *language_el = xmpp_stanza_get_child_by_name(item, "language");
-                    xmpp_stanza_t *service_type_el = xmpp_stanza_get_child_by_name(item, "service-type");
-                    xmpp_stanza_t *anonymity_el = xmpp_stanza_get_child_by_name(item, "anonymity-mode");
+                    const ::xmpp::StanzaView name_el = item.child("name");
+                    const ::xmpp::StanzaView nusers_el = item.child("nusers");
+                    const ::xmpp::StanzaView desc_el = item.child("description");
+                    const ::xmpp::StanzaView open_el = item.child("is-open");
+                    const ::xmpp::StanzaView language_el = item.child("language");
+                    const ::xmpp::StanzaView service_type_el = item.child("service-type");
+                    const ::xmpp::StanzaView anonymity_el = item.child("anonymity-mode");
 
-                    const std::string name_raw    = name_el  ? stanza_element_text(name_el)   : std::string {};
-                    const std::string nusers_raw  = nusers_el ? stanza_element_text(nusers_el) : std::string {};
-                    const std::string desc_raw    = desc_el  ? stanza_element_text(desc_el)   : std::string {};
-                    const std::string language_raw = language_el ? stanza_element_text(language_el) : std::string {};
-                    const std::string service_type_raw = service_type_el ? stanza_element_text(service_type_el) : std::string {};
-                    const std::string anonymity_raw = anonymity_el ? stanza_element_text(anonymity_el) : std::string {};
+                    const std::string name_raw    = name_el.valid() ? name_el.text()   : std::string {};
+                    const std::string nusers_raw  = nusers_el.valid() ? nusers_el.text() : std::string {};
+                    const std::string desc_raw    = desc_el.valid() ? desc_el.text()   : std::string {};
+                    const std::string language_raw = language_el.valid() ? language_el.text() : std::string {};
+                    const std::string service_type_raw = service_type_el.valid() ? service_type_el.text() : std::string {};
+                    const std::string anonymity_raw = anonymity_el.valid() ? anonymity_el.text() : std::string {};
 
                     std::string display = address;
                     if (!name_raw.empty())
@@ -625,9 +644,9 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                         meta_parts.emplace_back(nusers_raw + " users");
 
                     bool is_open = false;
-                    if (open_el)
+                    if (open_el.valid())
                     {
-                        const std::string open_raw = stanza_element_text(open_el);
+                        const std::string open_raw = open_el.text();
                         if (open_raw.empty()
                             || weechat_strcasecmp(open_raw.c_str(), "true") == 0
                             || open_raw == "1")
@@ -730,7 +749,7 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                     }
 
                     count++;
-                    item = xmpp_stanza_get_next(item);
+                    item = item.next_sibling();
                 }
 
                 if (!cs_info.picker)
@@ -773,17 +792,24 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
 
 bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
 {
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
-    const char *from = xmpp_stanza_get_from(stanza);
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)to;
     xmpp_stanza_t *reply = nullptr;
 
-    xmpp_stanza_t *query = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "query", "http://jabber.org/protocol/disco#info");
-    if (!query || !type)
+    const ::xmpp::StanzaView query = view.child("query", "http://jabber.org/protocol/disco#info");
+    if (!query.valid() || !type)
         return false;
 
     {
-        const char *stanza_id = xmpp_stanza_get_id(stanza);
+    const char *stanza_id = id;
 
         // /list enrichment path: compact room metadata from follow-up disco#info.
         if (stanza_id && account.channel_search_disco_queries.contains(stanza_id))
@@ -814,26 +840,25 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                     }
                 }
 
-                xmpp_stanza_t *x = xmpp_stanza_get_child_by_name_and_ns(query, "x", "jabber:x:data");
-                if (x)
+                const ::xmpp::StanzaView x = query.child("x", "jabber:x:data");
+                if (x.valid())
                 {
-                    xmpp_stanza_t *field = xmpp_stanza_get_child_by_name(x, "field");
-                    while (field)
+                    ::xmpp::StanzaView field = x.child("field");
+                    while (field.valid())
                     {
-                        const char *var = xmpp_stanza_get_attribute(field, "var");
-                        if (!var)
+                        const std::string var = field.attr_string("var");
+                        if (var.empty())
                         {
-                            field = xmpp_stanza_get_next(field);
+                            field = field.next_sibling();
                             continue;
                         }
                         std::string txt;
-                        for (xmpp_stanza_t *vnode = xmpp_stanza_get_children(field);
-                             vnode; vnode = xmpp_stanza_get_next(vnode))
+                        for (const ::xmpp::StanzaView vnode : ::xmpp::StanzaView(field))
                         {
-                            const char *vname = xmpp_stanza_get_name(vnode);
+                            const char *vname = vnode.name().data();
                             if (!vname || weechat_strcasecmp(vname, "value") != 0)
                                 continue;
-                            txt = stanza_element_text(vnode);
+                            txt = vnode.text();
                             break;
                         }
                         if (!txt.empty())
@@ -845,7 +870,7 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                             else if (std::string_view(var) == "muc#roominfo_lang")
                                 lang_s = txt;
                         }
-                        field = xmpp_stanza_get_next(field);
+                        field = field.next_sibling();
                     }
                 }
 
@@ -895,13 +920,13 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
 
         if (weechat_strcasecmp(type, "get") == 0)
         {
-            const char *requested_node = xmpp_stanza_get_attribute(query, "node");
+            const std::string requested_node = query.attr_string("node");
 
             // XEP-0030 §3.3: if a node= is present, it MUST match a recognized
             // node (our caps node "http://weechat.org#<hash>") otherwise return
             // <item-not-found/>.  An absent or empty node= always gets a normal reply.
             bool node_ok = true;
-            if (requested_node && *requested_node)
+            if (!requested_node.empty() )
             {
                 // Recompute our caps hash to derive the canonical node URI.
                     // Use a throwaway pre-existing stanza as reply placeholder.
@@ -920,7 +945,7 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
 
             if (node_ok)
             {
-                reply = get_caps(xmpp_stanza_reply(stanza), nullptr, requested_node);
+                reply = get_caps(xmpp_stanza_reply(stanza), nullptr, requested_node.empty() ? nullptr : requested_node.c_str());
                 account.connection.send(reply);
                 xmpp_stanza_release(reply);
             }
@@ -996,25 +1021,23 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                         weechat::channel::muc_info::anonymity::semianonymous;
 
                     // XEP-0045 §6.5: muc#roominfo FORM_TYPE (jabber:x:data)
-                    xmpp_stanza_t *xdata = xmpp_stanza_get_child_by_name_and_ns(
-                        query, "x", "jabber:x:data");
-                    if (xdata)
+                    const ::xmpp::StanzaView xdata = query.child("x", "jabber:x:data");
+                    if (xdata.valid())
                     {
-                        for (xmpp_stanza_t *field = xmpp_stanza_get_child_by_name(xdata, "field");
-                             field;
-                             field = xmpp_stanza_get_next(field))
+                        for (::xmpp::StanzaView field = xdata.child("field");
+                             field.valid();
+                             field = field.next_sibling())
                         {
-                            const char *var = xmpp_stanza_get_attribute(field, "var");
-                            if (!var)
+                            const std::string var = field.attr_string("var");
+                            if (var.empty())
                                 continue;
                             std::string txt;
-                            for (xmpp_stanza_t *vnode = xmpp_stanza_get_children(field);
-                                 vnode; vnode = xmpp_stanza_get_next(vnode))
+                            for (const ::xmpp::StanzaView vnode : ::xmpp::StanzaView(field))
                             {
-                                const char *vname = xmpp_stanza_get_name(vnode);
+                                const char *vname = vnode.name().data();
                                 if (!vname || weechat_strcasecmp(vname, "value") != 0)
                                     continue;
-                                txt = stanza_element_text(vnode);
+                                txt = vnode.text();
                                 break;
                             }
                             if (txt.empty())
@@ -1081,37 +1104,37 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                 bool supports_upload = false;
                 size_t max_size = 0;
                 
-                xmpp_stanza_t *feature = xmpp_stanza_get_child_by_name(query, "feature");
-                while (feature)
+                ::xmpp::StanzaView feature = query.child("feature");
+                while (feature.valid())
                 {
-                    const char *var = xmpp_stanza_get_attribute(feature, "var");
-                    if (var && std::string_view(var) == "urn:xmpp:http:upload:0")
+                    const std::string var = feature.attr_string("var");
+                    if (!var.empty() && std::string_view(var) == "urn:xmpp:http:upload:0")
                     {
                         supports_upload = true;
                     }
-                    feature = xmpp_stanza_get_next(feature);
+                    feature = feature.next_sibling();
                 }
                 
                 // Check for max file size in x data form
                 if (supports_upload)
                 {
-                    xmpp_stanza_t *x = xmpp_stanza_get_child_by_name_and_ns(query, "x", "jabber:x:data");
-                    if (x)
+                    const ::xmpp::StanzaView x = query.child("x", "jabber:x:data");
+                    if (x.valid())
                     {
-                        xmpp_stanza_t *field = xmpp_stanza_get_child_by_name(x, "field");
-                        while (field)
+                        ::xmpp::StanzaView field = x.child("field");
+                        while (field.valid())
                         {
-                            const char *var = xmpp_stanza_get_attribute(field, "var");
-                            if (var && std::string_view(var) == "max-file-size")
+                            const std::string var = field.attr_string("var");
+                            if (!var.empty() && std::string_view(var) == "max-file-size")
                             {
-                                xmpp_stanza_t *value = xmpp_stanza_get_child_by_name(field, "value");
-                                if (value)
+                                const ::xmpp::StanzaView value = field.child("value");
+                                if (value.valid())
                                 {
-                                    if (auto n = parse_int64(stanza_element_text(value)); n && *n > 0)
+                                    if (auto n = parse_int64(value.text()); n && *n > 0)
                                         max_size = static_cast<size_t>(*n);
                                 }
                             }
-                            field = xmpp_stanza_get_next(field);
+                            field = field.next_sibling();
                         }
                     }
                     
@@ -1224,8 +1247,7 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
             if (user_initiated)
             {
                 account.user_disco_queries.erase(stanza_id);
-                
-                const char *from_jid = xmpp_stanza_get_from(stanza);
+    const char *from_jid = from;
                 struct t_gui_buffer *output_buffer = account.buffer;
                 
                 auto disco_ui = weechat::UiPort::for_buffer(output_buffer);

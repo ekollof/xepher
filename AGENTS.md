@@ -58,7 +58,7 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 | Profile | Command | Flags | When |
 |---------|---------|-------|------|
-| Dev (default for agents) | `make DEBUG=1` | `-O0 -DDEBUG -g` | Day-to-day coding, fast rebuilds, assertions on; **runs 123 doctests** |
+| Dev (default for agents) | `make DEBUG=1` | `-O0 -DDEBUG -g` | Day-to-day coding, fast rebuilds, assertions on; **runs 125 doctests** |
 | Optimized | `make` | `-O2 -DNDEBUG -g` | Pre-release smoke test, performance checks; skips doctests |
 | ASan | `make DEBUG=1 ASAN=1` | dev + `-fsanitize=address` | Memory debugging (Linux: links `libasan`) |
 
@@ -421,7 +421,7 @@ Xepher follows **semantic versioning** (MAJOR.MINOR.PATCH):
 
 ### Release checklist
 
-1. **All commits pushed**, 123 doctests passing (`make DEBUG=1`), and optimized build OK (`make`).
+1. **All commits pushed**, 125 doctests passing (`make DEBUG=1`), and optimized build OK (`make`).
 2. **Bump version** in the three packaging files (all must match):
    - `packaging/arch/PKGBUILD` — `pkgver=X.Y.Z`
    - `packaging/rpm/weechat-xmpp.spec` — `Version: X.Y.Z` + new `%changelog` entry
@@ -539,7 +539,7 @@ Skip autojoin for IRC gateway rooms (causes connection issues):
 
 ### Testing Limitations
 
-- **123 doctests** cover handler slices, `StanzaView`, IQ builders, and port stubs (`make DEBUG=1` runs them automatically; `make test` anytime) — extend these when adding protocol logic
+- **125 doctests** cover handler slices, `StanzaView`, IQ builders, and port stubs (`make DEBUG=1` runs them automatically; `make test` anytime) — extend these when adding protocol logic
 - Full WeeChat integration still requires manual testing in a live instance
 - Use `/debug dump` for troubleshooting
 - Check logs: `/set xmpp.look.debug_level 2`

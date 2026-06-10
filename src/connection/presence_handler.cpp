@@ -19,6 +19,7 @@
 #include "color.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
+#include "xmpp/stanza_view.hh"
 #include "xmpp/atom.hh"
 #include "config.hh"
 #include "account.hh"

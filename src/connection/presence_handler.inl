@@ -666,13 +666,11 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
     // We display a notice; full verification (PEP fetch) is left to the user.
     if (binding->type && *binding->type == "subscribe")
     {
-        xmpp_stanza_t *moved_elem = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "moved", "urn:xmpp:moved:1");
-        if (moved_elem)
+        const auto presence_view = ::xmpp::StanzaView(stanza);
+        const auto moved_elem = presence_view.child("moved", "urn:xmpp:moved:1");
+        if (moved_elem.valid())
         {
-            xmpp_stanza_t *old_jid_elem = xmpp_stanza_get_child_by_name(
-                moved_elem, "old-jid");
-            const std::string old_jid_str = stanza_element_text(old_jid_elem);
+            const std::string old_jid_str = moved_elem.child("old-jid").text();
             const char *new_jid = binding->from ? binding->from->bare.data() : nullptr;
              if (!old_jid_str.empty() && new_jid)
              {
@@ -693,15 +691,15 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
     // JID is the room itself, not a real user, so vcard-temp requests there
     // are meaningless and would spam the server.
     {
-        xmpp_stanza_t *vcard_x = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "x", "vcard-temp:x:update");
+        const auto presence_view = ::xmpp::StanzaView(stanza);
+        const auto vcard_x = presence_view.child("x", "vcard-temp:x:update");
         bool is_muc_presence = channel && channel->type == weechat::channel::chat_type::MUC;
-        if (vcard_x && user && !is_muc_presence)
+        if (vcard_x.valid() && user && !is_muc_presence)
         {
-            xmpp_stanza_t *photo = xmpp_stanza_get_child_by_name(vcard_x, "photo");
-            if (photo)
+            const auto photo = vcard_x.child("photo");
+            if (photo.valid())
             {
-                const std::string photo_hash_str = stanza_element_text(photo);
+                const std::string photo_hash_str = photo.text();
                 std::string_view photo_hash = photo_hash_str;
                 if (!photo_hash.empty())
                 {
@@ -715,10 +713,9 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     if (!user->profile.vcard_fetched || hash_changed)
                     {
                         // Use the bare JID for the vCard request
-                        const char *from_full = xmpp_stanza_get_from(stanza);
-                        if (from_full)
+                        if (auto from_full = presence_view.from())
                         {
-                            std::string bare = jid(nullptr, from_full).bare;
+                            std::string bare = jid(nullptr, from_full->data()).bare;
                             if (!bare.empty())
                             {
                                 std::shared_ptr<xmpp_stanza_t> iq {

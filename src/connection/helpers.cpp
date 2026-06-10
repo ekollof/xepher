@@ -40,6 +40,7 @@
 #include "weechat/icat_preview.hh"
 #include "weechat/ui_port.hh"
 #include "connection/internal.hh"
+#include "xmpp/stanza_view.hh"
 
 // ── parse_omemo_device_id ─────────────────────────────────────────────────────
 
@@ -112,11 +113,11 @@ void append_raw_xml_trace(weechat::account &account,
     localtime_r(&now, &local_tm);
     std::string timestamp = fmt::format("{:%Y-%m-%d %H:%M:%S}", local_tm);
 
-    const char *stanza_name = xmpp_stanza_get_name(stanza);
+    const std::string stanza_name = std::string(::xmpp::StanzaView(stanza).name());
     fprintf(fp, "[%s] %s %s\n%s\n\n",
             timestamp.c_str(),
             direction ? direction : "XML",
-            stanza_name ? stanza_name : "(unknown)",
+            stanza_name.empty() ? "(unknown)" : stanza_name.c_str(),
             xml);
     fclose(fp);
 }

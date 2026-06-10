@@ -1,12 +1,18 @@
 bool weechat::connection::handle_vcard_iq_event(xmpp_stanza_t *stanza, std::string_view own_jid_str)
 {
-    const char *id = xmpp_stanza_get_id(stanza);
-    const char *from = xmpp_stanza_get_from(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)to;
 
-    xmpp_stanza_t *vcard = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "vCard", "vcard-temp");
-    if (!vcard || !type || weechat_strcasecmp(type, "result") != 0)
+    const ::xmpp::StanzaView vcard = view.child("vCard", "vcard-temp");
+    if (!vcard.valid() || !type || weechat_strcasecmp(type, "result") != 0)
         return false;
 
     const char *from_jid = from ? from : own_jid_str.data();
@@ -61,9 +67,9 @@ bool weechat::connection::handle_vcard_iq_event(xmpp_stanza_t *stanza, std::stri
     }
 
     // Helper: get direct text content of a child element
-    auto child_text = [&](xmpp_stanza_t *parent, const char *name) -> std::string {
-        xmpp_stanza_t *child = xmpp_stanza_get_child_by_name(parent, name);
-        return child ? stanza_element_text(child) : std::string {};
+    auto child_text = [&](const ::xmpp::StanzaView &parent, const char *name) -> std::string {
+        const ::xmpp::StanzaView child = parent.child(name);
+        return child.valid() ? child.text() : std::string {};
     };
 
     auto target_ui = weechat::UiPort::for_buffer(target_buf);
@@ -98,21 +104,21 @@ bool weechat::connection::handle_vcard_iq_event(xmpp_stanza_t *stanza, std::stri
 
     // ORG: <ORG><ORGNAME>…</ORGNAME></ORG>
     std::string org;
-    xmpp_stanza_t *org_el = xmpp_stanza_get_child_by_name(vcard, "ORG");
-    if (org_el) org = child_text(org_el, "ORGNAME");
+    const ::xmpp::StanzaView org_el = vcard.child("ORG");
+    if (org_el.valid()) org = child_text(org_el, "ORGNAME");
 
     // EMAIL: <EMAIL><USERID>…</USERID></EMAIL>  (first occurrence)
     std::string email_val;
-    xmpp_stanza_t *email_el = xmpp_stanza_get_child_by_name(vcard, "EMAIL");
-    if (email_el) email_val = child_text(email_el, "USERID");
+    const ::xmpp::StanzaView email_el = vcard.child("EMAIL");
+    if (email_el.valid()) email_val = child_text(email_el, "USERID");
 
     // TEL: <TEL><NUMBER>…</NUMBER></TEL>  (first occurrence)
     std::string tel;
-    xmpp_stanza_t *tel_el = xmpp_stanza_get_child_by_name(vcard, "TEL");
-    if (tel_el) tel = child_text(tel_el, "NUMBER");
+    const ::xmpp::StanzaView tel_el = vcard.child("TEL");
+    if (tel_el.valid()) tel = child_text(tel_el, "NUMBER");
 
     std::string adr;
-    if (xmpp_stanza_t *adr_el = xmpp_stanza_get_child_by_name(vcard, "ADR"))
+    if (const ::xmpp::StanzaView adr_el = vcard.child("ADR"); adr_el.valid())
         adr = ::xmpp::format_vcard_temp_adr(::xmpp::StanzaView(adr_el));
 
     if (is_whois)
@@ -155,34 +161,39 @@ bool weechat::connection::handle_vcard_iq_event(xmpp_stanza_t *stanza, std::stri
 
 bool weechat::connection::handle_vcard4_pubsub_iq_event(xmpp_stanza_t *stanza, std::string_view own_jid_str)
 {
-    const char *id = xmpp_stanza_get_id(stanza);
-    const char *from = xmpp_stanza_get_from(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)to;
 
-    xmpp_stanza_t *pubsub_vc4 = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "pubsub", "http://jabber.org/protocol/pubsub");
-    if (!pubsub_vc4 || !type || weechat_strcasecmp(type, "result") != 0)
+    const ::xmpp::StanzaView pubsub_vc4 = view.child("pubsub", "http://jabber.org/protocol/pubsub");
+    if (!pubsub_vc4.valid() || !type || weechat_strcasecmp(type, "result") != 0)
         return false;
 
-    xmpp_stanza_t *items = xmpp_stanza_get_child_by_name(pubsub_vc4, "items");
-    if (!items)
+    const ::xmpp::StanzaView items = pubsub_vc4.child("items");
+    if (!items.valid())
         return false;
 
-    const char *node = xmpp_stanza_get_attribute(items, "node");
-    if (!node || !::xmpp::is_vcard4_pubsub_node(node))
+    const std::string node = items.attr_string("node");
+    if (node.empty() || !::xmpp::is_vcard4_pubsub_node(node))
         return false;
 
     const char *from_jid = from ? from : own_jid_str.data();
     if (id)
         account.whois_queries.erase(id);
 
-    xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(items, "item");
-    if (!item)
+    ::xmpp::StanzaView item = items.child("item");
+    if (!item.valid())
         return false;
 
-    xmpp_stanza_t *vcard4 = xmpp_stanza_get_child_by_name_and_ns(
-        item, "vcard", NS_VCARD4);
-    if (!vcard4)
+    const ::xmpp::StanzaView vcard4 = item.child("vcard", NS_VCARD4);
+    if (!vcard4.valid())
         return false;
 
     XDEBUG("vCard4 auto-fetched for {}", from_jid);
@@ -191,17 +202,23 @@ bool weechat::connection::handle_vcard4_pubsub_iq_event(xmpp_stanza_t *stanza, s
 
 bool weechat::connection::handle_bookmarks_iq_event(xmpp_stanza_t *stanza)
 {
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
-    const char *to = xmpp_stanza_get_to(stanza);
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)id; (void)from;
 
-    xmpp_stanza_t *query = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "query", "jabber:iq:private");
-    if (!query || !type || weechat_strcasecmp(type, "result") != 0)
+    const ::xmpp::StanzaView query = view.child("query", "jabber:iq:private");
+    if (!query.valid() || !type || weechat_strcasecmp(type, "result") != 0)
         return false;
 
-    xmpp_stanza_t *storage = xmpp_stanza_get_child_by_name_and_ns(
-    query, "storage", "storage:bookmarks");
-    if (storage)
+    const ::xmpp::StanzaView storage = query.child("storage", "storage:bookmarks");
+    if (storage.valid())
     {
         // BUG 5 fix: only clear XEP-0048 bookmarks; preserve any entries
         // already populated by a XEP-0402 PEP push that arrived first.
@@ -213,27 +230,26 @@ bool weechat::connection::handle_bookmarks_iq_event(xmpp_stanza_t *stanza)
         if (account.bookmarks.empty())
             account.bookmarks.clear();
 
-        for (xmpp_stanza_t *conference = xmpp_stanza_get_children(storage);
-             conference; conference = xmpp_stanza_get_next(conference))
+        for (const ::xmpp::StanzaView conference : ::xmpp::StanzaView(storage))
         {
-            const char *name = xmpp_stanza_get_name(conference);
+            const char *name = conference.name().data();
             if (weechat_strcasecmp(name, "conference") != 0)
                 continue;
 
-            const char *jid = xmpp_stanza_get_attribute(conference, "jid");
-            const char *autojoin = xmpp_stanza_get_attribute(conference, "autojoin");
-            name = xmpp_stanza_get_attribute(conference, "name");
-            xmpp_stanza_t *nick_el = xmpp_stanza_get_child_by_name(conference, "nick");
-            const std::string bookmark_nick = nick_el ? stanza_element_text(nick_el) : std::string {};
+            const std::string jid = conference.attr_string("jid");
+            const std::string autojoin = conference.attr_string("autojoin");
+            const std::string bookmark_name = conference.attr_string("name");
+            const ::xmpp::StanzaView nick_el = conference.child("nick");
+            const std::string bookmark_nick = nick_el.valid() ? nick_el.text() : std::string {};
 
-            if (!jid)
+            if (jid.empty())
                 continue;
 
             // Store bookmark
             account.bookmarks[jid].jid = jid;
-            account.bookmarks[jid].name = name ? name : "";
+            account.bookmarks[jid].name = bookmark_name;
             account.bookmarks[jid].nick = bookmark_nick;
-            account.bookmarks[jid].autojoin = autojoin
+            account.bookmarks[jid].autojoin = !autojoin.empty()
                 && ::xmpp::is_bookmark_autojoin_true(autojoin);
 
             account.connection.send(stanza::iq()

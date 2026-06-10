@@ -1,18 +1,23 @@
 bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 {
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
     // SM counter incremented in libstrophe wrapper, not here
     // top_level parameter kept for nested/recursive calls
 
     (void) top_level;
     append_raw_xml_trace(account, "RECV", stanza);
 
-    xmpp_stanza_t *query;
+    ::xmpp::StanzaView query;
 
     auto binding = std::make_unique<xml::iq>(account.context, stanza);
-    const char *id = xmpp_stanza_get_id(stanza);
-    const char *from = xmpp_stanza_get_from(stanza);
-    const char *to = xmpp_stanza_get_to(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
     // Keep own JID alive for the duration of this handler.
     // account.jid() returns a temporary std::string; storing .data() on it
     // immediately produces a dangling pointer.  Cache it once here.
@@ -96,36 +101,35 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         if (!prefs_buf) prefs_buf = account.buffer;
         account.mam_prefs_queries.erase(id);
 
-        xmpp_stanza_t *prefs_el = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "prefs", "urn:xmpp:mam:2");
+        const ::xmpp::StanzaView prefs_el = view.child("prefs", "urn:xmpp:mam:2");
 
         auto prefs_ui = weechat::UiPort::for_buffer(prefs_buf);
         if (type && weechat_strcasecmp(type, "error") == 0)
         {
-            xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
-            const char *err_type = err ? xmpp_stanza_get_attribute(err, "type") : "unknown";
+            const ::xmpp::StanzaView err = view.child("error");
+            const std::string err_type_str = err.valid() ? err.attr_string("type") : std::string{"unknown"};
+            const char *err_type = err_type_str.c_str();
             prefs_ui->printf_error(fmt::format(
                 "MAM preferences: server returned error ({}) — feature may not be supported",
                 err_type));
         }
-        else if (prefs_el)
+        else if (prefs_el.valid())
         {
-            const char *def = xmpp_stanza_get_attribute(prefs_el, "default");
+            const std::string def = prefs_el.attr_string("default");
             prefs_ui->printf_network(fmt::format(
                 "MAM preferences: default={}{}{}",
-                weechat_color("bold"), def ? def : "(unset)", weechat_color("-bold")));
+                weechat_color("bold"), !def.empty() ? def.c_str() : "(unset)", weechat_color("-bold")));
 
             // Always list
-            xmpp_stanza_t *always_el = xmpp_stanza_get_child_by_name(prefs_el, "always");
-            if (always_el)
+            const ::xmpp::StanzaView always_el = prefs_el.child("always");
+            if (always_el.valid())
             {
                 std::string jids_str;
-                for (xmpp_stanza_t *jid_el = xmpp_stanza_get_children(always_el);
-                     jid_el; jid_el = xmpp_stanza_get_next(jid_el))
+                for (const ::xmpp::StanzaView jid_el : ::xmpp::StanzaView(always_el))
                 {
-                    const char *jn = xmpp_stanza_get_name(jid_el);
+                    const char *jn = jid_el.name().data();
                     if (!jn || std::string_view(jn) != "jid") continue;
-                    const std::string jid_txt = stanza_element_text(jid_el);
+                    const std::string jid_txt = jid_el.text();
                     if (!jid_txt.empty())
                     {
                         if (!jids_str.empty()) jids_str += ", ";
@@ -138,16 +142,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
 
             // Never list
-            xmpp_stanza_t *never_el = xmpp_stanza_get_child_by_name(prefs_el, "never");
-            if (never_el)
+            const ::xmpp::StanzaView never_el = prefs_el.child("never");
+            if (never_el.valid())
             {
                 std::string jids_str;
-                for (xmpp_stanza_t *jid_el = xmpp_stanza_get_children(never_el);
-                     jid_el; jid_el = xmpp_stanza_get_next(jid_el))
+                for (const ::xmpp::StanzaView jid_el : ::xmpp::StanzaView(never_el))
                 {
-                    const char *jn = xmpp_stanza_get_name(jid_el);
+                    const char *jn = jid_el.name().data();
                     if (!jn || std::string_view(jn) != "jid") continue;
-                    const std::string jid_txt = stanza_element_text(jid_el);
+                    const std::string jid_txt = jid_el.text();
                     if (!jid_txt.empty())
                     {
                         if (!jids_str.empty()) jids_str += ", ";
@@ -202,9 +205,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (auto pub_it = account.pubsub_publish_ids.find(id); pub_it != account.pubsub_publish_ids.end())
             {
                 auto& [_, ctx] = *pub_it;
-                xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-                const std::string error_cond = error_elem
-                    ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
+                const ::xmpp::StanzaView error_elem = view.child("error");
+                const std::string error_cond = error_elem.valid()
+                    ? ::xmpp::iq_error_text(error_elem) : "unknown error";
                 struct t_gui_buffer *err_buf = ctx.buffer ? ctx.buffer : account.buffer;
                 weechat::UiPort::for_buffer(err_buf)->printf_error(fmt::format(
                     "{}: publish failed for {}/{} (item {}): {}",
@@ -219,9 +222,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (auto sub_it = account.pubsub_subscribe_queries.find(id); sub_it != account.pubsub_subscribe_queries.end())
             {
                 auto& [_, sub] = *sub_it;
-                xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-                const std::string error_cond = error_elem
-                    ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
+                const ::xmpp::StanzaView error_elem = view.child("error");
+                const std::string error_cond = error_elem.valid()
+                    ? ::xmpp::iq_error_text(error_elem) : "unknown error";
                 struct t_gui_buffer *fb = sub.buffer ? sub.buffer : account.buffer;
                 weechat::UiPort::for_buffer(fb)->printf_error(fmt::format(
                     "{}: subscribe to {} failed: {}",
@@ -233,9 +236,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             if (auto unsub_it = account.pubsub_unsubscribe_queries.find(id); unsub_it != account.pubsub_unsubscribe_queries.end())
             {
                 auto& [_, unsub] = *unsub_it;
-                xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-                const std::string error_cond = error_elem
-                    ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
+                const ::xmpp::StanzaView error_elem = view.child("error");
+                const std::string error_cond = error_elem.valid()
+                    ? ::xmpp::iq_error_text(error_elem) : "unknown error";
                 struct t_gui_buffer *fb = unsub.buffer ? unsub.buffer : account.buffer;
                 weechat::UiPort::for_buffer(fb)->printf_error(fmt::format(
                     "{}: unsubscribe from {} failed: {}",
@@ -252,9 +255,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 const std::string &err_service = fi.service;
                 const std::string &err_node    = fi.node;
 
-                xmpp_stanza_t *error_elem = xmpp_stanza_get_child_by_name(stanza, "error");
-                const std::string error_cond = error_elem
-                    ? ::xmpp::iq_error_text(::xmpp::StanzaView(error_elem)) : "unknown error";
+                const ::xmpp::StanzaView error_elem = view.child("error");
+                const std::string error_cond = error_elem.valid()
+                    ? ::xmpp::iq_error_text(error_elem) : "unknown error";
 
                 // Report the error in the feed buffer if it already exists,
                 // otherwise fall back to the account buffer.
@@ -276,23 +279,20 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     }
     
     // XEP-0191: Blocking Command
-    xmpp_stanza_t *blocklist = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "blocklist", "urn:xmpp:blocking");
-    xmpp_stanza_t *block = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "block", "urn:xmpp:blocking");
-    xmpp_stanza_t *unblock = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "unblock", "urn:xmpp:blocking");
+    const ::xmpp::StanzaView blocklist = view.child("blocklist", "urn:xmpp:blocking");
+    const ::xmpp::StanzaView block = view.child("block", "urn:xmpp:blocking");
+    const ::xmpp::StanzaView unblock = view.child("unblock", "urn:xmpp:blocking");
     
-    if (blocklist && type && weechat_strcasecmp(type, "result") == 0)
+    if (blocklist.valid() && type && weechat_strcasecmp(type, "result") == 0)
     {
         // Handle blocklist response — populate the picker if open, else print inline.
-        xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(blocklist, "item");
+        ::xmpp::StanzaView item = blocklist.child("item");
 
         if (account.blocklist_picker)
         {
             // Picker is open: feed entries into it.
             using picker_t = weechat::ui::picker<std::string>;
-            if (!item)
+            if (!item.valid())
             {
                 // No blocked JIDs — add a non-selectable placeholder row.
                 account.blocklist_picker->add_entry(
@@ -300,13 +300,13 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             }
             else
             {
-                while (item)
+                while (item.valid())
                 {
-                    const char *jid = xmpp_stanza_get_attribute(item, "jid");
-                    if (jid)
+                    const std::string jid = item.attr_string("jid");
+                    if (!jid.empty())
                         account.blocklist_picker->add_entry(
                             picker_t::entry{std::string(jid), std::string(jid), "", true});
-                    item = xmpp_stanza_get_next(item);
+                    item = item.next_sibling();
                 }
             }
         }
@@ -314,15 +314,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         {
             // Picker not open (e.g. called without /blocklist picker path) — print inline.
             auto ui = weechat::UiPort::for_buffer(account.buffer);
-            if (item)
+            if (item.valid())
             {
                 ui->printf_network("Blocked JIDs:");
-                while (item)
+                while (item.valid())
                 {
-                    const char *jid = xmpp_stanza_get_attribute(item, "jid");
-                    if (jid)
+                    const std::string jid = item.attr_string("jid");
+                    if (!jid.empty())
                         ui->printf(fmt::format("  {}", jid));
-                    item = xmpp_stanza_get_next(item);
+                    item = item.next_sibling();
                 }
             }
             else
@@ -334,14 +334,14 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         return true;
     }
     
-    if (block && type && weechat_strcasecmp(type, "result") == 0)
+    if (block.valid() && type && weechat_strcasecmp(type, "result") == 0)
     {
         weechat::UiPort::for_buffer(account.buffer)->printf_network(
             "Block request successful");
         return true;
     }
     
-    if (unblock && type && weechat_strcasecmp(type, "result") == 0)
+    if (unblock.valid() && type && weechat_strcasecmp(type, "result") == 0)
     {
         weechat::UiPort::for_buffer(account.buffer)->printf_network(
             "Unblock request successful");
@@ -349,16 +349,16 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     }
 
     // XEP-0191: server-pushed block/unblock IQ sets (§8.4, §8.5)
-    if (block && type && weechat_strcasecmp(type, "set") == 0)
+    if (block.valid() && type && weechat_strcasecmp(type, "set") == 0)
     {
         auto ui = weechat::UiPort::for_buffer(account.buffer);
-        xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(block, "item");
-        while (item)
+        ::xmpp::StanzaView item = block.child("item");
+        while (item.valid())
         {
-            const char *jid = xmpp_stanza_get_attribute(item, "jid");
-            if (jid)
+            const std::string jid = item.attr_string("jid");
+            if (!jid.empty())
                 ui->printf_network(fmt::format("{} was blocked", jid));
-            item = xmpp_stanza_get_next(item);
+            item = item.next_sibling();
         }
         // Acknowledge the server push
         account.connection.send(stanza::iq()
@@ -371,18 +371,18 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         return true;
     }
 
-    if (unblock && type && weechat_strcasecmp(type, "set") == 0)
+    if (unblock.valid() && type && weechat_strcasecmp(type, "set") == 0)
     {
         auto ui = weechat::UiPort::for_buffer(account.buffer);
-        xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(unblock, "item");
-        if (item)
+        ::xmpp::StanzaView item = unblock.child("item");
+        if (item.valid())
         {
-            while (item)
+            while (item.valid())
             {
-                const char *jid = xmpp_stanza_get_attribute(item, "jid");
-                if (jid)
+                const std::string jid = item.attr_string("jid");
+                if (!jid.empty())
                     ui->printf_network(fmt::format("{} was unblocked", jid));
-                item = xmpp_stanza_get_next(item);
+                item = item.next_sibling();
             }
         }
         else
@@ -402,35 +402,33 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
     // XEP-0045 §10.2/§10.5/§10.7: muc#owner / muc#admin owner-tracked IQ results.
     // Match by IQ id only — muc#owner responses carry muc#owner, not disco#items.
-    const char *owner_stanza_id = xmpp_stanza_get_id(stanza);
+    const char *owner_stanza_id = id;
     if (owner_stanza_id && account.muc_owner_queries.contains(owner_stanza_id))
     {
         auto info = account.muc_owner_queries[owner_stanza_id];
         account.muc_owner_queries.erase(owner_stanza_id);
         struct t_gui_buffer *out = info.buffer ? info.buffer : account.buffer;
 
-        xmpp_stanza_t *owner_q = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "query", "http://jabber.org/protocol/muc#owner");
-        xmpp_stanza_t *admin_q = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "query", "http://jabber.org/protocol/muc#admin");
-        xmpp_stanza_t *register_q = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "query", "http://jabber.org/protocol/muc#register");
+        const ::xmpp::StanzaView owner_q = view.child("query", "http://jabber.org/protocol/muc#owner");
+        const ::xmpp::StanzaView admin_q = view.child("query", "http://jabber.org/protocol/muc#admin");
+        const ::xmpp::StanzaView register_q = view.child("query", "http://jabber.org/protocol/muc#register");
 
         // Error path: print a friendly message and return.
         if (type && weechat_strcasecmp(type, "error") == 0)
         {
             std::string err = "server error";
-            if (auto err_el = xmpp_stanza_get_child_by_name(stanza, "error"))
+            const ::xmpp::StanzaView err_el = view.child("error");
+            if (err_el.valid())
             {
-                if (xmpp_stanza_get_child_by_name(err_el, "forbidden"))
+                if (err_el.child("forbidden").valid())
                     err = "permission denied (you must be a room owner)";
-                else if (xmpp_stanza_get_child_by_name(err_el, "not-allowed"))
+                else if (err_el.child("not-allowed").valid())
                     err = "not allowed (room configuration is locked)";
-                else if (xmpp_stanza_get_child_by_name(err_el, "item-not-found"))
+                else if (err_el.child("item-not-found").valid())
                     err = "room not found";
-                else if (xmpp_stanza_get_child_by_name(err_el, "conflict"))
+                else if (err_el.child("conflict").valid())
                     err = "conflict";
-                else if (xmpp_stanza_get_child_by_name(err_el, "not-acceptable"))
+                else if (err_el.child("not-acceptable").valid())
                     err = "not acceptable";
             }
             const char *what = "operation";
@@ -463,38 +461,37 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                         auto& [_, ch] = *ch_it;
                         weechat::channel::room_config_form form;
 
-                        xmpp_stanza_t *xdata = owner_q
-                            ? xmpp_stanza_get_child_by_name_and_ns(
-                                  owner_q, "x", "jabber:x:data")
-                            : nullptr;
-                        if (xdata)
+                        const ::xmpp::StanzaView xdata = owner_q.valid()
+                            ? owner_q.child("x", "jabber:x:data")
+                            : ::xmpp::StanzaView{};
+                        if (xdata.valid())
                         {
-                            if (const char *sid = xmpp_stanza_get_attribute(xdata, "sessionid"))
+                            const std::string sid = xdata.attr_string("sessionid");
+                            if (!sid.empty())
                                 form.sessionid = sid;
-                            xmpp_stanza_t *field = xmpp_stanza_get_child_by_name(xdata, "field");
-                            while (field)
+                            ::xmpp::StanzaView field = xdata.child("field");
+                            while (field.valid())
                             {
                                 weechat::channel::room_config_field f;
-                                if (const char *var = xmpp_stanza_get_attribute(field, "var"))
-                                    f.var = var;
-                                if (const char *typ = xmpp_stanza_get_attribute(field, "type"))
-                                    f.type = typ;
-                                if (const char *lbl = xmpp_stanza_get_attribute(field, "label"))
-                                    f.label = lbl;
+                                const std::string var = field.attr_string("var");
+                                if (!var.empty()) f.var = var;
+                                const std::string typ = field.attr_string("type");
+                                if (!typ.empty()) f.type = typ;
+                                const std::string lbl = field.attr_string("label");
+                                if (!lbl.empty()) f.label = lbl;
                                 // xmpp_stanza_get_text_ptr only works on raw text
                                 // nodes; <value> elements need get_text (see caps
                                 // hash builder ~L3486).
-                                for (xmpp_stanza_t *v = xmpp_stanza_get_children(field);
-                                     v; v = xmpp_stanza_get_next(v))
+                                for (const ::xmpp::StanzaView v : ::xmpp::StanzaView(field))
                                 {
-                                    const char *vname = xmpp_stanza_get_name(v);
+                                    const char *vname = v.name().data();
                                     if (!vname || weechat_strcasecmp(vname, "value") != 0)
                                         continue;
-                                    f.values.push_back(stanza_element_text(v));
+                                    f.values.push_back(v.text());
                                 }
                                 if (!f.var.empty())
                                     form.fields.push_back(std::move(f));
-                                field = xmpp_stanza_get_next(field);
+                                field = field.next_sibling();
                             }
                         }
 
@@ -672,8 +669,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 }
                 case weechat::account::muc_owner_kind::register_get:
                 {
-                    const ::xmpp::StanzaView xdata = register_q
-                        ? ::xmpp::StanzaView{register_q}.child("x", "jabber:x:data")
+                    const ::xmpp::StanzaView xdata = register_q.valid()
+                        ? register_q.child("x", "jabber:x:data")
                         : ::xmpp::StanzaView{};
                     const auto fields = ::xmpp::parse_muc_register_form_fields(xdata);
 
@@ -753,61 +750,57 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
 
     
     // Handle roster (RFC 6121)
-    query = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "query", "jabber:iq:roster");
+    query = view.child("query", "jabber:iq:roster");
 
     // Parse <group> children of a roster <item> into account.roster[jid].groups
-    auto parse_roster_groups = [&](xmpp_stanza_t *item, const char *jid) {
+    auto parse_roster_groups = [&](const ::xmpp::StanzaView &item, const std::string &jid) {
         account.roster[jid].groups.clear();
-        for (xmpp_stanza_t *g = xmpp_stanza_get_children(item);
-             g; g = xmpp_stanza_get_next(g))
+        for (const ::xmpp::StanzaView g : ::xmpp::StanzaView(item))
         {
-            if (weechat_strcasecmp(xmpp_stanza_get_name(g), "group") != 0)
+            if (weechat_strcasecmp(g.name().data(), "group") != 0)
                 continue;
-            const std::string group_name = stanza_element_text(g);
+            const std::string group_name = g.text();
             if (!group_name.empty())
                 account.roster[jid].groups.push_back(group_name);
         }
     };
 
-    if (query && type && weechat_strcasecmp(type, "result") == 0)
+    if (query.valid() && type && weechat_strcasecmp(type, "result") == 0)
     {
-        xmpp_stanza_t *item;
-        for (item = xmpp_stanza_get_children(query);
-             item; item = xmpp_stanza_get_next(item))
+        for (const ::xmpp::StanzaView item : ::xmpp::StanzaView(query))
         {
-            const char *name = xmpp_stanza_get_name(item);
+            const char *name = item.name().data();
             if (weechat_strcasecmp(name, "item") != 0)
                 continue;
 
-            const char *jid = xmpp_stanza_get_attribute(item, "jid");
-            const char *roster_name = xmpp_stanza_get_attribute(item, "name");
-            const char *subscription = xmpp_stanza_get_attribute(item, "subscription");
+            const std::string jid = item.attr_string("jid");
+            const std::string roster_name = item.attr_string("name");
+            const std::string subscription = item.attr_string("subscription");
 
-            if (!jid)
+            if (jid.empty())
                 continue;
 
             account.roster[jid].jid = jid;
-            account.roster[jid].name = roster_name ? roster_name : "";
-            account.roster[jid].subscription = subscription ? subscription : "none";
+            account.roster[jid].name = roster_name;
+            account.roster[jid].subscription = subscription.empty() ? "none" : subscription;
             parse_roster_groups(item, jid);
         }
         account.sync_roster_nicklist();
     }
 
     // RFC 6121 §2.1.6 — roster push: server sends IQ type="set" with a single item
-    if (query && type && weechat_strcasecmp(type, "set") == 0)
+    if (query.valid() && type && weechat_strcasecmp(type, "set") == 0)
     {
-        xmpp_stanza_t *item = xmpp_stanza_get_child_by_name(query, "item");
-        if (item)
+        ::xmpp::StanzaView item = query.child("item");
+        if (item.valid())
         {
-            const char *jid          = xmpp_stanza_get_attribute(item, "jid");
-            const char *roster_name  = xmpp_stanza_get_attribute(item, "name");
-            const char *subscription = xmpp_stanza_get_attribute(item, "subscription");
+            const std::string jid = item.attr_string("jid");
+            const std::string roster_name = item.attr_string("name");
+            const std::string subscription = item.attr_string("subscription");
 
-            if (jid)
+            if (!jid.empty())
             {
-                if (subscription && weechat_strcasecmp(subscription, "remove") == 0)
+                if (!subscription.empty() && weechat_strcasecmp(subscription.c_str(), "remove") == 0)
                 {
                     account.roster.erase(jid);
                     if (weechat::user *removed = weechat::user::search(&account, jid))
@@ -819,19 +812,19 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 {
                     bool is_new = !account.roster.contains(jid);
                     account.roster[jid].jid = jid;
-                    account.roster[jid].name = roster_name ? roster_name : "";
-                    account.roster[jid].subscription = subscription ? subscription : "none";
+                    account.roster[jid].name = roster_name;
+                    account.roster[jid].subscription = subscription.empty() ? "none" : subscription;
                     parse_roster_groups(item, jid);
 
                     auto roster_ui = weechat::UiPort::for_buffer(account.buffer);
                     if (is_new)
                         roster_ui->printf_network(fmt::format(
                             "Roster: {} added ({})",
-                            jid, subscription ? subscription : "none"));
+                            jid, subscription.empty() ? "none" : subscription));
                     else
                         roster_ui->printf_network(fmt::format(
                             "Roster: {} updated (subscription: {})",
-                            jid, subscription ? subscription : "none"));
+                            jid, subscription.empty() ? "none" : subscription));
 
                     account.update_roster_nicklist_entry(jid);
                 }

@@ -31,4 +31,19 @@ std::string iq_error_text(StanzaView error_elem)
     return "unknown error";
 }
 
+std::string iq_error_condition(StanzaView iq, std::span<const std::string_view> candidates)
+{
+    const StanzaView error = iq.child("error");
+    if (!error.valid())
+        return "unknown";
+
+    for (const std::string_view name : candidates)
+    {
+        if (const StanzaView cond = error.child(name); cond.valid())
+            return std::string(cond.name());
+    }
+
+    return "unknown";
+}
+
 }  // namespace xmpp

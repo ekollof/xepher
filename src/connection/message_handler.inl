@@ -20,6 +20,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         }
     }
 
+    const auto inbound = ::xmpp::StanzaView(stanza);
+
     // Cache hdata handles — stable for the process lifetime, resolved once.
     static struct t_hdata *hdata_line      = weechat_hdata_get("line");
     static struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
@@ -39,7 +41,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // without this broadened check they silently fail to find their target line
     // during MAM replay.
     weechat::channel *channel, *parent_channel;
-    xmpp_stanza_t *x, *body, *delay, *topic, *result, *forwarded, *encrypted;
+    xmpp_stanza_t *x, *body, *delay, *topic, *result, *encrypted;
     const char *type, *from, *nick, *from_bare, *to, *to_bare, *id, *thread, *replace_id, *timestamp;
     const char *text = nullptr;
     std::string intext_storage;
@@ -48,6 +50,18 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     };
     std::string from_bare_main_storage; // owns main from_bare string
     std::string to_bare_main_storage;   // owns main to_bare string
+    std::string inbound_type_storage;
+    std::string inbound_from_storage;
+    std::string inbound_to_storage;
+    std::string inbound_id_storage;
+    std::string inbound_thread_storage;
+    std::string stanza_id_attr_storage;
+    std::string stanza_id_by_attr_storage;
+    std::string origin_id_attr_storage;
+    std::string timestamp_attr_storage;
+    std::string delay_from_attr_storage;
+    std::string eme_namespace_storage;
+    std::string eme_name_storage;
     // Cache own JID for use when stanza 'from' is absent (e.g. self-messages).
     // account.jid() returns a temporary; taking .data() on it is a dangling pointer.
     const std::string own_jid_str = account.jid();
@@ -77,14 +91,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         return nullptr;
     };
 
-    const auto partner_channel_from_message = [&](xmpp_stanza_t *msg)
+    const auto partner_channel_from_message = [&](const ::xmpp::StanzaView &msg)
         -> weechat::channel *
     {
-        const char *msg_from = xmpp_stanza_get_from(msg);
-        const char *msg_to = xmpp_stanza_get_to(msg);
         const auto partner = ::xmpp::conversation_channel_jid_from_message(
-            msg_from ? std::string_view(msg_from) : std::string_view{},
-            msg_to ? std::string_view(msg_to) : std::string_view{},
+            msg.from().value_or(""),
+            msg.to().value_or(""),
             own_jid_str);
         if (!partner)
             return nullptr;
@@ -98,11 +110,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     time_t date = 0;
 
     auto binding = std::make_unique<xml::message>(account.context, stanza);
-    body = xmpp_stanza_get_child_by_name(stanza, "body");
+    body = inbound.child("body").raw();
     xmpp_stanza_t *encrypted_without_body =
-        ::xmpp::stanza_axolotl_encrypted(::xmpp::StanzaView(stanza)).raw();
-    xmpp_stanza_t *pgp_without_body = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "x", "jabber:x:encrypted");
+        ::xmpp::stanza_axolotl_encrypted(inbound).raw();
+    xmpp_stanza_t *pgp_without_body = inbound.child("x", "jabber:x:encrypted").raw();
 
     // Payloadless OMEMO stanzas are control/key-transport messages and must
     // not create PM buffers for inactive roster contacts.
@@ -112,14 +123,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
     if (body == nullptr && !encrypted_without_body && !pgp_without_body)
     {
-        topic = xmpp_stanza_get_child_by_name(stanza, "subject");
+        topic = inbound.child("subject").raw();
         if (topic != nullptr)
         {
             intext_storage = stanza_element_text(topic);
-            type = xmpp_stanza_get_type(stanza);
-        if (::xmpp::stanza_is_error_message(::xmpp::StanzaView(stanza)))
+            inbound_type_storage = inbound.attr_string("type");
+            type = inbound_type_storage.empty() ? nullptr : inbound_type_storage.c_str();
+        if (::xmpp::stanza_is_error_message(inbound))
             return 1;
-        from = xmpp_stanza_get_from(stanza);
+        inbound_from_storage = inbound.attr_string("from");
+        from = inbound_from_storage.empty() ? nullptr : inbound_from_storage.c_str();
         if (from == nullptr)
             return 1;
         std::string from_bare_s = ::jid(nullptr, from).bare;
@@ -173,7 +186,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 const std::string cs_nick_s = ::jid(nullptr, chat_state->from.c_str()).resource;
                 from_bare = cs_from_bare_s.c_str();
                 nick = cs_nick_s.c_str();
-                channel = partner_channel_from_message(stanza);
+                channel = partner_channel_from_message(inbound);
                 if (!channel)
                     return 1;
 
@@ -208,28 +221,28 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         //   </mentions>
         // Security (§4 MUST): outer from= must match the from= of the forwarded message.
         {
-            xmpp_stanza_t *mmn_elem = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "mentions", "urn:xmpp:mmn:0");
-            if (mmn_elem)
+            const auto mmn_view = inbound.child("mentions", "urn:xmpp:mmn:0");
+            if (mmn_view.valid())
             {
                 // The outer message from= is the MUC JID that sent us the notification.
-                const char *outer_from = xmpp_stanza_get_from(stanza);
+                const std::string outer_from_s = inbound.attr_string("from");
+                const char *outer_from = outer_from_s.empty() ? nullptr : outer_from_s.c_str();
                 std::string muc_jid = outer_from ? ::jid(nullptr, outer_from).bare : std::string{};
 
                 if (!muc_jid.empty())
                 {
                     // <forwarded> is a direct child of <mentions>, not of <message>
-                    xmpp_stanza_t *mmn_fwd = xmpp_stanza_get_child_by_name_and_ns(
-                        mmn_elem, "forwarded", "urn:xmpp:forward:0");
-                    if (mmn_fwd)
+                    const auto mmn_fwd = mmn_view.child("forwarded", "urn:xmpp:forward:0");
+                    if (mmn_fwd.valid())
                     {
-                        xmpp_stanza_t *mmn_msg = xmpp_stanza_get_child_by_name(mmn_fwd, "message");
-                        xmpp_stanza_t *mmn_delay = xmpp_stanza_get_child_by_name_and_ns(
-                            mmn_fwd, "delay", "urn:xmpp:delay");
-                        if (mmn_msg)
+                        const auto mmn_msg = mmn_fwd.child("message");
+                        const auto mmn_delay = mmn_fwd.child("delay", "urn:xmpp:delay");
+                        if (mmn_msg.valid())
                         {
                             // §4 MUST: forwarded message from= bare JID must match muc_jid
-                            const char *inner_from_raw = xmpp_stanza_get_from(mmn_msg);
+                            const std::string inner_from_raw_s = mmn_msg.attr_string("from");
+                            const char *inner_from_raw = inner_from_raw_s.empty()
+                                ? nullptr : inner_from_raw_s.c_str();
                             if (!inner_from_raw)
                                 return 1;
                             std::string inner_muc = ::jid(nullptr, inner_from_raw).bare;
@@ -246,27 +259,25 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             weechat::channel *muc_ch = &account.channels.at(muc_jid);
                             struct t_gui_buffer *muc_buf = muc_ch->buffer;
 
-                            xmpp_stanza_t *mmn_body =
-                                xmpp_stanza_get_child_by_name(mmn_msg, "body");
-                            const std::string mmn_text_str = stanza_element_text(mmn_body);
+                            const std::string mmn_text_str = mmn_msg.child("body").text();
                             const char *mmn_text = mmn_text_str.empty()
                                 ? nullptr : mmn_text_str.c_str();
 
-                            const char *mmn_from = xmpp_stanza_get_from(mmn_msg);
+                            const std::string mmn_from_s = mmn_msg.attr_string("from");
+                            const char *mmn_from = mmn_from_s.empty() ? nullptr : mmn_from_s.c_str();
                             std::string mmn_nick_s = mmn_from ? ::jid(nullptr, mmn_from).resource : std::string{};
                             const char *mmn_nick = !mmn_nick_s.empty()
                                 ? mmn_nick_s.c_str() : "(unknown)";
 
                             // Parse timestamp from <delay> if present
                             time_t mmn_ts = 0;
-                            if (mmn_delay)
+                            if (mmn_delay.valid())
                             {
-                                const char *stamp =
-                                    xmpp_stanza_get_attribute(mmn_delay, "stamp");
-                                if (stamp)
+                                const std::string stamp = mmn_delay.attr_string("stamp");
+                                if (!stamp.empty())
                                 {
                                     struct tm mmn_tm = {};
-                                    strptime(stamp, "%FT%T", &mmn_tm);
+                                    strptime(stamp.c_str(), "%FT%T", &mmn_tm);
                                     mmn_ts = timegm(&mmn_tm);
                                 }
                             }
@@ -286,11 +297,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             }
         }
 
-        result = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "result", "urn:xmpp:mam:2");
+        result = inbound.child("result", "urn:xmpp:mam:2").raw();
         if (result)
         {
-            const auto mam_view = ::xmpp::StanzaView(stanza);
+            const auto mam_view = inbound;
 
             // XEP-0442: pubsub MAM result — forwarded stanza contains a pubsub
             // <event> with the original item payload. Process it here so we can
@@ -315,43 +325,46 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 if (inserted)
                     account.feed_open_register(feed_key);
 
-                forwarded = xmpp_stanza_get_child_by_name_and_ns(
-                    result, "forwarded", "urn:xmpp:forward:0");
-                if (forwarded)
+                const auto result_view = ::xmpp::StanzaView(result);
+                const auto forwarded_view = result_view.child("forwarded", "urn:xmpp:forward:0");
+                if (forwarded_view.valid())
                 {
-                    xmpp_stanza_t *fwd_msg = xmpp_stanza_get_child_by_name(forwarded, "message");
-                    if (fwd_msg)
+                    const auto fwd_msg = forwarded_view.child("message");
+                    if (fwd_msg.valid())
                     {
                         // Find the <event> or direct <item> child
-                        xmpp_stanza_t *fwd_event = xmpp_stanza_get_child_by_name_and_ns(
-                            fwd_msg, "event", "http://jabber.org/protocol/pubsub#event");
-                        xmpp_stanza_t *fwd_items = fwd_event
-                            ? xmpp_stanza_get_child_by_name(fwd_event, "items") : nullptr;
+                        const auto fwd_event = fwd_msg.child(
+                            "event", "http://jabber.org/protocol/pubsub#event");
+                        const auto fwd_items = fwd_event.valid()
+                            ? fwd_event.child("items") : ::xmpp::StanzaView(nullptr);
 
-                        if (fwd_items)
+                        if (fwd_items.valid())
                         {
                             // Extract the publisher (from= of the inner message or publisher= on item)
-                            const char *publisher_jid = xmpp_stanza_get_from(fwd_msg);
+                            const std::string publisher_jid_s = fwd_msg.attr_string("from");
+                            const char *publisher_jid = publisher_jid_s.empty()
+                                ? nullptr : publisher_jid_s.c_str();
 
-                            for (xmpp_stanza_t *fwd_item = xmpp_stanza_get_children(fwd_items);
-                                 fwd_item; fwd_item = xmpp_stanza_get_next(fwd_item))
+                            for (const auto &fwd_item : fwd_items)
                             {
-                                const char *child_name = xmpp_stanza_get_name(fwd_item);
-                                if (!child_name || weechat_strcasecmp(child_name, "item") != 0)
+                                if (fwd_item.name() != "item")
                                     continue;
 
-                                const char *item_id_raw = xmpp_stanza_get_id(fwd_item);
+                                const std::string item_id_raw_s = fwd_item.attr_string("id");
+                                const char *item_id_raw = item_id_raw_s.empty()
+                                    ? nullptr : item_id_raw_s.c_str();
                                 if (item_id_raw && account.feed_item_seen(feed_key, item_id_raw))
                                     continue;
 
-                                xmpp_stanza_t *entry = xmpp_stanza_get_child_by_name_and_ns(
-                                    fwd_item, "entry", "http://www.w3.org/2005/Atom");
-                                if (!entry)
-                                    entry = xmpp_stanza_get_child_by_name(fwd_item, "entry");
+                                auto entry_view = fwd_item.child(
+                                    "entry", "http://www.w3.org/2005/Atom");
+                                if (!entry_view.valid())
+                                    entry_view = fwd_item.child("entry");
+                                xmpp_stanza_t *entry = entry_view.raw();
                                 if (!entry) continue;
 
-                                const char *pub = xmpp_stanza_get_attribute(fwd_item, "publisher");
-                                if (!pub) pub = publisher_jid;
+                                const std::string pub_s = fwd_item.attr_string("publisher");
+                                const char *pub = pub_s.empty() ? publisher_jid : pub_s.c_str();
 
                                 atom_entry ae = parse_atom_entry(account.context, entry, pub);
                                 if (item_id_raw && !ae.item_id.empty())
@@ -390,9 +403,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 xmpp_stanza_t *message = dispatch->message;
                 const auto msg_view = ::xmpp::StanzaView(message);
 
-                const char *debug_from = xmpp_stanza_get_from(message);
-                const char *debug_to = xmpp_stanza_get_to(message);
-                const char *debug_type = xmpp_stanza_get_type(message);
+                const std::string debug_from_s = msg_view.attr_string("from");
+                const std::string debug_to_s = msg_view.attr_string("to");
+                const std::string debug_type_s = msg_view.attr_string("type");
+                const char *debug_from = debug_from_s.empty() ? nullptr : debug_from_s.c_str();
+                const char *debug_to = debug_to_s.empty() ? nullptr : debug_to_s.c_str();
+                const char *debug_type = debug_type_s.empty() ? nullptr : debug_type_s.c_str();
 
                 const std::string from_bare_s = debug_from ? ::jid(nullptr, debug_from).bare : std::string{};
                 const std::string to_bare_s = debug_to ? ::jid(nullptr, debug_to).bare : std::string{};
@@ -418,7 +434,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             }));
                 }
 
-                const char *msg_id = xmpp_stanza_get_id(message);
+                const std::string msg_id_s = msg_view.attr_string("id");
+                const char *msg_id = msg_id_s.empty() ? nullptr : msg_id_s.c_str();
                 const char *msg_from = debug_from;
                 const char *msg_to = debug_to;
                 const std::string msg_text_str = msg_view.child("body").text();
@@ -515,7 +532,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             {
                 if (auto ack = ::xmpp::parse_incoming_receipt(view))
                 {
-                    if (weechat::channel *ch = partner_channel_from_message(stanza))
+                    if (weechat::channel *ch = partner_channel_from_message(inbound))
                     {
                         const bool muc_channel =
                             ch->type == weechat::channel::chat_type::MUC;
@@ -530,7 +547,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             {
                 if (auto ack = ::xmpp::parse_incoming_displayed(view))
                 {
-                    if (weechat::channel *ch = partner_channel_from_message(stanza))
+                    if (weechat::channel *ch = partner_channel_from_message(inbound))
                     {
                         const bool muc_channel =
                             ch->type == weechat::channel::chat_type::MUC;
@@ -545,11 +562,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
         // XEP-0224: Attention — handle incoming <attention> from others
         {
-            xmpp_stanza_t *attention = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "attention", "urn:xmpp:attention:0");
-            if (attention)
+            const auto attention_view = inbound.child("attention", "urn:xmpp:attention:0");
+            if (attention_view.valid())
             {
-                const char *attn_from = xmpp_stanza_get_from(stanza);
+                const std::string attn_from_s = inbound.attr_string("from");
+                const char *attn_from = attn_from_s.empty() ? nullptr : attn_from_s.c_str();
                 if (attn_from)
                 {
                     std::string bare_s = ::jid(nullptr, attn_from).bare;
@@ -580,17 +597,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
         // XEP-0437: Room Activity Indicators — handle <rai> notifications
         {
-            xmpp_stanza_t *rai = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "rai", "urn:xmpp:rai:0");
-            if (rai)
+            const auto rai_view = inbound.child("rai", "urn:xmpp:rai:0");
+            if (rai_view.valid())
             {
-                for (xmpp_stanza_t *act = xmpp_stanza_get_child_by_name(rai, "activity");
-                     act; act = xmpp_stanza_get_next(act))
+                for (const auto &act : rai_view)
                 {
-                    const char *act_name = xmpp_stanza_get_name(act);
-                    if (!act_name || weechat_strcasecmp(act_name, "activity") != 0)
+                    if (act.name() != "activity")
                         continue;
-                    const std::string jid_str = stanza_element_text(act);
+                    const std::string jid_str = act.text();
                     if (jid_str.empty())
                         continue;
                     const char *jid = jid_str.c_str();
@@ -633,7 +647,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             const auto payloadless_view = ::xmpp::StanzaView(stanza);
             if (auto reactions = ::xmpp::parse_message_reactions(payloadless_view))
             {
-                if (weechat::channel *rx_ch = partner_channel_from_message(stanza))
+                if (weechat::channel *rx_ch = partner_channel_from_message(inbound))
                 {
                     if (rx_ch->buffer)
                     {
@@ -646,8 +660,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             }
             if (auto retraction = ::xmpp::parse_message_retraction(payloadless_view))
             {
-                const char *rx_from = xmpp_stanza_get_from(stanza);
-                const char *rx_to = xmpp_stanza_get_to(stanza);
+                const std::string rx_from_s = inbound.attr_string("from");
+                const std::string rx_to_s = inbound.attr_string("to");
+                const char *rx_from = rx_from_s.empty() ? nullptr : rx_from_s.c_str();
+                const char *rx_to = rx_to_s.empty() ? nullptr : rx_to_s.c_str();
                 if (!rx_from && rx_to)
                 {
                     const std::string rx_to_bare = ::jid(nullptr, rx_to).bare;
@@ -655,12 +671,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         && !::xmpp::bare_jid_iequals(rx_to_bare, own_jid_str))
                         rx_from = own_jid_str.c_str();
                 }
-                if (weechat::channel *rx_ch = partner_channel_from_message(stanza))
+                if (weechat::channel *rx_ch = partner_channel_from_message(inbound))
                 {
                     const auto partner_jid = ::xmpp::conversation_channel_jid_from_message(
-                        rx_from ? std::string_view(rx_from) : std::string_view{},
-                        rx_to ? std::string_view(rx_to) : std::string_view{},
-                        own_jid_str);
+                        rx_from_s, rx_to_s, own_jid_str);
                     if (partner_jid)
                     {
                         account.mam_cache_retract_message(
@@ -707,11 +721,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
         return 1;
     }
-    type = xmpp_stanza_get_type(stanza);
-    if (::xmpp::stanza_is_error_message(::xmpp::StanzaView(stanza)))
+    inbound_type_storage = inbound.attr_string("type");
+    type = inbound_type_storage.empty() ? nullptr : inbound_type_storage.c_str();
+    if (::xmpp::stanza_is_error_message(inbound))
         return 1;
-    from = xmpp_stanza_get_from(stanza);
-    to = xmpp_stanza_get_to(stanza);
+    inbound_from_storage = inbound.attr_string("from");
+    from = inbound_from_storage.empty() ? nullptr : inbound_from_storage.c_str();
+    inbound_to_storage = inbound.attr_string("to");
+    to = inbound_to_storage.empty() ? nullptr : inbound_to_storage.c_str();
     if (from == nullptr)
     {
         // XEP-0280 sent carbons: inner copy may omit from=; peer is in to=.
@@ -735,18 +752,23 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         && ::xmpp::bare_jid_iequals(from_bare, own_jid_str);
     const bool is_self_outbound_copy = from_is_account && to_bare
         && !::xmpp::bare_jid_iequals(to_bare, own_jid_str);
-    id = xmpp_stanza_get_id(stanza);
+    inbound_id_storage = inbound.attr_string("id");
+    id = inbound_id_storage.empty() ? nullptr : inbound_id_storage.c_str();
     bool was_omemo_cached = false;  // set when plaintext came from omemo_plaintext cache
-    thread = xmpp_stanza_get_attribute(stanza, "thread");
+    inbound_thread_storage = inbound.attr_string("thread");
+    thread = inbound_thread_storage.empty() ? nullptr : inbound_thread_storage.c_str();
     
     // XEP-0359: Unique and Stable Stanza IDs
-    xmpp_stanza_t *stanza_id_elem = xmpp_stanza_get_child_by_name_and_ns(stanza, "stanza-id", "urn:xmpp:sid:0");
+    const auto stanza_id_view = inbound.child("stanza-id", "urn:xmpp:sid:0");
+    stanza_id_attr_storage = stanza_id_view.attr_string("id");
+    stanza_id_by_attr_storage = stanza_id_view.attr_string("by");
     const char *stanza_id = !override_archive_id.empty() ? override_archive_id.data()
-                            : stanza_id_elem ? xmpp_stanza_get_attribute(stanza_id_elem, "id") : nullptr;
-    const char *stanza_id_by = stanza_id_elem ? xmpp_stanza_get_attribute(stanza_id_elem, "by") : nullptr;
+                            : stanza_id_attr_storage.empty() ? nullptr : stanza_id_attr_storage.c_str();
+    const char *stanza_id_by = stanza_id_by_attr_storage.empty() ? nullptr : stanza_id_by_attr_storage.c_str();
     
-    xmpp_stanza_t *origin_id_elem = xmpp_stanza_get_child_by_name_and_ns(stanza, "origin-id", "urn:xmpp:sid:0");
-    const char *origin_id = origin_id_elem ? xmpp_stanza_get_attribute(origin_id_elem, "id") : nullptr;
+    const auto origin_id_view = inbound.child("origin-id", "urn:xmpp:sid:0");
+    origin_id_attr_storage = origin_id_view.attr_string("id");
+    const char *origin_id = origin_id_attr_storage.empty() ? nullptr : origin_id_attr_storage.c_str();
     
     // Prefer origin-id (client-assigned) over stanza-id (server-assigned)
     // over the message id attribute. The omemo_plaintext cache is keyed by
@@ -763,7 +785,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     std::string correction_target_storage = correction ? correction->target_id : std::string{};
     replace_id = correction_target_storage.empty()
         ? nullptr : correction_target_storage.c_str();
-    const auto msg_view = ::xmpp::StanzaView(stanza);
+    const auto msg_view = inbound;
     const bool receipt_requested = ::xmpp::stanza_requests_receipt(msg_view);
     const bool marker_markable = ::xmpp::stanza_is_marker_markable(msg_view);
     const bool is_delayed_delivery = ::xmpp::stanza_is_delayed_delivery(msg_view);
@@ -890,7 +912,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         return 1;
     }
 
-    encrypted = ::xmpp::stanza_axolotl_encrypted(::xmpp::StanzaView(stanza)).raw();
+    encrypted = ::xmpp::stanza_axolotl_encrypted(inbound).raw();
 
     // Record that this peer actively speaks OMEMO — but only for genuine
     // inbound encrypted messages (not self-outbound copies or plaintext).
@@ -908,13 +930,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         account.omemo.note_peer_traffic(account.context, channel->id);
     }
 
-    x = xmpp_stanza_get_child_by_name_and_ns(stanza, "x", "jabber:x:encrypted");
+    x = inbound.child("x", "jabber:x:encrypted").raw();
     
     // XEP-0380: Explicit Message Encryption
-    xmpp_stanza_t *eme = xmpp_stanza_get_child_by_name_and_ns(stanza, "encryption",
-                                                                "urn:xmpp:eme:0");
-    const char *eme_namespace = eme ? xmpp_stanza_get_attribute(eme, "namespace") : nullptr;
-    const char *eme_name = eme ? xmpp_stanza_get_attribute(eme, "name") : nullptr;
+    const auto eme_view = inbound.child("encryption", "urn:xmpp:eme:0");
+    eme_namespace_storage = eme_view.attr_string("namespace");
+    eme_name_storage = eme_view.attr_string("name");
+    const char *eme_namespace = eme_namespace_storage.empty() ? nullptr : eme_namespace_storage.c_str();
+    const char *eme_name = eme_name_storage.empty() ? nullptr : eme_name_storage.c_str();
     
     intext_storage = body ? stanza_element_text(body) : std::string {};
 
@@ -972,14 +995,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     std::string xhtml_fallback;
     if (!encrypted && !x && !skip_xhtml_for_bob)
     {
-        xmpp_stanza_t *html_elem = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "html", "http://jabber.org/protocol/xhtml-im");
-        if (html_elem)
+        const auto html_view = inbound.child("html", "http://jabber.org/protocol/xhtml-im");
+        if (html_view.valid())
         {
-            xmpp_stanza_t *html_body = xmpp_stanza_get_child_by_name(html_elem, "body");
-            if (html_body)
+            const auto html_body = html_view.child("body");
+            if (html_body.valid())
             {
-                xhtml_fallback = xhtml_to_weechat(html_body);
+                xhtml_fallback = xhtml_to_weechat(html_body.raw());
                 // Trim leading/trailing whitespace
                 auto trim_pos = xhtml_fallback.find_first_not_of(" \t\n\r");
                 if (trim_pos != std::string::npos)
@@ -1392,10 +1414,13 @@ message_handler_after_omemo:
         // between the original message and its correction).
         nick = from_bare;
     }
-    delay = xmpp_stanza_get_child_by_name_and_ns(stanza, "delay", "urn:xmpp:delay");
-    timestamp = !override_delay_stamp.empty() ? override_delay_stamp.data()
-                : delay ? xmpp_stanza_get_attribute(delay, "stamp") : nullptr;
-    const char *delay_from = delay ? xmpp_stanza_get_attribute(delay, "from") : nullptr;
+    const auto delay_view = inbound.child("delay", "urn:xmpp:delay");
+    delay = delay_view.raw();
+    timestamp_attr_storage = !override_delay_stamp.empty()
+        ? std::string(override_delay_stamp) : delay_view.attr_string("stamp");
+    timestamp = timestamp_attr_storage.empty() ? nullptr : timestamp_attr_storage.c_str();
+    delay_from_attr_storage = delay_view.attr_string("from");
+    const char *delay_from = delay_from_attr_storage.empty() ? nullptr : delay_from_attr_storage.c_str();
     if (timestamp)
     {
         strptime(timestamp, "%FT%T", &time);
@@ -1489,15 +1514,14 @@ message_handler_after_omemo:
     if (is_muc_channel && from_bare &&
         account.peer_supports_feature(from_bare, "urn:xmpp:occupant-id:0"))
     {
-        xmpp_stanza_t *occ_id_elem = xmpp_stanza_get_child_by_name_and_ns(
-            stanza, "occupant-id", "urn:xmpp:occupant-id:0");
-        if (occ_id_elem)
+        const auto occ_id_view = inbound.child("occupant-id", "urn:xmpp:occupant-id:0");
+        if (occ_id_view.valid())
         {
-            const char *occ_id = xmpp_stanza_get_attribute(occ_id_elem, "id");
-            if (occ_id && *occ_id)
+            const std::string occ_id = occ_id_view.attr_string("id");
+            if (!occ_id.empty())
             {
                 weechat_string_dyn_concat(dyn_tags, ",occupant_id_", -1);
-                weechat_string_dyn_concat(dyn_tags, occ_id, -1);
+                weechat_string_dyn_concat(dyn_tags, occ_id.c_str(), -1);
             }
         }
     }
@@ -1534,10 +1558,8 @@ message_handler_after_omemo:
     // as <no-store> or <no-permanent-store>, add the WeeChat no_log tag so
     // it is not written to the buffer log file.
     {
-        bool no_store = xmpp_stanza_get_child_by_name_and_ns(
-                            stanza, "no-store", "urn:xmpp:hints") != nullptr
-                     || xmpp_stanza_get_child_by_name_and_ns(
-                            stanza, "no-permanent-store", "urn:xmpp:hints") != nullptr;
+        bool no_store = inbound.child("no-store", "urn:xmpp:hints").valid()
+                     || inbound.child("no-permanent-store", "urn:xmpp:hints").valid();
         if (no_store)
             weechat_string_dyn_concat(dyn_tags, ",no_log", -1);
     }
@@ -1590,19 +1612,17 @@ message_handler_after_omemo:
         // XEP-0372: References — check for explicit @mention targeting local JID
         // A <reference type="mention" uri="xmpp:user@server"> forces highlight.
         bool xep0372_mentioned = false;
-        for (xmpp_stanza_t *ref = xmpp_stanza_get_children(stanza);
-             ref && !xep0372_mentioned; ref = xmpp_stanza_get_next(ref))
+        for (const auto &ref : inbound)
         {
-            const char *ref_ns = xmpp_stanza_get_ns(ref);
-            const char *ref_name = xmpp_stanza_get_name(ref);
-            if (!ref_ns || !ref_name) continue;
-            if (std::string_view(ref_name) != "reference"
-                || std::string_view(ref_ns) != "urn:xmpp:reference:0")
+            if (xep0372_mentioned) break;
+            auto ref_ns = ref.xmlns();
+            if (!ref_ns || ref.name() != "reference"
+                || *ref_ns != "urn:xmpp:reference:0")
                 continue;
-            const char *ref_type = xmpp_stanza_get_attribute(ref, "type");
-            if (!ref_type || std::string_view(ref_type) != "mention") continue;
-            const char *ref_uri = xmpp_stanza_get_attribute(ref, "uri");
-            if (!ref_uri) continue;
+            const std::string ref_type = ref.attr_string("type");
+            if (ref_type != "mention") continue;
+            const std::string ref_uri = ref.attr_string("uri");
+            if (ref_uri.empty()) continue;
             // URI is "xmpp:user@server" or "xmpp:user@server/resource"
             std::string_view ref_uri_sv(ref_uri);
             auto colon_pos = ref_uri_sv.find(':');
@@ -1757,27 +1777,23 @@ message_handler_after_omemo:
     std::optional<pending_icat_preview> pending_icat;
 
     // XEP-0066: Out of Band Data - extract URL from <x xmlns='jabber:x:oob'>
-    xmpp_stanza_t *oob_x = xmpp_stanza_get_child_by_name_and_ns(stanza, "x", "jabber:x:oob");
+    const auto oob_view = inbound.child("x", "jabber:x:oob");
     std::string oob_suffix;
-    if (oob_x)
+    if (oob_view.valid())
     {
-        xmpp_stanza_t *url_elem = xmpp_stanza_get_child_by_name(oob_x, "url");
-        if (url_elem)
+        const std::string url_text = oob_view.child("url").text();
+        if (!url_text.empty())
         {
-            const std::string url_text = stanza_element_text(url_elem);
-            if (!url_text.empty())
+            // Candidate for weechat-icat (no MIME in OOB — check extension)
+            std::string_view url_sv(url_text);
+            if (url_sv.ends_with(".jpg") || url_sv.ends_with(".jpeg")
+                || url_sv.ends_with(".png") || url_sv.ends_with(".gif")
+                || url_sv.ends_with(".webp"))
             {
-                // Candidate for weechat-icat (no MIME in OOB — check extension)
-                std::string_view url_sv(url_text);
-                if (url_sv.ends_with(".jpg") || url_sv.ends_with(".jpeg")
-                    || url_sv.ends_with(".png") || url_sv.ends_with(".gif")
-                    || url_sv.ends_with(".webp"))
-                {
-                    incoming_image_url = url_text;
-                }
+                incoming_image_url = url_text;
+            }
 
-                const std::string desc_text = stanza_element_text(
-                    xmpp_stanza_get_child_by_name(oob_x, "desc"));
+            const std::string desc_text = oob_view.child("desc").text();
 
                 // Format: [URL: url] or [URL: description (url)]
                 if (!desc_text.empty())
@@ -1794,8 +1810,6 @@ message_handler_after_omemo:
                                             url_text,
                                             weechat_color("resetcolor"));
                 }
-                
-            }
         }
     }
 
@@ -1939,57 +1953,47 @@ message_handler_after_omemo:
     // Live messages populate the LMDB og_previews cache; MAM replays look up the cache.
     std::vector<account::og_preview> og_previews_to_show;
 
-    xmpp_stanza_t *rdf_desc = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "Description", "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
-    if (rdf_desc)
+    bool has_rdf_description = false;
+    for (const auto &desc : inbound)
     {
-        // Multiple <rdf:Description> children may appear (one per URL); collect all previews
-        for (xmpp_stanza_t *desc = rdf_desc; desc;
-             desc = xmpp_stanza_get_next(desc))
+        auto desc_ns = desc.xmlns();
+        if (desc.name() != "Description" || !desc_ns
+            || *desc_ns != "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+            continue;
+
+        has_rdf_description = true;
+        account::og_preview p;
+        for (const auto &prop : desc)
         {
-            const char *desc_name = xmpp_stanza_get_name(desc);
-            const char *desc_ns   = xmpp_stanza_get_ns(desc);
-            if (!desc_name || !desc_ns) continue;
-            if (std::string_view(desc_name) != "Description"
-                || std::string_view(desc_ns) != "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
-                continue;
+            auto prop_ns = prop.xmlns();
+            if (!prop_ns || *prop_ns != "https://ogp.me/ns#") continue;
 
-            account::og_preview p;
-            for (xmpp_stanza_t *prop = xmpp_stanza_get_children(desc);
-                 prop; prop = xmpp_stanza_get_next(prop))
+            const std::string val = prop.text();
+            if (val.empty()) continue;
+
+            if (prop.name() == "title" && p.title.empty())
+                p.title = val;
+            else if (prop.name() == "description" && p.description.empty())
+                p.description = val;
+            else if (prop.name() == "url" && p.url.empty())
+                p.url = val;
+            else if (prop.name() == "image" && p.image.empty())
             {
-                const char *prop_name = xmpp_stanza_get_name(prop);
-                const char *prop_ns   = xmpp_stanza_get_ns(prop);
-                if (!prop_name || !prop_ns) continue;
-                if (std::string_view(prop_ns) != "https://ogp.me/ns#") continue;
-
-                const std::string val = stanza_element_text(prop);
-                if (val.empty()) continue;
-
-                if (std::string_view(prop_name) == "title" && p.title.empty())
-                    p.title = val;
-                else if (std::string_view(prop_name) == "description" && p.description.empty())
-                    p.description = val;
-                else if (std::string_view(prop_name) == "url" && p.url.empty())
-                    p.url = val;
-                else if (std::string_view(prop_name) == "image" && p.image.empty())
-                {
-                    // Only store HTTP(S) image URLs; skip cid:, ni:, data: URIs
-                    if (std::string_view(val).starts_with("http"))
-                        p.image = val;
-                }
-            }
-
-            if (!p.title.empty() || !p.description.empty() || !p.url.empty())
-            {
-                // Persist to LMDB cache so MAM replay can redisplay without network fetch
-                if (!p.url.empty())
-                    account.og_cache_store(p.url, p);
-                og_previews_to_show.push_back(std::move(p));
+                // Only store HTTP(S) image URLs; skip cid:, ni:, data: URIs
+                if (std::string_view(val).starts_with("http"))
+                    p.image = val;
             }
         }
+
+        if (!p.title.empty() || !p.description.empty() || !p.url.empty())
+        {
+            // Persist to LMDB cache so MAM replay can redisplay without network fetch
+            if (!p.url.empty())
+                account.og_cache_store(p.url, p);
+            og_previews_to_show.push_back(std::move(p));
+        }
     }
-    else if (is_mam_replay && text)
+    if (!has_rdf_description && is_mam_replay && text)
     {
         // MAM replay: no <rdf:Description> in stanza — look up any URLs in the body from cache.
         // Simple scanner: find "http://" or "https://" and scan to first whitespace or end.
@@ -2528,10 +2532,9 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
 {
     if (!x_form || !buf) return;
 
-    const std::string title = stanza_element_text(
-        xmpp_stanza_get_child_by_name(x_form, "title"));
-    const std::string instr = stanza_element_text(
-        xmpp_stanza_get_child_by_name(x_form, "instructions"));
+    const auto form_view = ::xmpp::StanzaView(x_form);
+    const std::string title = form_view.child("title").text();
+    const std::string instr = form_view.child("instructions").text();
 
     auto form_ui = weechat::UiPort::for_buffer(buf);
     form_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
@@ -2553,14 +2556,15 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
     int field_index = 0;
 
     // Print each field
-    for (xmpp_stanza_t *field = xmpp_stanza_get_children(x_form);
-         field; field = xmpp_stanza_get_next(field))
+    for (const auto &field : form_view)
     {
-        const char *fname = xmpp_stanza_get_name(field);
-        if (!fname || std::string_view(fname) != "field") continue;
-        const char *var   = xmpp_stanza_get_attribute(field, "var");
-        const char *label = xmpp_stanza_get_attribute(field, "label");
-        const char *ftype = xmpp_stanza_get_attribute(field, "type");
+        if (field.name() != "field") continue;
+        const std::string var_s   = field.attr_string("var");
+        const std::string label_s = field.attr_string("label");
+        const std::string ftype_s = field.attr_string("type");
+        const char *var   = var_s.empty() ? nullptr : var_s.c_str();
+        const char *label = label_s.empty() ? nullptr : label_s.c_str();
+        const char *ftype = ftype_s.empty() ? nullptr : ftype_s.c_str();
 
         // Skip hidden fields — not user-visible
         if (ftype && std::string_view(ftype) == "hidden") continue;
@@ -2569,16 +2573,14 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
 
         // Collect all <value> children (text-multi and list-multi can have several)
         std::vector<std::string> values;
-        for (xmpp_stanza_t *v = xmpp_stanza_get_children(field);
-             v; v = xmpp_stanza_get_next(v))
+        for (const auto &v : field)
         {
-            const char *vname = xmpp_stanza_get_name(v);
-            if (!vname || std::string_view(vname) != "value") continue;
-            values.push_back(stanza_element_text(v));
+            if (v.name() != "value") continue;
+            values.push_back(v.text());
         }
 
         // Check if field is required
-        bool required = (xmpp_stanza_get_child_by_name(field, "required") != nullptr);
+        bool required = field.child("required").valid();
 
         // Determine display value string
         bool is_password = ftype && std::string_view(ftype) == "text-private";
@@ -2646,15 +2648,13 @@ void render_data_form(struct t_gui_buffer *buf, xmpp_stanza_t *x_form,
         std::string options_str;
         if (is_list)
         {
-            for (xmpp_stanza_t *opt = xmpp_stanza_get_children(field);
-                 opt; opt = xmpp_stanza_get_next(opt))
+            for (const auto &opt : field)
             {
-                const char *oname = xmpp_stanza_get_name(opt);
-                if (!oname || std::string_view(oname) != "option") continue;
+                if (opt.name() != "option") continue;
 
-                const std::string oval = stanza_element_text(
-                    xmpp_stanza_get_child_by_name(opt, "value"));
-                const char *olabel = xmpp_stanza_get_attribute(opt, "label");
+                const std::string oval = opt.child("value").text();
+                const std::string olabel_s = opt.attr_string("label");
+                const char *olabel = olabel_s.empty() ? nullptr : olabel_s.c_str();
 
                 if (!options_str.empty()) options_str += "  ";
 

@@ -1,12 +1,14 @@
 bool weechat::connection::handle_bob_iq_event(xmpp_stanza_t *stanza,
                                                 std::string_view own_jid_str)
 {
-    const char *id = xmpp_stanza_get_id(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+
     if (!id || !type)
         return false;
-
-    const ::xmpp::StanzaView view(stanza);
 
     if (weechat_strcasecmp(type, "get") == 0 && ::xmpp::is_bob_iq_get(view))
     {
@@ -14,7 +16,6 @@ bool weechat::connection::handle_bob_iq_event(xmpp_stanza_t *stanza,
         const ::xmpp::BobHostedPayload *hosted = nullptr;
         if (auto entry = ::xmpp::bob_host_lookup(account, cid))
             hosted = &*entry;
-
         if (auto reply = ::xmpp::handle_bob_iq_get(view, own_jid_str, hosted))
         {
             account.connection.send(reply->build(account.context).get());
@@ -28,7 +29,6 @@ bool weechat::connection::handle_bob_iq_event(xmpp_stanza_t *stanza,
     {
         if (!account.bob_fetch_queries.contains(id))
             return false;
-
         const auto ctx = account.bob_fetch_queries[id];
         account.bob_fetch_queries.erase(id);
         account.bob_inflight_cids.erase(ctx.cid);
@@ -39,25 +39,20 @@ bool weechat::connection::handle_bob_iq_event(xmpp_stanza_t *stanza,
 
     if (weechat_strcasecmp(type, "result") != 0)
         return false;
-
     if (!account.bob_fetch_queries.contains(id))
         return false;
 
-    xmpp_stanza_t *data_elem = xmpp_stanza_get_child_by_name_and_ns(
-        stanza, "data", ::xmpp::k_bob_ns.data());
-    if (!data_elem)
+    const ::xmpp::StanzaView data_elem = view.child("data", ::xmpp::k_bob_ns);
+    if (!data_elem.valid())
         return false;
-
-    const std::string b64_data = stanza_element_text(data_elem);
+    const std::string b64_data = data_elem.text();
     if (b64_data.empty())
         return false;
-
-    const std::string mime = get_attribute(data_elem, "type").value_or("application/octet-stream");
+    const std::string mime = data_elem.attr_string("type");
     const auto bytes = ::xmpp::bob_decode_base64(b64_data);
     if (bytes.empty())
         return false;
-
-    ::xmpp::bob_complete_fetch_iq(account, id, mime, bytes);
+    ::xmpp::bob_complete_fetch_iq(account, id, mime.empty() ? "application/octet-stream" : mime, bytes);
     XDEBUG("BoB fetch completed (iq {})", id);
     return true;
 }

@@ -1,8 +1,12 @@
 bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::string_view own_jid_str)
 {
-    const char *from = xmpp_stanza_get_from(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
     const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
 
     if (::xmpp::is_ping_get_iq(view))
     {
@@ -15,8 +19,7 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
         || (weechat_strcasecmp(type, "result") != 0
             && weechat_strcasecmp(type, "error") != 0))
         return false;
-
-    const char *stanza_id = xmpp_stanza_get_id(stanza);
+    const char *stanza_id = id;
     auto ping_it = stanza_id ? account.user_ping_queries.find(stanza_id)
                              : account.user_ping_queries.end();
     if (ping_it == account.user_ping_queries.end())
@@ -54,7 +57,7 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
         return true;
     }
 
-    xmpp_stanza_t *err_elem = xmpp_stanza_get_child_by_name(stanza, "error");
+    const ::xmpp::StanzaView err_elem = view.child("error");
     const ::xmpp::StanzaView err_view(err_elem);
 
     if (is_muc_selfping)
@@ -67,8 +70,9 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
             break;
         case ::xmpp::MucSelfPingErrorOutcome::ambiguous:
         {
-            const char *etype = err_elem
-                ? xmpp_stanza_get_attribute(err_elem, "type") : "unknown";
+            const std::string etype_s = err_elem.valid()
+                ? err_elem.attr_string("type") : std::string{"unknown"};
+            const char *etype = etype_s.c_str();
             ui->printf_network(fmt::format(
                 "MUC self-ping to {}: network error ({}), skipping rejoin",
                 room_jid, etype));
@@ -92,8 +96,9 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
         return true;
     }
 
-    const char *error_type = err_elem
-        ? xmpp_stanza_get_attribute(err_elem, "type") : "unknown";
+    const std::string error_type_s = err_elem.valid()
+        ? err_elem.attr_string("type") : std::string{"unknown"};
+    const char *error_type = error_type_s.c_str();
     ui->printf_error(fmt::format("Ping failed to {}: {}", from_jid, error_type));
     return true;
 }

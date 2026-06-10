@@ -230,6 +230,7 @@ SRCS=src/plugin.cpp \
 	 src/xmpp/stanza_view.cpp \
 	 src/xmpp/iq_handlers.cpp \
 	 src/xmpp/iq_error.cpp \
+	 src/xmpp/data_form.cpp \
 	 src/xmpp/iq_ping.cpp \
 	 src/xmpp/iq_pubsub_feed.cpp \
 	 src/xmpp/iq_omemo_pubsub.cpp \

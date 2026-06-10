@@ -266,22 +266,15 @@ static int ibr_set_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     auto *st = reinterpret_cast<ibr_state *>(userdata);
     if (!st || st->done) return 0;
 
-    const char *type = xmpp_stanza_get_type(stanza);
-    if (type && std::string_view(type) == "result") {
+    const ::xmpp::StanzaView view(stanza);
+    if (view.type() == "result") {
         weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: registration successful for {} — adding account")), WEECHAT_XMPP_PLUGIN_NAME, st->jid.c_str()));
         command__add_account(st->account_name.c_str(), st->jid.c_str(), st->password.c_str());
     } else {
-        // Error
-        const char *condition = "unknown";
-        xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
-        if (err) {
-            xmpp_stanza_t *cond = xmpp_stanza_get_child_by_name(err, "conflict");
-            if (!cond) cond = xmpp_stanza_get_child_by_name(err, "not-acceptable");
-            if (!cond) cond = xmpp_stanza_get_child_by_name(err, "service-unavailable");
-            if (!cond) cond = xmpp_stanza_get_child_by_name(err, "forbidden");
-            if (!cond) cond = xmpp_stanza_get_child_by_name(err, "bad-request");
-            if (cond)  condition = xmpp_stanza_get_name(cond);
-        }
+        static constexpr std::array<std::string_view, 5> k_set_error_conditions = {
+            "conflict", "not-acceptable", "service-unavailable", "forbidden", "bad-request"
+        };
+        const std::string condition = ::xmpp::iq_error_condition(view, k_set_error_conditions);
         weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: registration failed: {}")), WEECHAT_XMPP_PLUGIN_NAME, condition));
     }
 
@@ -296,24 +289,21 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     auto *st = reinterpret_cast<ibr_state *>(userdata);
     if (!st || st->done) return 0;
 
-    const char *type = xmpp_stanza_get_type(stanza);
-    if (!type || std::string_view(type) != "result") {
+    const ::xmpp::StanzaView view(stanza);
+    if (view.type() != "result") {
         // Server returned an error to our field-list query
-        const char *condition = "unknown";
-        xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
-        if (err) {
-            xmpp_stanza_t *cond = xmpp_stanza_get_child_by_name(err, "service-unavailable");
-            if (!cond) cond = xmpp_stanza_get_child_by_name(err, "forbidden");
-            if (cond) condition = xmpp_stanza_get_name(cond);
-        }
+        static constexpr std::array<std::string_view, 2> k_get_error_conditions = {
+            "service-unavailable", "forbidden"
+        };
+        const std::string condition = ::xmpp::iq_error_condition(view, k_get_error_conditions);
         weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: server rejected IBR query: {}")), WEECHAT_XMPP_PLUGIN_NAME, condition));
         xmpp_disconnect(conn);
         st->done = true;
         return 1;
     }
 
-    xmpp_stanza_t *query = xmpp_stanza_get_child_by_ns(stanza, "jabber:iq:register");
-    if (!query) {
+    const ::xmpp::StanzaView query = view.child("query", "jabber:iq:register");
+    if (!query.valid()) {
         weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR: server response missing <query xmlns='jabber:iq:register'>")), WEECHAT_XMPP_PLUGIN_NAME));
         xmpp_disconnect(conn);
         st->done = true;
@@ -321,7 +311,7 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     }
 
     // Already registered?
-    if (xmpp_stanza_get_child_by_name(query, "registered")) {
+    if (query.child("registered").valid()) {
         weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR: already registered on {}")), WEECHAT_XMPP_PLUGIN_NAME, st->server.c_str()));
         xmpp_disconnect(conn);
         st->done = true;
@@ -332,38 +322,29 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     // A terminal client cannot fill in arbitrary form fields interactively,
     // so we detect this, print the form instructions and field list, and abort
     // with a helpful message directing the user to the server's web registration.
-    xmpp_stanza_t *xdata = xmpp_stanza_get_child_by_ns(query, "jabber:x:data");
-    if (xdata) {
+    const ::xmpp::StanzaView xdata = query.child("x", "jabber:x:data");
+    if (xdata.valid()) {
         weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR: server requires a data form for registration"
                          " — web registration required")), WEECHAT_XMPP_PLUGIN_NAME));
 
         // Print the form title/instructions if present
-        xmpp_stanza_t *title_el = xmpp_stanza_get_child_by_name(xdata, "title");
-        if (title_el) {
-            const std::string title = stanza_element_text(title_el);
+        if (const ::xmpp::StanzaView title_el = xdata.child("title"); title_el.valid()) {
+            const std::string title = title_el.text();
             if (!title.empty())
         weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form title: {}")), WEECHAT_XMPP_PLUGIN_NAME, title.c_str()));
         }
-        xmpp_stanza_t *instr_el = xmpp_stanza_get_child_by_name(xdata, "instructions");
-        if (instr_el) {
-            const std::string instructions = stanza_element_text(instr_el);
+        if (const ::xmpp::StanzaView instr_el = xdata.child("instructions"); instr_el.valid()) {
+            const std::string instructions = instr_el.text();
             if (!instructions.empty())
         weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form instructions: {}")), WEECHAT_XMPP_PLUGIN_NAME, instructions.c_str()));
         }
 
         // Print each field's var and label so the user can identify what's needed
-        for (xmpp_stanza_t *field = xmpp_stanza_get_children(xdata);
-             field; field = xmpp_stanza_get_next(field)) {
-            if (!xmpp_stanza_get_name(field) ||
-                std::string_view(xmpp_stanza_get_name(field)) != "field") continue;
-            const char *var   = xmpp_stanza_get_attribute(field, "var");
-            const char *label = xmpp_stanza_get_attribute(field, "label");
-            if (var) {
-                if (label)
-        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form field: {} ({})")), WEECHAT_XMPP_PLUGIN_NAME, var, label));
-                else
-        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form field: {}")), WEECHAT_XMPP_PLUGIN_NAME, var));
-            }
+        for (const auto& field : ::xmpp::parse_data_form_fields(xdata)) {
+            if (!field.label.empty())
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form field: {} ({})")), WEECHAT_XMPP_PLUGIN_NAME, field.var, field.label));
+            else
+        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form field: {}")), WEECHAT_XMPP_PLUGIN_NAME, field.var));
         }
 
         weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR: use the server's web interface to register an account")), WEECHAT_XMPP_PLUGIN_NAME));
@@ -374,18 +355,16 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
 
     // Warn about required fields beyond username+password that we cannot fill
     {
-        static const char *const known_fields[] = { "username", "password", nullptr };
-        for (xmpp_stanza_t *child = xmpp_stanza_get_children(query);
-             child; child = xmpp_stanza_get_next(child)) {
-            const char *cname = xmpp_stanza_get_name(child);
-            if (!cname) continue;
+        static constexpr std::array<std::string_view, 2> known_fields = { "username", "password" };
+        for (const ::xmpp::StanzaView child : query) {
+            const std::string_view cname = child.name();
+            if (cname.empty()) continue;
             bool is_known = false;
-            for (int i = 0; known_fields[i]; ++i) {
-                if (std::string_view(cname) == known_fields[i]) { is_known = true; break; }
+            for (const std::string_view known : known_fields) {
+                if (cname == known) { is_known = true; break; }
             }
             // Skip housekeeping elements
-            if (std::string_view sv{cname};
-                sv == "registered" || sv == "instructions" || sv == "x") continue;
+            if (cname == "registered" || cname == "instructions" || cname == "x") continue;
             if (!is_known) {
         weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR: server requires unknown field <{}/>"
                                  " — registration may fail")), WEECHAT_XMPP_PLUGIN_NAME, cname));
@@ -394,11 +373,11 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     }
 
     // OOB redirect?
-    xmpp_stanza_t *oob = xmpp_stanza_get_child_by_ns(stanza, "jabber:x:oob");
-    if (!oob) oob = xmpp_stanza_get_child_by_ns(query, "jabber:x:oob");
-    if (oob) {
-        xmpp_stanza_t *url_el = xmpp_stanza_get_child_by_name(oob, "url");
-        const std::string oob_url = stanza_element_text(url_el);
+    ::xmpp::StanzaView oob = view.child("x", "jabber:x:oob");
+    if (!oob.valid())
+        oob = query.child("x", "jabber:x:oob");
+    if (oob.valid()) {
+        const std::string oob_url = oob.child("url").text();
         weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR: server requires out-of-band registration: {}")), WEECHAT_XMPP_PLUGIN_NAME, oob_url.empty() ? "(no URL provided)" : oob_url.c_str()));
         xmpp_disconnect(conn);
         st->done = true;
@@ -758,26 +737,19 @@ static int ibr_unregister_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *
         reinterpret_cast<ibr_unregister_context *>(userdata));
     if (!ctx) return 0;
 
-    const char *type = xmpp_stanza_get_type(stanza);
-    if (type && std::string_view(type) == "result") {
+    const ::xmpp::StanzaView view(stanza);
+    if (view.type() == "result") {
         weechat::UiPort::for_buffer(ctx->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: account cancelled on server — deleting local account")), WEECHAT_XMPP_PLUGIN_NAME));
         std::string name = ctx->account->name;
         ctx->account->disconnect(0);
         weechat::accounts.erase(name);
         weechat::config::write();
     } else {
-        const char *condition = "unknown";
-        xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
-        if (err) {
-            static const char *const error_names[] = {
-                "forbidden", "not-allowed", "service-unavailable",
-                "feature-not-implemented", "bad-request", nullptr
-            };
-            for (int i = 0; error_names[i]; ++i) {
-                xmpp_stanza_t *c = xmpp_stanza_get_child_by_name(err, error_names[i]);
-                if (c) { condition = xmpp_stanza_get_name(c); break; }
-            }
-        }
+        static constexpr std::array<std::string_view, 5> k_unregister_error_conditions = {
+            "forbidden", "not-allowed", "service-unavailable",
+            "feature-not-implemented", "bad-request"
+        };
+        const std::string condition = ::xmpp::iq_error_condition(view, k_unregister_error_conditions);
         weechat::UiPort::for_buffer(ctx->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR unregister failed: {}")), WEECHAT_XMPP_PLUGIN_NAME, condition));
     }
 
@@ -853,24 +825,17 @@ static int ibr_passwd_result_handler(xmpp_conn_t * /*conn*/, xmpp_stanza_t *stan
         reinterpret_cast<ibr_passwd_context *>(userdata));
     if (!ctx) return 0;
 
-    const char *type = xmpp_stanza_get_type(stanza);
-    if (type && std::string_view(type) == "result") {
+    const ::xmpp::StanzaView view(stanza);
+    if (view.type() == "result") {
         ctx->account->password(ctx->new_password);
         weechat::config::write();
         weechat::UiPort::for_buffer(ctx->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: password changed successfully")), WEECHAT_XMPP_PLUGIN_NAME));
     } else {
-        const char *condition = "unknown";
-        xmpp_stanza_t *err = xmpp_stanza_get_child_by_name(stanza, "error");
-        if (err) {
-            static const char *const error_names[] = {
-                "not-authorized", "forbidden", "not-allowed",
-                "bad-request", "not-acceptable", nullptr
-            };
-            for (int i = 0; error_names[i]; ++i) {
-                xmpp_stanza_t *c = xmpp_stanza_get_child_by_name(err, error_names[i]);
-                if (c) { condition = xmpp_stanza_get_name(c); break; }
-            }
-        }
+        static constexpr std::array<std::string_view, 5> k_passwd_error_conditions = {
+            "not-authorized", "forbidden", "not-allowed",
+            "bad-request", "not-acceptable"
+        };
+        const std::string condition = ::xmpp::iq_error_condition(view, k_passwd_error_conditions);
         weechat::UiPort::for_buffer(ctx->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR password change failed: {}")), WEECHAT_XMPP_PLUGIN_NAME, condition));
     }
 

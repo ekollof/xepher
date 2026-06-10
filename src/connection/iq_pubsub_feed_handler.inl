@@ -1,7 +1,15 @@
 bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
 {
-    const char *id = xmpp_stanza_get_id(stanza);
-    const char *type = xmpp_stanza_get_attribute(stanza, "type");
+    const ::xmpp::StanzaView view(stanza);
+    const std::string iq_id_str = view.attr_string("id");
+    const std::string iq_from_str = view.attr_string("from");
+    const std::string iq_to_str = view.attr_string("to");
+    const std::string iq_type_str = view.attr_string("type");
+    const char *id = iq_id_str.empty() ? nullptr : iq_id_str.c_str();
+    const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
+    const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
+    const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
+    (void)from; (void)to;
     bool handled = false;
 
     auto trigger_publish_refetch = [&](const char *iq_id) {
@@ -41,9 +49,8 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
         // XEP-0060: PubSub feed item-fetch result
         // Arrives when we sent an IQ get for items after a <retract> event.
         {
-            xmpp_stanza_t *pubsub_feed = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "pubsub", "http://jabber.org/protocol/pubsub");
-            if (pubsub_feed && id && type && weechat_strcasecmp(type, "result") == 0)
+            const ::xmpp::StanzaView pubsub_feed = view.child("pubsub", "http://jabber.org/protocol/pubsub");
+            if (pubsub_feed.valid() && id && type && weechat_strcasecmp(type, "result") == 0)
             {
                 // Clean up successful publish tracking and trigger a re-fetch so the
                 // comments/blog buffer updates immediately (server echoed <publish> back).
@@ -80,19 +87,18 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                         bool stale_page = false;
                         int  rsm_total_count = -1;
                         {
-                            xmpp_stanza_t *rsm_set = xmpp_stanza_get_child_by_name_and_ns(
-                                pubsub_feed, "set", "http://jabber.org/protocol/rsm");
-                            if (rsm_set && max_items_req > 0)
+                            const ::xmpp::StanzaView rsm_set = pubsub_feed.child("set", "http://jabber.org/protocol/rsm");
+                            if (rsm_set.valid() && max_items_req > 0)
                             {
-                                xmpp_stanza_t *count_el  = xmpp_stanza_get_child_by_name(rsm_set, "count");
-                                const std::string count_text = stanza_element_text(count_el);
+                                const ::xmpp::StanzaView count_el = rsm_set.child("count");
+                                const std::string count_text = count_el.text();
                                 if (auto n = parse_int64(count_text); n)
                                     rsm_total_count = static_cast<int>(*n);
                                 else
                                     rsm_total_count = -1;
     
-                                xmpp_stanza_t *first_el   = xmpp_stanza_get_child_by_name(rsm_set, "first");
-                                const std::string first_text = stanza_element_text(first_el);
+                                const ::xmpp::StanzaView first_el = rsm_set.child("first");
+                                const std::string first_text = first_el.text();
     
                                 // Detect stale page: the server returned the oldest-first page
                                 // (index=0) even though there are more items than max_items.
@@ -130,9 +136,8 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                                     // (conservative: only trigger if count is at least 10x max_items)
                                     if (!parsed)
                                     {
-                                        const char *index_attr = first_el
-                                            ? xmpp_stanza_get_attribute(first_el, "index")
-                                            : nullptr;
+                                        const std::string index_storage = first_el.valid() ? first_el.attr_string("index") : std::string{};
+                                        const char *index_attr = index_storage.empty() ? nullptr : index_storage.c_str();
                                         const int first_index = index_attr
                                             ? static_cast<int>(parse_int64(index_attr).value_or(-1))
                                             : -1;
@@ -174,8 +179,8 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                             }
                         }
     
-                        xmpp_stanza_t *items = xmpp_stanza_get_child_by_name(pubsub_feed, "items");
-                        if (items && !stale_page)
+                        const ::xmpp::StanzaView items = pubsub_feed.child("items");
+                        if (items.valid() && !stale_page)
                         {
                             // Collect items and sort oldest-first by Atom <published>
                             // (falling back to <updated>). ISO 8601 strings are
@@ -183,36 +188,32 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                             // strptime needed. This is server-order-independent:
                             // it doesn't matter whether the server returns
                             // oldest-first or newest-first.
-                            auto item_pubdate = [](xmpp_stanza_t *item) -> std::string {
-                                xmpp_stanza_t *entry =
-                                    xmpp_stanza_get_child_by_name_and_ns(
-                                        item, "entry", "http://www.w3.org/2005/Atom");
-                                if (!entry)
-                                    entry = xmpp_stanza_get_child_by_name(item, "entry");
-                                if (!entry) return {};
+                            auto item_pubdate = [](const ::xmpp::StanzaView &item) -> std::string {
+                                ::xmpp::StanzaView entry = item.child("entry", "http://www.w3.org/2005/Atom");
+                                if (!entry.valid()) entry = item.child("entry");
+                                if (!entry.valid()) return {};
                                 for (const char *tag : {"published", "updated"}) {
-                                    xmpp_stanza_t *el =
-                                        xmpp_stanza_get_child_by_name(entry, tag);
-                                    if (!el) continue;
-                                    const std::string s = stanza_element_text(el);
+                                    const ::xmpp::StanzaView el = entry.child(tag);
+                                    if (!el.valid()) continue;
+                                    const std::string s = el.text();
                                     if (!s.empty()) return s;
                                 }
                                 return {};
                             };
                             std::vector<xmpp_stanza_t *> item_vec;
-                            for (xmpp_stanza_t *item = xmpp_stanza_get_children(items);
-                                 item; item = xmpp_stanza_get_next(item))
-                                item_vec.push_back(item);
+                            for (const ::xmpp::StanzaView item : ::xmpp::StanzaView(items))
+                                item_vec.push_back(item.raw());
                             std::ranges::stable_sort(item_vec,
                                 [&item_pubdate](xmpp_stanza_t *a, xmpp_stanza_t *b) {
-                                    return item_pubdate(a) < item_pubdate(b);
+                                    return item_pubdate(::xmpp::StanzaView{a}) < item_pubdate(::xmpp::StanzaView{b});
                                 });
-                            for (xmpp_stanza_t *item : item_vec)
+                            for (xmpp_stanza_t *item_raw : item_vec)
                             {
-                                if (!item || weechat_strcasecmp(xmpp_stanza_get_name(item), "item") != 0)
+                                const ::xmpp::StanzaView item{item_raw};
+                                if (!item.valid() || weechat_strcasecmp(item.name().data(), "item") != 0)
                                     continue;
-    
-                                const char *item_id_raw = xmpp_stanza_get_id(item);
+                                const std::string item_id_storage = item.attr_string("id");
+                                const char *item_id_raw = item_id_storage.empty() ? nullptr : item_id_storage.c_str();
     
                                 // Skip non-Atom items stored in the node (e.g. avatar metadata
                                 // published by Prosody into the blog node).  These are not
@@ -222,19 +223,13 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                                     && ::xmpp::is_skipped_non_atom_feed_item_id(item_id_raw))
                                     continue;
     
-                                xmpp_stanza_t *entry = xmpp_stanza_get_child_by_name_and_ns(
-                                    item, "entry", "http://www.w3.org/2005/Atom");
-                                if (!entry)
-                                    entry = xmpp_stanza_get_child_by_name(item, "entry");
-    
-                                xmpp_stanza_t *feed = xmpp_stanza_get_child_by_name_and_ns(
-                                    item, "feed", "http://www.w3.org/2005/Atom");
-                                if (!feed)
-                                    feed = xmpp_stanza_get_child_by_name(item, "feed");
-    
-                                if (!entry && feed)
+                                ::xmpp::StanzaView entry = item.child("entry", "http://www.w3.org/2005/Atom");
+                                if (!entry.valid()) entry = item.child("entry");
+                                ::xmpp::StanzaView feed = item.child("feed", "http://www.w3.org/2005/Atom");
+                                if (!feed.valid()) feed = item.child("feed");
+                                if (!entry.valid() && feed.valid())
                                 {
-                                    atom_feed af = parse_atom_feed(account.context, feed);
+                                    atom_feed af = parse_atom_feed(account.context, feed.raw());
                                     if (!af.empty())
                                     {
                                         if (!af.title.empty())
@@ -262,8 +257,8 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                                     continue;
                                 }
     
-                                const char *publisher = xmpp_stanza_get_attribute(item, "publisher");
-                                atom_entry ae = parse_atom_entry(account.context, entry, publisher);
+                                const std::string publisher = item.attr_string("publisher");
+                                atom_entry ae = parse_atom_entry(account.context, entry.raw(), publisher.empty() ? nullptr : publisher.c_str());
                                 if (item_id_raw && !ae.item_id.empty())
                                     account.feed_atom_id_set(feed_key, item_id_raw, ae.item_id);
                                 if (item_id_raw && !ae.replies_link.empty())
@@ -298,12 +293,11 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                         // rsm_total_count was already populated in the pre-check above.
                         if (!stale_page && max_items_req > 0)
                         {
-                            xmpp_stanza_t *rsm_set2 = xmpp_stanza_get_child_by_name_and_ns(
-                                pubsub_feed, "set", "http://jabber.org/protocol/rsm");
-                            if (rsm_set2)
+                            const ::xmpp::StanzaView rsm_set2 = pubsub_feed.child("set", "http://jabber.org/protocol/rsm");
+                            if (rsm_set2.valid())
                             {
-                                xmpp_stanza_t *first_el2 = xmpp_stanza_get_child_by_name(rsm_set2, "first");
-                                const std::string first_text2 = stanza_element_text(first_el2);
+                                const ::xmpp::StanzaView first_el2 = rsm_set2.child("first");
+                                const std::string first_text2 = first_el2.text();
                                 if (!first_text2.empty())
                                 {
                                     std::string hint = fmt::format(
@@ -331,9 +325,8 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
     
         // XEP-0060: PubSub subscriptions result — /feed <service> (default, no --all)
         {
-            xmpp_stanza_t *pubsub_subs = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "pubsub", "http://jabber.org/protocol/pubsub");
-            if (pubsub_subs && id && type && weechat_strcasecmp(type, "result") == 0)
+            const ::xmpp::StanzaView pubsub_subs = view.child("pubsub", "http://jabber.org/protocol/pubsub");
+            if (pubsub_subs.valid() && id && type && weechat_strcasecmp(type, "result") == 0)
             {
                 if (auto subs_it = account.pubsub_subscriptions_queries.find(id); subs_it != account.pubsub_subscriptions_queries.end())
                 {
@@ -341,23 +334,22 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                     account.pubsub_subscriptions_queries.erase(subs_it);
                     handled = true;
 
-                    xmpp_stanza_t *subscriptions = xmpp_stanza_get_child_by_name(pubsub_subs, "subscriptions");
+                    const ::xmpp::StanzaView subscriptions = pubsub_subs.child("subscriptions");
                     int node_count = 0;
     
-                    if (subscriptions)
+                    if (subscriptions.valid())
                     {
-                        for (xmpp_stanza_t *sub = xmpp_stanza_get_children(subscriptions);
-                             sub; sub = xmpp_stanza_get_next(sub))
+                        for (const ::xmpp::StanzaView sub : ::xmpp::StanzaView(subscriptions))
                         {
-                            const char *sub_name = xmpp_stanza_get_name(sub);
+                            const char *sub_name = sub.name().data();
                             if (!sub_name || weechat_strcasecmp(sub_name, "subscription") != 0)
                                 continue;
     
-                            const char *sub_state = xmpp_stanza_get_attribute(sub, "subscription");
-                            const char *node_attr = xmpp_stanza_get_attribute(sub, "node");
+                            const std::string sub_state = sub.attr_string("subscription");
+                            const std::string node_attr = sub.attr_string("node");
     
-                            if (!node_attr || !sub_state
-                                || weechat_strcasecmp(sub_state, "subscribed") != 0)
+                            if (node_attr.empty() || sub_state.empty()
+                                || weechat_strcasecmp(sub_state.c_str(), "subscribed") != 0)
                                 continue;
     
                             std::string node_name(node_attr);
@@ -415,9 +407,8 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
     
         // XEP-0060: PubSub subscribe/unsubscribe result
         {
-            xmpp_stanza_t *pubsub_res = xmpp_stanza_get_child_by_name_and_ns(
-                stanza, "pubsub", "http://jabber.org/protocol/pubsub");
-            if (pubsub_res && id && type && weechat_strcasecmp(type, "result") == 0)
+            const ::xmpp::StanzaView pubsub_res = view.child("pubsub", "http://jabber.org/protocol/pubsub");
+            if (pubsub_res.valid() && id && type && weechat_strcasecmp(type, "result") == 0)
             {
                 if (auto sub_ok_it = account.pubsub_subscribe_queries.find(id); sub_ok_it != account.pubsub_subscribe_queries.end())
                 {

@@ -17,6 +17,7 @@
 #include "avatar.hh"
 #include "debug.hh"
 #include "xmpp/node.hh"
+#include "xmpp/stanza_view.hh"
 #include "xmpp/stanza.hh"
 #include "connection/internal.hh"
 #include "xmpp/atom.hh"
