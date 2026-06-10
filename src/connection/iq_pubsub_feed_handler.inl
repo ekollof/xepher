@@ -67,7 +67,7 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                     account.pubsub_fetch_ids.erase(fetch_it);
                     handled = true;
 
-                    if (!account.feed_is_open(feed_key))
+                    if (!weechat::xmpp_feeds_enabled() || !account.feed_is_open(feed_key))
                         return handled;
 
                     auto [ch_it, inserted] = account.channels.try_emplace(
@@ -330,6 +330,9 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                     const std::string feed_service = subs_it->second;
                     account.pubsub_subscriptions_queries.erase(subs_it);
                     handled = true;
+
+                    if (!weechat::xmpp_feeds_enabled())
+                        return handled;
 
                     const ::xmpp::StanzaView subscriptions = pubsub_subs.child("subscriptions");
                     int node_count = 0;

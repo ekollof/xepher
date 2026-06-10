@@ -262,11 +262,14 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                             // docs/planning-muc-omemo.md §2.3: For occupants whose real JID we already
                             // know from presence, start fetching their OMEMO devicelist now.
                             // This is done in parallel with the full disco#items for completeness.
-                            for (const auto& [occ_id, member] : channel->members)
+                            if (channel->muc_supports_omemo())
                             {
-                                if (member.real_jid && !member.real_jid->empty())
+                                for (const auto& [occ_id, member] : channel->members)
                                 {
-                                    account.omemo.request_axolotl_devicelist(account, *member.real_jid);
+                                    if (member.real_jid && !member.real_jid->empty())
+                                    {
+                                        account.omemo.request_axolotl_devicelist(account, *member.real_jid);
+                                    }
                                 }
                             }
 
@@ -493,9 +496,10 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     // docs/planning-muc-omemo.md §2.3: Whenever we learn (or re-learn) a
                     // real JID for a MUC occupant via presence, proactively request their
                     // OMEMO devicelist so we can fetch bundles and build sessions early.
-                    if (item.target && channel &&
-                        channel->type == weechat::channel::chat_type::MUC &&
-                        account.omemo)
+                    if (item.target && channel
+                        && channel->type == weechat::channel::chat_type::MUC
+                        && channel->muc_supports_omemo()
+                        && account.omemo)
                     {
                         account.omemo.request_axolotl_devicelist(account, item.target->full);
                     }

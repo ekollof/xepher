@@ -19,36 +19,40 @@ void weechat::connection::handle_pubsub_mam_disco_iq_error(xmpp_stanza_t *stanza
             std::string svc_jid = account.pubsub_mam_disco_queries[id];
             account.pubsub_mam_disco_queries.erase(id);
 
-            if (auto def_it = account.pubsub_mam_deferred_feeds.find(svc_jid); def_it != account.pubsub_mam_deferred_feeds.end())
+            if (weechat::xmpp_feeds_enabled())
             {
-                auto& [_, deferred] = *def_it;
-                const int max_items = 20;
-                for (const auto &feed_key : deferred)
+                if (auto def_it = account.pubsub_mam_deferred_feeds.find(svc_jid);
+                    def_it != account.pubsub_mam_deferred_feeds.end())
                 {
-                    if (!account.feed_is_open(feed_key))
-                        continue;
+                    auto& [_, deferred] = *def_it;
+                    const int max_items = 20;
+                    for (const auto &feed_key : deferred)
+                    {
+                        if (!account.feed_is_open(feed_key))
+                            continue;
 
-                    auto slash = feed_key.find('/');
-                    if (slash == std::string::npos) continue;
-                    std::string node_name = feed_key.substr(slash + 1);
+                        auto slash = feed_key.find('/');
+                        if (slash == std::string::npos) continue;
+                        std::string node_name = feed_key.substr(slash + 1);
 
-                    std::string fuid = stanza::uuid(account.context);
-                    stanza::xep0060::items def_its(node_name);
-                    def_its.max_items(max_items);
-                    stanza::xep0060::pubsub def_ps;
-                    def_ps.items(def_its);
-                    account.pubsub_fetch_ids[fuid] = {svc_jid, node_name, {}, max_items};
-                    account.connection.send(stanza::iq()
-                        .from(account.jid())
-                        .to(svc_jid)
-                        .type("get")
-                        .id(fuid)
-                        .xep0060()
-                        .pubsub(def_ps)
-                        .build(account.context)
-                        .get());
+                        std::string fuid = stanza::uuid(account.context);
+                        stanza::xep0060::items def_its(node_name);
+                        def_its.max_items(max_items);
+                        stanza::xep0060::pubsub def_ps;
+                        def_ps.items(def_its);
+                        account.pubsub_fetch_ids[fuid] = {svc_jid, node_name, {}, max_items};
+                        account.connection.send(stanza::iq()
+                            .from(account.jid())
+                            .to(svc_jid)
+                            .type("get")
+                            .id(fuid)
+                            .xep0060()
+                            .pubsub(def_ps)
+                            .build(account.context)
+                            .get());
+                    }
+                    account.pubsub_mam_deferred_feeds.erase(def_it);
                 }
-                account.pubsub_mam_deferred_feeds.erase(def_it);
             }
         }
 }
@@ -103,11 +107,14 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
             // list from disco#items, request devicelists for any that have a
             // visible real_jid (idempotent — the request path early-returns if
             // already in flight or recently requested).
-            for (const auto& [occ_id, member] : ch.members)
+            if (ch.muc_supports_omemo())
             {
-                if (member.real_jid && !member.real_jid->empty())
+                for (const auto& [occ_id, member] : ch.members)
                 {
-                    account.omemo.request_axolotl_devicelist(account, *member.real_jid);
+                    if (member.real_jid && !member.real_jid->empty())
+                    {
+                        account.omemo.request_axolotl_devicelist(account, *member.real_jid);
+                    }
                 }
             }
 
@@ -306,6 +313,9 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
     {
         std::string feed_service = account.pubsub_disco_queries[iq_id];
         account.pubsub_disco_queries.erase(iq_id);
+
+        if (!weechat::xmpp_feeds_enabled())
+            return false;
 
         int node_count = 0;
         ::xmpp::StanzaView disco_item = items_query.child("item");
@@ -1155,8 +1165,11 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                     account.pubsub_mam_services.insert(svc_jid);
 
                 // Flush deferred feed restores for this service.
-                if (auto def_it = account.pubsub_mam_deferred_feeds.find(svc_jid); def_it != account.pubsub_mam_deferred_feeds.end())
+                if (weechat::xmpp_feeds_enabled())
                 {
+                    if (auto def_it = account.pubsub_mam_deferred_feeds.find(svc_jid);
+                        def_it != account.pubsub_mam_deferred_feeds.end())
+                    {
                     auto& [_, deferred] = *def_it;
                     const int max_items = 20;
                 for (const auto &feed_key : deferred)
@@ -1226,6 +1239,7 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                         }
                     }
                     account.pubsub_mam_deferred_feeds.erase(def_it);
+                    }
                 }
             }
 

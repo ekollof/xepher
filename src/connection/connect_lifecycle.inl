@@ -592,10 +592,13 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
 
         // Primary restore source: LMDB feed-open registry.
         // This is the authoritative list and works across full WeeChat restarts.
-        for (const auto &feed_key : account.feed_open_list())
+        if (weechat::xmpp_feeds_enabled())
         {
-            restore_feed(feed_key);
-            restored_feeds.insert(feed_key);
+            for (const auto &feed_key : account.feed_open_list())
+            {
+                restore_feed(feed_key);
+                restored_feeds.insert(feed_key);
+            }
         }
 
         // Tertiary restore source: LMDB pm_open registry.

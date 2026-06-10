@@ -16,6 +16,7 @@
 #include "channel.hh"
 #include "connection.hh"
 #include "avatar.hh"
+#include "config.hh"
 #include "debug.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza_view.hh"

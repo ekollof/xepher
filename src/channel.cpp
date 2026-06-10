@@ -619,6 +619,8 @@ void weechat::channel::apply_muc_info(const muc_info &incoming)
     // Disco#info refresh is authoritative for mode flags (XEP-0045 §6.4 lists
     // both positive and negative muc_* feature vars). Optional metadata and
     // anonymity are overwritten when the server supplies them.
+    const auto prev_anon = muc_info_.anon;
+
     muc_info_.moderated    = incoming.moderated;
     muc_info_.members_only = incoming.members_only;
     muc_info_.persistent   = incoming.persistent;
@@ -638,6 +640,21 @@ void weechat::channel::apply_muc_info(const muc_info &incoming)
         muc_info_.subject_modifiable = false;
 
     update_modes();
+
+    if (type == chat_type::MUC && prev_anon != muc_info_.anon)
+    {
+        maybe_disable_muc_omemo();
+        if (muc_supports_omemo() && account.omemo)
+        {
+            for (const auto &[_, member] : members)
+            {
+                if (!member.real_jid || member.real_jid->empty())
+                    continue;
+                register_omemo_recipient(*member.real_jid);
+                account.omemo.request_axolotl_devicelist(account, *member.real_jid);
+            }
+        }
+    }
 }
 
 void weechat::channel::update_modes()
@@ -724,7 +741,7 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     // known for a MUC occupant (via presence, future admin affiliation results, etc.),
     // kick off their devicelist fetch so bundles can be requested next. The request
     // path is idempotent.
-    if (real_jid && type == weechat::channel::chat_type::MUC)
+    if (real_jid && type == weechat::channel::chat_type::MUC && muc_supports_omemo())
         register_omemo_recipient(*real_jid);
 
     if (real_jid && type == weechat::channel::chat_type::MUC && account.omemo
@@ -1052,9 +1069,21 @@ void weechat::channel::set_muc_anonymity(muc_info::anonymity anon)
     if (type != weechat::channel::chat_type::MUC)
         return;
 
+    const auto prev_anon = muc_info_.anon;
     muc_info_.anon = anon;
     update_modes();
     maybe_disable_muc_omemo();
+
+    if (prev_anon != muc_info_.anon && muc_supports_omemo() && account.omemo)
+    {
+        for (const auto &[_, member] : members)
+        {
+            if (!member.real_jid || member.real_jid->empty())
+                continue;
+            register_omemo_recipient(*member.real_jid);
+            account.omemo.request_axolotl_devicelist(account, *member.real_jid);
+        }
+    }
 }
 
 void weechat::channel::maybe_disable_muc_omemo()

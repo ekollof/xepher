@@ -410,6 +410,16 @@ static void resolve_key_transport_route(weechat::account &account,
     }
 }
 
+static bool key_transport_routes_as_groupchat(weechat::account &account,
+                                              struct t_gui_buffer *buffer,
+                                              std::string_view peer_bare_jid)
+{
+    std::string dest;
+    std::string msg_type;
+    resolve_key_transport_route(account, buffer, peer_bare_jid, dest, msg_type);
+    return msg_type == "groupchat";
+}
+
 static void send_key_transport(omemo &self,
                                weechat::account &account,
                                struct t_gui_buffer *buffer,
@@ -633,7 +643,18 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
 
                 if ((session_is_fresh || needs_key_transport) && account)
                 {
-                    if (global_mam_catchup)
+                    // MUC OMEMO: passive bundle prefetch must not blast groupchat
+                    // key-transport stanzas into the room (issue #6). Only send when
+                    // explicitly queued (decode recovery, force-kex).
+                    const bool passive_muc_prefetch = session_is_fresh
+                        && !needs_key_transport
+                        && key_transport_routes_as_groupchat(*account, buffer, bare_jid);
+                    if (passive_muc_prefetch)
+                    {
+                        XDEBUG("omemo: skipping passive key-transport for MUC occupant {}/{}",
+                               bare_jid, remote_device_id);
+                    }
+                    else if (global_mam_catchup)
                     {
                         postponed_key_transports.insert({bare_jid, remote_device_id});
                     }

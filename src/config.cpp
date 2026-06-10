@@ -222,6 +222,13 @@ weechat::config::config()
                 "requires the icat.py script to be loaded in WeeChat",
                 nullptr, 0, 0,
                 "off", nullptr, false,
+                {}, {}, {}},
+            .feeds{file, section_look, "feeds", "boolean",
+                "enable PubSub microblog feed buffers (/feed, XEP-0060 / XEP-0472); "
+                "when off, no feed buffers are created or restored and /feed is disabled "
+                "(except /feed close to dismiss existing buffers)",
+                nullptr, 0, 0,
+                "on", nullptr, false,
                 {}, {}, {}}}
 {
 }
@@ -251,4 +258,11 @@ bool xmpp_raw_xml_log_is_on()
     if (!weechat::config::instance)
         return false;
     return weechat_config_boolean(weechat::config::instance->look.raw_xml_log);
+}
+
+bool weechat::xmpp_feeds_enabled()
+{
+    if (!weechat::config::instance)
+        return true;
+    return weechat_config_boolean(weechat::config::instance->look.feeds);
 }

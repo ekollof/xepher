@@ -309,6 +309,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             const auto pubsub_queryid = ::xmpp::mam_pubsub_query_id(mam_view);
             if (pubsub_queryid && account.pubsub_mam_queries.contains(*pubsub_queryid))
             {
+                if (!weechat::xmpp_feeds_enabled())
+                    return 1;
+
                 const auto &pq = account.pubsub_mam_queries.at(*pubsub_queryid);
                 std::string feed_service = pq.service;
                 std::string node_name    = pq.node;

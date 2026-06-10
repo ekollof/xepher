@@ -745,6 +745,15 @@ int command__feed(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
+    if (!weechat::xmpp_feeds_enabled()
+        && (argc < 2 || weechat_strcasecmp(argv[1], "close") != 0))
+    {
+        ui->printf_error(fmt::format(
+            fmt::runtime(_("{}: feeds are disabled (set {}look.feeds on to enable)")),
+            WEECHAT_XMPP_PLUGIN_NAME, WEECHAT_XMPP_PLUGIN_NAME));
+        return WEECHAT_RC_OK;
+    }
+
     if (argc < 2)
     {
         // No arguments: behave as /feed discover (list known pubsub services

@@ -57,6 +57,7 @@ namespace weechat
             config_option highlight_words;
             config_option emoticons;
             config_option icat;
+            config_option feeds;
         } look;
 
     public:
@@ -70,4 +71,6 @@ namespace weechat
         static bool read();
         static bool write();
     };
+
+    [[nodiscard]] bool xmpp_feeds_enabled();
 }

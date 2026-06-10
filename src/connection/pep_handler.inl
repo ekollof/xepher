@@ -371,6 +371,9 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
 
         if (feed_gate.is_generic_feed)
         {
+            if (!weechat::xmpp_feeds_enabled())
+                return;
+
             // Buffer key: "service/node", e.g. "news.movim.eu/Phoronix"
             std::string feed_key = fmt::format("{}/{}", feed_service_sv, node_sv);
 
