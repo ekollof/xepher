@@ -242,9 +242,8 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
 
         // For inline (non-picker) path, print header first.
         if (!adhoc_info.picker)
-            adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-                fmt::format("{}{}Commands available on {}{}:",
-                    weechat::RuntimePort::default_runtime().prefix("network"),
+            adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                fmt::format("{}Commands available on {}{}:",
                     weechat::RuntimePort::default_runtime().color("bold"),
                     adhoc_info.target_jid,
                     weechat::RuntimePort::default_runtime().color("reset")));
@@ -269,9 +268,8 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
             else
             {
                 // Inline print path
-                adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-                    fmt::format("{}  {}{:<40}{}  {}{}",
-                        weechat::RuntimePort::default_runtime().prefix("network"),
+                adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                    fmt::format("  {}{:<40}{}  {}{}",
                         weechat::RuntimePort::default_runtime().color("bold"),
                         !cmd_name.empty() ? cmd_name : "(unnamed)",
                         weechat::RuntimePort::default_runtime().color("reset"),
@@ -286,13 +284,11 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
         if (!adhoc_info.picker)
         {
             if (count == 0)
-                adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-                    fmt::format("{}  (no commands available)",
-                        weechat::RuntimePort::default_runtime().prefix("network")));
+                adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                    "  (no commands available)");
             else
-                adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-                    fmt::format("{}  Use /adhoc {} <node> to execute a command",
-                        weechat::RuntimePort::default_runtime().prefix("network"),
+                adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                    fmt::format("  Use /adhoc {} <node> to execute a command",
                         adhoc_info.target_jid));
         }
         else if (count == 0)
@@ -406,9 +402,8 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
     auto adhoc_ui = weechat::UiPort::for_buffer(adhoc_buf);
     if (weechat_strcasecmp(type, "error") == 0)
     {
-        adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-            fmt::format("{}[adhoc] Error executing command {}",
-                weechat::RuntimePort::default_runtime().prefix("error"),
+        adhoc_ui->printf_date_tags_error(0, "xmpp_adhoc,notify_none",
+            fmt::format("[adhoc] Error executing command {}",
                 !cmd_node.empty() ? cmd_node : "(unknown)"));
     }
     else if (weechat_strcasecmp(type, "result") == 0)
@@ -435,18 +430,16 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
             // Command completed with no form — check for <note>
             const ::xmpp::StanzaView note = adhoc_command.child("note");
             const std::string note_text = note.text();
-            adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-                fmt::format("{}[adhoc] Command {} completed{}{}",
-                    weechat::RuntimePort::default_runtime().prefix("network"),
+            adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                fmt::format("[adhoc] Command {} completed{}{}",
                     !cmd_node.empty() ? cmd_node : "",
                     note_text.empty() ? "" : ": ",
                     note_text.empty() ? "" : note_text));
         }
         else if (!cmd_status.empty() && std::string_view(cmd_status) == "executing" && !x_form.valid())
         {
-            adhoc_ui->printf_date_tags(0, "xmpp_adhoc,notify_none",
-                fmt::format("{}[adhoc] Command {} in progress (no form)",
-                    weechat::RuntimePort::default_runtime().prefix("network"),
+            adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                fmt::format("[adhoc] Command {} in progress (no form)",
                     !cmd_node.empty() ? cmd_node : ""));
         }
     }
@@ -505,10 +498,9 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                     }
                 }
             }
-            weechat::UiPort::for_buffer(cs_buf)->printf_date_tags(
+            weechat::UiPort::for_buffer(cs_buf)->printf_date_tags_error(
                 0, "xmpp_channel_search,notify_none",
-                fmt::format("{}[search] Error from {}: {}",
-                    weechat::RuntimePort::default_runtime().prefix("error"),
+                fmt::format("[search] Error from {}: {}",
                     cs_info.service_jid,
                     !err_text_str.empty() ? err_text_str
                         : (err_condition ? err_condition : "unknown error")));
@@ -526,10 +518,9 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
 
                 if (!search_el.valid() || !x_form.valid())
                 {
-                    cs_ui->printf_date_tags(
+                    cs_ui->printf_date_tags_error(
                         0, "xmpp_channel_search,notify_none",
-                        fmt::format("{}[search] Unexpected response from {} (missing form)",
-                            weechat::RuntimePort::default_runtime().prefix("error"),
+                        fmt::format("[search] Unexpected response from {} (missing form)",
                             cs_info.service_jid));
                     account.channel_search_queries.erase(cs_id);
                     return true;
@@ -605,10 +596,8 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                 {
                     if (count == 0 && !cs_info.picker)
                     {
-                        cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
-                            fmt::format("{}MUC Rooms (via {}):",
-                                weechat::RuntimePort::default_runtime().prefix("network"),
-                                cs_info.service_jid));
+                        cs_ui->printf_date_tags_network(0, "xmpp_channel_search,notify_none",
+                            fmt::format("MUC Rooms (via {}):", cs_info.service_jid));
                     }
 
                     const std::string address = item.attr_string("address");
@@ -756,15 +745,13 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                 {
                     if (count == 0)
                     {
-                        cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
-                            fmt::format("{}No rooms found matching your query",
-                                weechat::RuntimePort::default_runtime().prefix("network")));
+                        cs_ui->printf_date_tags_network(0, "xmpp_channel_search,notify_none",
+                            "No rooms found matching your query");
                     }
                     else
                     {
-                        cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
-                            fmt::format("{}Use /enter <address> to join a room",
-                                weechat::RuntimePort::default_runtime().prefix("network")));
+                        cs_ui->printf_date_tags_network(0, "xmpp_channel_search,notify_none",
+                            "Use /enter <address> to join a room");
                     }
                 }
                 else if (count == 0)
@@ -777,9 +764,8 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
             }
             else
             {
-                cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
-                    fmt::format("{}[search] Unexpected response from {} (missing <result>)",
-                        weechat::RuntimePort::default_runtime().prefix("error"),
+                cs_ui->printf_date_tags_error(0, "xmpp_channel_search,notify_none",
+                    fmt::format("[search] Unexpected response from {} (missing <result>)",
                         cs_info.service_jid));
             }
 

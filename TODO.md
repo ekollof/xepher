@@ -33,8 +33,8 @@ Post-migration audit. Surgical/minimal changes only; update this section when it
 
 | Priority | Gap | Location(s) | Remediation |
 |----------|-----|-------------|-------------|
-| Medium | Manual prefix in dated messages | Other connection `.inl` files (`pep_handler`, `iq_*`, `helpers.cpp`) | Use typed `UiPort` methods when those paths are next edited |
 | Low | `debug.hh` bypasses ports | `XDEBUG` → raw `weechat_printf` | Optional: route through `UiPort` when refactoring debug path |
+| Low | Manual prefix outside handlers | `channel.cpp`, `command/*.inl`, `account.cpp`, etc. | Use typed `UiPort` methods when those paths are next edited |
 
 ### Acceptable exceptions (no action unless touched)
 

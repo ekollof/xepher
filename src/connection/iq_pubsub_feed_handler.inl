@@ -235,10 +235,9 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                                         if (!af.title.empty())
                                         {
                                             feed_ch.update_name(af.title.c_str());
-                                            weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                            weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags_network(
                                                 0, "xmpp_feed,notify_none",
-                                                fmt::format("{}Feed title:{} {}",
-                                                    weechat::RuntimePort::default_runtime().prefix("network"),
+                                                fmt::format("Feed title:{} {}",
                                                     weechat::RuntimePort::default_runtime().color("reset"),
                                                     af.title));
                                         }
@@ -304,16 +303,14 @@ bool weechat::connection::handle_pubsub_feed_iq_event(xmpp_stanza_t *stanza)
                                         "/feed {} {} --before {}",
                                         feed_service, node_name, first_text2);
                                     if (rsm_total_count > 0)
-                                        weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                        weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags_network(
                                             0, "xmpp_feed,notify_none",
-                                            fmt::format("{}{} item(s) total — for older entries: {}",
-                                                weechat::RuntimePort::default_runtime().prefix("network"),
+                                            fmt::format("{} item(s) total — for older entries: {}",
                                                 rsm_total_count, hint));
                                     else
-                                        weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                        weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags_network(
                                             0, "xmpp_feed,notify_none",
-                                            fmt::format("{}For older entries: {}",
-                                                weechat::RuntimePort::default_runtime().prefix("network"), hint));
+                                            fmt::format("For older entries: {}", hint));
                                 }
                             }
                         }

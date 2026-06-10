@@ -192,10 +192,9 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
                 const std::string end_str = mam_query.end
                     ? format_local_timestamp(*mam_query.end)
                     : "now";
-                weechat::UiPort::for_buffer(ch.buffer)->printf_date_tags(
+                weechat::UiPort::for_buffer(ch.buffer)->printf_date_tags_network(
                     0, "xmpp_mam_fin,notify_none,no_log",
-                    fmt::format("{}History loaded: {} → {}",
-                                weechat::RuntimePort::default_runtime().prefix("network"), start_str, end_str));
+                    fmt::format("History loaded: {} → {}", start_str, end_str));
             }
         }
     }

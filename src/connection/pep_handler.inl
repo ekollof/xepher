@@ -421,10 +421,9 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
                             if (!af.title.empty())
                             {
                                 feed_ch.update_name(af.title.c_str());
-                                weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                                weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags_network(
                                     0, "xmpp_feed,notify_none",
-                                    fmt::format("{}Feed title:{} {}",
-                                        weechat::RuntimePort::default_runtime().prefix("network"),
+                                    fmt::format("Feed title:{} {}",
                                         weechat::RuntimePort::default_runtime().color("reset"),
                                         af.title));
                             }
@@ -490,11 +489,9 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
                         else
                         {
                             // No ID at all — nothing useful to show or fetch
-                            weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags(
+                            weechat::UiPort::for_buffer(feed_ch.buffer)->printf_date_tags_network(
                                 0, "xmpp_feed,notify_message",
-                                fmt::format("{}[{}] New item (no content)",
-                                    weechat::RuntimePort::default_runtime().prefix("network"),
-                                    std::string(node_sv)));
+                                fmt::format("[{}] New item (no content)", std::string(node_sv)));
                         }
                     }
                     else
