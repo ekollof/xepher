@@ -2911,3 +2911,72 @@ TEST_CASE("collect_bob_image_refs parses inline XEP-0231 data element")
     xmpp_stanza_release(msg);
 }
 
+TEST_CASE("bob_make_cid uses sha1+hex@bob.xmpp.org form")
+{
+    const std::vector<std::uint8_t> data = {'h', 'i'};
+    const std::string cid = xmpp::bob_make_cid(data);
+    CHECK(cid.starts_with("sha1+"));
+    CHECK(cid.ends_with("@bob.xmpp.org"));
+    CHECK(cid.size() == 58);
+}
+
+TEST_CASE("handle_bob_iq_get returns BoB payload for hosted cid")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *iq = xmpp_stanza_new_from_string(env.ctx,
+        "<iq xmlns='jabber:client' type='get' id='bob1' "
+        "from='peer@example.com/resource' to='me@example.com'>"
+        "<data xmlns='urn:xmpp:bob' "
+        "cid='sha1+abc@bob.xmpp.org'/>"
+        "</iq>");
+    REQUIRE(iq != nullptr);
+
+    const xmpp::BobHostedPayload hosted{
+        "image/png",
+        {0x89, 0x50, 0x4e, 0x47},
+    };
+
+    auto reply = xmpp::handle_bob_iq_get(
+        xmpp::StanzaView(iq), "me@example.com", &hosted);
+    REQUIRE(reply.has_value());
+
+    auto built = std::move(*reply).build(env.ctx);
+    const std::string xml = stanza_to_xml(env.ctx, built.get());
+    CHECK(xml.find("type=\"result\"") != std::string::npos);
+    CHECK(xml.find("sha1+abc@bob.xmpp.org") != std::string::npos);
+    CHECK(xml.find("image/png") != std::string::npos);
+
+    const xmpp::StanzaView result_view(built.get());
+    const xmpp::StanzaView data = result_view.child("data", xmpp::k_bob_ns);
+    REQUIRE(data.valid());
+    CHECK(!data.text().empty());
+
+    xmpp_stanza_release(iq);
+}
+
+TEST_CASE("handle_bob_iq_get returns item-not-found when unhosted")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *iq = xmpp_stanza_new_from_string(env.ctx,
+        "<iq xmlns='jabber:client' type='get' id='bob2' "
+        "from='peer@example.com' to='me@example.com'>"
+        "<data xmlns='urn:xmpp:bob' cid='sha1+missing@bob.xmpp.org'/>"
+        "</iq>");
+    REQUIRE(iq != nullptr);
+
+    auto reply = xmpp::handle_bob_iq_get(
+        xmpp::StanzaView(iq), "me@example.com", nullptr);
+    REQUIRE(reply.has_value());
+
+    auto built = std::move(*reply).build(env.ctx);
+    const std::string xml = stanza_to_xml(env.ctx, built.get());
+    CHECK(xml.find("type=\"error\"") != std::string::npos);
+    CHECK(xml.find("item-not-found") != std::string::npos);
+
+    xmpp_stanza_release(iq);
+}
+

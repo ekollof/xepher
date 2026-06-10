@@ -483,7 +483,7 @@
         <xmpp:version>1.1</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >Bits of Binary (receive) — resolves XHTML-IM &lt;img src='cid:…@bob.xmpp.org'/&gt; references and inline &lt;data xmlns='urn:xmpp:bob'/&gt;; IQ-fetches uncached payloads from the sender, caches locally, displays inline via weechat-icat when xmpp.look.icat is enabled (Movim sticker interop); publishing not implemented</xmpp:note>
+                >Bits of Binary — receive: XHTML-IM cid refs and inline &lt;data xmlns='urn:xmpp:bob'/&gt;, IQ-fetch, local cache, weechat-icat display (Movim sticker interop); send: small plaintext images (≤8 KiB) via /upload as BoB + XHTML-IM with sha1 cid hosting and IQ-get responses; advertises urn:xmpp:bob in caps/disco; OMEMO outbound BoB not yet implemented</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

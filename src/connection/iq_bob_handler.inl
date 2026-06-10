@@ -1,9 +1,28 @@
-bool weechat::connection::handle_bob_iq_event(xmpp_stanza_t *stanza)
+bool weechat::connection::handle_bob_iq_event(xmpp_stanza_t *stanza,
+                                                std::string_view own_jid_str)
 {
     const char *id = xmpp_stanza_get_id(stanza);
     const char *type = xmpp_stanza_get_attribute(stanza, "type");
     if (!id || !type)
         return false;
+
+    const ::xmpp::StanzaView view(stanza);
+
+    if (weechat_strcasecmp(type, "get") == 0 && ::xmpp::is_bob_iq_get(view))
+    {
+        const std::string cid = view.child("data", ::xmpp::k_bob_ns).attr_string("cid");
+        const ::xmpp::BobHostedPayload *hosted = nullptr;
+        if (auto entry = ::xmpp::bob_host_lookup(account, cid))
+            hosted = &*entry;
+
+        if (auto reply = ::xmpp::handle_bob_iq_get(view, own_jid_str, hosted))
+        {
+            account.connection.send(reply->build(account.context).get());
+            XDEBUG("BoB IQ-get served for cid {}", cid);
+            return true;
+        }
+        return false;
+    }
 
     if (weechat_strcasecmp(type, "error") == 0)
     {

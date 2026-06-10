@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <ctime>
+#include <span>
 #include <deque>
 #include <string>
 #include <string_view>
@@ -377,6 +378,12 @@ namespace weechat
         int send_message(std::string to, std::string body,
                          std::optional<std::string> oob = {},
                          std::optional<file_metadata> file_meta = {});
+
+        // XEP-0231: send a small image (≤8 KiB) via BoB + XHTML-IM (plaintext only).
+        int send_bob_image(std::string_view to,
+                           std::span<const std::uint8_t> data,
+                           std::string_view mime,
+                           std::string_view alt = "image");
         // Low-level overload: skip_probe must be supplied explicitly to avoid
         // ambiguity with the std::string overload above.
         int send_message(std::string_view to, std::string_view body, bool skip_probe);

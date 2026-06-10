@@ -28,6 +28,7 @@
 #include "omemo.hh"
 #include "config.hh"
 #include "channel.hh"
+#include "xmpp/message_bob.hh"
 #include "connection.hh"
 #include "user.hh"
 #include "ui/picker.hh"
@@ -324,6 +325,8 @@ namespace weechat
         std::unordered_map<std::string, bob_icat_context> bob_fetch_queries;  // iq_id → ctx
         std::unordered_set<std::string> bob_inflight_cids;
         std::unordered_map<std::string, std::vector<bob_icat_context>> bob_deferred_icat;
+        // Payloads we host for inbound BoB IQ-get (outbound XEP-0231 sends).
+        std::unordered_map<std::string, ::xmpp::BobHostedPayload> bob_hosted;
 
         // XEP-0060: pending publish IQs (/feed post, /feed reply, /feed retract).
         // Maps IQ id → context used to report errors to the user.

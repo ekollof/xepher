@@ -37,6 +37,8 @@
 #include "command.hh"
 #include "sexp/driver.hh"
 #include "ui/picker.hh"
+#include "xmpp/message_bob.hh"
+#include "xmpp/iq_upload.hh"
 
 #define MAM_DEFAULT_DAYS 2
 #define STR(X) #X

@@ -34,6 +34,8 @@
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/message_pep_feed.hh"
+#include "xmpp/message_bob.hh"
+#include "weechat/icat_preview.hh"
 
 namespace {
 std::string channel_short_name(weechat::channel::chat_type type, std::string_view name)
@@ -1222,6 +1224,73 @@ int weechat::channel::send_message(std::string to, std::string body,
                                  "%s\t%s ⌛",
                                  prefix.data(),
                                  display_body.c_str());
+    }
+
+    return WEECHAT_RC_OK;
+}
+
+int weechat::channel::send_bob_image(std::string_view to,
+                                     std::span<const std::uint8_t> data,
+                                     std::string_view mime,
+                                     std::string_view alt)
+{
+    if (to.empty() || data.empty() || mime.empty())
+        return WEECHAT_RC_ERROR;
+
+    if (!::xmpp::bob_payload_size_ok(data.size()))
+    {
+        weechat_printf_date_tags(buffer, 0, "notify_none",
+                               "%s%s: image too large for XEP-0231 BoB (max %zu bytes)",
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                               ::xmpp::k_bob_max_payload_bytes);
+        return WEECHAT_RC_ERROR;
+    }
+
+    if (account.omemo && omemo.enabled)
+    {
+        weechat_printf_date_tags(buffer, 0, "notify_none",
+                               "%s%s: BoB send requires plaintext; disable OMEMO or use /upload",
+                               weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_ERROR;
+    }
+
+    const std::string cid = ::xmpp::bob_make_cid(data);
+    ::xmpp::bob_host_store(account, cid, mime, data);
+
+    const std::string saved_id = stanza::uuid(account.context);
+    const char *mtype = (type == chat_type::MUC ? "groupchat" : "chat");
+    auto msg = ::xmpp::build_bob_image_message(
+        to, mtype, saved_id, cid, mime, data, alt);
+
+    if (type == chat_type::PM
+        && to.contains('/')
+        && account.channels.contains(::jid(nullptr, std::string(to)).bare)
+        && account.channels.at(::jid(nullptr, std::string(to)).bare).type == chat_type::MUC)
+    {
+        msg.muc_user(stanza::xep0045::muc_user_x());
+    }
+
+    auto msg_sp = msg.build(account.context);
+    account.connection.send(msg_sp.get());
+
+    if (type != chat_type::MUC)
+    {
+        auto *self_user = user::search(&account, account.jid().data());
+        auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
+        const std::string tag = "xmpp_message,message,private,notify_none,self_msg,log1,id_" + saved_id;
+        weechat_printf_date_tags(buffer, 0, tag.c_str(),
+                                 "%s\t%s ⌛",
+                                 prefix.data(),
+                                 (alt.empty() ? "[image]" : std::string(alt)).c_str());
+    }
+
+    if (auto path = ::xmpp::bob_cache_lookup(account, cid))
+    {
+        weechat::icat_preview_request req;
+        req.buffer = buffer;
+        req.source = *path;
+        req.mime = std::string(mime);
+        invoke_icat_preview(req, account);
     }
 
     return WEECHAT_RC_OK;

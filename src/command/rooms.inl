@@ -294,6 +294,71 @@ int command__upload(const void *pointer, void *data,
                       ptr_account->upload_max_size, filesize);
         return WEECHAT_RC_OK;
     }
+
+    // Extract just the filename (no path) for metadata and BoB alt text.
+    size_t last_slash = filename.find_last_of("/\\");
+    std::string basename = (last_slash != std::string::npos)
+        ? filename.substr(last_slash + 1)
+        : filename;
+
+    // Sanitize filename: allow alphanumeric, dots, dashes, and underscores.
+    std::string sanitized_basename;
+    std::ranges::for_each(basename, [&](char c) {
+        if ((c >= 'a' && c <= 'z')
+            || (c >= 'A' && c <= 'Z')
+            || (c >= '0' && c <= '9')
+            || c == '.' || c == '-' || c == '_')
+        {
+            sanitized_basename += c;
+        }
+        else
+        {
+            sanitized_basename += '-';
+        }
+    });
+
+    size_t pos = 0;
+    while ((pos = sanitized_basename.find("--", pos)) != std::string::npos)
+        sanitized_basename.erase(pos, 1);
+    while (!sanitized_basename.empty() && sanitized_basename[0] == '-')
+        sanitized_basename.erase(0, 1);
+    while (!sanitized_basename.empty() && sanitized_basename.back() == '-')
+        sanitized_basename.pop_back();
+
+    std::string content_type = ::xmpp::content_type_from_upload_filename(sanitized_basename);
+    const bool channel_omemo = ptr_account->omemo && ptr_channel->omemo.enabled;
+
+    // XEP-0231: small plaintext images use BoB instead of HTTP upload (Movim interop).
+    if (content_type.starts_with("image/")
+        && ::xmpp::bob_payload_size_ok(static_cast<std::size_t>(filesize))
+        && !channel_omemo)
+    {
+        std::vector<std::uint8_t> image_bytes(static_cast<std::size_t>(filesize));
+        FILE *bob_file = fopen(filename.c_str(), "rb");
+        if (!bob_file)
+        {
+            weechat_printf(buffer, "%s%s: cannot read image for BoB send: %s",
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
+                           filename.c_str());
+            return WEECHAT_RC_OK;
+        }
+        const std::size_t read_n = fread(
+            image_bytes.data(), 1, image_bytes.size(), bob_file);
+        fclose(bob_file);
+        if (read_n != image_bytes.size())
+        {
+            weechat_printf(buffer, "%s%s: failed to read image for BoB send",
+                           weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+            return WEECHAT_RC_OK;
+        }
+
+        weechat_printf_date_tags(buffer, 0, "no_trigger,notify_none",
+                                 "%sSending image via XEP-0231 BoB (%ld bytes)...",
+                                 weechat_prefix("network"), filesize);
+        ptr_channel->send_bob_image(
+            ptr_channel->id, image_bytes, content_type, sanitized_basename);
+        return WEECHAT_RC_OK;
+    }
     
     // Check if we have discovered upload service
     if (ptr_account->upload_service.empty())
@@ -310,65 +375,9 @@ int command__upload(const void *pointer, void *data,
     // Generate request ID
     std::string upload_id = stanza::uuid(ptr_account->context);
     const char *id = upload_id.c_str();
-    
-    // Extract just the filename (no path)
-    size_t last_slash = filename.find_last_of("/\\");
-    std::string basename = (last_slash != std::string::npos) 
-        ? filename.substr(last_slash + 1) 
-        : filename;
-    
-    // Sanitize filename: allow alphanumeric, dots, dashes, and underscores
-    // Some servers are very strict about filenames (XEP-0363 doesn't specify allowed chars)
-    std::string sanitized_basename;
-    std::ranges::for_each(basename, [&](char c) {
-        if ((c >= 'a' && c <= 'z') || 
-            (c >= 'A' && c <= 'Z') || 
-            (c >= '0' && c <= '9') || 
-            c == '.' || c == '-' || c == '_')
-        {
-            sanitized_basename += c;
-        }
-        else
-        {
-            sanitized_basename += '-';  // Replace any other char with dash
-        }
-    });
-    
-    // Remove consecutive dashes
-    size_t pos = 0;
-    while ((pos = sanitized_basename.find("--", pos)) != std::string::npos)
-    {
-        sanitized_basename.erase(pos, 1);
-    }
-    
-    // Remove leading/trailing dashes
-    while (!sanitized_basename.empty() && sanitized_basename[0] == '-')
-        sanitized_basename.erase(0, 1);
-    while (!sanitized_basename.empty() && sanitized_basename.back() == '-')
-        sanitized_basename.pop_back();
-    
+
     weechat_printf(buffer, "%sUsing sanitized filename: %s",
                   weechat_prefix("network"), sanitized_basename.c_str());
-    
-    // Determine content-type from file extension
-    std::string content_type = "application/octet-stream";
-    size_t dot_pos = sanitized_basename.find_last_of('.');
-    if (dot_pos != std::string::npos)
-    {
-        std::string ext = sanitized_basename.substr(dot_pos + 1);
-        std::ranges::transform(ext, ext.begin(), ::tolower);
-        
-        if (ext == "jpg" || ext == "jpeg") content_type = "image/jpeg";
-        else if (ext == "png") content_type = "image/png";
-        else if (ext == "gif") content_type = "image/gif";
-        else if (ext == "webp") content_type = "image/webp";
-        else if (ext == "mp4") content_type = "video/mp4";
-        else if (ext == "webm") content_type = "video/webm";
-        else if (ext == "pdf") content_type = "application/pdf";
-        else if (ext == "txt") content_type = "text/plain";
-        else if (ext == "zip") content_type = "application/zip";
-        else if (ext == "tar") content_type = "application/x-tar";
-    }
     
     // Use the size from the early probe (printed in "Requesting..." and used for max check).
     // Snapshot happens immediately after this, so the snapshotted bytes (and thus uploaded
@@ -379,7 +388,6 @@ int command__upload(const void *pointer, void *data,
     // XEP-0448: when the channel has OMEMO active, the actual upload will be
     // AES-256-GCM ciphertext = plaintext + 16-byte auth tag.  Request the slot
     // for the larger size so the server does not reject the PUT with HTTP 413.
-    bool channel_omemo = ptr_account->omemo && ptr_channel->omemo.enabled;
     size_t slot_size = channel_omemo ? file_size + 16 : file_size;
 
     // Snapshot the exact bytes of the selected file to a private temp right now.

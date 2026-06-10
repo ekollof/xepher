@@ -176,7 +176,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     if (handle_avatar_pubsub_iq_event(stanza, own_jid))
         return true;
 
-    if (handle_bob_iq_event(stanza))
+    if (handle_bob_iq_event(stanza, own_jid))
         return true;
 
     if (handle_pubsub_feed_iq_event(stanza))

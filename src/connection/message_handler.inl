@@ -2346,6 +2346,7 @@ xmpp_stanza_t *weechat::connection::get_caps(xmpp_stanza_t *reply, std::optional
         "urn:xmpp:blocking",
         "urn:xmpp:bookmarks:1",
         "urn:xmpp:bookmarks:1+notify",
+        "urn:xmpp:bob",
         "urn:xmpp:carbons:2",
         "urn:xmpp:ping",
         "urn:xmpp:receipts",
