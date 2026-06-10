@@ -241,11 +241,17 @@ namespace weechat
         // response (parse a form on "config_get"/"config_set"; print outcome
         // on "aff_set"/"destroy"). "room_jid" is the destination (bare JID).
         // "buffer" is where to print outcome messages.
-        enum class muc_owner_kind { config_get, config_set, destroy, aff_set };
+        enum class muc_owner_kind {
+            config_get, config_set, destroy,
+            aff_set, aff_list,
+            register_get, register_set
+        };
         struct muc_owner_query_info {
             std::string room_jid;
             struct t_gui_buffer *buffer;
             muc_owner_kind kind;
+            std::string list_affiliation;   // aff_list filter (e.g. "member")
+            std::string register_nick;        // pending nick for register_set after GET
         };
         std::unordered_map<std::string, muc_owner_query_info> muc_owner_queries;  // iq_id -> info
 

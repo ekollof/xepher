@@ -1129,6 +1129,33 @@ TEST_CASE("parse_direct_muc_invite reads XEP-0249 attributes")
     xmpp_stanza_release(msg);
 }
 
+TEST_CASE("parse_mediated_muc_invite reads XEP-0045 muc#user invite")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' from='room@conf.example' to='bob@example.org'>"
+        "<x xmlns='http://jabber.org/protocol/muc#user'>"
+        "<invite to='bob@example.org' from='alice@example.org'>"
+        "<reason>join us</reason></invite>"
+        "<password>secret</password>"
+        "</x></message>");
+    REQUIRE(msg != nullptr);
+
+    auto invite = xmpp::parse_mediated_muc_invite(xmpp::StanzaView(msg));
+    REQUIRE(invite.has_value());
+    CHECK(invite->room_jid == "room@conf.example");
+    REQUIRE(invite->inviter_bare.has_value());
+    CHECK(*invite->inviter_bare == "alice@example.org");
+    REQUIRE(invite->reason.has_value());
+    CHECK(*invite->reason == "join us");
+    REQUIRE(invite->password.has_value());
+    CHECK(*invite->password == "secret");
+
+    xmpp_stanza_release(msg);
+}
+
 TEST_CASE("message_ephemeral spoiler and fallback helpers")
 {
     unit_strophe_env env;

@@ -88,6 +88,15 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                               error->description ? error->description->data() : "",
                                               error->description ? ")" : "");
                 weechat_printf(channel->buffer, "%s", msg.c_str());
+                if (binding->muc()
+                    && std::string_view{error_reason} == "Not on Member List")
+                {
+                    weechat_printf(channel->buffer, "%s%s",
+                                   weechat_prefix("error"),
+                                   fmt::format("{}: this room may require membership — "
+                                               "try /mucregister [nick] or /mucregister query",
+                                               WEECHAT_XMPP_PLUGIN_NAME).c_str());
+                }
             }
             else
             {

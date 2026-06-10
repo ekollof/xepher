@@ -16,6 +16,7 @@
 #include <array>
 #include <algorithm>
 #include <ranges>
+#include <string_view>
 #include <span>
 #include <expected>
 #include <fmt/core.h>

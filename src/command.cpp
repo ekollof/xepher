@@ -182,9 +182,12 @@ void command__init()
 
     hook = weechat_hook_command(
         "invite",
-        N_("invite a user to the current MUC room (XEP-0249)"),
-        N_("<jid> [<reason>]"),
-        N_("    jid: user to invite\n reason: optional invitation message"),
+        N_("invite a user to the current MUC room (XEP-0249 or XEP-0045 mediated)"),
+        N_("[--mediated] <jid> [<reason>]"),
+        N_("    --mediated: room-mediated invite (XEP-0045 §7.8.2)\n"
+           "    jid: user to invite\n"
+           " reason: optional invitation message\n\n"
+           "Default is a direct invite (XEP-0249)."),
         nullptr, &command__invite, nullptr, nullptr);
     if (!hook)
         weechat_printf(nullptr, "Failed to setup command /invite");
@@ -682,6 +685,47 @@ void command__init()
         weechat_printf(nullptr, "Failed to setup command /ban");
 
     hook = weechat_hook_command(
+        "voice",
+        N_("grant voice to a MUC occupant (XEP-0045 §9.6)"),
+        N_("<nick> [<reason>]"),
+        N_("Sets role to participant in a moderated room. Requires moderator.\n\n"
+           "Examples:\n"
+           "  /voice guestnick\n"
+           "  /voice guestnick Welcome to speak"),
+        nullptr, &command__voice, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /voice");
+
+    hook = weechat_hook_command(
+        "devoice",
+        N_("revoke voice from a MUC occupant (XEP-0045 §9.6)"),
+        N_("<nick> [<reason>]"),
+        N_("Sets role to visitor in a moderated room. Requires moderator."),
+        nullptr, &command__devoice, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /devoice");
+
+    hook = weechat_hook_command(
+        "op",
+        N_("grant moderator role to a MUC occupant (XEP-0045 §9.5)"),
+        N_("<nick> [<reason>]"),
+        N_("Sets role to moderator. Requires admin or owner.\n\n"
+           "Examples:\n"
+           "  /op trustednick"),
+        nullptr, &command__op, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /op");
+
+    hook = weechat_hook_command(
+        "deop",
+        N_("revoke moderator role from a MUC occupant (XEP-0045 §9.5)"),
+        N_("<nick> [<reason>]"),
+        N_("Sets role to participant (not a kick). Requires admin or owner."),
+        nullptr, &command__deop, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /deop");
+
+    hook = weechat_hook_command(
         "topic",
         N_("set or clear the MUC room topic (XEP-0045)"),
         N_("[<text>]"),
@@ -780,18 +824,33 @@ void command__init()
 
     hook = weechat_hook_command(
         "affiliation",
-        N_("change a user's MUC affiliation (XEP-0045 §10.5, owner-only)"),
-        N_("set <jid> <owner|admin|member|none|outcast> [<reason>] [--confirm]"),
-        N_("Grants, revokes, or modifies a user's affiliation in the current "
-           "room. Without --confirm the command prints the planned action and "
-           "exits. Use 'none' or 'outcast' to revoke membership or ban a JID.\n\n"
+        N_("list or change MUC affiliations (XEP-0045 §9.3–10.5)"),
+        N_("list [owner|admin|member|outcast]\n"
+           " || set <jid> <owner|admin|member|none|outcast> [--nick <nick>] [<reason>] [--confirm]"),
+        N_("list: query affiliation list (default: member)\n"
+           " set: change a user's affiliation (owner-only). --nick sets or "
+           "unsets (empty) a reserved member nickname.\n\n"
            "Examples:\n"
-           "  /affiliation set alice@example.com admin\n"
-           "  /affiliation set bob@example.com admin \"promotion\" --confirm\n"
+           "  /affiliation list admin\n"
+           "  /affiliation set alice@example.com admin --confirm\n"
+           "  /affiliation set bob@example.com member --nick BobNick --confirm\n"
            "  /affiliation set troll@example.com outcast \"spam\" --confirm"),
         nullptr, &command__affiliation, nullptr, nullptr);
     if (!hook)
         weechat_printf(nullptr, "Failed to setup command /affiliation");
+
+    hook = weechat_hook_command(
+        "mucregister",
+        N_("register with a MUC room (XEP-0045 §15)"),
+        N_("query || [<nick>]"),
+        N_("query: show current registration / reserved nick info\n"
+           " nick: submit registration with the given room nickname\n\n"
+           "Examples:\n"
+           "  /mucregister query\n"
+           "  /mucregister MyNick"),
+        nullptr, &command__mucregister, nullptr, nullptr);
+    if (!hook)
+        weechat_printf(nullptr, "Failed to setup command /mucregister");
 
     hook = weechat_hook_command(
         "feed",

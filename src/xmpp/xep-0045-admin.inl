@@ -38,12 +38,18 @@ namespace stanza {
             }
         };
 
-        // <item jid='J' affiliation='outcast'/>  (ban)
+        // <item jid='J' affiliation='outcast'/>  (ban / affiliation set)
         struct item_by_jid : virtual public spec {
             explicit item_by_jid(std::string_view jid, std::string_view affiliation)
                 : spec("item") {
                 attr("jid", jid);
                 attr("affiliation", affiliation);
+            }
+            // XEP-0045 §9.4 / §1.35.4: optional reserved room nick on member modify;
+            // empty string unsets a reserved nickname.
+            item_by_jid& nick(std::string_view n) {
+                attr("nick", n);
+                return *this;
             }
             item_by_jid& reason(std::string_view r) {
                 xep0045admin::reason rel(r);

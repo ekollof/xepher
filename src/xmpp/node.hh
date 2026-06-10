@@ -197,6 +197,7 @@ namespace stanza {
 #include "xep-0030.inl"
 #include "xep-0045.inl"
 #include "xep-0045-admin.inl"
+#include "xep-0045-register.inl"
 #include "xep-0049.inl"
 #include "xep-0059.inl"
 #include "xep-0060.inl"
@@ -376,6 +377,15 @@ namespace stanza {
             child(x);
             return *this;
         }
+        message& mediated_invite(std::string_view to_jid, std::string_view invite_reason = {}) {
+            xep0045::muc_user_x ux;
+            xep0045::invite_to inv(to_jid);
+            if (!invite_reason.empty())
+                inv.reason(invite_reason);
+            ux.invite(inv);
+            child(ux);
+            return *this;
+        }
     };
 
     struct presence : virtual public spec,
@@ -395,6 +405,7 @@ namespace stanza {
                 public xep0030::iq,
                 public xep0045::xep0045owner::iq,
                 public xep0045admin::iq,
+                public xep0045register::iq,
                 public xep0049::iq,
                 public xep0060::iq,
                 public xep0092::iq,

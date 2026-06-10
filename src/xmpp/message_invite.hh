@@ -14,6 +14,7 @@
 namespace xmpp {
 
 inline constexpr std::string_view k_muc_invite_ns = "jabber:x:conference";
+inline constexpr std::string_view k_muc_user_ns = "http://jabber.org/protocol/muc#user";
 
 [[nodiscard]] XMPP_TEST_EXPORT bool stanza_is_error_message(StanzaView msg);
 
@@ -26,5 +27,15 @@ struct DirectMucInvite {
 
 [[nodiscard]] XMPP_TEST_EXPORT std::optional<DirectMucInvite>
 parse_direct_muc_invite(StanzaView msg);
+
+struct MediatedMucInvite {
+    std::string room_jid;
+    std::optional<std::string> password;
+    std::optional<std::string> reason;
+    std::optional<std::string> inviter_bare;
+};
+
+[[nodiscard]] XMPP_TEST_EXPORT std::optional<MediatedMucInvite>
+parse_mediated_muc_invite(StanzaView msg);
 
 }  // namespace xmpp

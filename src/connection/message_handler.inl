@@ -874,6 +874,27 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         return 1;
     }
 
+    // XEP-0045 §7.8.2: Mediated MUC invitations
+    if (auto mediated = ::xmpp::parse_mediated_muc_invite(::xmpp::StanzaView(stanza)))
+    {
+        const std::string_view who = mediated->inviter_bare
+            ? std::string_view{*mediated->inviter_bare}
+            : std::string_view{mediated->room_jid};
+        const auto reason_suffix = mediated->reason
+            ? fmt::format(" ({})", *mediated->reason) : std::string{};
+        const auto join_args = mediated->password
+            ? fmt::format(" {}", *mediated->password) : std::string{};
+        weechat_printf(account.buffer, "%s%s",
+                       weechat_prefix("network"),
+                       fmt::format("{} invited you to {}{}",
+                                   who, mediated->room_jid, reason_suffix).c_str());
+        weechat_printf(account.buffer, "%s%s",
+                       weechat_prefix("network"),
+                       fmt::format("To join: /join {}{}",
+                                   mediated->room_jid, join_args).c_str());
+        return 1;
+    }
+
     encrypted = ::xmpp::stanza_axolotl_encrypted(::xmpp::StanzaView(stanza)).raw();
 
     // Record that this peer actively speaks OMEMO — but only for genuine

@@ -65,6 +65,7 @@ struct jabber_org {
         struct muc : public xmlns { muc() : xmlns("http://jabber.org/protocol/muc") {}
             struct admin : public xmlns { admin() : xmlns("http://jabber.org/protocol/muc#admin") {} };
             struct owner : public xmlns { owner() : xmlns("http://jabber.org/protocol/muc#owner") {} };
+            struct register_ : public xmlns { register_() : xmlns("http://jabber.org/protocol/muc#register") {} };
             struct unique : public xmlns { unique() : xmlns("http://jabber.org/protocol/muc#unique") {} };
             struct user : public xmlns { user() : xmlns("http://jabber.org/protocol/muc#user") {} };
         };

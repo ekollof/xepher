@@ -125,27 +125,55 @@ int command__invite(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    if (argc < 2)
+    bool mediated = false;
+    int invitee_arg = 1;
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::string_view{argv[i]} == "--mediated")
+            mediated = true;
+        else
+        {
+            invitee_arg = i;
+            break;
+        }
+    }
+
+    if (argc < 2 || invitee_arg >= argc
+        || std::string_view{argv[invitee_arg]} == "--mediated")
     {
         weechat_printf(buffer,
-                        _("%s%s: missing argument for \"%s\" command"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "invite");
+                        _("%s%s: usage: /invite [--mediated] <jid> [<reason>]"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
         return WEECHAT_RC_OK;
     }
 
-    const char *invitee_jid = argv[1];
-    const char *reason = argc > 2 ? argv_eol[2] : nullptr;
+    const char *invitee_jid = argv[invitee_arg];
+    const char *reason = (invitee_arg + 1 < argc) ? argv_eol[invitee_arg + 1] : nullptr;
 
-    auto inv_msg = stanza::message().to(invitee_jid);
-    static_cast<stanza::xep0249::message&>(inv_msg).invite(
-        ptr_channel->name.data(), nullptr, reason);
-    ptr_account->connection.send(inv_msg.build(ptr_account->context).get());
+    if (mediated)
+    {
+        auto inv_msg = stanza::message().to(ptr_channel->id).mediated_invite(
+            invitee_jid, reason ? std::string_view(reason) : std::string_view{});
+        ptr_account->connection.send(inv_msg.build(ptr_account->context).get());
 
-    weechat_printf(buffer,
-                    _("%sInvited %s to %s"),
-                    weechat_prefix("network"),
-                    invitee_jid,
-                    ptr_channel->name.data());
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("network"),
+                       fmt::format("Mediated invite sent for {} to join {}",
+                                   invitee_jid, ptr_channel->name).c_str());
+    }
+    else
+    {
+        auto inv_msg = stanza::message().to(invitee_jid);
+        static_cast<stanza::xep0249::message&>(inv_msg).invite(
+            ptr_channel->name.data(), nullptr, reason);
+        ptr_account->connection.send(inv_msg.build(ptr_account->context).get());
+
+        weechat_printf(buffer,
+                        _("%sInvited %s to %s"),
+                        weechat_prefix("network"),
+                        invitee_jid,
+                        ptr_channel->name.data());
+    }
 
     return WEECHAT_RC_OK;
 }

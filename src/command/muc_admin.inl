@@ -427,6 +427,229 @@ int command__ban(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+namespace {
+
+constexpr std::array k_muc_affiliations = {
+    std::string_view{"owner"}, std::string_view{"admin"},
+    std::string_view{"member"}, std::string_view{"outcast"},
+    std::string_view{"none"},
+};
+
+constexpr std::array k_muc_list_affiliations = {
+    std::string_view{"owner"}, std::string_view{"admin"},
+    std::string_view{"member"}, std::string_view{"outcast"},
+};
+
+[[nodiscard]] auto is_muc_affiliation(std::string_view aff) -> bool
+{
+    return std::ranges::contains(k_muc_affiliations, aff);
+}
+
+[[nodiscard]] auto is_muc_list_affiliation(std::string_view aff) -> bool
+{
+    return std::ranges::contains(k_muc_list_affiliations, aff);
+}
+
+struct affiliation_set_opts {
+    std::string nick;
+    std::string reason;
+    bool confirm = false;
+    bool nick_specified = false;
+};
+
+[[nodiscard]] auto parse_affiliation_set_opts(int argc, char **argv, char **argv_eol,
+                                              int start = 4) -> affiliation_set_opts
+{
+    affiliation_set_opts opts;
+    for (int i = start; i < argc; ++i)
+    {
+        const std::string_view arg = argv[i];
+        if (arg == "--confirm")
+            opts.confirm = true;
+        else if (arg == "--nick" && i + 1 < argc)
+        {
+            opts.nick = argv[++i];
+            opts.nick_specified = true;
+        }
+        else if (opts.reason.empty())
+        {
+            opts.reason = argv_eol[i];
+            break;
+        }
+    }
+    return opts;
+}
+
+[[nodiscard]] auto send_muc_role_change(weechat::account *ptr_account,
+                                        weechat::channel *ptr_channel,
+                                        struct t_gui_buffer *buffer,
+                                        std::string_view nick,
+                                        std::string_view role,
+                                        std::string_view reason,
+                                        std::string_view action_past) -> int
+{
+    stanza::xep0045admin::item_by_nick role_item(nick, role);
+    if (!reason.empty())
+        role_item.reason(reason);
+    stanza::xep0045admin::query role_query;
+    role_query.item(role_item);
+    const std::string iq_id = stanza::uuid(ptr_account->context);
+    auto role_iq = stanza::iq().type("set").to(ptr_channel->id).id(iq_id);
+    role_iq.muc_admin(role_query);
+    ptr_account->connection.send(role_iq.build(ptr_account->context).get());
+
+    const auto suffix = reason.empty() ? std::string{}
+                                       : fmt::format(": {}", reason);
+    weechat_printf(buffer, "%s%s",
+                   weechat_prefix("network"),
+                   fmt::format("{} {} in {}{}", action_past, nick,
+                               ptr_channel->id, suffix).c_str());
+    return WEECHAT_RC_OK;
+}
+
+[[nodiscard]] auto muc_admin_precheck(struct t_gui_buffer *buffer,
+                                      weechat::account *ptr_account,
+                                      weechat::channel *ptr_channel,
+                                      std::string_view cmd) -> bool
+{
+    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    {
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("error"),
+                       fmt::format("{}: \"{}\" command can only be executed in a MUC buffer",
+                                   WEECHAT_XMPP_PLUGIN_NAME, cmd).c_str());
+        return false;
+    }
+    if (!ptr_account->connected())
+    {
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("error"),
+                       fmt::format("{}: you are not connected to server",
+                                   WEECHAT_XMPP_PLUGIN_NAME).c_str());
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] auto optional_reason(int argc, char **argv_eol, int idx) -> std::string_view
+{
+    return (argc > idx) ? std::string_view{argv_eol[idx]} : std::string_view{};
+}
+
+} // namespace
+
+// XEP-0045 §9.6: grant voice (role=participant) in a moderated room.
+int command__voice(const void *pointer, void *data,
+                   struct t_gui_buffer *buffer, int argc,
+                   char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    (void) pointer;
+    (void) data;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+    if (!muc_admin_precheck(buffer, ptr_account, ptr_channel, "voice"))
+        return WEECHAT_RC_OK;
+    if (argc < 2)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: usage: /voice <nick> [<reason>]"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    return send_muc_role_change(ptr_account, ptr_channel, buffer, argv[1], "participant",
+                                optional_reason(argc, argv_eol, 2), "Voiced");
+}
+
+// XEP-0045 §9.6: revoke voice (role=visitor).
+int command__devoice(const void *pointer, void *data,
+                     struct t_gui_buffer *buffer, int argc,
+                     char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    (void) pointer;
+    (void) data;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+    if (!muc_admin_precheck(buffer, ptr_account, ptr_channel, "devoice"))
+        return WEECHAT_RC_OK;
+    if (argc < 2)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: usage: /devoice <nick> [<reason>]"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    return send_muc_role_change(ptr_account, ptr_channel, buffer, argv[1], "visitor",
+                                optional_reason(argc, argv_eol, 2), "Devoiced");
+}
+
+// XEP-0045 §9.5: grant moderator role.
+int command__op(const void *pointer, void *data,
+                struct t_gui_buffer *buffer, int argc,
+                char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    (void) pointer;
+    (void) data;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+    if (!muc_admin_precheck(buffer, ptr_account, ptr_channel, "op"))
+        return WEECHAT_RC_OK;
+    if (argc < 2)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: usage: /op <nick> [<reason>]"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    return send_muc_role_change(ptr_account, ptr_channel, buffer, argv[1], "moderator",
+                                optional_reason(argc, argv_eol, 2), "Opped");
+}
+
+// XEP-0045 §9.5: revoke moderator role (back to participant, not a kick).
+int command__deop(const void *pointer, void *data,
+                  struct t_gui_buffer *buffer, int argc,
+                  char **argv, char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    (void) pointer;
+    (void) data;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+    if (!muc_admin_precheck(buffer, ptr_account, ptr_channel, "deop"))
+        return WEECHAT_RC_OK;
+    if (argc < 2)
+    {
+        weechat_printf(buffer,
+                        _("%s%s: usage: /deop <nick> [<reason>]"),
+                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        return WEECHAT_RC_OK;
+    }
+
+    return send_muc_role_change(ptr_account, ptr_channel, buffer, argv[1], "participant",
+                                optional_reason(argc, argv_eol, 2), "Deopped");
+}
+
 int command__topic(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
@@ -2622,11 +2845,11 @@ int command__destroy([[maybe_unused]] const void *pointer,
     return WEECHAT_RC_OK;
 }
 
-// XEP-0045 §10.5: change a user's affiliation in the current MUC. Owner-only.
+// XEP-0045 §9.3–9.4 / §10.5: affiliation list and set in the current MUC.
 //
-// Usage: /affiliation set <jid> <owner|admin|member|none|outcast> [reason] [--confirm]
-//
-// Without --confirm the command prints the planned action and exits.
+// Usage:
+//   /affiliation list [owner|admin|member|outcast]
+//   /affiliation set <jid> <aff> [--nick <nick>] [reason] [--confirm]
 int command__affiliation([[maybe_unused]] const void *pointer,
                         [[maybe_unused]] void *data,
                         struct t_gui_buffer *buffer, int argc,
@@ -2640,71 +2863,130 @@ int command__affiliation([[maybe_unused]] const void *pointer,
     if (!ptr_account)
         return WEECHAT_RC_ERROR;
 
-    if (!ptr_channel || ptr_channel->type != weechat::channel::chat_type::MUC)
+    if (!muc_admin_precheck(buffer, ptr_account, ptr_channel, "affiliation"))
+        return WEECHAT_RC_OK;
+
+    if (argc < 2)
     {
         weechat_printf(buffer,
-                        _("%s%s: \"%s\" command can only be executed in a MUC buffer"),
-                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, "affiliation");
-        return WEECHAT_RC_OK;
-    }
-
-    if (!ptr_account->connected())
-    {
-        weechat_printf(buffer, _("%s%s: you are not connected to server"),
-                       weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
-        return WEECHAT_RC_OK;
-    }
-
-    if (argc < 2 || std::string_view(argv[1]) != "set")
-    {
-        weechat_printf(buffer,
-            _("%s%s: usage: /affiliation set <jid> <owner|admin|member|none|outcast> [reason] [--confirm]"),
+            _("%s%s: usage: /affiliation list [owner|admin|member|outcast]\n"
+              "              /affiliation set <jid> <aff> [--nick <nick>] [reason] [--confirm]"),
             weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
         return WEECHAT_RC_OK;
     }
+
+    const std::string_view sub = argv[1];
+
+    if (sub == "list")
+    {
+        const std::string_view aff_filter = (argc >= 3) ? std::string_view{argv[2]}
+                                                        : std::string_view{"member"};
+        if (!is_muc_list_affiliation(aff_filter))
+        {
+            weechat_printf(buffer, "%s%s",
+                           weechat_prefix("error"),
+                           fmt::format("{}: invalid affiliation '{}' "
+                                       "(valid: owner admin member outcast)",
+                                       WEECHAT_XMPP_PLUGIN_NAME, aff_filter).c_str());
+            return WEECHAT_RC_OK;
+        }
+
+        const std::string id = stanza::uuid(ptr_account->context);
+        ptr_account->muc_owner_queries[id] = weechat::account::muc_owner_query_info{
+            ptr_channel->id,
+            ptr_channel->buffer,
+            weechat::account::muc_owner_kind::aff_list,
+            std::string{aff_filter},
+            {}
+        };
+
+        stanza::xep0045admin::item_by_affiliation list_item(aff_filter);
+        stanza::xep0045admin::query q;
+        q.item(list_item);
+        auto list_iq = stanza::iq().type("get").to(ptr_channel->id).id(id);
+        list_iq.muc_admin(q);
+        ptr_account->connection.send(list_iq.build(ptr_account->context).get());
+
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("network"),
+                       fmt::format("Fetching {} list for {}…",
+                                   aff_filter, ptr_channel->id).c_str());
+        return WEECHAT_RC_OK;
+    }
+
+    if (sub != "set")
+    {
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("error"),
+                       fmt::format("{}: unknown subcommand '{}' (use: list | set)",
+                                   WEECHAT_XMPP_PLUGIN_NAME, sub).c_str());
+        return WEECHAT_RC_OK;
+    }
+
     if (argc < 4)
     {
-        weechat_printf(buffer,
-            _("%s%s: missing argument: /affiliation set <jid> <affiliation> [reason]"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME);
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("error"),
+                       fmt::format("{}: usage: /affiliation set <jid> <affiliation> "
+                                   "[--nick <nick>] [reason] [--confirm]",
+                                   WEECHAT_XMPP_PLUGIN_NAME).c_str());
         return WEECHAT_RC_OK;
     }
 
-    std::string_view target_jid = argv[2];
-    std::string_view aff = argv[3];
+    const std::string_view target_jid = argv[2];
+    const std::string_view aff = argv[3];
 
-    std::string aff_str{aff};
-    if (aff_str != "owner" && aff_str != "admin" && aff_str != "member" &&
-        aff_str != "none" && aff_str != "outcast")
+    if (!is_muc_affiliation(aff))
     {
-        weechat_printf(buffer,
-            _("%s%s: invalid affiliation '%s' (valid: owner admin member none outcast)"),
-            weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME, aff_str.c_str());
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("error"),
+                       fmt::format("{}: invalid affiliation '{}' "
+                                   "(valid: owner admin member none outcast)",
+                                   WEECHAT_XMPP_PLUGIN_NAME, aff).c_str());
         return WEECHAT_RC_OK;
     }
 
-    std::string reason = argc > 4 ? argv_eol[4] : "";
-    bool confirm = false;
-    for (int i = 1; i < argc; ++i)
-        if (std::string_view(argv[i]) == "--confirm") { confirm = true; break; }
+    const auto opts = parse_affiliation_set_opts(argc, argv, argv_eol);
 
     weechat_printf(buffer, "");
-    weechat_printf(buffer, "%sPlanned affiliation change in %s%s%s:",
-                   weechat_prefix("network"), weechat_color("chat_server"),
-                   ptr_channel->id.data(), weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-12s%s %s%s%s",
-                   weechat_color("chat_nick"), "target", weechat_color("reset"),
-                   weechat_color("chat_value"), std::string(target_jid).c_str(),
-                   weechat_color("reset"));
-    weechat_printf(buffer, "  %s%-12s%s %s%s%s",
-                   weechat_color("chat_nick"), "affiliation", weechat_color("reset"),
-                   weechat_color("chat_value"), aff_str.c_str(), weechat_color("reset"));
-    if (!reason.empty())
-        weechat_printf(buffer, "  %s%-12s%s %s%s%s",
-                       weechat_color("chat_nick"), "reason", weechat_color("reset"),
-                       weechat_color("chat_value"), reason.c_str(), weechat_color("reset"));
+    weechat_printf(buffer, "%s%s",
+                   weechat_prefix("network"),
+                   fmt::format("Planned affiliation change in {}{}{}:",
+                               weechat_color("chat_server"), ptr_channel->id,
+                               weechat_color("reset")).c_str());
+    weechat_printf(buffer, "%s",
+                   fmt::format("  {}{}{} {}{}{}",
+                               weechat_color("chat_nick"), "target",
+                               weechat_color("reset"),
+                               weechat_color("chat_value"), target_jid,
+                               weechat_color("reset")).c_str());
+    weechat_printf(buffer, "%s",
+                   fmt::format("  {}{}{} {}{}{}",
+                               weechat_color("chat_nick"), "affiliation",
+                               weechat_color("reset"),
+                               weechat_color("chat_value"), aff,
+                               weechat_color("reset")).c_str());
+    if (opts.nick_specified)
+    {
+        weechat_printf(buffer, "%s",
+                       fmt::format("  {}{}{} {}{}{}",
+                                   weechat_color("chat_nick"), "nick",
+                                   weechat_color("reset"),
+                                   weechat_color("chat_value"),
+                                   opts.nick.empty() ? "(unset)" : opts.nick,
+                                   weechat_color("reset")).c_str());
+    }
+    if (!opts.reason.empty())
+    {
+        weechat_printf(buffer, "%s",
+                       fmt::format("  {}{}{} {}{}{}",
+                                   weechat_color("chat_nick"), "reason",
+                                   weechat_color("reset"),
+                                   weechat_color("chat_value"), opts.reason,
+                                   weechat_color("reset")).c_str());
+    }
 
-    if (!confirm)
+    if (!opts.confirm)
     {
         weechat_printf(buffer, "%s%s: re-run with %s--confirm%s to apply.",
                        weechat_prefix("error"), WEECHAT_XMPP_PLUGIN_NAME,
@@ -2712,17 +2994,18 @@ int command__affiliation([[maybe_unused]] const void *pointer,
         return WEECHAT_RC_OK;
     }
 
-    std::string id = stanza::uuid(ptr_account->context);
-    weechat::account::muc_owner_query_info info{
+    const std::string id = stanza::uuid(ptr_account->context);
+    ptr_account->muc_owner_queries[id] = weechat::account::muc_owner_query_info{
         ptr_channel->id,
         ptr_channel->buffer,
         weechat::account::muc_owner_kind::aff_set
     };
-    ptr_account->muc_owner_queries[id] = info;
 
-    stanza::xep0045admin::item_by_jid item(target_jid, aff_str);
-    if (!reason.empty())
-        item.reason(reason);
+    stanza::xep0045admin::item_by_jid item(target_jid, aff);
+    if (opts.nick_specified)
+        item.nick(opts.nick);
+    if (!opts.reason.empty())
+        item.reason(opts.reason);
     stanza::xep0045admin::query q;
     q.item(item);
 
@@ -2730,8 +3013,73 @@ int command__affiliation([[maybe_unused]] const void *pointer,
     iq.muc_admin(q);
     ptr_account->connection.send(iq.build(ptr_account->context).get());
 
-    weechat_printf(buffer, "%sSetting affiliation of %s to %s…",
+    weechat_printf(buffer, "%s%s",
                    weechat_prefix("network"),
-                   std::string(target_jid).c_str(), aff_str.c_str());
+                   fmt::format("Setting affiliation of {} to {}…",
+                               target_jid, aff).c_str());
+    return WEECHAT_RC_OK;
+}
+
+// XEP-0045 §15: room registration (membership / reserved nick).
+//
+// Usage:
+//   /mucregister query
+//   /mucregister [nick]
+int command__mucregister([[maybe_unused]] const void *pointer,
+                       [[maybe_unused]] void *data,
+                       struct t_gui_buffer *buffer, int argc,
+                       char **argv, [[maybe_unused]] char **argv_eol)
+{
+    weechat::account *ptr_account = nullptr;
+    weechat::channel *ptr_channel = nullptr;
+
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+
+    if (!ptr_account)
+        return WEECHAT_RC_ERROR;
+
+    if (!muc_admin_precheck(buffer, ptr_account, ptr_channel, "mucregister"))
+        return WEECHAT_RC_OK;
+
+    const bool is_query = (argc >= 2 && std::string_view{argv[1]} == "query");
+    const std::string pending_nick = (!is_query && argc >= 2) ? std::string{argv[1]}
+                                                              : std::string{};
+
+    const std::string id = stanza::uuid(ptr_account->context);
+    ptr_account->muc_owner_queries[id] = weechat::account::muc_owner_query_info{
+        ptr_channel->id,
+        ptr_channel->buffer,
+        weechat::account::muc_owner_kind::register_get,
+        {},
+        pending_nick
+    };
+
+    stanza::xep0045register::query q;
+    auto reg_iq = stanza::iq().type("get").to(ptr_channel->id).id(id);
+    reg_iq.muc_register(q);
+    ptr_account->connection.send(reg_iq.build(ptr_account->context).get());
+
+    if (is_query)
+    {
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("network"),
+                       fmt::format("Fetching room registration info for {}…",
+                                   ptr_channel->id).c_str());
+    }
+    else if (!pending_nick.empty())
+    {
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("network"),
+                       fmt::format("Registering with nick {} in {}…",
+                                   pending_nick, ptr_channel->id).c_str());
+    }
+    else
+    {
+        weechat_printf(buffer, "%s%s",
+                       weechat_prefix("network"),
+                       fmt::format("Fetching registration form for {}…",
+                                   ptr_channel->id).c_str());
+    }
+
     return WEECHAT_RC_OK;
 }

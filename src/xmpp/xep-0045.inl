@@ -403,11 +403,26 @@ namespace stanza {
             }
         };
 
+        // <invite to='user@host'><reason>…</reason></invite> (XEP-0045 §7.8.2)
+        struct invite_to : virtual public spec {
+            explicit invite_to(std::string_view to_jid) : spec("invite") {
+                attr("to", to_jid);
+            }
+            invite_to& reason(std::string_view r) {
+                struct r_el : virtual public spec {
+                    r_el(std::string_view t) : spec("reason") { text(t); }
+                } re(r);
+                child(re);
+                return *this;
+            }
+        };
+
         // <x xmlns='http://jabber.org/protocol/muc#user'/>
         struct muc_user_x : virtual public spec {
             muc_user_x() : spec("x") {
                 xmlns<jabber_org::protocol::muc::user>();
             }
+            muc_user_x& invite(invite_to& inv) { child(inv); return *this; }
         };
 
         // stanza::presence mixin — adds a <x xmlns='...muc'><history maxstanzas='0'/></x>
@@ -435,6 +450,17 @@ namespace stanza {
             message() : spec("message") {}
 
             message& muc_user(xep0045::muc_user_x x) { child(x); return *this; }
+
+            // XEP-0045 §7.8.2: mediated room invitation (message to room@service).
+            message& mediated_invite(std::string_view to_jid, std::string_view invite_reason = {}) {
+                xep0045::muc_user_x ux;
+                xep0045::invite_to inv(to_jid);
+                if (!invite_reason.empty())
+                    inv.reason(invite_reason);
+                ux.invite(inv);
+                child(ux);
+                return *this;
+            }
         };
 
         // XEP-0045 §10.2/§10.7: room owner actions via the muc#owner namespace.

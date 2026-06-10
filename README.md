@@ -744,6 +744,15 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 | `/create <room@server> [nick] [--reserved]` | Create a new MUC room (XEP-0045 §10.1). With `--reserved` the room is created locked so the owner can configure it via `/setmodes` / `/affiliation` / `/destroy` before letting anyone in. Without `--reserved` the room is unlocked with server defaults (instant room) as soon as the server signals status 201 |
 | `/kick <nick> [reason]` | Kick a user from the MUC (requires moderator role) |
 | `/ban <jid> [reason]` | Ban a user by JID (requires admin/owner role) |
+| `/voice <nick> [reason]` | Grant voice in a moderated room (role=participant; moderator) |
+| `/devoice <nick> [reason]` | Revoke voice (role=visitor; moderator) |
+| `/op <nick> [reason]` | Grant moderator role (admin/owner) |
+| `/deop <nick> [reason]` | Revoke moderator role back to participant (not a kick) |
+| `/affiliation list [owner\|admin\|member\|outcast]` | Query affiliation list (default: member) |
+| `/affiliation set <jid> <aff> [--nick <nick>] [reason] [--confirm]` | Change affiliation; `--nick` sets or unsets (empty) reserved member nick |
+| `/mucregister query` | Show room registration / reserved-nick info (XEP-0045 §15) |
+| `/mucregister [nick]` | Register with the room using the given nick |
+| `/invite [--mediated] <jid> [reason]` | Invite a user (direct XEP-0249 by default; `--mediated` for XEP-0045 §7.8.2) |
 | `/topic [text]` | Set or clear the room topic |
 | `/nick [newnick]` | Change your nickname in the current MUC |
 | `/names` | List all known occupants in the current MUC with IRC-style role/affiliation prefixes (same symbols as the nicklist; sorted by rank then nick) |

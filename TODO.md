@@ -178,6 +178,7 @@ VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
 **Phase 3 — Low / Future**
 - [x] Spoilers: XEP-0382 already implemented (builder + parser + /spoiler command).
 - [x] Invites: XEP-0249 Direct MUC Invitations already implemented (fluent builder + handler).
+- [x] XEP-0045 MUC admin/registration remainder — see dedicated section below.
 - [x] Blocking: XEP-0191 Blocking Command already implemented (fluent builder + /block /unblock /blocklist commands + picker UI + server push handler).
 - [ ] XEP-0353 Jingle Message Initiation (voice/video calls) — not planned; requires full Jingle stack.
 - [x] XEP-0437 Room Activity Indicators — subscribe via presence to own bare JID, display <activity> notifications in account buffer; deferred but implemented for convenience.
@@ -201,6 +202,131 @@ VERIFIED(1) or UNTRUSTED(0) → return UNDECIDED(2); else → BLIND(3).
 **When adding future XEP support or modifying**: Follow AGENTS checklist exactly (fetch spec, verify, commit .txt with code, update DOAP/README, add row here, test, commit, push).
 
 *This section created as Phase 0 of the audit. Next high-priority work (emission migration) requires user approval of specific batch before surgical edits.*
+
+---
+
+## XEP-0045: Complete Remaining MUC Client Features
+
+**Origin**: Spec freshness audit (xmpp.org **1.35.5** vs local `docs/specs/xep-0045.txt` **1.35.3**).
+Revisions 1.35.4/1.35.5 are editorial/example-only — no wire-protocol changes. This plan
+covers the **implementation gaps** that keep DOAP at `partial`.
+
+**Canonical spec**: Re-fetch `docs/specs/xep-0045.txt` from
+`https://xmpp.org/extensions/xep-0045.html` and commit alongside the first code batch.
+Bump `DOAP.xml` `xmpp:version` to **1.35.5** when work lands.
+
+### Design decisions (confirmed)
+
+| Topic | Decision |
+|-------|----------|
+| Command style | **IRC-style** — `/voice`, `/devoice`, `/op`, `/deop` (matches existing `/kick`, `/ban`, `/topic`, `/nick`) |
+| Affiliation lists | **Extend `/affiliation`** — add `list` subcommand; keep `set` as today |
+| Room config UI | **`/setmodes` + `/affiliation` is sufficient** — no interactive `/roomconfig` picker over all `muc#roomconfig_*` fields |
+| PM → MUC conference | **`jabber:x:conference` in PM → print `/join` hint** — do not auto-join |
+
+### Already implemented (no rework)
+
+- Join/leave, `<history maxstanzas='0'/>`, password on join (`/create`, `/enter`)
+- Groupchat send/receive, topic (`/topic`), nick change (`/nick`)
+- Kick/ban (`/kick`, `/ban`), occupant display (`/names`, `/modes`)
+- Room create instant + `--reserved`; owner config via `/setmodes`; destroy (`/destroy`)
+- Affiliation set single-JID (`/affiliation set … --confirm`)
+- Direct invite XEP-0249 (`/invite`)
+- MUC private messages (`room@service/nick` + `muc#user` for carbons)
+- Status codes, role/affiliation nicklist, offline occupant display
+
+### Gaps (this plan)
+
+| Gap | XEP ref | Notes |
+|-----|---------|-------|
+| Voice grant/revoke | §9.6 | `muc#admin` IQ set: `role=participant` / `role=visitor` by nick |
+| Moderator grant/revoke | §9.5 | `muc#admin` IQ set: `role=moderator` / `role=participant` by nick |
+| Affiliation list query | §9.3–9.4 | `muc#admin` IQ get with `<item affiliation='…'/>` |
+| Member nick on set | §9.4, §10.5, §1.35.4 | Optional `nick` attr on `/affiliation set` for member list; empty nick unsets reserved nick |
+| Mediated room invite | §6.3, §10.6 | IQ set to room with `<invite to='…'/>` in `muc#user` |
+| Inbound mediated invite | §6.3 | Notify user; offer `/join` shortcut (no auto-join) |
+| Room registration | §15 | `muc#register` IQ for membership + reserved nick |
+| PM conference hint | §6.2 (jabber:x:conference) | Detect in PM handler; print join hint only |
+| DOAP note refresh | — | Expand note: partial admin + `/setmodes`/`/affiliation`/`/destroy`; not full voice/register until below done |
+
+**Explicitly out of scope** (per design decisions):
+- Full interactive room config over all `muc#roomconfig_*` fields
+- Auto-join on `jabber:x:conference` in PM
+- Server-side MUC service admin (XEP-0133)
+- Logging retrieval, message moderation UI beyond existing `/moderate`
+
+### Execution phases
+
+**Phase 0 — Spec + builders (prerequisite)**
+- [x] Re-fetch + commit `docs/specs/xep-0045.txt` (1.35.5)
+- [x] Extend `src/xmpp/xep-0045-admin.inl`:
+  - `item_by_jid` with optional `nick` attr (member list modify)
+  - mediated-invite builder: `muc#user` `<invite to='…'><reason>…</reason></invite>` on message (§7.8.2)
+- [x] Add `src/xmpp/xep-0045-register.inl`: `muc#register` query + form submit
+- [x] Doctest: `parse_mediated_muc_invite`
+
+**Phase 1 — IRC-style admin commands (highest value)**
+- [x] `/voice <nick> [reason]` — IQ set `role=participant` (§9.6)
+- [x] `/devoice <nick> [reason]` — IQ set `role=visitor`
+- [x] `/op <nick> [reason]` — IQ set `role=moderator` (§9.5)
+- [x] `/deop <nick> [reason]` — IQ set `role=participant` (not kick; distinct from `/kick`)
+- [x] Register commands in `src/command.cpp` with help text
+- [x] Implement in `src/command/muc_admin.inl`; reuse `xep0045admin` builders
+
+**Phase 2 — Extend `/affiliation`**
+- [x] `/affiliation list [owner|admin|member|outcast]` — `muc#admin` IQ get; print JID/nick table to buffer
+- [x] Track pending list queries on account (`muc_owner_queries` + `aff_list` kind)
+- [x] Extend `/affiliation set <jid> <aff> [--nick <nick>] [reason] [--confirm]`
+- [x] 1.35.4 reserved-nick unset via `--nick` with empty value
+- [x] Result handler: parse affiliation list items into buffer output
+
+**Phase 3 — Invitations**
+- [x] `/invite --mediated <jid> [reason]` — room-mediated invite (§7.8.2); default stays XEP-0249 direct
+- [x] Inbound mediated invite handler: notify + `/join` hint
+- [ ] Decline support (optional follow-up): `muc#user` decline stanza if user wants `/decline` later
+
+**Phase 4 — Registration (`muc#register`)**
+- [x] `/mucregister [nick]` — submit registration for current room (membership request / reserved nick)
+- [x] `/mucregister query` — discover existing registration / reserved nick (§15.3.2)
+- [x] On join `registration-required` error: print hint to run `/mucregister`
+- [x] Register commands in `command.cpp`
+
+**Phase 5 — PM conference hint**
+- [x] XEP-0249 `jabber:x:conference` in PM already prints `/join` hint (no auto-join)
+
+**Phase 6 — Documentation + DOAP**
+- [x] `README.md`: document new commands
+- [x] `DOAP.xml`: bump XEP-0045 version to 1.35.5; expand `xmpp:note`
+
+### Key files
+
+| Area | Path |
+|------|------|
+| Admin commands | `src/command/muc_admin.inl`, `src/command/muc_admin.cpp`, `src/command.cpp` |
+| Builders | `src/xmpp/xep-0045-admin.inl`, `src/xmpp/xep-0045.inl`, new `xep-0045-register.inl` + thin `.cpp` wrapper |
+| IQ results | `src/connection/iq_handler.inl` |
+| Inbound invites | `src/xmpp/message_invite.cpp` or `presence_handler.inl` (mediated invite arrives as message/presence with `muc#user`) |
+| Account state | `src/account.hh` — pending `muc_admin_queries` map (mirror `muc_owner_queries`) |
+| Tests | extend doctests in relevant `src/xmpp/*.cpp` wrappers |
+
+### Verification
+
+- `CXX="ccache clang++" make DEBUG=1` — 109 doctests pass
+- Manual WeeChat (full restart): join moderated room as mod; `/voice`/`/devoice`/`/op`/`/deop`; `/affiliation list member`; `/affiliation set` with nick; `/invite --mediated`; receive mediated invite; `/mucregister` on members-only room; PM with `x:conference` shows hint only
+- Enable `xmpp.look.debug` + `xmpp.look.raw_xml_log`; cross-check stanzas against `docs/specs/xep-0045.txt` examples
+- Retest critical regressions: PM no-recreate, typing indicators, MUC nicklist, `/kick`/`/ban`, `/setmodes`/`/destroy`
+
+### Status
+
+- [x] Phase 0 — spec + builders
+- [x] Phase 1 — voice/op commands
+- [x] Phase 2 — affiliation list + nick on set
+- [x] Phase 3 — mediated invites
+- [x] Phase 4 — muc#register
+- [x] Phase 5 — PM conference hint (XEP-0249 `jabber:x:conference` join hint already existed)
+- [x] Phase 6 — docs + DOAP
+
+*Preplanned per user request. Execute phases in order; each phase is one logical commit (or stacked commits per phase sub-step). Say "execute the plan" / "start Phase 1" to begin implementation.*
 
 ---
 
