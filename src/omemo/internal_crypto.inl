@@ -406,6 +406,8 @@ void invalidate_session_cipher_cache_jid(omemo &self, std::string_view jid)
     OMEMO_ASSERT(!jid.empty(), "peer jid must be non-empty");
     OMEMO_ASSERT(remote_device_id != 0, "peer device id must be non-zero");
 
+    const omemo_lmdb_read_scope read_scope {self};
+
     // Per Conversations: Signal-encrypt innerKey(16) || authTag(16) = 32 bytes
     std::array<std::uint8_t, 32> bundle {};
     auto bundle_span = std::span(bundle);
@@ -454,6 +456,8 @@ void invalidate_session_cipher_cache_jid(omemo &self, std::string_view jid)
 
     if (out_is_duplicate)
         *out_is_duplicate = false;
+
+    const omemo_lmdb_read_scope read_scope {self};
 
     session_cipher *cipher = get_session_cipher(self, jid, remote_device_id);
     if (!cipher)
@@ -584,10 +588,18 @@ void store_bytes(omemo &self, std::string_view key, const std::uint8_t *data, st
 
 [[nodiscard]] auto load_bytes(omemo &self, std::string_view key) -> std::optional<std::vector<std::uint8_t>>
 {
-    auto transaction = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
     std::string_view value;
-    if (!self.dbi.omemo.get(transaction, key, value))
-        return std::nullopt;
+    if (self.lmdb_read_txn_)
+    {
+        if (!self.dbi.omemo.get(*self.lmdb_read_txn_, key, value))
+            return std::nullopt;
+    }
+    else
+    {
+        auto transaction = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+        if (!self.dbi.omemo.get(transaction, key, value))
+            return std::nullopt;
+    }
 
     const auto *begin = reinterpret_cast<const std::uint8_t *>(value.data());
     return std::vector<std::uint8_t> {begin, begin + value.size()};

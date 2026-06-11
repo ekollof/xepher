@@ -14,7 +14,7 @@ void weechat::account::mam_cache_init()
             std::filesystem::path(mam_db_path.data()).parent_path());
 
         mam_db_env = lmdb::env::create();
-        mam_db_env.set_max_dbs(10);
+        mam_db_env.set_max_dbs(12);
         mam_db_env.set_mapsize((size_t)1048576 * 1000); // 1000MB
         mam_db_env.open(mam_db_path.data(), MDB_NOSUBDIR, 0600);
 
@@ -26,12 +26,15 @@ void weechat::account::mam_cache_init()
         mam_dbi.capabilities = lmdb::dbi::open(transaction, "capabilities", MDB_CREATE);
         mam_dbi.retractions = lmdb::dbi::open(transaction, "retractions", MDB_CREATE);
         mam_dbi.cursors = lmdb::dbi::open(transaction, "cursors", MDB_CREATE);
+        mam_dbi.feed_seen = lmdb::dbi::open(transaction, "feed_seen", MDB_CREATE);
         mam_dbi.omemo_plaintext = lmdb::dbi::open(transaction, "omemo_plaintext", MDB_CREATE);
         mam_dbi.esfs_downloads  = lmdb::dbi::open(transaction, "esfs_downloads",  MDB_CREATE);
         mam_dbi.image_previews  = lmdb::dbi::open(transaction, "image_previews",  MDB_CREATE);
         mam_dbi.og_previews     = lmdb::dbi::open(transaction, "og_previews",     MDB_CREATE);
 
         transaction.commit();
+
+        migrate_feed_seen_from_cursors();
         
         // Load capability cache from database
         caps_cache_load();
@@ -55,6 +58,71 @@ void mam_cache_put_in_txn(MDB_txn *txn, MDB_dbi dbi,
     MDB_val v = {value.size(), const_cast<void *>(static_cast<const void *>(value.data()))};
     mdb_put(txn, dbi, &k, &v, 0);
 }
+
+[[nodiscard]] auto feed_seen_storage_key(std::string_view feed_key, std::string_view item_id)
+    -> std::string
+{
+    return fmt::format("{}:{}", feed_key, item_id);
+}
+
+} // namespace
+
+void weechat::account::migrate_feed_seen_from_cursors()
+{
+    if (!mam_db_env)
+        return;
+
+    static constexpr std::string_view marker = "__feed_seen_migrated_v1";
+    try {
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn rtxn = lmdb::txn::begin(mam_db_env, parent_transaction, MDB_RDONLY);
+        MDB_val mk = {marker.size(), const_cast<void *>(static_cast<const void *>(marker.data()))};
+        MDB_val mv;
+        if (mdb_get(rtxn.handle(), mam_dbi.feed_seen.handle(), &mk, &mv) == 0)
+        {
+            rtxn.abort();
+            return;
+        }
+        rtxn.abort();
+
+        lmdb::txn wtxn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
+        static constexpr std::string_view legacy_prefix = "feed_seen:";
+        MDB_cursor *cursor = nullptr;
+        if (mdb_cursor_open(wtxn.handle(), mam_dbi.cursors.handle(), &cursor) != 0)
+        {
+            wtxn.abort();
+            return;
+        }
+
+        MDB_val k = {legacy_prefix.size(),
+                     const_cast<void *>(static_cast<const void *>(legacy_prefix.data()))};
+        MDB_val v;
+        int rc = mdb_cursor_get(cursor, &k, &v, MDB_SET_RANGE);
+        while (rc == 0)
+        {
+            const std::string_view key_sv(static_cast<const char *>(k.mv_data), k.mv_size);
+            if (!key_sv.starts_with(legacy_prefix))
+                break;
+
+            const auto new_key = key_sv.substr(legacy_prefix.size());
+            MDB_val nk = {new_key.size(), const_cast<void *>(static_cast<const void *>(new_key.data()))};
+            mdb_put(wtxn.handle(), mam_dbi.feed_seen.handle(), &nk, &v, 0);
+            mdb_del(wtxn.handle(), mam_dbi.cursors.handle(), &k, nullptr);
+            rc = mdb_cursor_get(cursor, &k, &v, MDB_NEXT);
+        }
+        mdb_cursor_close(cursor);
+
+        static const char *done = "1";
+        MDB_val done_k = {marker.size(), const_cast<void *>(static_cast<const void *>(marker.data()))};
+        MDB_val done_v = {1, const_cast<void *>(static_cast<const void *>(done))};
+        mdb_put(wtxn.handle(), mam_dbi.feed_seen.handle(), &done_k, &done_v, 0);
+        wtxn.commit();
+    } catch (const lmdb::error&) {
+        // Best-effort migration; legacy cursors keys may remain until next connect.
+    }
+}
+
+namespace {
 
 [[nodiscard]] auto mam_cache_channel_from_message_key(std::string_view key) -> std::string_view
 {
@@ -630,7 +698,7 @@ bool weechat::account::feed_item_seen(std::string_view feed_key, std::string_vie
     if (item_id.empty())
         return false;
 
-    const std::string key = fmt::format("feed_seen:{}:{}", feed_key, item_id);
+    const std::string key = feed_seen_storage_key(feed_key, item_id);
     if (feed_seen_keys_.contains(key))
         return true;
 
@@ -640,9 +708,9 @@ bool weechat::account::feed_item_seen(std::string_view feed_key, std::string_vie
     try {
         lmdb::txn parent_transaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, MDB_RDONLY);
-        MDB_val k = {key.size(), (void*)key.data()};
+        MDB_val k = {key.size(), const_cast<void *>(static_cast<const void *>(key.data()))};
         MDB_val v;
-        const bool found = (mdb_get(txn.handle(), mam_dbi.cursors.handle(), &k, &v) == 0);
+        const bool found = (mdb_get(txn.handle(), mam_dbi.feed_seen.handle(), &k, &v) == 0);
         txn.abort();
         if (found)
             feed_seen_keys_.insert(key);
@@ -657,7 +725,7 @@ void weechat::account::feed_item_mark_seen(std::string_view feed_key, std::strin
     if (item_id.empty())
         return;
 
-    const std::string key = fmt::format("feed_seen:{}:{}", feed_key, item_id);
+    const std::string key = feed_seen_storage_key(feed_key, item_id);
     feed_seen_keys_.insert(key);
 
     if (!mam_db_env)
@@ -667,9 +735,9 @@ void weechat::account::feed_item_mark_seen(std::string_view feed_key, std::strin
     try {
         lmdb::txn parent_transaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
-        MDB_val k = {key.size(), (void*)key.data()};
-        MDB_val v = {1, (void*)val_str};
-        mdb_put(txn.handle(), mam_dbi.cursors.handle(), &k, &v, 0);
+        MDB_val k = {key.size(), const_cast<void *>(static_cast<const void *>(key.data()))};
+        MDB_val v = {1, const_cast<void *>(static_cast<const void *>(val_str))};
+        mdb_put(txn.handle(), mam_dbi.feed_seen.handle(), &k, &v, 0);
         txn.commit();
     } catch (const lmdb::error&) {
         // Silently ignore write errors
@@ -682,27 +750,26 @@ void weechat::account::feed_seen_sync_from_cache()
     if (!mam_db_env)
         return;
 
-    static constexpr std::string_view prefix = "feed_seen:";
+    static constexpr std::string_view marker = "__feed_seen_migrated_v1";
     try {
         lmdb::txn parent_transaction{nullptr};
         lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, MDB_RDONLY);
 
         MDB_cursor *cursor = nullptr;
-        if (mdb_cursor_open(txn.handle(), mam_dbi.cursors.handle(), &cursor) != 0)
+        if (mdb_cursor_open(txn.handle(), mam_dbi.feed_seen.handle(), &cursor) != 0)
         {
             txn.abort();
             return;
         }
 
-        MDB_val k = {prefix.size(), (void*)prefix.data()};
+        MDB_val k {};
         MDB_val v;
-        int rc = mdb_cursor_get(cursor, &k, &v, MDB_SET_RANGE);
+        int rc = mdb_cursor_get(cursor, &k, &v, MDB_FIRST);
         while (rc == 0)
         {
             std::string_view kv(static_cast<const char*>(k.mv_data), k.mv_size);
-            if (!kv.starts_with(prefix))
-                break;
-            feed_seen_keys_.emplace(kv);
+            if (kv != marker)
+                feed_seen_keys_.emplace(kv);
             rc = mdb_cursor_get(cursor, &k, &v, MDB_NEXT);
         }
 

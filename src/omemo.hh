@@ -150,6 +150,10 @@ namespace weechat {
             // Reused libsignal session_cipher handles per peer device (invalidated on session delete).
             std::unordered_map<std::string, libsignal::unique_session_cipher> session_cipher_cache_;
 
+            // Optional shared RO txn for nested Signal store reads (see omemo_lmdb_read_scope).
+            std::optional<lmdb::txn> lmdb_read_txn_;
+            int lmdb_read_txn_depth_ = 0;
+
             class bundle_request
             {
             public:

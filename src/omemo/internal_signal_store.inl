@@ -45,8 +45,15 @@ void store_string(omemo &self, std::string_view key, std::string_view value)
 
 [[nodiscard]] auto load_string(omemo &self, std::string_view key) -> std::optional<std::string>
 {
-    auto transaction = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
     std::string_view value;
+    if (self.lmdb_read_txn_)
+    {
+        if (!self.dbi.omemo.get(*self.lmdb_read_txn_, key, value))
+            return std::nullopt;
+        return std::string {value};
+    }
+
+    auto transaction = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
     if (!self.dbi.omemo.get(transaction, key, value))
         return std::nullopt;
     return std::string {value};
@@ -634,6 +641,8 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     OMEMO_ASSERT(self.store_context, "signal store context must exist before building a session from a bundle");
     OMEMO_ASSERT(!jid.empty(), "peer jid must be present when building a session from a bundle");
     OMEMO_ASSERT(remote_device_id != 0, "peer device id must be non-zero when building a session from a bundle");
+
+    const omemo_lmdb_read_scope read_scope {self};
 
     const auto bundle = load_bundle(self, jid, remote_device_id);
     if (!bundle || bundle->prekeys.empty())

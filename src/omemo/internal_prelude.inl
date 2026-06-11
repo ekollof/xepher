@@ -121,6 +121,27 @@ using unique_gcry_mac = std::unique_ptr<std::remove_pointer_t<gcry_mac_hd_t>, gc
 
 using c_string = std::unique_ptr<char, decltype(&free)>;
 
+// Reuse one RO LMDB txn across nested Signal store reads during encrypt/decrypt.
+class omemo_lmdb_read_scope {
+    omemo &self_;
+
+public:
+    explicit omemo_lmdb_read_scope(omemo &self) : self_(self)
+    {
+        if (self_.lmdb_read_txn_depth_++ == 0)
+            self_.lmdb_read_txn_.emplace(lmdb::txn::begin(self_.db_env, nullptr, MDB_RDONLY));
+    }
+
+    ~omemo_lmdb_read_scope()
+    {
+        if (self_.lmdb_read_txn_depth_ > 0 && --self_.lmdb_read_txn_depth_ == 0)
+            self_.lmdb_read_txn_.reset();
+    }
+
+    omemo_lmdb_read_scope(const omemo_lmdb_read_scope &) = delete;
+    omemo_lmdb_read_scope &operator=(const omemo_lmdb_read_scope &) = delete;
+};
+
 [[nodiscard]] auto eval_path(std::string_view expression) -> std::string
 {
     std::string expr_str(expression);  // ensure null-terminated for C API

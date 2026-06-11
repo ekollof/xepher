@@ -446,6 +446,7 @@ namespace weechat
             lmdb::dbi capabilities = 0;    // XEP-0115 capability cache
             lmdb::dbi retractions = 0;     // XEP-0424 retracted message IDs
             lmdb::dbi cursors = 0;         // RSM cursor persistence for MAM queries
+            lmdb::dbi feed_seen = 0;       // feed item dedup keys (feed_key:item_id)
             lmdb::dbi omemo_plaintext = 0; // decrypted OMEMO body cache (keyed channel_jid:msg_id)
             lmdb::dbi esfs_downloads = 0;  // ESFS downloaded file paths (keyed channel_jid:stable_id → saved_path)
             lmdb::dbi image_previews = 0;  // local image paths for icat MAM replay (keyed channel_jid:stable_id)
@@ -562,6 +563,7 @@ namespace weechat
         [[nodiscard]] bool feed_is_open(std::string_view feed_key) const;
         void feed_open_sync_from_cache();
         void feed_seen_sync_from_cache();
+        void migrate_feed_seen_from_cursors();
         void feed_dismiss(std::string_view feed_key);
         std::vector<std::string> feed_open_list();
 
