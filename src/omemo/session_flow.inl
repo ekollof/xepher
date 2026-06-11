@@ -515,9 +515,8 @@ static void send_key_transport(omemo &self,
 
     if (!any_keys && !own_has_keys)
     {
-        print_error(buffer, fmt::format(
-            "OMEMO: key-transport encrypt failed for {}/{}",
-            peer_jid, remote_device_id));
+        XDEBUG("OMEMO: key-transport encrypt failed for {}/{}",
+               peer_jid, remote_device_id);
         return;
     }
 

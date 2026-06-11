@@ -369,7 +369,7 @@ namespace {
     auto authtag_span = std::span(authtag);
     if (gcry_cipher_checktag(*cipher, authtag_span.data(), authtag_span.size()) != 0)
     {
-        print_error(nullptr, "omemo: legacy OMEMO payload GCM authentication failed");
+        XDEBUG("omemo: legacy OMEMO payload GCM authentication failed");
         return std::unexpected("auth tag failed");
     }
 
@@ -520,9 +520,8 @@ enum class prekey_decrypt_strategy {
     const auto scoped_cipher = scoped_session_cipher::create(self, jid, remote_device_id);
     if (!scoped_cipher)
     {
-        print_error(nullptr,
-                    fmt::format("omemo: (legacy) session_cipher_create failed for {}/{}",
-                                jid, remote_device_id));
+        XDEBUG("omemo: (legacy) session_cipher_create failed for {}/{}",
+               jid, remote_device_id);
         return std::nullopt;
     }
     session_cipher *cipher = scoped_cipher->get();
@@ -543,9 +542,8 @@ enum class prekey_decrypt_strategy {
             rc = pre_key_signal_message_deserialize(&message_raw, ser_span.data(), ser_span.size(), self.context);
         if (rc != 0)
         {
-            print_error(nullptr,
-                        fmt::format("omemo: (legacy) pre_key_signal_message_deserialize failed for {}/{}: rc={}",
-                                    jid, remote_device_id, rc));
+            XDEBUG("omemo: (legacy) pre_key_signal_message_deserialize failed for {}/{}: rc={}",
+                   jid, remote_device_id, rc);
             return std::nullopt;
         }
         libsignal::object<pre_key_signal_message> message {message_raw};
@@ -615,9 +613,8 @@ enum class prekey_decrypt_strategy {
             rc = signal_message_deserialize(&message_raw, ser_span.data(), ser_span.size(), self.context);
         if (rc != 0)
         {
-            print_error(nullptr,
-                        fmt::format("omemo: (legacy) signal_message_deserialize failed for {}/{}: rc={}",
-                                    jid, remote_device_id, rc));
+            XDEBUG("omemo: (legacy) signal_message_deserialize failed for {}/{}: rc={}",
+                   jid, remote_device_id, rc);
             return std::nullopt;
         }
         libsignal::object<signal_message> message {message_raw};
@@ -642,9 +639,8 @@ enum class prekey_decrypt_strategy {
                 *out_is_duplicate = true;
             return std::nullopt;
         }
-        print_error(nullptr,
-                    fmt::format("omemo: (legacy) session_cipher_decrypt failed for {}/{}: rc={}",
-                                jid, remote_device_id, result));
+        XDEBUG("omemo: (legacy) session_cipher_decrypt failed for {}/{}: rc={}",
+               jid, remote_device_id, result);
         return std::nullopt;
     }
 
@@ -652,9 +648,8 @@ enum class prekey_decrypt_strategy {
         plaintext_raw, signal_buffer_bzero_free);
     if (signal_buffer_len(plaintext.get()) != 32)
     {
-        print_error(nullptr,
-                    fmt::format("omemo: (legacy) decrypted transport key has wrong length {} (expected 32)",
-                                signal_buffer_len(plaintext.get())));
+        XDEBUG("omemo: (legacy) decrypted transport key has wrong length {} (expected 32)",
+               signal_buffer_len(plaintext.get()));
         return std::nullopt;
     }
 

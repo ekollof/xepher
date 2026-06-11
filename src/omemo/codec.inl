@@ -177,7 +177,8 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             XDEBUG("OMEMO decode: transport key decrypt {} for {}/{}",
                    legacy_transport_key ? "ok" : "failed", jid, *sender_device_id);
             if (!legacy_transport_key && !quiet && !(out_is_duplicate && *out_is_duplicate))
-                print_error(buffer, "OMEMO (legacy) Signal decryption of transport key failed.");
+                XDEBUG("OMEMO decode: legacy Signal transport-key decrypt failed for {}/{}",
+                       jid, *sender_device_id);
         }
     }
 
@@ -227,11 +228,10 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
         if (!quiet && !suppress_peer_traffic)
         {
             if (!found_keys_elem)
-                print_error(buffer, "OMEMO message has no <keys> element in header.");
+                XDEBUG("OMEMO decode: message has no <keys> element in header (peer={})", jid);
             else if (!found_keys_for_our_bare_jid)
-                print_error(buffer, fmt::format(
-                    "OMEMO message has no <keys jid='{}'> element for our bare JID.",
-                    own_bare_jid));
+                XDEBUG("OMEMO decode: message has no <keys jid='{}'> for our bare JID (peer={})",
+                       own_bare_jid, jid);
         }
         if (!found_key_for_us)
         {
@@ -272,7 +272,8 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             // recovery actions — there is nothing to recover.
             const bool is_duplicate = out_is_duplicate && *out_is_duplicate;
             if (!quiet && !suppress_peer_traffic && !is_duplicate)
-                print_error(buffer, "OMEMO transport key decryption failed.");
+                XDEBUG("OMEMO decode: transport-key decrypt failed for {}/{} — recovery may follow",
+                       jid, sender_device_id ? *sender_device_id : 0u);
             if (!is_duplicate && account && sender_device_id)
             {
                 const std::string bare_jid = normalize_bare_jid(*account->context, jid);
@@ -288,9 +289,8 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                     {
                         key_transport_bootstrap_attempted.insert(kex_key);
                         if (!quiet)
-                            print_info(buffer, fmt::format(
-                                "OMEMO: queueing key-transport to {}/{} to recover stale session",
-                                bare_jid, *sender_device_id));
+                            XDEBUG("omemo: queueing key-transport to {}/{} to recover stale session",
+                                   bare_jid, *sender_device_id);
                         // Delete the stale session so the key-transport forces a fresh
                         // PreKeySignalMessage exchange from the sender's side.
                         auto addr = make_signal_address(bare_jid,

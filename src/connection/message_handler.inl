@@ -1169,8 +1169,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             case ::xmpp::OmemoDecryptFailureDisposition::AbortSilent:
                 return 1;
             case ::xmpp::OmemoDecryptFailureDisposition::ShowDecryptionError:
-                weechat::UiPort::for_buffer(channel->buffer)->printf_error(
-                    fmt::format("OMEMO Decryption Error ({})", from));
+                XDEBUG("omemo: decryption failed for {} (from={})", decode_jid, from);
                 return 1;
             }
         }
