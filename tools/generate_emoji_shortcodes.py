@@ -1,20 +1,33 @@
 #!/usr/bin/env python3
-"""Regenerate src/message_emoji_shortcodes.inl from github/gemoji."""
+"""Regenerate src/message_emoji_shortcodes.inl from vendored github/gemoji data."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import urllib.request
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
 GEMoji_URL = "https://raw.githubusercontent.com/github/gemoji/master/db/emoji.json"
-OUT_PATH = Path(__file__).resolve().parents[1] / "src" / "message_emoji_shortcodes.inl"
+JSON_PATH = ROOT / "tools" / "gemoji" / "emoji.json"
+OUT_PATH = ROOT / "src" / "message_emoji_shortcodes.inl"
 
 
-def main() -> None:
+def load_emoji_data(path: Path) -> list[dict]:
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def fetch_upstream_json(path: Path) -> None:
     with urllib.request.urlopen(GEMoji_URL) as response:
         data = json.load(response)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"fetched {path}")
 
+
+def generate_inl(data: list[dict]) -> str:
     entries: list[tuple[str, str]] = []
     seen: set[str] = set()
     for item in data:
@@ -32,7 +45,7 @@ def main() -> None:
         esc = emoji.replace("\\", "\\\\").replace('"', '\\"')
         rows.append(f'    {{"{alias}", "{esc}"}},')
 
-    content = f"""// Generated from github/gemoji db/emoji.json — do not edit by hand.
+    return f"""// Generated from tools/gemoji/emoji.json — do not edit by hand.
 // Regenerate: python3 tools/generate_emoji_shortcodes.py
 
 #pragma once
@@ -70,8 +83,26 @@ static constexpr emoji_shortcode_entry k_emoji_shortcodes[] = {{
 }} // namespace
 """
 
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--fetch",
+        action="store_true",
+        help="download tools/gemoji/emoji.json from upstream before generating",
+    )
+    args = parser.parse_args()
+
+    if args.fetch:
+        fetch_upstream_json(JSON_PATH)
+
+    if not JSON_PATH.is_file():
+        raise SystemExit(f"missing {JSON_PATH} (run with --fetch or add the file)")
+
+    content = generate_inl(load_emoji_data(JSON_PATH))
     OUT_PATH.write_text(content, encoding="utf-8")
-    print(f"wrote {OUT_PATH} ({len(entries)} aliases)")
+    alias_count = content.count('    {"')
+    print(f"wrote {OUT_PATH} ({alias_count} aliases)")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-// Generated from github/gemoji db/emoji.json — do not edit by hand.
+// Generated from tools/gemoji/emoji.json — do not edit by hand.
 // Regenerate: python3 tools/generate_emoji_shortcodes.py
 
 #pragma once
