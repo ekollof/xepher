@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <list>
 #include <memory>
 #include <functional>
 #include <optional>
@@ -11,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "test_export.hh"
 
@@ -47,6 +49,52 @@ namespace weechat {
         struct signal_address_view {
             std::string name;
             signal_protocol_address address {};
+
+            void sync_address() noexcept
+            {
+                address.name = name.empty() ? nullptr : name.c_str();
+                address.name_len = name.size();
+            }
+
+            signal_address_view() = default;
+
+            signal_address_view(signal_address_view&& other) noexcept
+                : name(std::move(other.name)), address(other.address)
+            {
+                sync_address();
+                other.address.name = nullptr;
+                other.address.name_len = 0;
+            }
+
+            signal_address_view& operator=(signal_address_view&& other) noexcept
+            {
+                if (this != &other)
+                {
+                    name = std::move(other.name);
+                    address.device_id = other.address.device_id;
+                    sync_address();
+                    other.address.name = nullptr;
+                    other.address.name_len = 0;
+                }
+                return *this;
+            }
+
+            signal_address_view(const signal_address_view& other)
+                : name(other.name), address(other.address)
+            {
+                sync_address();
+            }
+
+            signal_address_view& operator=(const signal_address_view& other)
+            {
+                if (this != &other)
+                {
+                    name = other.name;
+                    address.device_id = other.address.device_id;
+                    sync_address();
+                }
+                return *this;
+            }
         };
 
         // libsignal session_cipher stores remote_address by pointer — keep name alive.
@@ -159,7 +207,10 @@ namespace weechat {
             std::unordered_map<std::string, omemo_trust> tofu_trust_cache_;
 
             // Reused libsignal session_cipher handles per peer device (invalidated on session delete).
-            std::unordered_map<std::string, cached_session_cipher> session_cipher_cache_;
+            // List storage keeps address structs at stable addresses for libsignal's raw pointers.
+            std::list<cached_session_cipher> session_cipher_storage_;
+            std::unordered_map<std::string, std::list<cached_session_cipher>::iterator>
+                session_cipher_cache_;
 
             // Optional shared RO txn for nested Signal store reads (see omemo_lmdb_read_scope).
             std::optional<lmdb::txn> lmdb_read_txn_;

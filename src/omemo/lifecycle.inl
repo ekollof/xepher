@@ -198,6 +198,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, co
         axolotl_devicelist_cache_.clear();
         tofu_trust_cache_.clear();
         session_cipher_cache_.clear();
+        session_cipher_storage_.clear();
         lmdb_read_txn_.reset();
         lmdb_read_txn_depth_ = 0;
         prekey_reply_sent.clear();

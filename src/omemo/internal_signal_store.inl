@@ -618,9 +618,8 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
 {
     signal_address_view view;
     view.name = std::string {jid};
-    view.address.name = view.name.c_str();
-    view.address.name_len = view.name.size();
     view.address.device_id = device_id;
+    view.sync_address();
     return view;
 }
 

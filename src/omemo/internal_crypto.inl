@@ -383,12 +383,26 @@ namespace {
 
 void invalidate_session_cipher_cache(omemo &self, std::string_view jid, std::uint32_t device_id)
 {
-    self.session_cipher_cache_.erase(session_cipher_cache_key(jid, device_id));
+    const auto cache_key = session_cipher_cache_key(jid, device_id);
+    if (auto it = self.session_cipher_cache_.find(cache_key); it != self.session_cipher_cache_.end())
+    {
+        self.session_cipher_storage_.erase(it->second);
+        self.session_cipher_cache_.erase(it);
+    }
 }
 
 void invalidate_session_cipher_cache_jid(omemo &self, std::string_view jid)
 {
     const std::string prefix = fmt::format("{}:", jid);
+    std::vector<std::list<cached_session_cipher>::iterator> stale;
+    stale.reserve(self.session_cipher_cache_.size());
+    for (auto& [key, storage_it] : self.session_cipher_cache_)
+    {
+        if (key.starts_with(prefix))
+            stale.push_back(storage_it);
+    }
+    for (const auto storage_it : stale)
+        self.session_cipher_storage_.erase(storage_it);
     std::erase_if(self.session_cipher_cache_,
                   [&](const auto &entry) { return entry.first.starts_with(prefix); });
 }
@@ -398,19 +412,22 @@ void invalidate_session_cipher_cache_jid(omemo &self, std::string_view jid)
 {
     const auto cache_key = session_cipher_cache_key(jid, device_id);
     if (auto it = self.session_cipher_cache_.find(cache_key); it != self.session_cipher_cache_.end())
-        return it->second.cipher.get();
+        return it->second->cipher.get();
 
-    cached_session_cipher entry;
-    entry.address = make_signal_address(jid, static_cast<std::int32_t>(device_id));
+    auto storage_it = self.session_cipher_storage_.emplace(self.session_cipher_storage_.end());
+    storage_it->address = make_signal_address(jid, static_cast<std::int32_t>(device_id));
+
     session_cipher *cipher_raw = nullptr;
-    if (session_cipher_create(&cipher_raw, self.store_context, &entry.address.address, self.context) != 0)
+    if (session_cipher_create(&cipher_raw, self.store_context, &storage_it->address.address, self.context) != 0)
+    {
+        self.session_cipher_storage_.erase(storage_it);
         return nullptr;
+    }
 
-    entry.cipher = libsignal::unique_session_cipher {cipher_raw};
-    session_cipher_set_version(entry.cipher.get(), CIPHERTEXT_CURRENT_VERSION);
-    session_cipher *cached = entry.cipher.get();
-    self.session_cipher_cache_[cache_key] = std::move(entry);
-    return cached;
+    storage_it->cipher = libsignal::unique_session_cipher {cipher_raw};
+    session_cipher_set_version(storage_it->cipher.get(), CIPHERTEXT_CURRENT_VERSION);
+    self.session_cipher_cache_.emplace(cache_key, storage_it);
+    return storage_it->cipher.get();
 }
 
 // Signal-encrypt the legacy transport key bundle: innerKey(16) || authTag(16) = 32 bytes.
