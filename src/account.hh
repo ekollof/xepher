@@ -179,6 +179,8 @@ namespace weechat
         bool sm_resume_attempted = false;     // current connect tried <resume/>
         bool sm_post_connect_done = false;    // run_post_connect_setup completed
         std::string sm_id;              // session ID for resumption
+        std::string sm_reconnect_host;  // preferred host from <enabled location='…'/>
+        std::uint16_t sm_reconnect_port = 0;
         uint32_t sm_h_inbound = 0;      // stanzas we've received and handled
         uint32_t sm_h_outbound = 0;     // stanzas we've sent
         uint32_t sm_last_ack = 0;       // last h value acknowledged by server

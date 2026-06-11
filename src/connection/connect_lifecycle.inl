@@ -150,6 +150,14 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                                   status == event::raw_connect ? "raw-connect" :
                                   "unknown";
 
+        if (status == event::fail && !account.sm_reconnect_host.empty())
+        {
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                "SM reconnect location failed — falling back to standard connection");
+            account.sm_reconnect_host.clear();
+            account.sm_reconnect_port = 0;
+        }
+
         {
             auto ui = weechat::UiPort::for_buffer(account.buffer);
             const std::string conn_msg = fmt::format(
@@ -329,8 +337,20 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
         return 1; // accept cert, keep conn->tls valid, avoid nullptr-deref crash
     });
 
+    const char *altdomain = nullptr;
+    unsigned short altport = 0;
+    if (!account.sm_id.empty()
+        && !account.sm_reconnect_host.empty()
+        && account.sm_reconnect_port != 0)
+    {
+        altdomain = account.sm_reconnect_host.c_str();
+        altport = account.sm_reconnect_port;
+        XDEBUG("SM resume: connecting to preferred location {}:{}",
+               account.sm_reconnect_host, altport);
+    }
+
     if (!connect_client(
-            nullptr, 0, [](xmpp_conn_t *conn, xmpp_conn_event_t status,
+            altdomain, altport, [](xmpp_conn_t *conn, xmpp_conn_event_t status,
                            int error, xmpp_stream_error_t *stream_error,
                            void *userdata) {
                 auto& connection = *reinterpret_cast<weechat::connection*>(userdata);

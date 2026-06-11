@@ -373,7 +373,7 @@
         <xmpp:version>1.6.3</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >Stream Management for reliable message delivery and session resumption</xmpp:note>
+                >Stream Management: stanza ack/retransmit, session resume with post-connect deferral, resume-failure enable fallback, server preferred reconnect location, handled-count-too-high stream close, graceful disconnect ack</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

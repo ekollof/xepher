@@ -6,6 +6,7 @@
 #include <charconv>
 #include <cmath>
 #include <expected>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -41,6 +42,43 @@ parse_uint32(std::string_view value)
     if (error != std::errc {} || ptr != end)
         return std::unexpected("invalid uint32");
     return parsed;
+}
+
+XMPP_TEST_EXPORT std::optional<sm_reconnect_endpoint>
+parse_sm_location(std::string_view location)
+{
+    if (location.empty())
+        return std::nullopt;
+
+    std::string_view host;
+    std::string_view port_str;
+
+    if (location.starts_with('['))
+    {
+        const auto close = location.find(']');
+        if (close == std::string_view::npos || close + 1 >= location.size()
+            || location[close + 1] != ':')
+            return std::nullopt;
+        host = location.substr(1, close - 1);
+        port_str = location.substr(close + 2);
+    }
+    else
+    {
+        const auto colon = location.rfind(':');
+        if (colon == std::string_view::npos || colon + 1 >= location.size())
+            return std::nullopt;
+        host = location.substr(0, colon);
+        port_str = location.substr(colon + 1);
+    }
+
+    if (host.empty())
+        return std::nullopt;
+
+    const auto port = parse_uint32(port_str);
+    if (!port || *port == 0 || *port > 65535U)
+        return std::nullopt;
+
+    return sm_reconnect_endpoint{std::string(host), static_cast<std::uint16_t>(*port)};
 }
 
 XMPP_TEST_EXPORT std::expected<std::int64_t, std::string>

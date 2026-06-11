@@ -179,6 +179,35 @@ TEST_CASE("parse_uint32")
     }
 }
 
+TEST_CASE("parse_sm_location")
+{
+    SUBCASE("hostname with port")
+    {
+        const auto ep = parse_sm_location("xmpp.example.com:5222");
+        REQUIRE(ep);
+        CHECK(ep->host == "xmpp.example.com");
+        CHECK(ep->port == 5222);
+    }
+
+    SUBCASE("bracketed IPv6 with port")
+    {
+        const auto ep = parse_sm_location("[2001:41D0:1:A49b::1]:9222");
+        REQUIRE(ep);
+        CHECK(ep->host == "2001:41D0:1:A49b::1");
+        CHECK(ep->port == 9222);
+    }
+
+    SUBCASE("empty is invalid")
+    {
+        CHECK_FALSE(parse_sm_location(""));
+    }
+
+    SUBCASE("missing port is invalid")
+    {
+        CHECK_FALSE(parse_sm_location("xmpp.example.com"));
+    }
+}
+
 TEST_CASE("parse_int64")
 {
     SUBCASE("valid positive")

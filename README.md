@@ -1218,7 +1218,7 @@ the JID above.
 - ✅ XEP-0115: Entity Capabilities (persistent caching)
 - ✅ XEP-0163: Personal Eventing Protocol
 - ✅ XEP-0191: Blocking Command
-- ✅ XEP-0198: Stream Management
+- ✅ XEP-0198: Stream Management — negotiates SM before application stanzas; session resume with stanza retransmit; resume failure falls back to fresh `<enable/>`; on resume skips redundant roster/presence/MAM/feed fetches; honors server `<enabled location='…'/>` for reconnect; closes stream on invalid peer ack (`handled-count-too-high`); graceful final ack before disconnect
 
 ### Advanced IM
 

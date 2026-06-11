@@ -8,6 +8,7 @@
 #include <ctime>
 #include <expected>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include "test_export.hh"
@@ -36,6 +37,15 @@ XMPP_TEST_EXPORT std::string unescape(std::string_view str);
 
 [[nodiscard]] XMPP_TEST_EXPORT std::expected<std::uint32_t, std::string>
 parse_uint32(std::string_view value);
+
+// XEP-0198 §5: parse <enabled/> location (RFC 6120 §4.9.3.19 host:port or [ipv6]:port).
+struct sm_reconnect_endpoint {
+    std::string host;
+    std::uint16_t port = 0;
+};
+
+[[nodiscard]] XMPP_TEST_EXPORT std::optional<sm_reconnect_endpoint>
+parse_sm_location(std::string_view location);
 
 [[nodiscard]] XMPP_TEST_EXPORT std::expected<std::int64_t, std::string>
 parse_int64(std::string_view value);

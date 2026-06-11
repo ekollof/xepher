@@ -27,6 +27,32 @@ void sm_replay_pending_stanzas(weechat::connection &connection, weechat::account
         connection.send(stanza_copy.get());
 }
 
+void sm_close_stream_handled_count_too_high(weechat::connection &connection,
+                                              weechat::account &account,
+                                              const std::uint32_t ack_h,
+                                              const std::uint32_t sent)
+{
+    weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+        "SM error: server ack h={} exceeds sent count {} — closing stream",
+        ack_h, sent));
+
+    account.sm_enabled = false;
+
+    const std::string err_xml = fmt::format(
+        "<stream:error>"
+        "<undefined-condition xmlns='urn:ietf:params:xml:ns:xmpp-streams'/>"
+        "<handled-count-too-high xmlns='urn:xmpp:sm:3' h='{}' send-count='{}'/>"
+        "<text xml:lang='en' xmlns='urn:ietf:params:xml:ns:xmpp-streams'>"
+        "You acknowledged {} stanzas, but I only sent you {} so far."
+        "</text>"
+        "</stream:error>",
+        ack_h, sent, ack_h, sent);
+
+    xmpp_send_raw(static_cast<xmpp_conn_t *>(connection),
+                  err_xml.data(), err_xml.size());
+    xmpp_disconnect(static_cast<xmpp_conn_t *>(connection));
+}
+
 } // namespace
 
 void weechat::connection::send_sm_graceful_ack()
@@ -80,6 +106,25 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         else
         {
             XDEBUG("Stream Management enabled (not resumable)");
+        }
+
+        const std::string location = view.attr_string("location");
+        if (location.empty())
+        {
+            account.sm_reconnect_host.clear();
+            account.sm_reconnect_port = 0;
+        }
+        else if (const auto endpoint = parse_sm_location(location))
+        {
+            account.sm_reconnect_host = endpoint->host;
+            account.sm_reconnect_port = endpoint->port;
+            XDEBUG("SM reconnect location: {}:{}", endpoint->host, endpoint->port);
+        }
+        else
+        {
+            account.sm_reconnect_host.clear();
+            account.sm_reconnect_port = 0;
+            XDEBUG("SM reconnect location parse failed: {}", location);
         }
 
         sm_start_ack_timer(account);
@@ -201,9 +246,8 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         const uint32_t ack_count = parse_uint32(h).value_or(0);
         if (ack_count > account.sm_h_outbound)
         {
-            weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
-                "SM error: server ack h={} exceeds sent count {}",
-                ack_count, account.sm_h_outbound));
+            sm_close_stream_handled_count_too_high(*this, account,
+                                                   ack_count, account.sm_h_outbound);
             return true;
         }
 
