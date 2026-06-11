@@ -18,6 +18,9 @@ inline constexpr std::string_view k_glyph_pending = " ⌛";
 inline constexpr std::string_view k_glyph_delivered = " ✓";
 inline constexpr std::string_view k_glyph_seen = " ✓✓";
 
+// Default backward scan depth for buffer line lookups (MAM dedup uses the same cap).
+inline constexpr int k_line_store_default_max_scan = 256;
+
 // Strip a trailing delivery-status glyph from a buffer line message.
 [[nodiscard]] XMPP_TEST_EXPORT std::string strip_status_glyph_suffix(std::string message);
 
@@ -31,7 +34,7 @@ inline constexpr std::string_view k_glyph_seen = " ✓✓";
 [[nodiscard]] XMPP_TEST_EXPORT bool line_store_buffer_contains_any_tag(
     struct t_gui_buffer *buffer,
     std::initializer_list<std::string_view> needles,
-    int max_scan = 256);
+    int max_scan = k_line_store_default_max_scan);
 
 enum class LineStoreLookupResult {
     NotFound,
@@ -43,20 +46,23 @@ enum class LineStoreLookupResult {
 [[nodiscard]] XMPP_TEST_EXPORT LineStoreLookupResult
 line_store_find_message_line_for_sender(struct t_gui_buffer *buffer,
                                         std::string_view target_id,
-                                        std::string_view sender_key);
+                                        std::string_view sender_key,
+                                        int max_scan = k_line_store_default_max_scan);
 
 // Update message text on the first line whose tags match target_id.
 [[nodiscard]] XMPP_TEST_EXPORT bool line_store_update_message_by_id(
     struct t_gui_buffer *buffer,
     std::string_view target_id,
-    std::string_view new_message);
+    std::string_view new_message,
+    int max_scan = k_line_store_default_max_scan);
 
 // Tombstone the first matching line (no sender verification).
 [[nodiscard]] XMPP_TEST_EXPORT LineStoreLookupResult
 line_store_tombstone_message_by_id(struct t_gui_buffer *buffer,
                                    std::string_view target_id,
                                    std::string_view tombstone_message,
-                                   std::string_view replacement_tags);
+                                   std::string_view replacement_tags,
+                                   int max_scan = k_line_store_default_max_scan);
 
 // Tombstone with XEP-0424 sender verification (nick_ or occupant_id_ tags).
 [[nodiscard]] XMPP_TEST_EXPORT LineStoreLookupResult
@@ -66,7 +72,8 @@ line_store_tombstone_retraction_by_id(struct t_gui_buffer *buffer,
                                       std::string_view replacement_tags,
                                       std::string_view sender_key,
                                       std::string_view occupant_id,
-                                      bool prefer_occupant_id);
+                                      bool prefer_occupant_id,
+                                      int max_scan = k_line_store_default_max_scan);
 
 struct ReplyQuoteLookup {
     std::string excerpt;
@@ -75,12 +82,15 @@ struct ReplyQuoteLookup {
 
 // XEP-0461: find the body line of a tagged message group and build quote context.
 [[nodiscard]] XMPP_TEST_EXPORT std::optional<ReplyQuoteLookup>
-line_store_lookup_reply_quote(struct t_gui_buffer *buffer, std::string_view target_id);
+line_store_lookup_reply_quote(struct t_gui_buffer *buffer,
+                              std::string_view target_id,
+                              int max_scan = k_line_store_default_max_scan);
 
 // XEP-0444: replace reaction suffix on the first line matching target_id.
 [[nodiscard]] XMPP_TEST_EXPORT bool line_store_apply_reactions_by_id(
     struct t_gui_buffer *buffer,
     std::string_view target_id,
-    std::string_view emojis);
+    std::string_view emojis,
+    int max_scan = k_line_store_default_max_scan);
 
 }  // namespace weechat

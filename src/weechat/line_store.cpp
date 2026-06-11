@@ -175,9 +175,10 @@ bool line_store_buffer_contains_any_tag(struct t_gui_buffer *buffer,
 LineStoreLookupResult line_store_find_message_line_for_sender(
     struct t_gui_buffer *buffer,
     std::string_view target_id,
-    std::string_view sender_key)
+    std::string_view sender_key,
+    int max_scan)
 {
-    if (!buffer || target_id.empty() || sender_key.empty())
+    if (!buffer || target_id.empty() || sender_key.empty() || max_scan <= 0)
         return LineStoreLookupResult::NotFound;
 
     const xmpp::LineSenderVerify verify{ .sender_key = std::string(sender_key) };
@@ -192,7 +193,7 @@ LineStoreLookupResult line_store_find_message_line_for_sender(
         return LineStoreLookupResult::NotFound;
 
     void *last_line = weechat_hdata_pointer(hdata_lines, lines, "last_line");
-    while (last_line)
+    for (int scan = 0; last_line && scan < max_scan; ++scan)
     {
         void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
         if (line_data && line_data_has_message_id(line_data, target_id, hdata_line_data))
@@ -208,9 +209,10 @@ LineStoreLookupResult line_store_find_message_line_for_sender(
 
 bool line_store_update_message_by_id(struct t_gui_buffer *buffer,
                                      std::string_view target_id,
-                                     std::string_view new_message)
+                                     std::string_view new_message,
+                                     int max_scan)
 {
-    if (!buffer || target_id.empty() || new_message.empty())
+    if (!buffer || target_id.empty() || new_message.empty() || max_scan <= 0)
         return false;
 
     static struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
@@ -223,7 +225,7 @@ bool line_store_update_message_by_id(struct t_gui_buffer *buffer,
         return false;
 
     void *last_line = weechat_hdata_pointer(hdata_lines, lines, "last_line");
-    while (last_line)
+    for (int scan = 0; last_line && scan < max_scan; ++scan)
     {
         void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
         if (line_data && line_data_has_message_id(line_data, target_id, hdata_line_data))
@@ -240,9 +242,10 @@ LineStoreLookupResult line_store_tombstone_message_by_id(
     struct t_gui_buffer *buffer,
     std::string_view target_id,
     std::string_view tombstone_message,
-    std::string_view replacement_tags)
+    std::string_view replacement_tags,
+    int max_scan)
 {
-    if (!buffer || target_id.empty())
+    if (!buffer || target_id.empty() || max_scan <= 0)
         return LineStoreLookupResult::NotFound;
 
     static struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
@@ -255,7 +258,7 @@ LineStoreLookupResult line_store_tombstone_message_by_id(
         return LineStoreLookupResult::NotFound;
 
     void *last_line = weechat_hdata_pointer(hdata_lines, lines, "last_line");
-    while (last_line)
+    for (int scan = 0; last_line && scan < max_scan; ++scan)
     {
         void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
         if (line_data && line_data_has_message_id(line_data, target_id, hdata_line_data))
@@ -275,9 +278,10 @@ LineStoreLookupResult line_store_tombstone_retraction_by_id(
     std::string_view replacement_tags,
     std::string_view sender_key,
     std::string_view occupant_id,
-    bool prefer_occupant_id)
+    bool prefer_occupant_id,
+    int max_scan)
 {
-    if (!buffer || target_id.empty())
+    if (!buffer || target_id.empty() || max_scan <= 0)
         return LineStoreLookupResult::NotFound;
 
     xmpp::LineSenderVerify verify{ .sender_key = std::string(sender_key) };
@@ -295,7 +299,7 @@ LineStoreLookupResult line_store_tombstone_retraction_by_id(
         return LineStoreLookupResult::NotFound;
 
     void *last_line = weechat_hdata_pointer(hdata_lines, lines, "last_line");
-    while (last_line)
+    for (int scan = 0; last_line && scan < max_scan; ++scan)
     {
         void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
         if (line_data && line_data_has_message_id(line_data, target_id, hdata_line_data))
@@ -312,9 +316,9 @@ LineStoreLookupResult line_store_tombstone_retraction_by_id(
 }
 
 std::optional<ReplyQuoteLookup> line_store_lookup_reply_quote(
-    struct t_gui_buffer *buffer, std::string_view target_id)
+    struct t_gui_buffer *buffer, std::string_view target_id, int max_scan)
 {
-    if (!buffer || target_id.empty())
+    if (!buffer || target_id.empty() || max_scan <= 0)
         return std::nullopt;
 
     static struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
@@ -329,7 +333,7 @@ std::optional<ReplyQuoteLookup> line_store_lookup_reply_quote(
     void *body_line = nullptr;
     void *scan = weechat_hdata_pointer(hdata_lines, lines, "last_line");
     bool in_group = false;
-    while (scan)
+    for (int n = 0; scan && n < max_scan; ++n)
     {
         void *ld = weechat_hdata_pointer(hdata_line, scan, "data");
         const bool has_tag = ld && line_data_has_message_id(ld, target_id, hdata_line_data);
@@ -382,9 +386,10 @@ std::optional<ReplyQuoteLookup> line_store_lookup_reply_quote(
 
 bool line_store_apply_reactions_by_id(struct t_gui_buffer *buffer,
                                       std::string_view target_id,
-                                      std::string_view emojis)
+                                      std::string_view emojis,
+                                      int max_scan)
 {
-    if (!buffer || target_id.empty())
+    if (!buffer || target_id.empty() || max_scan <= 0)
         return false;
 
     static struct t_hdata *hdata_buffer = weechat_hdata_get("buffer");
@@ -397,7 +402,7 @@ bool line_store_apply_reactions_by_id(struct t_gui_buffer *buffer,
         return false;
 
     void *last_line = weechat_hdata_pointer(hdata_lines, lines, "last_line");
-    while (last_line)
+    for (int scan = 0; last_line && scan < max_scan; ++scan)
     {
         void *line_data = weechat_hdata_pointer(hdata_line, last_line, "data");
         if (line_data && line_data_has_message_id(line_data, target_id, hdata_line_data))
