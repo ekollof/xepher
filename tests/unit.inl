@@ -2288,6 +2288,29 @@ TEST_CASE("strip_status_glyph_suffix removes trailing delivery glyphs")
     CHECK(weechat::strip_status_glyph_suffix("hello ✓") + " ✓✓" == "hello ✓✓");
 }
 
+TEST_CASE("format_self_pm_line places delivery glyph before tab")
+{
+    CHECK(weechat::format_self_pm_line("nick", "hello")
+          == "nick ⌛\thello");
+    CHECK(weechat::format_self_pm_line("nick", "🔒 secret", weechat::k_glyph_delivered)
+          == "nick ✓\t🔒 secret");
+}
+
+TEST_CASE("apply_delivery_glyph_to_line updates prefix column only")
+{
+    const std::string pending = "nick ⌛\thello";
+    CHECK(weechat::apply_delivery_glyph_to_line(pending, weechat::k_glyph_delivered)
+          == "nick ✓\thello");
+    CHECK(weechat::apply_delivery_glyph_to_line(
+              weechat::apply_delivery_glyph_to_line(pending, weechat::k_glyph_delivered),
+              weechat::k_glyph_seen)
+          == "nick ✓✓\thello");
+
+    // Legacy lines without tab: glyph stays at end of the whole string.
+    CHECK(weechat::apply_delivery_glyph_to_line("nick hello ⌛", weechat::k_glyph_delivered)
+          == "nick hello ✓");
+}
+
 TEST_CASE("XEP-0184 receipt request builder")
 {
     unit_strophe_env env;

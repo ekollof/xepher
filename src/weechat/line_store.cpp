@@ -87,6 +87,30 @@ std::string strip_status_glyph_suffix(std::string message)
     return message;
 }
 
+std::string format_self_pm_line(const std::string_view prefix,
+                                const std::string_view body,
+                                const std::string_view glyph)
+{
+    return fmt::format("{}{}\t{}", prefix, glyph, body);
+}
+
+std::string apply_delivery_glyph_to_line(std::string line, const std::string_view glyph)
+{
+    const auto tab = line.find('\t');
+    if (tab == std::string::npos)
+    {
+        line = strip_status_glyph_suffix(std::move(line));
+        line += glyph;
+        return line;
+    }
+
+    std::string prefix = line.substr(0, tab);
+    std::string body = line.substr(tab + 1);
+    prefix = strip_status_glyph_suffix(std::move(prefix));
+    prefix += glyph;
+    return fmt::format("{}\t{}", prefix, body);
+}
+
 bool line_store_update_line_glyph_by_tag(struct t_gui_buffer *buffer,
                                          std::string_view acked_id,
                                          std::string_view new_glyph)
@@ -118,9 +142,8 @@ bool line_store_update_line_glyph_by_tag(struct t_gui_buffer *buffer,
             if (found)
             {
                 const char *cur_msg = weechat_hdata_string(hdata_line_data, line_data, "message");
-                std::string new_msg = cur_msg ? cur_msg : "";
-                new_msg = strip_status_glyph_suffix(std::move(new_msg));
-                new_msg += new_glyph;
+                std::string new_msg = apply_delivery_glyph_to_line(
+                    cur_msg ? cur_msg : "", new_glyph);
 
                 struct t_hashtable *ht = weechat_hashtable_new(
                     4, WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_STRING, nullptr, nullptr);

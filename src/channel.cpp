@@ -40,6 +40,7 @@
 #include "xmpp/message_bob.hh"
 #include "weechat/icat_preview.hh"
 #include "weechat/ui_port.hh"
+#include "weechat/line_store.hh"
 
 namespace {
 std::string channel_short_name(weechat::channel::chat_type type, std::string_view name)
@@ -1369,7 +1370,7 @@ int weechat::channel::send_message(std::string to, std::string body,
             ? replace_emoticons(body)
             : std::string(body);
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, tag.c_str(),
-            fmt::format("{}\t{} ⌛", prefix, display_body));
+            weechat::format_self_pm_line(prefix, display_body));
     }
 
     return WEECHAT_RC_OK;
@@ -1424,7 +1425,7 @@ int weechat::channel::send_bob_image(std::string_view to,
         auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
         const std::string tag = "xmpp_message,message,private,notify_none,self_msg,log1,id_" + saved_id;
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, tag.c_str(),
-            fmt::format("{}\t{} ⌛", prefix, alt.empty() ? "[image]" : std::string(alt)));
+            weechat::format_self_pm_line(prefix, alt.empty() ? "[image]" : std::string(alt)));
     }
 
     if (auto path = ::xmpp::bob_cache_lookup(account, cid))
@@ -1714,20 +1715,25 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                           transport == weechat::channel::transport::PGP);
         if (is_action)
         {
+            const std::string action_prefix = fmt::format(
+                "{}{}",
+                weechat::RuntimePort::default_runtime().prefix("action"),
+                prefix);
+            const std::string action_body = fmt::format(
+                "{}{}",
+                encrypted ? "🔒 " : "",
+                body_str.substr(4));
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, tag.c_str(),
-                fmt::format("{}{} {}{} ⌛",
-                            weechat::RuntimePort::default_runtime().prefix("action"),
-                            prefix,
-                            encrypted ? "🔒 " : "",
-                            body_str.substr(4)));
+                weechat::format_self_pm_line(action_prefix, action_body));
         }
         else
         {
+            const std::string msg_body = fmt::format(
+                "{}{}",
+                encrypted ? "🔒 " : "",
+                body_str);
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, tag.c_str(),
-                fmt::format("{}\t{}{} ⌛",
-                            prefix,
-                            encrypted ? "🔒 " : "",
-                            body_str));
+                weechat::format_self_pm_line(prefix, msg_body));
         }
     }
 

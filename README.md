@@ -238,13 +238,22 @@ buffer's encryption mode (🔒OMEMO / 🔒PGP / empty for plaintext). In MUCs it
 
 ### Message status glyphs
 
-Sent messages display an inline status glyph that updates automatically:
+Sent PM messages show a delivery-status glyph beside your nick (in the prefix
+column, not appended to the message body). It updates automatically when the
+recipient acknowledges the message:
 
 | Glyph | Meaning |
 |-------|---------|
 | ⌛ | Pending — sent, no receipt yet |
 | ✓ | Delivered — recipient's client received it (XEP-0184) |
 | ✓✓ | Read — recipient marked it displayed (XEP-0333) |
+
+### Avatar badges in PM
+
+A colored Unicode symbol (for example `◉`) may appear before a contact's bare
+JID in PM buffers. That is a deterministic avatar badge derived from their
+[XEP-0084](https://xmpp.org/extensions/xep-0084.html) PEP avatar image — not an
+OMEMO device ID. Contacts without a published avatar show only the colored JID.
 
 ### Highlight words
 

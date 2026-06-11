@@ -24,6 +24,15 @@ inline constexpr int k_line_store_default_max_scan = 256;
 // Strip a trailing delivery-status glyph from a buffer line message.
 [[nodiscard]] XMPP_TEST_EXPORT std::string strip_status_glyph_suffix(std::string message);
 
+// Outgoing PM self-message: delivery glyph lives on the prefix column (before tab).
+[[nodiscard]] XMPP_TEST_EXPORT std::string format_self_pm_line(std::string_view prefix,
+                                                                 std::string_view body,
+                                                                 std::string_view glyph = k_glyph_pending);
+
+// Update delivery glyph on prefix column; legacy lines without tab keep suffix behavior.
+[[nodiscard]] XMPP_TEST_EXPORT std::string apply_delivery_glyph_to_line(std::string line,
+                                                                          std::string_view glyph);
+
 // Walk buffer lines backwards; update the line tagged id_<acked_id> with new_glyph.
 // Returns true when a matching line was found and updated.
 [[nodiscard]] bool line_store_update_line_glyph_by_tag(struct t_gui_buffer *buffer,

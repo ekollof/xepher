@@ -67,7 +67,13 @@ collect_buffer_messages(struct t_gui_buffer *buffer, int max)
                 if (e.id.empty())
                     e.id = e.stanza_id;
                 const char *msg = weechat_hdata_string(hd_line_data, line_data, "message");
-                if (msg) e.body = msg;
+                if (msg)
+                {
+                    e.body = weechat::strip_status_glyph_suffix(
+                        xmpp::extract_line_body_text(msg));
+                    if (e.body.empty())
+                        e.body = weechat::strip_status_glyph_suffix(msg);
+                }
                 result.push_back(std::move(e));
             }
         }
@@ -302,18 +308,7 @@ int command__edit(const void *pointer, void *data,
             for (auto &e : el)
                 if (e.id == selected) { body = e.body; break; }
 
-            // Strip WeeChat colour codes and delivery-status glyphs before pre-filling
-            std::string clean_body;
-            if (!body.empty())
-            {
-                std::unique_ptr<char, decltype(&free)> stripped(
-                    weechat_string_remove_color(body.c_str(), nullptr), &free);
-                if (stripped) clean_body = stripped.get();
-                else clean_body = body;
-                clean_body = weechat::strip_status_glyph_suffix(std::move(clean_body));
-            }
-
-            std::string input = fmt::format("/edit-to {} {}", selected, clean_body);
+            std::string input = fmt::format("/edit-to {} {}", selected, body);
             weechat_buffer_set(buf, "input", input.c_str());
             weechat_buffer_set(buf, "input_pos",
                                std::to_string(input.size()).c_str());
