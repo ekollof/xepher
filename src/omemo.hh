@@ -36,6 +36,14 @@ namespace weechat {
             const char *public_key;
         };
 
+        // BTBV trust levels — mirrors omemo_dr/const.py OMEMOTrust
+        enum class omemo_trust : int {
+            UNTRUSTED = 0, // explicitly distrusted by user
+            VERIFIED  = 1, // manually verified (fingerprint/QR)
+            UNDECIDED = 2, // new device for JID that already has VERIFIED or UNTRUSTED keys
+            BLIND     = 3, // auto-trusted (TOFU — first contact with this JID)
+        };
+
         struct omemo
         {
             // IMPORTANT: C++ destroys members in reverse declaration order.
@@ -132,6 +140,15 @@ namespace weechat {
             // sender they can stop sending OMEMOKeyExchanges."
             // Cleared on disconnect/reconnect together with heartbeat_sent.
             std::set<std::pair<std::string, std::uint32_t>> prekey_reply_sent;
+
+            // In-memory axolotl devicelist strings (invalidated on PEP update).
+            std::unordered_map<std::string, std::string> axolotl_devicelist_cache_;
+
+            // In-memory BTBV trust levels (invalidated on trust command / store).
+            std::unordered_map<std::string, omemo_trust> tofu_trust_cache_;
+
+            // Reused libsignal session_cipher handles per peer device (invalidated on session delete).
+            std::unordered_map<std::string, libsignal::unique_session_cipher> session_cipher_cache_;
 
             class bundle_request
             {

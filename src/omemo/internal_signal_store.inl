@@ -27,7 +27,7 @@ void ensure_db_open(omemo &self)
     {
         self.db_env = lmdb::env::create();
         self.db_env.set_max_dbs(4);
-        self.db_env.set_mapsize(32U * 1024U * 1024U);
+        self.db_env.set_mapsize(128U * 1024U * 1024U);
         self.db_env.open(self.db_path.c_str(), MDB_NOSUBDIR | MDB_CREATE, 0600);
     }
 
@@ -50,6 +50,52 @@ void store_string(omemo &self, std::string_view key, std::string_view value)
     if (!self.dbi.omemo.get(transaction, key, value))
         return std::nullopt;
     return std::string {value};
+}
+
+// Single RO txn to warm devicelist + trust caches before an encode pass.
+void prefetch_encode_lmdb(omemo &self, std::span<const std::string_view> jids)
+{
+    if (!self.db_env || jids.empty())
+        return;
+
+    auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+    for (const auto jid : jids)
+    {
+        if (jid.empty())
+            continue;
+
+        const std::string jid_key(jid);
+        if (!self.axolotl_devicelist_cache_.contains(jid_key))
+        {
+            std::string_view devicelist;
+            if (self.dbi.omemo.get(txn, key_for_axolotl_devicelist(jid), devicelist))
+                self.axolotl_devicelist_cache_[jid_key] = std::string(devicelist);
+        }
+
+        const auto dl_it = self.axolotl_devicelist_cache_.find(jid_key);
+        if (dl_it == self.axolotl_devicelist_cache_.end())
+            continue;
+
+        for (const auto &dev : split(dl_it->second, ';'))
+        {
+            const auto device_id = parse_uint32(dev);
+            if (!device_id || !is_valid_omemo_device_id(*device_id))
+                continue;
+
+            const auto cache_key = trust_cache_key(jid, *device_id);
+            if (self.tofu_trust_cache_.contains(cache_key))
+                continue;
+
+            std::string_view trust_val;
+            if (!self.dbi.omemo.get(txn, key_for_tofu_trust(jid, *device_id), trust_val))
+                continue;
+
+            const auto parsed = parse_uint32(trust_val);
+            if (!parsed || *parsed > 3)
+                continue;
+            self.tofu_trust_cache_[cache_key] = static_cast<omemo_trust>(*parsed);
+        }
+    }
 }
 
 [[nodiscard]] auto load_bundle(omemo &self, std::string_view jid,
@@ -645,19 +691,22 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
         return false;
     }
 
-    const auto signed_pre_key_raw = base64_decode(nullptr, bundle->signed_pre_key);
-    if (signed_pre_key_raw.empty())
+    signal_buffer *serialized_spk_raw = nullptr;
+    if (ec_public_key_serialize(&serialized_spk_raw, *signed_pre_key) != 0)
     {
         print_error(nullptr,
-                    fmt::format("omemo: session bootstrap failed for {}/{}: signed prekey payload is empty/invalid base64",
+                    fmt::format("omemo: session bootstrap failed for {}/{}: could not serialize signed prekey for signature check",
                                 jid, remote_device_id));
         return false;
     }
+    unique_signal_buffer serialized_spk {serialized_spk_raw};
 
     // Validate bundle signature before invoking libsignal session setup.
     // Some broken bundles trigger signature failures; rejecting them here keeps
     // the failure explicit and avoids pushing invalid material further.
-    std::span<const uint8_t> spk_span = signed_pre_key_raw;
+    std::span<const uint8_t> spk_span {
+        static_cast<const uint8_t *>(signal_buffer_const_data(serialized_spk.get())),
+        signal_buffer_len(serialized_spk.get())};
     std::span<const uint8_t> sig_span = signature;
     if (curve_verify_signature(*(*identity_key),
                                spk_span.data(), spk_span.size(),
@@ -967,7 +1016,13 @@ int session_delete(const signal_protocol_address *address, void *user_data)
     const bool deleted = self->dbi.omemo.del(transaction,
                                              key_for_session(signal_address_name(address), address->device_id));
     if (deleted)
+    {
         transaction.commit();
+        invalidate_session_cipher_cache(
+            *self,
+            signal_address_name(address),
+            static_cast<std::uint32_t>(address->device_id));
+    }
     else
         transaction.abort();
     return deleted ? 1 : 0;
@@ -996,6 +1051,7 @@ int session_delete_all(const char *name, std::size_t name_len, void *user_data)
     }
 
     transaction.commit();
+    invalidate_session_cipher_cache_jid(*self, std::string_view {name, name_len});
     return deleted;
 }
 

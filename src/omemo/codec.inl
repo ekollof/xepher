@@ -392,23 +392,19 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
 
     ensure_local_identity(*this);
     ensure_registration_id(*this);
-    if (ensure_prekeys(*this, *account->context))
-    {
-        // New prekeys were just generated (or repaired) — republish so peers
-        // fetch the updated material instead of using a stale cached bundle.
-        print_info(buffer, "OMEMO: prekeys regenerated — republishing bundle");
-        if (std::shared_ptr<xmpp_stanza_t> lbs { get_axolotl_bundle(*account->context, nullptr, nullptr), xmpp_stanza_release })
-            account->connection.send(lbs.get());
-    }
 
     std::string target_jid = ::jid(nullptr, jid.data()).bare;
     if (target_jid.empty())
         target_jid = std::string(jid);
 
     note_peer_traffic(account->context, target_jid);
+    {
+        const std::array<std::string_view, 1> prefetch_jids{target_jid};
+        prefetch_encode_lmdb(*this, prefetch_jids);
+    }
 
     // Look up device list — stored under legacy key set by the legacy devicelist handler
-    const auto devicelist = load_string(*this, key_for_axolotl_devicelist(target_jid));
+    const auto devicelist = load_axolotl_devicelist(*this, target_jid);
     if (!devicelist || devicelist->empty())
     {
         request_axolotl_devicelist(*account, target_jid);
@@ -528,7 +524,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
 
     // Encrypt for own devices (carbon copy sync + self-message support).
     {
-        const auto own_legacy_devicelist = load_string(*this, key_for_axolotl_devicelist(own_jid));
+        const auto own_legacy_devicelist = load_axolotl_devicelist(*this, own_jid);
         if (own_legacy_devicelist && !own_legacy_devicelist->empty())
         {
             int incomplete_own_devices = 0;
@@ -600,12 +596,6 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
 
     ensure_local_identity(*this);
     ensure_registration_id(*this);
-    if (ensure_prekeys(*this, *account->context))
-    {
-        print_info(buffer, "OMEMO: prekeys regenerated — republishing bundle");
-        if (std::shared_ptr<xmpp_stanza_t> lbs { get_axolotl_bundle(*account->context, nullptr, nullptr), xmpp_stanza_release })
-            account->connection.send(lbs.get());
-    }
 
     // Encrypt the plaintext payload once (AES-128-GCM). All recipients get the same ciphertext.
     const auto ep = axolotl_omemo_encrypt(unencrypted);
@@ -619,6 +609,24 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
         auto b = ::jid(nullptr, account->jid().data()).bare;
         return b.empty() ? std::string(account->jid()) : b;
     }();
+
+    {
+        std::vector<std::string> prefetch_jids;
+        prefetch_jids.reserve(recipient_bare_jids.size() + 1);
+        for (const auto &rec : recipient_bare_jids)
+        {
+            std::string r = ::jid(nullptr, rec).bare;
+            if (r.empty())
+                r = rec;
+            prefetch_jids.push_back(std::move(r));
+        }
+        prefetch_jids.push_back(own_jid);
+        std::vector<std::string_view> prefetch_views;
+        prefetch_views.reserve(prefetch_jids.size());
+        for (const auto &j : prefetch_jids)
+            prefetch_views.push_back(j);
+        prefetch_encode_lmdb(*this, prefetch_views);
+    }
 
     stanza::xep0384::axolotl_header header_spec(fmt::format("{}", device_id));
 
@@ -709,7 +717,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
         std::string r = ::jid(nullptr, rec).bare;
         if (r.empty()) r = rec;
 
-        const auto dl = load_string(*this, key_for_axolotl_devicelist(r));
+        const auto dl = load_axolotl_devicelist(*this, r);
         if (dl && !dl->empty())
         {
             encrypt_for_recipient(r, *dl, /*include_own_device*/ false);
@@ -725,7 +733,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
 
     // Own devices (so other of our clients can decrypt the MUC message)
     {
-        const auto own_dl = load_string(*this, key_for_axolotl_devicelist(own_jid));
+        const auto own_dl = load_axolotl_devicelist(*this, own_jid);
         if (own_dl && !own_dl->empty())
         {
             encrypt_for_recipient(own_jid, *own_dl, /*include_own_device*/ true);

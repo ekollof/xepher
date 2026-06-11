@@ -195,6 +195,9 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, co
         key_transport_bootstrap_attempted.clear();
         failed_session_bootstrap.clear();
         peers_with_observed_traffic.clear();
+        axolotl_devicelist_cache_.clear();
+        tofu_trust_cache_.clear();
+        session_cipher_cache_.clear();
         prekey_reply_sent.clear();
         global_mam_catchup = false;
         bundle_republish_pending = false;

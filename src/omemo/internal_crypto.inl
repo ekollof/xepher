@@ -359,6 +359,42 @@ struct axolotl_omemo_payload {
     return std::string(plaintext.begin(), plaintext.end());
 }
 
+[[nodiscard]] auto session_cipher_cache_key(std::string_view jid, std::uint32_t device_id) -> std::string
+{
+    return fmt::format("{}:{}", jid, device_id);
+}
+
+void invalidate_session_cipher_cache(omemo &self, std::string_view jid, std::uint32_t device_id)
+{
+    self.session_cipher_cache_.erase(session_cipher_cache_key(jid, device_id));
+}
+
+void invalidate_session_cipher_cache_jid(omemo &self, std::string_view jid)
+{
+    const std::string prefix = fmt::format("{}:", jid);
+    std::erase_if(self.session_cipher_cache_,
+                  [&](const auto &entry) { return entry.first.starts_with(prefix); });
+}
+
+[[nodiscard]] auto get_session_cipher(omemo &self, std::string_view jid, std::uint32_t device_id)
+    -> session_cipher *
+{
+    const auto cache_key = session_cipher_cache_key(jid, device_id);
+    if (auto it = self.session_cipher_cache_.find(cache_key); it != self.session_cipher_cache_.end())
+        return it->second.get();
+
+    auto address = make_signal_address(jid, static_cast<std::int32_t>(device_id));
+    session_cipher *cipher_raw = nullptr;
+    if (session_cipher_create(&cipher_raw, self.store_context, &address.address, self.context) != 0)
+        return nullptr;
+
+    libsignal::unique_session_cipher cipher {cipher_raw};
+    session_cipher_set_version(cipher.get(), CIPHERTEXT_CURRENT_VERSION);
+    session_cipher *cached = cipher.get();
+    self.session_cipher_cache_[cache_key] = std::move(cipher);
+    return cached;
+}
+
 // Signal-encrypt the legacy transport key bundle: innerKey(16) || authTag(16) = 32 bytes.
 [[nodiscard]] auto encrypt_axolotl_transport_key(omemo &self, std::string_view jid,
                                                 std::uint32_t remote_device_id,
@@ -376,21 +412,12 @@ struct axolotl_omemo_payload {
     std::ranges::copy(ep.key, bundle_span.begin());
     std::ranges::copy(ep.authtag, bundle_span.begin() + 16);
 
-    auto address = make_signal_address(jid, static_cast<std::int32_t>(remote_device_id));
-
-    session_cipher *cipher_raw = nullptr;
-    if (session_cipher_create(&cipher_raw, self.store_context, &address.address, self.context) != 0)
+    session_cipher *cipher = get_session_cipher(self, jid, remote_device_id);
+    if (!cipher)
         return std::nullopt;
-    libsignal::unique_session_cipher cipher {cipher_raw};
-    // Legacy eu.siacs.conversations.axolotl uses Signal wire-format version 3
-    // (CIPHERTEXT_CURRENT_VERSION). Using CIPHERTEXT_OMEMO_VERSION (4) here
-    // causes the session to be established at v4, which ConverseJS and other
-    // legacy clients cannot handle: they send v3 messages back, which libsignal
-    // then rejects with "Message version 3, but session version 4".
-    session_cipher_set_version(cipher.get(), CIPHERTEXT_CURRENT_VERSION);
 
     ciphertext_message *message_raw = nullptr;
-    if (session_cipher_encrypt(cipher.get(), bundle_span.data(), bundle_span.size(), &message_raw) != 0)
+    if (session_cipher_encrypt(cipher, bundle_span.data(), bundle_span.size(), &message_raw) != 0)
         return std::nullopt;
     libsignal::unique_ciphertext_message message {message_raw};
 
@@ -428,22 +455,14 @@ struct axolotl_omemo_payload {
     if (out_is_duplicate)
         *out_is_duplicate = false;
 
-    auto address = make_signal_address(jid, static_cast<std::int32_t>(remote_device_id));
-
-    session_cipher *cipher_raw = nullptr;
-    if (int rc = session_cipher_create(&cipher_raw, self.store_context, &address.address, self.context); rc != 0)
+    session_cipher *cipher = get_session_cipher(self, jid, remote_device_id);
+    if (!cipher)
     {
         print_error(nullptr,
-                    fmt::format("omemo: (legacy) session_cipher_create failed for {}/{}: rc={}",
-                                jid, remote_device_id, rc));
+                    fmt::format("omemo: (legacy) session_cipher_create failed for {}/{}",
+                                jid, remote_device_id));
         return std::nullopt;
     }
-    libsignal::unique_session_cipher cipher {cipher_raw};
-    // Legacy eu.siacs.conversations.axolotl uses Signal wire-format version 3.
-    // Do NOT set CIPHERTEXT_OMEMO_VERSION (4) here — that would cause a v4
-    // session to be established on our side while the peer sends v3 messages,
-    // resulting in "Message version 3, but session version 4" and MAC failures.
-    session_cipher_set_version(cipher.get(), CIPHERTEXT_CURRENT_VERSION);
 
     std::uint32_t registration_id = 0;
     signal_protocol_identity_get_local_registration_id(self.store_context, &registration_id);
@@ -475,7 +494,7 @@ struct axolotl_omemo_payload {
             if (inner_sm)
                 *out_message_counter = signal_message_get_counter(inner_sm);
         }
-        result = session_cipher_decrypt_pre_key_signal_message(cipher.get(), message.get(), nullptr, &plaintext_raw);
+        result = session_cipher_decrypt_pre_key_signal_message(cipher, message.get(), nullptr, &plaintext_raw);
 
         // If prekey decryption fails but a session already exists, the prekey
         // was consumed on a previous delivery (e.g. MAM replay consumed it live,
@@ -492,7 +511,7 @@ struct axolotl_omemo_payload {
             signal_message *inner = pre_key_signal_message_get_signal_message(message.get());
             if (inner)
             {
-                result = session_cipher_decrypt_signal_message(cipher.get(), inner, nullptr, &plaintext_raw);
+                result = session_cipher_decrypt_signal_message(cipher, inner, nullptr, &plaintext_raw);
             }
         }
     }
@@ -513,7 +532,7 @@ struct axolotl_omemo_payload {
         // Capture the ratchet counter for heartbeat logic (XEP-0384 §6).
         if (out_message_counter)
             *out_message_counter = signal_message_get_counter(message.get());
-        result = session_cipher_decrypt_signal_message(cipher.get(), message.get(), nullptr, &plaintext_raw);
+        result = session_cipher_decrypt_signal_message(cipher, message.get(), nullptr, &plaintext_raw);
     }
 
     if (result != 0 || !plaintext_raw)

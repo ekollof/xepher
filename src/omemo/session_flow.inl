@@ -247,7 +247,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
 
     const auto devicelist_str = join(devices, ";");
     missing_axolotl_devicelist.erase(bare_jid);
-    store_string(*this, key_for_axolotl_devicelist(bare_jid), devicelist_str);
+    store_axolotl_devicelist(*this, bare_jid, devicelist_str);
 
     // Sibling devices on our own account must be BLIND-trusted so encode includes
     // keys for carbon-copy delivery to other clients (BTBV UNDECIDED would skip them).
@@ -298,6 +298,18 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
                 continue;
             }
             ch.mark_omemo_bundle_pending(bare_jid, *remote_device_id);
+        }
+
+        const bool have_session = has_session(bare_jid.c_str(), *remote_device_id);
+        if (have_session)
+            continue;
+
+        if (auto bundle = load_bundle(*this, bare_jid, *remote_device_id);
+            bundle && !bundle->prekeys.empty())
+        {
+            (void)establish_session_from_bundle(
+                *this, account->context, bare_jid, *remote_device_id);
+            continue;
         }
 
         request_axolotl_bundle(*account, bare_jid, *remote_device_id);

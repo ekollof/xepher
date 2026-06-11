@@ -119,14 +119,6 @@ struct gcry_mac_deleter {
 
 using unique_gcry_mac = std::unique_ptr<std::remove_pointer_t<gcry_mac_hd_t>, gcry_mac_deleter>;
 
-// BTBV trust levels — mirrors omemo_dr/const.py OMEMOTrust
-enum class omemo_trust : int {
-    UNTRUSTED = 0, // explicitly distrusted by user
-    VERIFIED  = 1, // manually verified (fingerprint/QR)
-    UNDECIDED = 2, // new device for JID that already has VERIFIED or UNTRUSTED keys
-    BLIND     = 3, // auto-trusted (TOFU — first contact with this JID)
-};
-
 using c_string = std::unique_ptr<char, decltype(&free)>;
 
 [[nodiscard]] auto eval_path(std::string_view expression) -> std::string
@@ -212,6 +204,42 @@ void print_error(t_gui_buffer *buffer, std::string_view message)
     return fmt::format("axolotl_devicelist:{}", jid);
 }
 
+void store_axolotl_devicelist(omemo &self, std::string_view jid, std::string_view devicelist)
+{
+    if (!self.db_env || jid.empty())
+        return;
+    auto txn = lmdb::txn::begin(self.db_env);
+    self.dbi.omemo.put(txn, key_for_axolotl_devicelist(jid), devicelist);
+    txn.commit();
+    self.axolotl_devicelist_cache_[std::string(jid)] = std::string(devicelist);
+}
+
+[[nodiscard]] auto load_axolotl_devicelist(omemo &self, std::string_view jid)
+    -> std::optional<std::string>
+{
+    const std::string jid_key(jid);
+    if (auto it = self.axolotl_devicelist_cache_.find(jid_key);
+        it != self.axolotl_devicelist_cache_.end())
+    {
+        return it->second;
+    }
+
+    if (!self.db_env || jid.empty())
+        return std::nullopt;
+    auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+    std::string_view value;
+    if (!self.dbi.omemo.get(txn, key_for_axolotl_devicelist(jid), value))
+        return std::nullopt;
+    auto stored = std::string(value);
+    self.axolotl_devicelist_cache_[jid_key] = stored;
+    return stored;
+}
+
+[[nodiscard]] auto trust_cache_key(std::string_view jid, std::uint32_t device_id) -> std::string
+{
+    return fmt::format("{}:{}", jid, device_id);
+}
+
 // Axolotl bundle LMDB cache key (eu.siacs.conversations.axolotl namespace).
 [[maybe_unused]] [[nodiscard]] auto key_for_axolotl_bundle(std::string_view jid, std::uint32_t device_id) -> std::string
 {
@@ -234,6 +262,7 @@ void store_tofu_trust(omemo &self,
     self.dbi.omemo.put(txn, key_for_tofu_trust(jid, device_id),
                        std::to_string(static_cast<int>(trust)));
     txn.commit();
+    self.tofu_trust_cache_[trust_cache_key(jid, device_id)] = trust;
 }
 
 [[nodiscard]] auto load_tofu_trust(omemo &self,
@@ -243,6 +272,14 @@ void store_tofu_trust(omemo &self,
 {
     if (!self.db_env || jid.empty() || device_id == 0)
         return std::unexpected("no db or invalid device");
+
+    const auto cache_key = trust_cache_key(jid, device_id);
+    if (auto it = self.tofu_trust_cache_.find(cache_key);
+        it != self.tofu_trust_cache_.end())
+    {
+        return it->second;
+    }
+
     auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
     std::string_view value;
     if (!self.dbi.omemo.get(txn, key_for_tofu_trust(jid, device_id), value))
@@ -250,7 +287,9 @@ void store_tofu_trust(omemo &self,
     const auto parsed = parse_uint32(value);
     if (!parsed || *parsed > 3)
         return std::unexpected("bad trust value");
-    return static_cast<omemo_trust>(*parsed);
+    const auto trust = static_cast<omemo_trust>(*parsed);
+    self.tofu_trust_cache_[cache_key] = trust;
+    return trust;
 }
 
 // BTBV get_default_trust() — mirrors Gajim storage/omemo.py:get_default_trust().
