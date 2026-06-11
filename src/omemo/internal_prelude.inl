@@ -480,9 +480,7 @@ void request_axolotl_bundle(weechat::account &account, std::string_view jid, std
     const std::string target_jid = normalize_bare_jid(account.context, jid);
     const std::string own_bare_jid = normalize_bare_jid(account.context, account.jid());
     const bool is_own_jid = weechat_strcasecmp(target_jid.c_str(), own_bare_jid.c_str()) == 0;
-    const bool muc_prefetch = account.omemo_muc_occupant_in_eligible_room(target_jid);
     if (!is_own_jid
-        && !muc_prefetch
         && !account.omemo.has_peer_traffic(account.context, target_jid))
     {
         XDEBUG("omemo: deferring legacy bundle request for {}/{} until PM/MAM traffic is observed",

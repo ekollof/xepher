@@ -281,40 +281,6 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
     if (!account)
         return;
 
-    // MUC OMEMO (XEP-0384 §5.8.2): fetch bundles for every device on eligible
-    // rooms that list this occupant as a recipient — independent of PM channels.
-    for (const auto &dev : devices)
-    {
-        const auto remote_device_id = parse_uint32(dev);
-        if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
-            continue;
-
-        for (auto &[_, ch] : account->channels)
-        {
-            if (ch.type != weechat::channel::chat_type::MUC
-                || !ch.muc_supports_omemo()
-                || !ch.omemo_recipient_jids.contains(bare_jid))
-            {
-                continue;
-            }
-            ch.mark_omemo_bundle_pending(bare_jid, *remote_device_id);
-        }
-
-        const bool have_session = has_session(bare_jid.c_str(), *remote_device_id);
-        if (have_session)
-            continue;
-
-        if (auto bundle = load_bundle(*this, bare_jid, *remote_device_id);
-            bundle && !bundle->prekeys.empty())
-        {
-            (void)establish_session_from_bundle(
-                *this, account->context, bare_jid, *remote_device_id);
-            continue;
-        }
-
-        request_axolotl_bundle(*account, bare_jid, *remote_device_id);
-    }
-
     if (auto ch_it = account->channels.find(bare_jid);
         ch_it != account->channels.end())
     {

@@ -259,20 +259,6 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                 }
                             }
 
-                            // docs/planning-muc-omemo.md §2.3: For occupants whose real JID we already
-                            // know from presence, start fetching their OMEMO devicelist now.
-                            // This is done in parallel with the full disco#items for completeness.
-                            if (channel->muc_supports_omemo())
-                            {
-                                for (const auto& [occ_id, member] : channel->members)
-                                {
-                                    if (member.real_jid && !member.real_jid->empty())
-                                    {
-                                        account.omemo.request_axolotl_devicelist(account, *member.real_jid);
-                                    }
-                                }
-                            }
-
                             // XEP-0045 §6.4 / §6.5: discover the room's mode flags
                             // (muc_moderated, muc_membersonly, …) and muc#roominfo
                             // metadata so we can render the buffer's "modes" property
@@ -492,17 +478,6 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                                                     : std::nullopt,
                                         user,
                                         {.announce_join = true, .online = true});
-
-                    // docs/planning-muc-omemo.md §2.3: Whenever we learn (or re-learn) a
-                    // real JID for a MUC occupant via presence, proactively request their
-                    // OMEMO devicelist so we can fetch bundles and build sessions early.
-                    if (item.target && channel
-                        && channel->type == weechat::channel::chat_type::MUC
-                        && channel->muc_supports_omemo()
-                        && account.omemo)
-                    {
-                        account.omemo.request_axolotl_devicelist(account, item.target->full);
-                    }
 
                     if (is_server_nick && channel)
                     {

@@ -651,7 +651,6 @@ void weechat::channel::apply_muc_info(const muc_info &incoming)
                 if (!member.real_jid || member.real_jid->empty())
                     continue;
                 register_omemo_recipient(*member.real_jid);
-                account.omemo.request_axolotl_devicelist(account, *member.real_jid);
             }
         }
     }
@@ -737,18 +736,10 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     }
     member->present = opts.online;
 
-    // docs/planning-muc-omemo.md §2.3: Central place — whenever a real_jid becomes
-    // known for a MUC occupant (via presence, future admin affiliation results, etc.),
-    // kick off their devicelist fetch so bundles can be requested next. The request
-    // path is idempotent.
+    // MUC OMEMO: track bare JIDs for encode_muc; devicelist/bundle fetches happen
+    // on demand when sending (or when decrypting inbound traffic).
     if (real_jid && type == weechat::channel::chat_type::MUC && muc_supports_omemo())
         register_omemo_recipient(*real_jid);
-
-    if (real_jid && type == weechat::channel::chat_type::MUC && account.omemo
-        && muc_supports_omemo())
-    {
-        account.omemo.request_axolotl_devicelist(account, *real_jid);
-    }
 
     if (user)
     {
@@ -1081,7 +1072,6 @@ void weechat::channel::set_muc_anonymity(muc_info::anonymity anon)
             if (!member.real_jid || member.real_jid->empty())
                 continue;
             register_omemo_recipient(*member.real_jid);
-            account.omemo.request_axolotl_devicelist(account, *member.real_jid);
         }
     }
 }
@@ -1446,15 +1436,6 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
                 fmt::format("{}: OMEMO requires real JIDs visible for all online occupants",
                             weechat::RuntimePort::default_runtime().prefix("error")));
-            return WEECHAT_RC_ERROR;
-        }
-        if (!omemo.pending_muc_bundle_keys.empty()
-            || !account.omemo.pending_bundle_fetch.empty())
-        {
-            weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}: OMEMO not ready yet (fetching occupant bundles… {} pending)",
-                            weechat::RuntimePort::default_runtime().prefix("error"),
-                            omemo.pending_muc_bundle_keys.size()));
             return WEECHAT_RC_ERROR;
         }
     }

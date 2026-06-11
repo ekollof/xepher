@@ -103,21 +103,6 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                     item = item.next_sibling();
                 }
 
-            // docs/planning-muc-omemo.md §2.3: Now that we have the full occupant
-            // list from disco#items, request devicelists for any that have a
-            // visible real_jid (idempotent — the request path early-returns if
-            // already in flight or recently requested).
-            if (ch.muc_supports_omemo())
-            {
-                for (const auto& [occ_id, member] : ch.members)
-                {
-                    if (member.real_jid && !member.real_jid->empty())
-                    {
-                        account.omemo.request_axolotl_devicelist(account, *member.real_jid);
-                    }
-                }
-            }
-
             return true; // occupant list handled; do not mis-treat nicks as upload services
             }
         }
@@ -195,10 +180,7 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                                     {.announce_join = false,
                                      .online = online});
                             }
-                            else if (account.omemo && ch.muc_supports_omemo())
-                            {
-                                account.omemo.request_axolotl_devicelist(account, real_jid);
-                            }
+
                         }
                         item = item.next_sibling();
                     }

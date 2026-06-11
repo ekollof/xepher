@@ -290,54 +290,6 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                                 account.connection.send(dl_stanza.get());
                         }
                     }
-                    else if (account.omemo)
-                    {
-                        ::xmpp::StanzaView item = items.child("item");
-                        const ::xmpp::StanzaView list = item.valid()
-                            ? item.child("list", "eu.siacs.conversations.axolotl")
-                            : ::xmpp::StanzaView{};
-    
-                        int legacy_device_count = 0;
-                        if (list.valid()) for (const ::xmpp::StanzaView device : list)
-                        {
-                            const char *name = device.name().data();
-                            if (!name || weechat_strcasecmp(name, "device") != 0)
-                                continue;
-    
-                            const std::string did = device.attr_string("id");
-                            const auto parsed_did = parse_omemo_device_id(did);
-                            if (!parsed_did)
-                                continue;
-    
-                            if (*parsed_did == account.omemo.device_id)
-                                continue;
-    
-                            const auto bundle_key =
-                                std::make_pair(std::string(node_owner_str), *parsed_did);
-                            if (account.omemo.pending_bundle_fetch.contains(bundle_key))
-                                continue;
-    
-                            const auto bundle_node = fmt::format(
-                                "eu.siacs.conversations.axolotl.bundles:{}",
-                                *parsed_did);
-                            std::string uuid = stanza::uuid(account.context);
-                            stanza::xep0060::items its(bundle_node);
-                            stanza::xep0060::pubsub ps;
-                            ps.items(its);
-                            stanza::iq iq_s;
-                            iq_s.id(uuid).from(account.jid()).to(node_owner_str).type("get");
-                            iq_s.pubsub(ps);
-                            account.omemo.pending_iq_jid[uuid] = node_owner_str;
-                            account.omemo.pending_bundle_fetch.insert(bundle_key);
-    
-                            ++legacy_device_count;
-                            account.connection.send(iq_s.build(account.context).get());
-                        }
-    
-                    XDEBUG("omemo: requested {} legacy bundle(s) for {}",
-                           legacy_device_count,
-                           node_owner_str);
-                }
                 handled = true;
             }
             else if (items_node
