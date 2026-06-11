@@ -408,8 +408,7 @@ struct scoped_session_cipher {
     OMEMO_ASSERT(!jid.empty(), "peer jid must be non-empty");
     OMEMO_ASSERT(remote_device_id != 0, "peer device id must be non-zero");
 
-    // No omemo_lmdb_read_scope here: session_cipher_encrypt writes session state
-    // via store callbacks; an open RO txn in the same thread deadlocks LMDB.
+    const omemo_lmdb_write_scope write_scope {self};
 
     // Per Conversations: Signal-encrypt innerKey(16) || authTag(16) = 32 bytes
     std::array<std::uint8_t, 32> bundle {};
@@ -460,8 +459,10 @@ struct scoped_session_cipher {
     if (out_is_duplicate)
         *out_is_duplicate = false;
 
-    // No omemo_lmdb_read_scope here: session_cipher_decrypt_* writes session state
-    // via store callbacks; an open RO txn in the same thread deadlocks LMDB.
+    XDEBUG("omemo: (legacy) transport-key decrypt enter {}/{} prekey={} bytes={}",
+           jid, remote_device_id, is_prekey, serialized.size());
+
+    const omemo_lmdb_write_scope write_scope {self};
 
     const auto scoped_cipher = scoped_session_cipher::create(self, jid, remote_device_id);
     if (!scoped_cipher)
@@ -472,6 +473,7 @@ struct scoped_session_cipher {
         return std::nullopt;
     }
     session_cipher *cipher = scoped_cipher->get();
+    XDEBUG("omemo: (legacy) session_cipher ready for {}/{}", jid, remote_device_id);
 
     std::uint32_t registration_id = 0;
     signal_protocol_identity_get_local_registration_id(self.store_context, &registration_id);
@@ -494,6 +496,7 @@ struct scoped_session_cipher {
             return std::nullopt;
         }
         libsignal::object<pre_key_signal_message> message {message_raw};
+        XDEBUG("omemo: (legacy) PreKeySignalMessage deserialized for {}/{}", jid, remote_device_id);
         if (out_used_prekey_id && pre_key_signal_message_has_pre_key_id(message.get()))
             *out_used_prekey_id = pre_key_signal_message_get_pre_key_id(message.get());
         // Capture the ratchet counter for heartbeat logic (XEP-0384 §6).
@@ -503,25 +506,43 @@ struct scoped_session_cipher {
             if (inner_sm)
                 *out_message_counter = signal_message_get_counter(inner_sm);
         }
-        result = session_cipher_decrypt_pre_key_signal_message(cipher, message.get(), nullptr, &plaintext_raw);
 
-        // If prekey decryption fails but a session already exists, the prekey
-        // was consumed on a previous delivery (e.g. MAM replay consumed it live,
-        // or this is a repeated MAM fetch of the same archived stanza).
-        // Fall back to decrypting the embedded SignalMessage — if the ratchet
-        // position still matches, this recovers the plaintext.  If the ratchet
-        // has advanced past this message (rc=-1001) it is irrecoverable; we
-        // return nullopt so the caller can silently discard it per XEP-0384 §6.
+        signal_message *inner = pre_key_signal_message_get_signal_message(message.get());
+        const bool session_exists =
+            signal_protocol_session_contains_session(self.store_context,
+                                                     &scoped_cipher->address.address) == 1;
+
+        // When a session already exists (typical MAM replay), try the embedded
+        // SignalMessage first.  PreKeySignalMessage decrypt can stall or fail on
+        // consumed one-time prekeys from archived stanzas.
+        if (session_exists && inner)
+        {
+            XDEBUG("omemo: (legacy) trying inner SignalMessage first for {}/{} (session exists)",
+                   jid, remote_device_id);
+            result = session_cipher_decrypt_signal_message(cipher, inner, nullptr, &plaintext_raw);
+        }
+
         if (result != 0 && plaintext_raw == nullptr)
+        {
+            XDEBUG("omemo: (legacy) decrypting PreKeySignalMessage for {}/{}",
+                   jid, remote_device_id);
+            result = session_cipher_decrypt_pre_key_signal_message(cipher, message.get(), nullptr,
+                                                                   &plaintext_raw);
+        }
+
+        // Prekey path failed but a session exists — fall back to inner SignalMessage
+        // if we did not already try it above.
+        if (result != 0 && plaintext_raw == nullptr && inner && !session_exists)
         {
             print_error(nullptr,
                         fmt::format("omemo: (legacy) prekey decrypt failed for {}/{}: rc={}; trying inner SignalMessage",
                                     jid, remote_device_id, result));
-            signal_message *inner = pre_key_signal_message_get_signal_message(message.get());
-            if (inner)
-            {
-                result = session_cipher_decrypt_signal_message(cipher, inner, nullptr, &plaintext_raw);
-            }
+            result = session_cipher_decrypt_signal_message(cipher, inner, nullptr, &plaintext_raw);
+        }
+        else if (result != 0 && plaintext_raw == nullptr && inner && session_exists)
+        {
+            XDEBUG("omemo: (legacy) inner SignalMessage fallback failed for {}/{}: rc={}",
+                   jid, remote_device_id, result);
         }
     }
     else
@@ -584,16 +605,28 @@ struct scoped_session_cipher {
 
 void store_bytes(omemo &self, std::string_view key, const std::uint8_t *data, std::size_t size)
 {
+    const auto value = std::string_view {reinterpret_cast<const char *>(data), size};
+    if (self.lmdb_write_txn_)
+    {
+        self.dbi.omemo.put(*self.lmdb_write_txn_, key, value);
+        return;
+    }
+
     auto transaction = lmdb::txn::begin(self.db_env);
-    self.dbi.omemo.put(transaction,
-                       key,
-                       std::string_view {reinterpret_cast<const char *>(data), size});
+    self.dbi.omemo.put(transaction, key, value);
     transaction.commit();
 }
 
 [[nodiscard]] auto load_bytes(omemo &self, std::string_view key) -> std::optional<std::vector<std::uint8_t>>
 {
     std::string_view value;
+    if (self.lmdb_write_txn_)
+    {
+        if (!self.dbi.omemo.get(*self.lmdb_write_txn_, key, value))
+            return std::nullopt;
+        const auto *begin = reinterpret_cast<const std::uint8_t *>(value.data());
+        return std::vector<std::uint8_t> {begin, begin + value.size()};
+    }
     if (self.lmdb_read_txn_)
     {
         if (!self.dbi.omemo.get(*self.lmdb_read_txn_, key, value))

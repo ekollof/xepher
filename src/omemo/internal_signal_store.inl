@@ -38,14 +38,41 @@ void ensure_db_open(omemo &self)
 
 void store_string(omemo &self, std::string_view key, std::string_view value)
 {
+    if (self.lmdb_write_txn_)
+    {
+        self.dbi.omemo.put(*self.lmdb_write_txn_, key, value);
+        return;
+    }
+
     auto transaction = lmdb::txn::begin(self.db_env);
     self.dbi.omemo.put(transaction, key, value);
     transaction.commit();
 }
 
+void delete_bytes(omemo &self, std::string_view key)
+{
+    if (self.lmdb_write_txn_)
+    {
+        self.dbi.omemo.del(*self.lmdb_write_txn_, key);
+        return;
+    }
+
+    auto transaction = lmdb::txn::begin(self.db_env);
+    if (self.dbi.omemo.del(transaction, key))
+        transaction.commit();
+    else
+        transaction.abort();
+}
+
 [[nodiscard]] auto load_string(omemo &self, std::string_view key) -> std::optional<std::string>
 {
     std::string_view value;
+    if (self.lmdb_write_txn_)
+    {
+        if (!self.dbi.omemo.get(*self.lmdb_write_txn_, key, value))
+            return std::nullopt;
+        return std::string {value};
+    }
     if (self.lmdb_read_txn_)
     {
         if (!self.dbi.omemo.get(*self.lmdb_read_txn_, key, value))
@@ -750,6 +777,7 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
         *(*identity_key));
 
     libsignal::session_builder builder(self.store_context, &address.address, self.context);
+    const omemo_lmdb_write_scope write_scope {self};
     try
     {
         builder.process_pre_key_bundle(pre_key_bundle);
@@ -891,11 +919,7 @@ int pre_key_remove(std::uint32_t pre_key_id, void *user_data)
     if (!self)
         return SG_ERR_INVAL;
 
-    auto transaction = lmdb::txn::begin(self->db_env);
-    if (self->dbi.omemo.del(transaction, key_for_prekey_record(pre_key_id)))
-        transaction.commit();
-    else
-        transaction.abort();
+    delete_bytes(*self, key_for_prekey_record(pre_key_id));
     return SG_SUCCESS;
 }
 
@@ -936,11 +960,7 @@ int signed_pre_key_remove(std::uint32_t signed_pre_key_id, void *user_data)
     if (!self)
         return SG_ERR_INVAL;
 
-    auto transaction = lmdb::txn::begin(self->db_env);
-    if (self->dbi.omemo.del(transaction, key_for_signed_prekey_record(signed_pre_key_id)))
-        transaction.commit();
-    else
-        transaction.abort();
+    delete_bytes(*self, key_for_signed_prekey_record(signed_pre_key_id));
     return SG_SUCCESS;
 }
 
@@ -1026,14 +1046,11 @@ int session_delete(const signal_protocol_address *address, void *user_data)
     if (!self || !address)
         return SG_ERR_INVAL;
 
-    auto transaction = lmdb::txn::begin(self->db_env);
-    const bool deleted = self->dbi.omemo.del(transaction,
-                                             key_for_session(signal_address_name(address), address->device_id));
-    if (deleted)
-        transaction.commit();
-    else
-        transaction.abort();
-    return deleted ? 1 : 0;
+    const auto session_key =
+        key_for_session(signal_address_name(address), address->device_id);
+    const bool had_session = load_bytes(*self, session_key).has_value();
+    delete_bytes(*self, session_key);
+    return had_session ? 1 : 0;
 }
 
 int session_delete_all(const char *name, std::size_t name_len, void *user_data)
@@ -1043,6 +1060,24 @@ int session_delete_all(const char *name, std::size_t name_len, void *user_data)
         return SG_ERR_INVAL;
 
     const auto prefix = fmt::format("session:{}:", std::string_view {name, name_len});
+    if (self->lmdb_write_txn_)
+    {
+        auto cursor = lmdb::cursor::open(*self->lmdb_write_txn_, self->dbi.omemo);
+        std::string_view key;
+        std::string_view value;
+        int deleted = 0;
+
+        for (bool found = cursor.get(key, value, MDB_FIRST); found;
+             found = cursor.get(key, value, MDB_NEXT))
+        {
+            if (!key.starts_with(prefix))
+                continue;
+            cursor.del();
+            ++deleted;
+        }
+        return deleted;
+    }
+
     auto transaction = lmdb::txn::begin(self->db_env);
     auto cursor = lmdb::cursor::open(transaction, self->dbi.omemo);
     std::string_view key;

@@ -107,6 +107,15 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     bool found_keys_elem = false;
     bool found_keys_for_our_bare_jid = false;
     bool found_key_for_us = false;
+    const auto should_skip_mam_prekey_decrypt = [&](bool is_prekey_msg) -> bool {
+        if (!suppress_peer_traffic || !is_prekey_msg || !sender_device_id)
+            return false;
+        if (has_session(jid, *sender_device_id))
+            return false;
+        XDEBUG("OMEMO decode: skipping MAM PreKeySignalMessage for {}/{} (no session)",
+               jid, *sender_device_id);
+        return true;
+    };
     for (const ::xmpp::StanzaView child : header)
     {
         if (legacy_transport_key)
@@ -168,6 +177,9 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                 continue;
             }
 
+            if (should_skip_mam_prekey_decrypt(is_prekey))
+                continue;
+
             XDEBUG("OMEMO decode: decrypting transport key for {}/{} prekey={} bytes={}",
                    jid, *sender_device_id, is_prekey, serialized.size());
             legacy_transport_key = decrypt_axolotl_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
@@ -209,6 +221,9 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
 
             const auto serialized = base64_decode(*account->context, key_stanza.text());
             if (serialized.empty())
+                continue;
+
+            if (should_skip_mam_prekey_decrypt(is_prekey))
                 continue;
 
             XDEBUG("OMEMO decode: decrypting legacy flat <key> for {}/{} prekey={}",

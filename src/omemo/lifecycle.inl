@@ -200,6 +200,8 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, co
         deferred_live_key_transports.clear();
         lmdb_read_txn_.reset();
         lmdb_read_txn_depth_ = 0;
+        lmdb_write_txn_.reset();
+        lmdb_write_txn_depth_ = 0;
         prekey_reply_sent.clear();
         global_mam_catchup = false;
         bundle_republish_pending = false;

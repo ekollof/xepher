@@ -137,6 +137,34 @@ public:
     omemo_lmdb_read_scope &operator=(const omemo_lmdb_read_scope &) = delete;
 };
 
+// Reuse one RW LMDB txn across nested Signal store reads/writes during encrypt/decrypt.
+// Avoids same-thread nested txn deadlocks and keeps mmap-backed reads valid until commit.
+class omemo_lmdb_write_scope {
+    omemo &self_;
+
+public:
+    explicit omemo_lmdb_write_scope(omemo &self) : self_(self)
+    {
+        if (self_.lmdb_write_txn_depth_++ == 0)
+            self_.lmdb_write_txn_.emplace(lmdb::txn::begin(self_.db_env));
+    }
+
+    ~omemo_lmdb_write_scope()
+    {
+        if (self_.lmdb_write_txn_depth_ > 0 && --self_.lmdb_write_txn_depth_ == 0)
+        {
+            if (self_.lmdb_write_txn_)
+            {
+                self_.lmdb_write_txn_->commit();
+                self_.lmdb_write_txn_.reset();
+            }
+        }
+    }
+
+    omemo_lmdb_write_scope(const omemo_lmdb_write_scope &) = delete;
+    omemo_lmdb_write_scope &operator=(const omemo_lmdb_write_scope &) = delete;
+};
+
 [[nodiscard]] auto eval_path(std::string_view expression) -> std::string
 {
     std::string expr_str(expression);  // ensure null-terminated for C API
@@ -274,10 +302,18 @@ void store_tofu_trust(omemo &self,
 {
     if (!self.db_env || jid.empty() || device_id == 0)
         return;
-    auto txn = lmdb::txn::begin(self.db_env);
-    self.dbi.omemo.put(txn, key_for_tofu_trust(jid, device_id),
-                       std::to_string(static_cast<int>(trust)));
-    txn.commit();
+    const auto key = key_for_tofu_trust(jid, device_id);
+    const auto value = std::to_string(static_cast<int>(trust));
+    if (self.lmdb_write_txn_)
+    {
+        self.dbi.omemo.put(*self.lmdb_write_txn_, key, value);
+    }
+    else
+    {
+        auto txn = lmdb::txn::begin(self.db_env);
+        self.dbi.omemo.put(txn, key, value);
+        txn.commit();
+    }
     self.tofu_trust_cache_[trust_cache_key(jid, device_id)] = trust;
 }
 
@@ -296,10 +332,24 @@ void store_tofu_trust(omemo &self,
         return it->second;
     }
 
-    auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+    const auto trust_key = key_for_tofu_trust(jid, device_id);
     std::string_view value;
-    if (!self.dbi.omemo.get(txn, key_for_tofu_trust(jid, device_id), value))
-        return std::unexpected("trust not found");
+    if (self.lmdb_write_txn_)
+    {
+        if (!self.dbi.omemo.get(*self.lmdb_write_txn_, trust_key, value))
+            return std::unexpected("trust not found");
+    }
+    else if (self.lmdb_read_txn_)
+    {
+        if (!self.dbi.omemo.get(*self.lmdb_read_txn_, trust_key, value))
+            return std::unexpected("trust not found");
+    }
+    else
+    {
+        auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+        if (!self.dbi.omemo.get(txn, trust_key, value))
+            return std::unexpected("trust not found");
+    }
     const auto parsed = parse_uint32(value);
     if (!parsed || *parsed > 3)
         return std::unexpected("bad trust value");
@@ -317,30 +367,43 @@ void store_tofu_trust(omemo &self,
         return omemo_trust::BLIND;
 
     const std::string prefix = fmt::format("trust:{}:", jid);
+    const auto scan_trust_keys = [&](lmdb::cursor &cursor) -> omemo_trust {
+        std::string_view k, v;
+        k = prefix;
+        v = {};
+        const bool found = cursor.get(k, v, MDB_SET_RANGE);
+        if (!found)
+            return omemo_trust::BLIND;
+
+        do {
+            if (!k.starts_with(prefix))
+                break;
+            const auto parsed = parse_uint32(v);
+            if (parsed)
+            {
+                const auto t = static_cast<omemo_trust>(*parsed);
+                if (t == omemo_trust::VERIFIED || t == omemo_trust::UNTRUSTED)
+                    return omemo_trust::UNDECIDED;
+            }
+        } while (cursor.get(k, v, MDB_NEXT));
+
+        return omemo_trust::BLIND;
+    };
+
+    if (self.lmdb_write_txn_)
+    {
+        auto cursor = lmdb::cursor::open(*self.lmdb_write_txn_, self.dbi.omemo);
+        return scan_trust_keys(cursor);
+    }
+    if (self.lmdb_read_txn_)
+    {
+        auto cursor = lmdb::cursor::open(*self.lmdb_read_txn_, self.dbi.omemo);
+        return scan_trust_keys(cursor);
+    }
+
     auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
     auto cursor = lmdb::cursor::open(txn, self.dbi.omemo);
-
-    std::string_view k, v;
-    // position cursor at first key >= prefix
-    k = prefix;
-    v = {};
-    const bool found = cursor.get(k, v, MDB_SET_RANGE);
-    if (!found)
-        return omemo_trust::BLIND;
-
-    do {
-        if (!k.starts_with(prefix))
-            break;
-        const auto parsed = parse_uint32(v);
-        if (parsed)
-        {
-            const auto t = static_cast<omemo_trust>(*parsed);
-            if (t == omemo_trust::VERIFIED || t == omemo_trust::UNTRUSTED)
-                return omemo_trust::UNDECIDED;
-        }
-    } while (cursor.get(k, v, MDB_NEXT));
-
-    return omemo_trust::BLIND;
+    return scan_trust_keys(cursor);
 }
 
 [[nodiscard]] auto key_for_session(std::string_view jid, std::uint32_t device_id) -> std::string

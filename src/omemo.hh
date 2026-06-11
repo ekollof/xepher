@@ -205,6 +205,9 @@ namespace weechat {
             // Optional shared RO txn for nested Signal store reads (see omemo_lmdb_read_scope).
             std::optional<lmdb::txn> lmdb_read_txn_;
             int lmdb_read_txn_depth_ = 0;
+            // Optional shared RW txn for Signal encrypt/decrypt (see omemo_lmdb_write_scope).
+            std::optional<lmdb::txn> lmdb_write_txn_;
+            int lmdb_write_txn_depth_ = 0;
 
             class bundle_request
             {
