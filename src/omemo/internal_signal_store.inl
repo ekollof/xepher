@@ -606,7 +606,11 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
 
 [[nodiscard]] auto signal_address_name(const signal_protocol_address *address) -> std::string
 {
-    return address ? std::string {address->name, address->name_len} : std::string {};
+    if (!address || !address->name || address->name_len == 0)
+        return {};
+    constexpr std::size_t k_max_jid_len = 1024;
+    const std::size_t len = std::min<std::size_t>(address->name_len, k_max_jid_len);
+    return std::string {address->name, len};
 }
 
 [[nodiscard]] auto make_signal_address(std::string_view jid, std::int32_t device_id)

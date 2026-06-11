@@ -49,11 +49,6 @@ struct signal_store_state {
     signal_crypto_provider crypto {};
 };
 
-struct signal_address_view {
-    std::string name;
-    signal_protocol_address address {};
-};
-
 std::unordered_map<omemo *, std::unique_ptr<signal_store_state>> g_signal_store_states;
 
 [[nodiscard]] auto make_signal_address(std::string_view jid, std::int32_t device_id)

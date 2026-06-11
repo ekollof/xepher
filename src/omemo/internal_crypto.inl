@@ -398,17 +398,18 @@ void invalidate_session_cipher_cache_jid(omemo &self, std::string_view jid)
 {
     const auto cache_key = session_cipher_cache_key(jid, device_id);
     if (auto it = self.session_cipher_cache_.find(cache_key); it != self.session_cipher_cache_.end())
-        return it->second.get();
+        return it->second.cipher.get();
 
-    auto address = make_signal_address(jid, static_cast<std::int32_t>(device_id));
+    cached_session_cipher entry;
+    entry.address = make_signal_address(jid, static_cast<std::int32_t>(device_id));
     session_cipher *cipher_raw = nullptr;
-    if (session_cipher_create(&cipher_raw, self.store_context, &address.address, self.context) != 0)
+    if (session_cipher_create(&cipher_raw, self.store_context, &entry.address.address, self.context) != 0)
         return nullptr;
 
-    libsignal::unique_session_cipher cipher {cipher_raw};
-    session_cipher_set_version(cipher.get(), CIPHERTEXT_CURRENT_VERSION);
-    session_cipher *cached = cipher.get();
-    self.session_cipher_cache_[cache_key] = std::move(cipher);
+    entry.cipher = libsignal::unique_session_cipher {cipher_raw};
+    session_cipher_set_version(entry.cipher.get(), CIPHERTEXT_CURRENT_VERSION);
+    session_cipher *cached = entry.cipher.get();
+    self.session_cipher_cache_[cache_key] = std::move(entry);
     return cached;
 }
 

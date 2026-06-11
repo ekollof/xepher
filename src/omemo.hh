@@ -44,6 +44,17 @@ namespace weechat {
             BLIND     = 3, // auto-trusted (TOFU — first contact with this JID)
         };
 
+        struct signal_address_view {
+            std::string name;
+            signal_protocol_address address {};
+        };
+
+        // libsignal session_cipher stores remote_address by pointer — keep name alive.
+        struct cached_session_cipher {
+            signal_address_view address;
+            libsignal::unique_session_cipher cipher;
+        };
+
         struct omemo
         {
             // IMPORTANT: C++ destroys members in reverse declaration order.
@@ -148,7 +159,7 @@ namespace weechat {
             std::unordered_map<std::string, omemo_trust> tofu_trust_cache_;
 
             // Reused libsignal session_cipher handles per peer device (invalidated on session delete).
-            std::unordered_map<std::string, libsignal::unique_session_cipher> session_cipher_cache_;
+            std::unordered_map<std::string, cached_session_cipher> session_cipher_cache_;
 
             // Optional shared RO txn for nested Signal store reads (see omemo_lmdb_read_scope).
             std::optional<lmdb::txn> lmdb_read_txn_;
