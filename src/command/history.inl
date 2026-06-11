@@ -69,10 +69,10 @@ collect_buffer_messages(struct t_gui_buffer *buffer, int max)
                 const char *msg = weechat_hdata_string(hd_line_data, line_data, "message");
                 if (msg)
                 {
-                    e.body = weechat::strip_status_glyph_suffix(
+                    e.body = weechat::strip_delivery_glyphs(
                         xmpp::extract_line_body_text(msg));
                     if (e.body.empty())
-                        e.body = weechat::strip_status_glyph_suffix(msg);
+                        e.body = weechat::strip_delivery_glyphs(msg);
                 }
                 result.push_back(std::move(e));
             }

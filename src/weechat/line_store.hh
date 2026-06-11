@@ -21,15 +21,17 @@ inline constexpr std::string_view k_glyph_seen = " ✓✓";
 // Default backward scan depth for buffer line lookups (MAM dedup uses the same cap).
 inline constexpr int k_line_store_default_max_scan = 256;
 
-// Strip a trailing delivery-status glyph from a buffer line message.
+// Strip a leading/trailing delivery-status glyph from message text.
+[[nodiscard]] XMPP_TEST_EXPORT std::string strip_status_glyph_prefix(std::string message);
 [[nodiscard]] XMPP_TEST_EXPORT std::string strip_status_glyph_suffix(std::string message);
+[[nodiscard]] XMPP_TEST_EXPORT std::string strip_delivery_glyphs(std::string message);
 
-// Outgoing PM self-message: delivery glyph lives on the prefix column (before tab).
+// Outgoing PM self-message: glyph at body start (WeeChat private lines hide nick column).
 [[nodiscard]] XMPP_TEST_EXPORT std::string format_self_pm_line(std::string_view prefix,
                                                                  std::string_view body,
                                                                  std::string_view glyph = k_glyph_pending);
 
-// Update delivery glyph on prefix column; legacy lines without tab keep suffix behavior.
+// Update delivery glyph on the body; migrates legacy suffix and mistaken prefix glyphs.
 [[nodiscard]] XMPP_TEST_EXPORT std::string apply_delivery_glyph_to_line(std::string line,
                                                                           std::string_view glyph);
 

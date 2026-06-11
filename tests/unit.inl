@@ -2288,27 +2288,31 @@ TEST_CASE("strip_status_glyph_suffix removes trailing delivery glyphs")
     CHECK(weechat::strip_status_glyph_suffix("hello ✓") + " ✓✓" == "hello ✓✓");
 }
 
-TEST_CASE("format_self_pm_line places delivery glyph before tab")
+TEST_CASE("format_self_pm_line places delivery glyph at body start")
 {
     CHECK(weechat::format_self_pm_line("nick", "hello")
-          == "nick ⌛\thello");
+          == "nick\t ⌛hello");
     CHECK(weechat::format_self_pm_line("nick", "🔒 secret", weechat::k_glyph_delivered)
-          == "nick ✓\t🔒 secret");
+          == "nick\t ✓🔒 secret");
 }
 
-TEST_CASE("apply_delivery_glyph_to_line updates prefix column only")
+TEST_CASE("apply_delivery_glyph_to_line updates body start")
 {
-    const std::string pending = "nick ⌛\thello";
+    const std::string pending = "nick\t ⌛hello";
     CHECK(weechat::apply_delivery_glyph_to_line(pending, weechat::k_glyph_delivered)
-          == "nick ✓\thello");
+          == "nick\t ✓hello");
     CHECK(weechat::apply_delivery_glyph_to_line(
               weechat::apply_delivery_glyph_to_line(pending, weechat::k_glyph_delivered),
               weechat::k_glyph_seen)
-          == "nick ✓✓\thello");
+          == "nick\t ✓✓hello");
 
-    // Legacy lines without tab: glyph stays at end of the whole string.
-    CHECK(weechat::apply_delivery_glyph_to_line("nick hello ⌛", weechat::k_glyph_delivered)
-          == "nick hello ✓");
+    // WeeChat private lines may store body only (no tab).
+    CHECK(weechat::apply_delivery_glyph_to_line("hello ⌛", weechat::k_glyph_delivered)
+          == " ✓hello");
+
+    // Migrate mistaken prefix-column glyph from an earlier build.
+    CHECK(weechat::apply_delivery_glyph_to_line("nick ⌛\thello ⌛", weechat::k_glyph_delivered)
+          == "nick\t ✓hello");
 }
 
 TEST_CASE("XEP-0184 receipt request builder")

@@ -238,8 +238,9 @@ buffer's encryption mode (🔒OMEMO / 🔒PGP / empty for plaintext). In MUCs it
 
 ### Message status glyphs
 
-Sent PM messages show a delivery-status glyph beside your nick (in the prefix
-column, not appended to the message body). It updates automatically when the
+Sent PM messages show a delivery-status glyph at the **start** of the message
+text (WeeChat's `private` tag hides the nick column for your own lines, so the
+glyph cannot appear beside the nick). It updates automatically when the
 recipient acknowledges the message:
 
 | Glyph | Meaning |

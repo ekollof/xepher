@@ -76,6 +76,17 @@ void line_data_set_message(void *line_data,
 
 }  // namespace
 
+std::string strip_status_glyph_prefix(std::string message)
+{
+    constexpr std::array glyphs{ k_glyph_pending, k_glyph_delivered, k_glyph_seen };
+    const auto glyph = std::ranges::find_if(glyphs, [&](const std::string_view prefix) {
+        return message.starts_with(prefix);
+    });
+    if (glyph != glyphs.end())
+        message.erase(0, glyph->size());
+    return message;
+}
+
 std::string strip_status_glyph_suffix(std::string message)
 {
     constexpr std::array glyphs{ k_glyph_pending, k_glyph_delivered, k_glyph_seen };
@@ -87,11 +98,17 @@ std::string strip_status_glyph_suffix(std::string message)
     return message;
 }
 
+std::string strip_delivery_glyphs(std::string message)
+{
+    message = strip_status_glyph_prefix(std::move(message));
+    return strip_status_glyph_suffix(std::move(message));
+}
+
 std::string format_self_pm_line(const std::string_view prefix,
                                 const std::string_view body,
                                 const std::string_view glyph)
 {
-    return fmt::format("{}{}\t{}", prefix, glyph, body);
+    return fmt::format("{}\t{}{}", prefix, glyph, body);
 }
 
 std::string apply_delivery_glyph_to_line(std::string line, const std::string_view glyph)
@@ -99,16 +116,13 @@ std::string apply_delivery_glyph_to_line(std::string line, const std::string_vie
     const auto tab = line.find('\t');
     if (tab == std::string::npos)
     {
-        line = strip_status_glyph_suffix(std::move(line));
-        line += glyph;
-        return line;
+        line = strip_delivery_glyphs(std::move(line));
+        return std::string(glyph) + line;
     }
 
-    std::string prefix = line.substr(0, tab);
-    std::string body = line.substr(tab + 1);
-    prefix = strip_status_glyph_suffix(std::move(prefix));
-    prefix += glyph;
-    return fmt::format("{}\t{}", prefix, body);
+    std::string prefix = strip_status_glyph_suffix(line.substr(0, tab));
+    std::string body = strip_delivery_glyphs(line.substr(tab + 1));
+    return fmt::format("{}\t{}{}", prefix, glyph, body);
 }
 
 bool line_store_update_line_glyph_by_tag(struct t_gui_buffer *buffer,
