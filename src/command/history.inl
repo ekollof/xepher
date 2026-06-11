@@ -68,12 +68,7 @@ collect_buffer_messages(struct t_gui_buffer *buffer, int max)
                     e.id = e.stanza_id;
                 const char *msg = weechat_hdata_string(hd_line_data, line_data, "message");
                 if (msg)
-                {
-                    e.body = weechat::strip_delivery_glyphs(
-                        xmpp::extract_line_body_text(msg));
-                    if (e.body.empty())
-                        e.body = weechat::strip_delivery_glyphs(msg);
-                }
+                    e.body = weechat::clean_editable_line_body(msg);
                 result.push_back(std::move(e));
             }
         }
@@ -308,7 +303,8 @@ int command__edit(const void *pointer, void *data,
             for (auto &e : el)
                 if (e.id == selected) { body = e.body; break; }
 
-            std::string input = fmt::format("/edit-to {} {}", selected, body);
+            const std::string clean_body = weechat::clean_editable_line_body(body);
+            std::string input = fmt::format("/edit-to {} {}", selected, clean_body);
             weechat_buffer_set(buf, "input", input.c_str());
             weechat_buffer_set(buf, "input_pos",
                                std::to_string(input.size()).c_str());

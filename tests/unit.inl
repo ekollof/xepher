@@ -2288,6 +2288,13 @@ TEST_CASE("strip_status_glyph_suffix removes trailing delivery glyphs")
     CHECK(weechat::strip_status_glyph_suffix("hello ✓") + " ✓✓" == "hello ✓✓");
 }
 
+TEST_CASE("clean_editable_line_body strips glyphs and colours for /edit")
+{
+    CHECK(weechat::clean_editable_line_body("nick\t ⌛hello") == "hello");
+    CHECK(weechat::clean_editable_line_body("hello ✓") == "hello");
+    CHECK(weechat::clean_editable_line_body("nick ⌛\thello ⌛") == "hello");
+}
+
 TEST_CASE("format_self_pm_line places delivery glyph at body start")
 {
     CHECK(weechat::format_self_pm_line("nick", "hello")

@@ -6,7 +6,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <cstdlib>
 #include <fmt/core.h>
+#include <memory>
 #include <ranges>
 #include <vector>
 #include <weechat/weechat-plugin.h>
@@ -78,12 +81,26 @@ void line_data_set_message(void *line_data,
 
 std::string strip_status_glyph_prefix(std::string message)
 {
+    while (!message.empty()
+           && std::isspace(static_cast<unsigned char>(message.front())))
+    {
+        message.erase(message.begin());
+    }
+
     constexpr std::array glyphs{ k_glyph_pending, k_glyph_delivered, k_glyph_seen };
-    const auto glyph = std::ranges::find_if(glyphs, [&](const std::string_view prefix) {
-        return message.starts_with(prefix);
+    const auto glyph = std::ranges::find_if(glyphs, [&](const std::string_view spaced) {
+        if (message.starts_with(spaced))
+            return true;
+        const std::string_view bare = spaced.substr(spaced.find_first_not_of(' '));
+        return !bare.empty() && message.starts_with(bare);
     });
     if (glyph != glyphs.end())
-        message.erase(0, glyph->size());
+    {
+        if (message.starts_with(*glyph))
+            message.erase(0, glyph->size());
+        else
+            message.erase(0, glyph->substr(glyph->find_first_not_of(' ')).size());
+    }
     return message;
 }
 
@@ -102,6 +119,36 @@ std::string strip_delivery_glyphs(std::string message)
 {
     message = strip_status_glyph_prefix(std::move(message));
     return strip_status_glyph_suffix(std::move(message));
+}
+
+std::string clean_editable_line_body(const std::string_view raw)
+{
+    if (raw.empty())
+        return {};
+
+    std::string_view body_sv = raw;
+    if (const auto tab = body_sv.find('\t'); tab != std::string_view::npos)
+        body_sv = body_sv.substr(tab + 1);
+    else if (!body_sv.empty() && body_sv.front() == '\t')
+        body_sv.remove_prefix(1);
+
+    std::string body(body_sv);
+    body = strip_delivery_glyphs(std::move(body));
+
+    if (weechat::plugin::instance)
+    {
+        std::unique_ptr<char, decltype(&free)> stripped(
+            weechat_string_remove_color(body.c_str(), nullptr), &free);
+        if (stripped)
+            body = strip_delivery_glyphs(stripped.get());
+    }
+
+    while (!body.empty()
+           && std::isspace(static_cast<unsigned char>(body.front())))
+    {
+        body.erase(body.begin());
+    }
+    return body;
 }
 
 std::string format_self_pm_line(const std::string_view prefix,

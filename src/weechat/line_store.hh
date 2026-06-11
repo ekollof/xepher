@@ -26,6 +26,9 @@ inline constexpr int k_line_store_default_max_scan = 256;
 [[nodiscard]] XMPP_TEST_EXPORT std::string strip_status_glyph_suffix(std::string message);
 [[nodiscard]] XMPP_TEST_EXPORT std::string strip_delivery_glyphs(std::string message);
 
+// Body text safe for /edit prefill: extract after tab, strip colours and delivery glyphs.
+[[nodiscard]] XMPP_TEST_EXPORT std::string clean_editable_line_body(std::string_view raw);
+
 // Outgoing PM self-message: glyph at body start (WeeChat private lines hide nick column).
 [[nodiscard]] XMPP_TEST_EXPORT std::string format_self_pm_line(std::string_view prefix,
                                                                  std::string_view body,
