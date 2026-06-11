@@ -598,14 +598,14 @@ void store_bytes(omemo &self, std::string_view key, const std::uint8_t *data, st
     {
         if (!self.dbi.omemo.get(*self.lmdb_read_txn_, key, value))
             return std::nullopt;
-    }
-    else
-    {
-        auto transaction = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
-        if (!self.dbi.omemo.get(transaction, key, value))
-            return std::nullopt;
+        const auto *begin = reinterpret_cast<const std::uint8_t *>(value.data());
+        return std::vector<std::uint8_t> {begin, begin + value.size()};
     }
 
+    auto transaction = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+    if (!self.dbi.omemo.get(transaction, key, value))
+        return std::nullopt;
+    // Copy while |transaction| is still open — value points into the mmap.
     const auto *begin = reinterpret_cast<const std::uint8_t *>(value.data());
     return std::vector<std::uint8_t> {begin, begin + value.size()};
 }
