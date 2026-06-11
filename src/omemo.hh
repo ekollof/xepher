@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include <list>
 #include <memory>
 #include <functional>
 #include <optional>
@@ -12,7 +11,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 #include "test_export.hh"
 
@@ -95,12 +93,6 @@ namespace weechat {
                 }
                 return *this;
             }
-        };
-
-        // libsignal session_cipher stores remote_address by pointer — keep name alive.
-        struct cached_session_cipher {
-            signal_address_view address;
-            libsignal::unique_session_cipher cipher;
         };
 
         struct omemo
@@ -200,17 +192,15 @@ namespace weechat {
             // Cleared on disconnect/reconnect together with heartbeat_sent.
             std::set<std::pair<std::string, std::uint32_t>> prekey_reply_sent;
 
+            // Live key-transport replies deferred until after xmpp_run_once()
+            // returns (avoids re-entrant sends while parsing inbound stanzas).
+            std::set<std::pair<std::string, std::uint32_t>> deferred_live_key_transports;
+
             // In-memory axolotl devicelist strings (invalidated on PEP update).
             std::unordered_map<std::string, std::string> axolotl_devicelist_cache_;
 
             // In-memory BTBV trust levels (invalidated on trust command / store).
             std::unordered_map<std::string, omemo_trust> tofu_trust_cache_;
-
-            // Reused libsignal session_cipher handles per peer device (invalidated on session delete).
-            // List storage keeps address structs at stable addresses for libsignal's raw pointers.
-            std::list<cached_session_cipher> session_cipher_storage_;
-            std::unordered_map<std::string, std::list<cached_session_cipher>::iterator>
-                session_cipher_cache_;
 
             // Optional shared RO txn for nested Signal store reads (see omemo_lmdb_read_scope).
             std::optional<lmdb::txn> lmdb_read_txn_;
@@ -310,6 +300,9 @@ namespace weechat {
             // catchup (see `postponed_key_transports`).  Called once the global
             // MAM <fin> arrives and `global_mam_catchup` is cleared.
             void process_postponed_key_transports(weechat::account &account);
+
+            // Drain key-transport replies queued during live OMEMO decode.
+            void process_deferred_live_key_transports(weechat::account &account);
 
             // If `bundle_republish_pending` is set, publish the axolotl bundle
             // exactly once and clear the flag.

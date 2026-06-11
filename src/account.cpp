@@ -631,8 +631,7 @@ void weechat::account::disconnect(int reconnect)
             {
                 weechat::BufferPort::default_port_ref().nicklist_remove_all(ch.buffer);
                 weechat::UiPort::for_buffer(ch.buffer)->printf_network(
-                    fmt::format(fmt::runtime(_("%s: disconnected from account")),
-                                WEECHAT_XMPP_PLUGIN_NAME));
+                    fmt::format("{}: disconnected from account", WEECHAT_XMPP_PLUGIN_NAME));
             }
         }
     }
@@ -642,8 +641,7 @@ void weechat::account::disconnect(int reconnect)
     if (buffer)
     {
         weechat::UiPort::for_buffer(buffer)->printf_network(
-            fmt::format(fmt::runtime(_("%s: disconnected from account")),
-                        WEECHAT_XMPP_PLUGIN_NAME));
+            fmt::format("{}: disconnected from account", WEECHAT_XMPP_PLUGIN_NAME));
     }
 
     // On manual disconnect, close all channel buffers (PM, MUC, FEED)

@@ -207,11 +207,11 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 err_text ? err_text : ""));
         }
         
-        // Clear SM session on clean disconnect (server-initiated or normal close)
-        // This prevents trying to resume a session the server has already closed
-        if (status == event::disconnect && error == 0)
+        // Drop SM state on any disconnect so abrupt socket loss does not resume
+        // a session the server has already torn down.
+        if (status == event::disconnect)
         {
-            if (!account.sm_id.empty())
+            if (!account.sm_id.empty() && error == 0)
             {
                 weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
                     "SM session {} closed by server", account.sm_id));
@@ -220,6 +220,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             account.sm_h_inbound = 0;
             account.sm_h_outbound = 0;
             account.sm_last_ack = 0;
+            account.sm_outqueue.clear();
         }
 
         // On <conflict>, the server kicked us because another session connected
@@ -370,4 +371,6 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
 void weechat::connection::process(xmpp_ctx_t *context, const unsigned long timeout)
 {
     xmpp_run_once(context ? context : this->context(), timeout);
+    if (account.connected() && !account.omemo.deferred_live_key_transports.empty())
+        account.omemo.process_deferred_live_key_transports(account);
 }

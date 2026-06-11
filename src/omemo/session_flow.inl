@@ -710,6 +710,20 @@ void weechat::xmpp::omemo::process_postponed_key_transports(weechat::account &ac
     postponed_key_transports.clear();
 }
 
+void weechat::xmpp::omemo::process_deferred_live_key_transports(weechat::account &account)
+{
+    if (deferred_live_key_transports.empty())
+        return;
+
+    const auto pending = std::exchange(deferred_live_key_transports, {});
+    for (const auto &[bare_jid, device_id] : pending)
+    {
+        struct t_gui_buffer *buf = key_transport_buffer_for_peer(
+            account, account.buffer, bare_jid);
+        send_key_transport(*this, account, buf, bare_jid.c_str(), device_id);
+    }
+}
+
 // Republish the axolotl bundle if deferred during global MAM catchup
 // (bundle_republish_pending == true).
 // Called immediately after process_postponed_key_transports() at every

@@ -356,9 +356,9 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             && !heartbeat_sent.contains(hb_key))
         {
             heartbeat_sent.insert(hb_key);
-            XDEBUG("omemo: sending heartbeat to {}/{} (counter={})",
+            XDEBUG("omemo: queueing heartbeat key-transport to {}/{} (counter={})",
                    bare_jid, *sender_device_id, *ratchet_message_counter);
-            send_key_transport(*this, *account, buffer, bare_jid.c_str(), *sender_device_id);
+            deferred_live_key_transports.insert(hb_key);
         }
     }
     // XEP-0384 §6 SHOULD: after successfully decrypting a PreKeySignalMessage,
@@ -370,9 +370,9 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
         if (!prekey_reply_sent.contains(pk_key))
         {
             prekey_reply_sent.insert(pk_key);
-            XDEBUG("omemo (legacy): sending prekey-reply key-transport to {}/{}",
+            XDEBUG("omemo (legacy): queueing prekey-reply key-transport to {}/{}",
                    bare_jid, *sender_device_id);
-            send_key_transport(*this, *account, buffer, bare_jid.c_str(), *sender_device_id);
+            deferred_live_key_transports.insert(pk_key);
         }
     }
     return std::string(*result);

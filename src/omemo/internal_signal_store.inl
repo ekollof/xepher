@@ -1028,13 +1028,7 @@ int session_delete(const signal_protocol_address *address, void *user_data)
     const bool deleted = self->dbi.omemo.del(transaction,
                                              key_for_session(signal_address_name(address), address->device_id));
     if (deleted)
-    {
         transaction.commit();
-        invalidate_session_cipher_cache(
-            *self,
-            signal_address_name(address),
-            static_cast<std::uint32_t>(address->device_id));
-    }
     else
         transaction.abort();
     return deleted ? 1 : 0;
@@ -1063,7 +1057,6 @@ int session_delete_all(const char *name, std::size_t name_len, void *user_data)
     }
 
     transaction.commit();
-    invalidate_session_cipher_cache_jid(*self, std::string_view {name, name_len});
     return deleted;
 }
 

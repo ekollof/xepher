@@ -376,59 +376,26 @@ namespace {
     return std::string(plaintext.begin(), plaintext.end());
 }
 
-[[nodiscard]] auto session_cipher_cache_key(std::string_view jid, std::uint32_t device_id) -> std::string
-{
-    return fmt::format("{}:{}", jid, device_id);
-}
+struct scoped_session_cipher {
+    signal_address_view address;
+    libsignal::unique_session_cipher cipher;
 
-void invalidate_session_cipher_cache(omemo &self, std::string_view jid, std::uint32_t device_id)
-{
-    const auto cache_key = session_cipher_cache_key(jid, device_id);
-    if (auto it = self.session_cipher_cache_.find(cache_key); it != self.session_cipher_cache_.end())
+    [[nodiscard]] static std::optional<scoped_session_cipher> create(omemo &self,
+                                                                     std::string_view jid,
+                                                                     std::uint32_t device_id)
     {
-        self.session_cipher_storage_.erase(it->second);
-        self.session_cipher_cache_.erase(it);
-    }
-}
-
-void invalidate_session_cipher_cache_jid(omemo &self, std::string_view jid)
-{
-    const std::string prefix = fmt::format("{}:", jid);
-    std::vector<std::list<cached_session_cipher>::iterator> stale;
-    stale.reserve(self.session_cipher_cache_.size());
-    for (auto& [key, storage_it] : self.session_cipher_cache_)
-    {
-        if (key.starts_with(prefix))
-            stale.push_back(storage_it);
-    }
-    for (const auto storage_it : stale)
-        self.session_cipher_storage_.erase(storage_it);
-    std::erase_if(self.session_cipher_cache_,
-                  [&](const auto &entry) { return entry.first.starts_with(prefix); });
-}
-
-[[nodiscard]] auto get_session_cipher(omemo &self, std::string_view jid, std::uint32_t device_id)
-    -> session_cipher *
-{
-    const auto cache_key = session_cipher_cache_key(jid, device_id);
-    if (auto it = self.session_cipher_cache_.find(cache_key); it != self.session_cipher_cache_.end())
-        return it->second->cipher.get();
-
-    auto storage_it = self.session_cipher_storage_.emplace(self.session_cipher_storage_.end());
-    storage_it->address = make_signal_address(jid, static_cast<std::int32_t>(device_id));
-
-    session_cipher *cipher_raw = nullptr;
-    if (session_cipher_create(&cipher_raw, self.store_context, &storage_it->address.address, self.context) != 0)
-    {
-        self.session_cipher_storage_.erase(storage_it);
-        return nullptr;
+        scoped_session_cipher scoped;
+        scoped.address = make_signal_address(jid, static_cast<std::int32_t>(device_id));
+        session_cipher *cipher_raw = nullptr;
+        if (session_cipher_create(&cipher_raw, self.store_context, &scoped.address.address, self.context) != 0)
+            return std::nullopt;
+        scoped.cipher = libsignal::unique_session_cipher {cipher_raw};
+        session_cipher_set_version(scoped.cipher.get(), CIPHERTEXT_CURRENT_VERSION);
+        return scoped;
     }
 
-    storage_it->cipher = libsignal::unique_session_cipher {cipher_raw};
-    session_cipher_set_version(storage_it->cipher.get(), CIPHERTEXT_CURRENT_VERSION);
-    self.session_cipher_cache_.emplace(cache_key, storage_it);
-    return storage_it->cipher.get();
-}
+    [[nodiscard]] session_cipher *get() const { return cipher.get(); }
+};
 
 // Signal-encrypt the legacy transport key bundle: innerKey(16) || authTag(16) = 32 bytes.
 [[nodiscard]] auto encrypt_axolotl_transport_key(omemo &self, std::string_view jid,
@@ -449,12 +416,12 @@ void invalidate_session_cipher_cache_jid(omemo &self, std::string_view jid)
     std::ranges::copy(ep.key, bundle_span.begin());
     std::ranges::copy(ep.authtag, bundle_span.begin() + 16);
 
-    session_cipher *cipher = get_session_cipher(self, jid, remote_device_id);
-    if (!cipher)
+    const auto scoped_cipher = scoped_session_cipher::create(self, jid, remote_device_id);
+    if (!scoped_cipher)
         return std::nullopt;
 
     ciphertext_message *message_raw = nullptr;
-    if (session_cipher_encrypt(cipher, bundle_span.data(), bundle_span.size(), &message_raw) != 0)
+    if (session_cipher_encrypt(scoped_cipher->get(), bundle_span.data(), bundle_span.size(), &message_raw) != 0)
         return std::nullopt;
     libsignal::unique_ciphertext_message message {message_raw};
 
@@ -494,14 +461,15 @@ void invalidate_session_cipher_cache_jid(omemo &self, std::string_view jid)
 
     const omemo_lmdb_read_scope read_scope {self};
 
-    session_cipher *cipher = get_session_cipher(self, jid, remote_device_id);
-    if (!cipher)
+    const auto scoped_cipher = scoped_session_cipher::create(self, jid, remote_device_id);
+    if (!scoped_cipher)
     {
         print_error(nullptr,
                     fmt::format("omemo: (legacy) session_cipher_create failed for {}/{}",
                                 jid, remote_device_id));
         return std::nullopt;
     }
+    session_cipher *cipher = scoped_cipher->get();
 
     std::uint32_t registration_id = 0;
     signal_protocol_identity_get_local_registration_id(self.store_context, &registration_id);
