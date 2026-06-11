@@ -3132,6 +3132,44 @@ TEST_CASE("replace_emoticons does not match shortcodes without boundaries")
     CHECK(replace_emoticons("foo:thumbsup:bar") == "foo:thumbsup:bar");
 }
 
+TEST_CASE("resolve_emoji_shortcode converts known aliases")
+{
+    CHECK(resolve_emoji_shortcode(":thumbsup:") == "👍");
+    CHECK(resolve_emoji_shortcode(":+1:") == "👍");
+}
+
+TEST_CASE("resolve_emoji_shortcode passes through raw emoji and unknown codes")
+{
+    CHECK(resolve_emoji_shortcode("👍") == "👍");
+    CHECK(resolve_emoji_shortcode(":unknown_xyz:") == ":unknown_xyz:");
+}
+
+TEST_CASE("emoji_shortcode_completions filters by prefix")
+{
+    const auto capped = emoji_shortcode_completions("", 64);
+    CHECK(capped.size() == 64);
+    CHECK(std::ranges::is_sorted(capped));
+
+    const auto thumb = emoji_shortcode_completions("thumb", 16);
+    CHECK(!thumb.empty());
+    CHECK(thumb.front().starts_with(":thumb"));
+}
+
+TEST_CASE("emoji_shortcode_completion_prefix parses /react and chat input")
+{
+    CHECK(emoji_shortcode_completion_prefix("/react :thumb") == "thumb");
+    CHECK(emoji_shortcode_completion_prefix("/react :thumbsup:") == "thumbsup");
+    CHECK(emoji_shortcode_completion_prefix("/react  :heart") == "heart");
+    CHECK(emoji_shortcode_completion_prefix("/react") == "");
+    CHECK(emoji_shortcode_completion_prefix("/react ") == "");
+    CHECK(!emoji_shortcode_completion_prefix("/react 👍"));
+
+    CHECK(emoji_shortcode_completion_prefix("sounds good :thumb") == "thumb");
+    CHECK(emoji_shortcode_completion_prefix(":heart") == "heart");
+    CHECK(!emoji_shortcode_completion_prefix("hello world"));
+    CHECK(!emoji_shortcode_completion_prefix("ratio 3:1"));
+}
+
 TEST_CASE("is_image_mime_type accepts image MIME types")
 {
     CHECK(is_image_mime_type("image/png") == true);

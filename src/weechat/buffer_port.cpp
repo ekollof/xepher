@@ -115,6 +115,17 @@ void WeechatBufferPort::nicklist_nick_set(
         std::string(value).c_str());
 }
 
+std::string WeechatBufferPort::get_string(
+    struct t_gui_buffer *const buffer,
+    const std::string_view property)
+{
+    if (!buffer || property.empty())
+        return {};
+    if (const char *value = weechat_buffer_get_string(buffer, std::string(property).c_str()))
+        return value;
+    return {};
+}
+
 std::unique_ptr<BufferPort> BufferPort::default_port()
 {
     return std::make_unique<WeechatBufferPort>();

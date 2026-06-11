@@ -558,7 +558,7 @@ int command__react(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    const char *emoji = argv_eol[1];
+    const std::string emoji = resolve_emoji_shortcode(argv_eol[1]);
 
     // Find the last message in buffer (not from us)
     struct t_hdata *hdata_line = weechat_hdata_get("line");
@@ -636,7 +636,7 @@ int command__react(const void *pointer, void *data,
     std::string msg_id = stanza::uuid(ptr_account->context);
 
     stanza::xep0444::reactions reactions_el(target_msg_id);
-    reactions_el.reaction(emoji);
+    reactions_el.reaction(emoji.c_str());
 
     auto msg_s = stanza::message()
         .type(ptr_channel->type == weechat::channel::chat_type::MUC

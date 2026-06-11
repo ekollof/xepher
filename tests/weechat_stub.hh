@@ -141,6 +141,16 @@ public:
                            std::string_view /*value*/) override
     {}
 
+    std::string buffer_input;
+
+    [[nodiscard]] std::string get_string(struct t_gui_buffer * /*buffer*/,
+                                           std::string_view property) override
+    {
+        if (property == "input")
+            return buffer_input;
+        return {};
+    }
+
     void clear()
     {
         searches.clear();
@@ -148,6 +158,7 @@ public:
         nicklist_removed.clear();
         nicklist_groups_added.clear();
         nicklist_nicks_added.clear();
+        buffer_input.clear();
     }
 };
 

@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <regex.h>
 #include <string>
+#include <vector>
 #include <algorithm>
 #include <ranges>
 #include <fmt/core.h>
@@ -317,4 +318,92 @@ XMPP_TEST_EXPORT std::string replace_emoticons(std::string_view text)
         ++i;
     }
     return result;
+}
+
+namespace {
+
+[[nodiscard]] std::string_view trim_trailing_spaces(std::string_view text)
+{
+    while (!text.empty() && text.back() == ' ')
+        text.remove_suffix(1);
+    return text;
+}
+
+[[nodiscard]] std::string_view last_token(std::string_view text)
+{
+    const auto pos = text.rfind(' ');
+    return pos == std::string_view::npos ? text : text.substr(pos + 1);
+}
+
+[[nodiscard]] std::string_view shortcode_name_from_token(std::string_view token)
+{
+    if (token.starts_with(':'))
+        token.remove_prefix(1);
+    if (!token.empty() && token.back() == ':')
+        token.remove_suffix(1);
+    return token;
+}
+
+}  // namespace
+
+XMPP_TEST_EXPORT std::optional<std::string_view>
+emoji_shortcode_completion_prefix(std::string_view line)
+{
+    constexpr std::string_view react_cmd = "/react";
+    if (line.starts_with(react_cmd))
+    {
+        std::string_view rest = line.substr(react_cmd.size());
+        while (!rest.empty() && rest.front() == ' ')
+            rest.remove_prefix(1);
+        if (rest.empty())
+            return std::string_view{};
+
+        const std::string_view token = last_token(rest);
+        if (!token.starts_with(':'))
+            return std::nullopt;
+        return shortcode_name_from_token(token);
+    }
+
+    const std::string_view token = last_token(trim_trailing_spaces(line));
+    if (!token.starts_with(':'))
+        return std::nullopt;
+    return shortcode_name_from_token(token);
+}
+
+XMPP_TEST_EXPORT std::string resolve_emoji_shortcode(std::string_view input)
+{
+    if (input.size() < 3 || input.front() != ':' || input.back() != ':')
+        return std::string(input);
+
+    const std::string_view name = input.substr(1, input.size() - 2);
+    if (name.empty())
+        return std::string(input);
+
+    if (const auto it = emoji_shortcode_map().find(name); it != emoji_shortcode_map().end())
+        return std::string(it->second);
+
+    return std::string(input);
+}
+
+XMPP_TEST_EXPORT std::vector<std::string>
+emoji_shortcode_completions(std::string_view prefix, const std::size_t limit)
+{
+    std::vector<std::string> codes;
+    codes.reserve(std::min(limit, emoji_shortcode_map().size()));
+
+    for (const auto &[code, _] : emoji_shortcode_map())
+    {
+        if (!prefix.empty() && !code.starts_with(prefix))
+            continue;
+        codes.emplace_back(code);
+    }
+
+    std::ranges::sort(codes);
+    if (codes.size() > limit)
+        codes.resize(limit);
+
+    for (auto &code : codes)
+        code = fmt::format(":{}:", code);
+
+    return codes;
 }

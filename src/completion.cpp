@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <string>
+#include <string_view>
 #include <stdio.h>
 #include <fmt/core.h>
 #include <strophe.h>
@@ -18,6 +19,8 @@
 #include "user.hh"
 #include "buffer.hh"
 #include "completion.hh"
+#include "message.hh"
+#include "weechat/buffer_port.hh"
 
 void completion__channel_nicks_add_speakers(struct t_gui_completion *completion,
                                             weechat::account *account,
@@ -103,6 +106,48 @@ int completion__channel_nicks_cb(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int completion__emoji_shortcode_cb(const void *pointer, void *data,
+                                 const char *completion_item,
+                                 struct t_gui_buffer *buffer,
+                                 struct t_gui_completion *completion)
+{
+    weechat::account *ptr_account;
+    weechat::channel *ptr_channel;
+
+    (void) pointer;
+    (void) data;
+    (void) completion_item;
+
+    ptr_account = nullptr;
+    ptr_channel = nullptr;
+    buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
+    if (!ptr_channel)
+        return WEECHAT_RC_OK;
+
+    switch (ptr_channel->type)
+    {
+    case weechat::channel::chat_type::MUC:
+    case weechat::channel::chat_type::PM:
+        break;
+    case weechat::channel::chat_type::FEED:
+        return WEECHAT_RC_OK;
+    }
+
+    const std::string input =
+        weechat::BufferPort::default_port_ref().get_string(buffer, "input");
+    const auto prefix = emoji_shortcode_completion_prefix(input);
+    if (!prefix)
+        return WEECHAT_RC_OK;
+
+    for (const auto &candidate : emoji_shortcode_completions(*prefix))
+    {
+        weechat_hook_completion_list_add(completion, candidate.c_str(),
+                                         0, WEECHAT_LIST_POS_SORT);
+    }
+
+    return WEECHAT_RC_OK;
+}
+
 int completion__accounts_cb(const void *pointer, void *data,
                             const char *completion_item,
                             struct t_gui_buffer *buffer,
@@ -139,11 +184,18 @@ void completion__init()
                             &completion__accounts_cb,
                             nullptr, nullptr);
 
+    weechat_hook_completion("xmpp_emoji_shortcode",
+                            N_("emoji shortcodes in chat and /react"),
+                            &completion__emoji_shortcode_cb,
+                            nullptr, nullptr);
+
     option = weechat_config_get("weechat.completion.default_template");
     default_template = weechat_config_string(option);
-    if (!weechat_strcasestr(default_template, "%(xmpp_account)"))
-    {
-        std::string new_template = fmt::format("{}|{}", default_template, "%(xmpp_account)");
+    std::string new_template = default_template;
+    if (!weechat_strcasestr(new_template.c_str(), "%(xmpp_account)"))
+        new_template = fmt::format("{}|{}", new_template, "%(xmpp_account)");
+    if (!weechat_strcasestr(new_template.c_str(), "%(xmpp_emoji_shortcode)"))
+        new_template = fmt::format("{}|{}", new_template, "%(xmpp_emoji_shortcode)");
+    if (new_template != default_template)
         weechat_config_option_set(option, new_template.c_str(), 1);
-    }
 }

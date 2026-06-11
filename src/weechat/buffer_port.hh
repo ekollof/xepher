@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <string_view>
 
 struct t_gui_buffer;
@@ -50,6 +51,9 @@ public:
                                    std::string_view property,
                                    std::string_view value) = 0;
 
+    [[nodiscard]] virtual std::string get_string(struct t_gui_buffer *buffer,
+                                                 std::string_view property) = 0;
+
     [[nodiscard]] static std::unique_ptr<BufferPort> default_port();
     [[nodiscard]] static BufferPort &default_port_ref();
 };
@@ -87,6 +91,8 @@ public:
                            struct t_gui_nick *nick,
                            std::string_view property,
                            std::string_view value) override;
+    [[nodiscard]] std::string get_string(struct t_gui_buffer *buffer,
+                                         std::string_view property) override;
 };
 
 }  // namespace weechat

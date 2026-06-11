@@ -443,13 +443,13 @@ void command__init()
         "react",
         N_("react to the last message with an emoji (XEP-0444)"),
         N_("<emoji>"),
-        N_("emoji: emoji reaction (e.g., 👍 😀 ❤️ 🎉)\n\n"
+        N_("emoji: Unicode emoji or :shortcode: (e.g., 👍 :thumbsup: :heart:)\n\n"
            "Reacts to the last message (not yours) in the buffer.\n"
            "Examples:\n"
            "  /react 👍\n"
-           "  /react ❤️\n"
-           "  /react 😂"),
-        nullptr, &command__react, nullptr, nullptr);
+           "  /react :thumbsup:\n"
+           "  /react :heart:"),
+        "%(xmpp_emoji_shortcode)", &command__react, nullptr, nullptr);
     if (!hook)
         weechat::UiPort::for_buffer(nullptr)->printf_error( "Failed to setup command /react");
 
