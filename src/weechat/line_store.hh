@@ -19,6 +19,10 @@ inline constexpr std::string_view k_glyph_delivered = "✓";
 inline constexpr std::string_view k_glyph_seen = "✓✓";
 inline constexpr std::string_view k_encrypted_glyph = "🔒";
 
+// Fixed display-width columns for vertically aligned status glyphs in PM bodies.
+inline constexpr std::size_t k_status_delivery_col_width = 2;
+inline constexpr std::size_t k_status_lock_col_width = 2;
+
 // Default backward scan depth for buffer line lookups (MAM dedup uses the same cap).
 inline constexpr int k_line_store_default_max_scan = 256;
 

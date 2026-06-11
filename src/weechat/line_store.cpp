@@ -82,6 +82,132 @@ struct ParsedMessageBody {
     std::string text;
 };
 
+[[nodiscard]] std::size_t utf8_advance(std::string_view text, std::size_t pos)
+{
+    if (pos >= text.size())
+        return 0;
+    const unsigned char lead = static_cast<unsigned char>(text[pos]);
+    if (lead < 0x80)
+        return 1;
+    if ((lead & 0xE0) == 0xC0)
+        return 2;
+    if ((lead & 0xF0) == 0xE0)
+        return 3;
+    if ((lead & 0xF8) == 0xF0)
+        return 4;
+    return 1;
+}
+
+[[nodiscard]] std::size_t status_glyph_display_width(std::string_view glyph)
+{
+    if (glyph == k_glyph_delivered)
+        return 1;
+    if (glyph == k_glyph_pending || glyph == k_glyph_seen || glyph == k_encrypted_glyph)
+        return 2;
+    return 0;
+}
+
+[[nodiscard]] std::size_t text_display_width(std::string_view text)
+{
+    std::size_t width = 0;
+    for (std::size_t pos = 0; pos < text.size();)
+    {
+        const std::size_t adv = utf8_advance(text, pos);
+        const std::string_view run = text.substr(pos, adv);
+        if (const std::size_t known = status_glyph_display_width(run); known > 0)
+            width += known;
+        else if (adv == 1 && static_cast<unsigned char>(text[pos]) < 0x80)
+            width += 1;
+        else
+            width += 2;
+        pos += adv;
+    }
+    return width;
+}
+
+[[nodiscard]] std::string pad_status_field(std::string_view content, const std::size_t target_width)
+{
+    std::string out(content);
+    if (const std::size_t width = text_display_width(content); width < target_width)
+        out.append(target_width - width, ' ');
+    return out;
+}
+
+[[nodiscard]] std::optional<ParsedMessageBody>
+try_parse_fixed_status_prefix(const std::string_view raw)
+{
+    if (raw.empty())
+        return std::nullopt;
+
+    std::size_t pos = 0;
+    bool matched_delivery = false;
+
+    constexpr std::array delivery_glyphs{
+        k_glyph_seen, k_glyph_pending, k_glyph_delivered,
+    };
+    for (const std::string_view glyph : delivery_glyphs)
+    {
+        if (!raw.substr(pos).starts_with(glyph))
+            continue;
+        pos += glyph.size();
+        matched_delivery = true;
+        break;
+    }
+
+    if (!matched_delivery)
+    {
+        if (raw.size() < k_status_delivery_col_width
+            || raw[0] != ' ' || raw[1] != ' ')
+        {
+            return std::nullopt;
+        }
+        pos = k_status_delivery_col_width;
+    }
+    else
+    {
+        const std::size_t field_start = 0;
+        while (pos < raw.size() && raw[pos] == ' '
+               && text_display_width(raw.substr(field_start, pos - field_start))
+                      < k_status_delivery_col_width)
+        {
+            ++pos;
+        }
+        if (text_display_width(raw.substr(field_start, pos - field_start))
+            != k_status_delivery_col_width)
+        {
+            return std::nullopt;
+        }
+    }
+
+    if (pos >= raw.size() || raw[pos] != ' ')
+        return std::nullopt;
+    ++pos;
+
+    ParsedMessageBody parsed;
+    if (raw.substr(pos).starts_with(k_encrypted_glyph))
+    {
+        parsed.encrypted = true;
+        pos += k_encrypted_glyph.size();
+        const std::size_t lock_start = pos - k_encrypted_glyph.size();
+        while (pos < raw.size() && raw[pos] == ' '
+               && text_display_width(raw.substr(lock_start, pos - lock_start))
+                      < k_status_lock_col_width)
+        {
+            ++pos;
+        }
+        if (text_display_width(raw.substr(lock_start, pos - lock_start))
+            != k_status_lock_col_width)
+        {
+            return std::nullopt;
+        }
+        if (pos < raw.size() && raw[pos] == ' ')
+            ++pos;
+    }
+
+    parsed.text = std::string(raw.substr(pos));
+    return parsed;
+}
+
 void trim_leading_ascii_ws(std::string &message);
 
 std::size_t glyph_prefix_length(std::string_view message, std::string_view glyph);
@@ -156,19 +282,16 @@ std::string format_message_status_prefix(const std::string_view delivery_glyph,
                                          const bool encrypted)
 {
     std::string out;
-    const auto append_part = [&](const std::string_view part) {
-        if (part.empty())
-            return;
-        if (!out.empty())
-            out += ' ';
-        out += part;
-    };
-
-    append_part(delivery_glyph);
+    if (delivery_glyph.empty())
+        out.assign(k_status_delivery_col_width, ' ');
+    else
+        out = pad_status_field(delivery_glyph, k_status_delivery_col_width);
+    out += ' ';
     if (encrypted)
-        append_part(k_encrypted_glyph);
-    if (!out.empty())
+    {
+        out += pad_status_field(k_encrypted_glyph, k_status_lock_col_width);
         out += ' ';
+    }
     return out;
 }
 
@@ -176,6 +299,9 @@ namespace {
 
 ParsedMessageBody parse_message_body_status(const std::string_view raw)
 {
+    if (auto fixed = try_parse_fixed_status_prefix(raw))
+        return *fixed;
+
     ParsedMessageBody parsed;
     std::string work = strip_delivery_glyphs(std::string(raw));
     trim_leading_ascii_ws(work);
