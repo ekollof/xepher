@@ -221,6 +221,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             account.sm_h_outbound = 0;
             account.sm_last_ack = 0;
             account.sm_outqueue.clear();
+            account.sm_pending_replay.clear();
         }
 
         // On <conflict>, the server kicked us because another session connected

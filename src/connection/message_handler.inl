@@ -942,6 +942,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         ? ::xmpp::is_own_device_omemo_self_copy(
             ::xmpp::StanzaView(encrypted), account.omemo.device_id)
         : false;
+    // Outbound copies sent from this device cannot be Signal-decrypted (the inbound
+    // session at {own_jid, own_device_id} is never established). Live duplicates
+    // (MAM page echo, SM replay) must skip decode() entirely — attempting it on
+    // multi-key legacy headers has caused multi-second hangs and connection loss.
+    const bool skip_own_device_omemo_decode = is_self_outbound_copy && is_own_device_self_copy;
     if (const auto self_copy_advice = ::xmpp::evaluate_omemo_self_copy_advice(
             encrypted != nullptr,
             is_self_outbound_copy,
@@ -958,9 +963,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         // skipped and the message is displayed using the OMEMO_ADVICE
         // placeholder (showing the user their sent history exists without
         // corrupting the live Signal session state).
-        // For live carbon copies (!is_mam_replay), leave |encrypted| set so
-        // the existing silently-discard path still applies
-        // (live copies are already shown as sent messages; no replay needed).
+        // For live copies from this device, leave |encrypted| set so
+        // should_skip_display_after_omemo() silently discards the duplicate;
+        // decode() is gated separately (skip_own_device_omemo_decode).
         if (self_copy_advice.clear_encrypted_on_mam)
             encrypted = nullptr;
     }
@@ -1043,7 +1048,7 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         }
     }
 
-    if (encrypted && account.omemo)
+    if (encrypted && account.omemo && !skip_own_device_omemo_decode)
     {
         bool omemo_is_duplicate = false;
         // For MUC OMEMO (plan §4.1): the stanza 'from' is room@service/nick.
