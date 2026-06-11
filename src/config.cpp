@@ -210,8 +210,9 @@ weechat::config::config()
                 "on", nullptr, false,
                 {}, {}, {}},
             .emoticons{file, section_look, "emoticons", "boolean",
-                "replace text emoticons like :) ;) :D <3 with their Unicode emoji "
-                "equivalents (😊 😉 😀 ❤️) in incoming messages and outgoing message bodies",
+                "replace text emoticons like :) ;) :D <3 and GitHub-style shortcodes "
+                "like :thumbsup: :smile: with their Unicode emoji equivalents in "
+                "incoming messages and outgoing message bodies",
                 nullptr, 0, 0,
                 "on", nullptr, false,
                 {}, {}, {}},

@@ -3116,6 +3116,22 @@ TEST_CASE("replace_emoticons does not match partial emoticons")
     CHECK(replace_emoticons("a:-)b") == "a:-)b");
 }
 
+TEST_CASE("replace_emoticons converts GitHub shortcodes")
+{
+    CHECK(replace_emoticons("Nice :thumbsup:") == "Nice 👍");
+    CHECK(replace_emoticons(":+1: :smile: :heart:") == "👍 😄 ❤️");
+}
+
+TEST_CASE("replace_emoticons leaves unknown shortcodes alone")
+{
+    CHECK(replace_emoticons(":not_a_real_emoji_shortcode:") == ":not_a_real_emoji_shortcode:");
+}
+
+TEST_CASE("replace_emoticons does not match shortcodes without boundaries")
+{
+    CHECK(replace_emoticons("foo:thumbsup:bar") == "foo:thumbsup:bar");
+}
+
 TEST_CASE("is_image_mime_type accepts image MIME types")
 {
     CHECK(is_image_mime_type("image/png") == true);

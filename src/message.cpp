@@ -20,7 +20,10 @@
 #include "channel.hh"
 #include "user.hh"
 #include "message.hh"
+#include "util.hh"
 #include "weechat/ui_port.hh"
+
+#include "message_emoji_shortcodes.inl"
 
 // RAII wrapper for POSIX regex_t — calls regfree() on scope exit.
 struct regex_guard {
@@ -235,6 +238,15 @@ static const std::pair<std::string_view, std::string_view> k_emoticons[] = {
     {":-3", "😺"},
 };
 
+namespace {
+
+[[nodiscard]] bool is_emoji_shortcode_name_char(const unsigned char c) noexcept
+{
+    return std::islower(c) || std::isdigit(c) || c == '_' || c == '+' || c == '-';
+}
+
+} // namespace
+
 XMPP_TEST_EXPORT std::string replace_emoticons(std::string_view text)
 {
     // Sort longest-first so multi-char emoticons like ":-)" are matched before ")"
@@ -244,13 +256,15 @@ XMPP_TEST_EXPORT std::string replace_emoticons(std::string_view text)
         return s;
     }();
 
-    auto after_boundary = [](char c) -> bool {
+    const auto &shortcodes = emoji_shortcode_map();
+
+    auto after_boundary = [](const char c) -> bool {
         return std::isspace(static_cast<unsigned char>(c))
             || std::ispunct(static_cast<unsigned char>(c));
     };
-    auto before_boundary = [](char c) -> bool {
+    auto before_boundary = [](const char c) -> bool {
         return c == ':'
-            ? false  // "::)" is valid C++ scope, not an emoticon
+            ? false  // "::)" / "::smile:" — second ':' is not a shortcode opener
             : (std::isspace(static_cast<unsigned char>(c))
                || std::ispunct(static_cast<unsigned char>(c)));
     };
@@ -258,24 +272,44 @@ XMPP_TEST_EXPORT std::string replace_emoticons(std::string_view text)
     std::string result;
     result.reserve(text.size());
 
-    size_t i = 0;
-    while (i < text.size())
+    for (std::size_t i = 0; i < text.size();)
     {
-        bool at_boundary = (i == 0) || before_boundary(text[i - 1]);
+        const bool at_boundary = (i == 0) || before_boundary(text[i - 1]);
 
         if (at_boundary)
         {
-            std::string_view tail = text.substr(i);
-            auto match = std::ranges::find_if(sorted, [&](const auto &e) {
+            const std::string_view tail = text.substr(i);
+            const auto emoticon = std::ranges::find_if(sorted, [&](const auto &e) {
                 return tail.starts_with(e.first)
                     && (i + e.first.size() >= text.size()
                         || after_boundary(text[i + e.first.size()]));
             });
-            if (match != sorted.end())
+            if (emoticon != sorted.end())
             {
-                result += match->second;
-                i += match->first.size();
+                result += emoticon->second;
+                i += emoticon->first.size();
                 continue;
+            }
+
+            // GitHub-style shortcodes: :thumbsup:, :+1:, :smile:
+            if (text[i] == ':')
+            {
+                std::size_t j = i + 1;
+                while (j < text.size()
+                       && is_emoji_shortcode_name_char(static_cast<unsigned char>(text[j])))
+                    ++j;
+
+                if (j < text.size() && text[j] == ':' && j > i + 1
+                    && (j + 1 >= text.size() || after_boundary(text[j + 1])))
+                {
+                    const std::string_view name = text.substr(i + 1, j - i - 1);
+                    if (const auto it = shortcodes.find(name); it != shortcodes.end())
+                    {
+                        result += it->second;
+                        i = j + 1;
+                        continue;
+                    }
+                }
             }
         }
 

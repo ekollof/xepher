@@ -18,5 +18,5 @@ XMPP_TEST_EXPORT void message__htmldecode(char *dest, const char *src, std::size
 std::string message__decode(weechat::account *account,
                             std::string_view text);
 
-// Replace text emoticons with Unicode emoji. Returns the modified string.
+// Replace text emoticons (:-), <3, …) and :shortcode: aliases (GitHub/gemoji) with Unicode emoji.
 XMPP_TEST_EXPORT std::string replace_emoticons(std::string_view text);
