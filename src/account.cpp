@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <ranges>
+#include <string_view>
 #include <span>
 #include <expected>
 #include <fmt/core.h>
@@ -39,6 +40,7 @@
 #include "debug.hh"
 #include "util.hh"
 #include "weechat/ui_port.hh"
+#include "xmpp/message_forward.hh"
 
 // Use a pointer that's never freed to prevent destructor running at program exit
 // when plugin is already unloaded. Memory is leaked intentionally; OS reclaims it.
@@ -424,6 +426,49 @@ xmpp_mem_t make_memory(void *userdata)
     return memory;
 }
 
+std::string weechat::account::resolve_channel_key(std::string_view partner_bare) const
+{
+    if (partner_bare.empty())
+        return {};
+
+    const std::string partner(partner_bare);
+    if (channels.contains(partner))
+    {
+        channel_key_cache_[::xmpp::bare_jid_fold_key(partner_bare)] = partner;
+        return partner;
+    }
+
+    const std::string folded = ::xmpp::bare_jid_fold_key(partner_bare);
+    if (auto cit = channel_key_cache_.find(folded); cit != channel_key_cache_.end())
+    {
+        if (channels.contains(cit->second))
+            return cit->second;
+    }
+
+    if (auto match = std::ranges::find_if(channels, [&](const auto &entry) {
+            const auto &[key, _] = entry;
+            return ::xmpp::bare_jid_iequals(key, partner_bare);
+        });
+        match != channels.end())
+    {
+        const auto &[key, _] = *match;
+        channel_key_cache_[folded] = key;
+        return key;
+    }
+    return partner;
+}
+
+void weechat::account::invalidate_channel_key_cache(std::string_view canonical_key)
+{
+    if (canonical_key.empty())
+        return;
+
+    std::erase_if(channel_key_cache_, [&](const auto &entry) {
+        const auto &[_, key] = entry;
+        return key == canonical_key;
+    });
+}
+
 weechat::account::account(config_file& config_file, const std::string name)
     : config_account(config_file, config_file.configuration.section_account, name.data())
     , memory(make_memory(this)), logger(make_logger(this))
@@ -464,6 +509,7 @@ weechat::account::~account()
     // channels are destroyed after mam_db_env in member reverse-destruction order,
     // but channel::~channel() updates MAM state for PM buffers. Destroy channels
     // explicitly here while the cache environment is still alive.
+    channel_key_cache_.clear();
     channels.clear();
 
     mam_cache_cleanup();

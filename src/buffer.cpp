@@ -259,6 +259,7 @@ int buffer__close_cb(const void *pointer, void *data,
             }
         }
 
+        ptr_account->invalidate_channel_key_cache(ptr_channel->name);
         ptr_account->channels.erase(ptr_channel->name);
     }
 

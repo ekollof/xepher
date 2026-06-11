@@ -40,6 +40,14 @@ bool bare_jid_iequals(std::string_view a, std::string_view b)
         });
 }
 
+std::string bare_jid_fold_key(std::string_view bare_jid)
+{
+    std::string out(bare_jid);
+    for (char &c : out)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return out;
+}
+
 bool stanza_has_user_message_payload(StanzaView msg)
 {
     const StanzaView body = msg.child("body");

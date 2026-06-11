@@ -7,10 +7,28 @@
 #include <cstdint>
 #include <ctime>
 #include <expected>
+#include <functional>
 #include <string>
 #include <string_view>
 #include "test_export.hh"
 #include "xmpp/stanza_view.hh"
+
+// Transparent hash/equality for unordered_(map|set) lookup by std::string_view.
+struct transparent_string_hash {
+    using is_transparent = void;
+    [[nodiscard]] std::size_t operator()(std::string_view sv) const noexcept
+    {
+        return std::hash<std::string_view>{}(sv);
+    }
+    [[nodiscard]] std::size_t operator()(const std::string &s) const noexcept
+    {
+        return std::hash<std::string_view>{}(s);
+    }
+    [[nodiscard]] std::size_t operator()(const char *s) const noexcept
+    {
+        return std::hash<std::string_view>{}(s);
+    }
+};
 
 XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2);
 

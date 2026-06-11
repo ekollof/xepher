@@ -44,6 +44,9 @@ struct MamPmDiscoveryPolicy {
 
 [[nodiscard]] XMPP_TEST_EXPORT bool bare_jid_iequals(std::string_view a, std::string_view b);
 
+// Case-folded bare JID for case-insensitive map keys (ASCII JID localpart@domain).
+[[nodiscard]] XMPP_TEST_EXPORT std::string bare_jid_fold_key(std::string_view bare_jid);
+
 [[nodiscard]] XMPP_TEST_EXPORT bool stanza_is_carbon(StanzaView msg);
 [[nodiscard]] XMPP_TEST_EXPORT bool carbon_sender_is_account(StanzaView envelope,
                                                              std::string_view account_bare_jid);
