@@ -2085,7 +2085,9 @@ message_handler_after_omemo:
         display_text = final_text.c_str();
     }
 
-    const char *encrypted_glyph = (encrypted || x || was_omemo_cached) ? "🔒 " : "";
+    const bool show_encrypted = encrypted || x || was_omemo_cached;
+    const std::string status_prefix =
+        weechat::format_message_status_prefix("", show_encrypted);
 
     if (!skip_live_self_render)
     {
@@ -2093,7 +2095,7 @@ message_handler_after_omemo:
         {
             std::string msg = fmt::format("{}\t{}[to {}]: {}{}",
                                           display_prefix,
-                                          edit, to, encrypted_glyph,
+                                          edit, to, status_prefix,
                                           display_text ? display_text : "");
             ch_ui->printf_date_tags(date, *dyn_tags, msg);
         }
@@ -2102,7 +2104,7 @@ message_handler_after_omemo:
             std::string msg = fmt::format("{}\t{}{}{} {}",
                                           weechat::RuntimePort::default_runtime().prefix("action"),
                                           edit, display_prefix,
-                                          encrypted_glyph,
+                                          status_prefix,
                                           display_text ? display_text+4 : "");
             ch_ui->printf_date_tags(date, *dyn_tags, msg);
         }
@@ -2110,7 +2112,7 @@ message_handler_after_omemo:
         {
             std::string msg = fmt::format("{}\t{}{}{}",
                                           display_prefix,
-                                          edit, encrypted_glyph,
+                                          edit, status_prefix,
                                           display_text ? display_text : "");
             ch_ui->printf_date_tags(date, *dyn_tags, msg);
         }

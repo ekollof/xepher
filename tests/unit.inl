@@ -2288,38 +2288,48 @@ TEST_CASE("strip_status_glyph_suffix removes trailing delivery glyphs")
     CHECK(weechat::strip_status_glyph_suffix("hello ✓") + " ✓✓" == "hello ✓✓");
 }
 
-TEST_CASE("clean_editable_line_body strips glyphs and colours for /edit")
+TEST_CASE("format_message_status_prefix aligns delivery and lock glyphs")
 {
-    CHECK(weechat::clean_editable_line_body("nick\t ⌛hello") == "hello");
+    CHECK(weechat::format_message_status_prefix(weechat::k_glyph_pending, false) == "⌛ ");
+    CHECK(weechat::format_message_status_prefix(weechat::k_glyph_delivered, false) == "✓ ");
+    CHECK(weechat::format_message_status_prefix(weechat::k_glyph_seen, false) == "✓✓ ");
+    CHECK(weechat::format_message_status_prefix(weechat::k_glyph_pending, true) == "⌛ 🔒 ");
+    CHECK(weechat::format_message_status_prefix("", true) == "🔒 ");
+}
+
+TEST_CASE("clean_editable_line_body strips aligned status prefix for /edit")
+{
+    CHECK(weechat::clean_editable_line_body("nick\t⌛ hello") == "hello");
+    CHECK(weechat::clean_editable_line_body("nick\t⌛ 🔒 hello") == "hello");
     CHECK(weechat::clean_editable_line_body("hello ✓") == "hello");
     CHECK(weechat::clean_editable_line_body("nick ⌛\thello ⌛") == "hello");
 }
 
-TEST_CASE("format_self_pm_line places delivery glyph at body start")
+TEST_CASE("format_self_pm_line places aligned status prefix at body start")
 {
     CHECK(weechat::format_self_pm_line("nick", "hello")
-          == "nick\t ⌛hello");
-    CHECK(weechat::format_self_pm_line("nick", "🔒 secret", weechat::k_glyph_delivered)
-          == "nick\t ✓🔒 secret");
+          == "nick\t⌛ hello");
+    CHECK(weechat::format_self_pm_line("nick", "secret", weechat::k_glyph_delivered, true)
+          == "nick\t✓ 🔒 secret");
 }
 
-TEST_CASE("apply_delivery_glyph_to_line updates body start")
+TEST_CASE("apply_delivery_glyph_to_line updates aligned status prefix")
 {
-    const std::string pending = "nick\t ⌛hello";
+    const std::string pending = "nick\t⌛ 🔒 hello";
     CHECK(weechat::apply_delivery_glyph_to_line(pending, weechat::k_glyph_delivered)
-          == "nick\t ✓hello");
+          == "nick\t✓ 🔒 hello");
     CHECK(weechat::apply_delivery_glyph_to_line(
               weechat::apply_delivery_glyph_to_line(pending, weechat::k_glyph_delivered),
               weechat::k_glyph_seen)
-          == "nick\t ✓✓hello");
+          == "nick\t✓✓ 🔒 hello");
 
     // WeeChat private lines may store body only (no tab).
-    CHECK(weechat::apply_delivery_glyph_to_line("hello ⌛", weechat::k_glyph_delivered)
-          == " ✓hello");
+    CHECK(weechat::apply_delivery_glyph_to_line("⌛ hello", weechat::k_glyph_delivered)
+          == "✓ hello");
 
-    // Migrate mistaken prefix-column glyph from an earlier build.
-    CHECK(weechat::apply_delivery_glyph_to_line("nick ⌛\thello ⌛", weechat::k_glyph_delivered)
-          == "nick\t ✓hello");
+    // Migrate legacy cramped prefix from an earlier build.
+    CHECK(weechat::apply_delivery_glyph_to_line("nick\t ⌛🔒 secret", weechat::k_glyph_delivered)
+          == "nick\t✓ 🔒 secret");
 }
 
 TEST_CASE("XEP-0184 receipt request builder")

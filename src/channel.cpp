@@ -1719,21 +1719,14 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
                 "{}{}",
                 weechat::RuntimePort::default_runtime().prefix("action"),
                 prefix);
-            const std::string action_body = fmt::format(
-                "{}{}",
-                encrypted ? "🔒 " : "",
-                body_str.substr(4));
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, tag.c_str(),
-                weechat::format_self_pm_line(action_prefix, action_body));
+                weechat::format_self_pm_line(
+                    action_prefix, body_str.substr(4), weechat::k_glyph_pending, encrypted));
         }
         else
         {
-            const std::string msg_body = fmt::format(
-                "{}{}",
-                encrypted ? "🔒 " : "",
-                body_str);
             weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, tag.c_str(),
-                weechat::format_self_pm_line(prefix, msg_body));
+                weechat::format_self_pm_line(prefix, body_str, weechat::k_glyph_pending, encrypted));
         }
     }
 

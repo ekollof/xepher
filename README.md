@@ -238,10 +238,10 @@ buffer's encryption mode (🔒OMEMO / 🔒PGP / empty for plaintext). In MUCs it
 
 ### Message status glyphs
 
-Sent PM messages show a delivery-status glyph at the **start** of the message
-text (WeeChat's `private` tag hides the nick column for your own lines, so the
-glyph cannot appear beside the nick). It updates automatically when the
-recipient acknowledges the message:
+Sent PM messages show delivery and encryption status as aligned prefixes at the
+**start** of the message text (WeeChat's `private` tag hides the nick column for
+your own lines). Examples: `⌛ hello`, `✓ 🔒 hello`. Status updates
+automatically when the recipient acknowledges the message:
 
 | Glyph | Meaning |
 |-------|---------|

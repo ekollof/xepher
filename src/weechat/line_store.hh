@@ -14,9 +14,10 @@ struct t_gui_buffer;
 
 namespace weechat {
 
-inline constexpr std::string_view k_glyph_pending = " ⌛";
-inline constexpr std::string_view k_glyph_delivered = " ✓";
-inline constexpr std::string_view k_glyph_seen = " ✓✓";
+inline constexpr std::string_view k_glyph_pending = "⌛";
+inline constexpr std::string_view k_glyph_delivered = "✓";
+inline constexpr std::string_view k_glyph_seen = "✓✓";
+inline constexpr std::string_view k_encrypted_glyph = "🔒";
 
 // Default backward scan depth for buffer line lookups (MAM dedup uses the same cap).
 inline constexpr int k_line_store_default_max_scan = 256;
@@ -26,13 +27,21 @@ inline constexpr int k_line_store_default_max_scan = 256;
 [[nodiscard]] XMPP_TEST_EXPORT std::string strip_status_glyph_suffix(std::string message);
 [[nodiscard]] XMPP_TEST_EXPORT std::string strip_delivery_glyphs(std::string message);
 
-// Body text safe for /edit prefill: extract after tab, strip colours and delivery glyphs.
+// Body text safe for /edit prefill: extract after tab, strip colours and status glyphs.
 [[nodiscard]] XMPP_TEST_EXPORT std::string clean_editable_line_body(std::string_view raw);
 
-// Outgoing PM self-message: glyph at body start (WeeChat private lines hide nick column).
+// Aligned status prefix: optional delivery glyph, optional OMEMO/PGP lock, trailing space.
+[[nodiscard]] XMPP_TEST_EXPORT std::string format_message_status_prefix(
+    std::string_view delivery_glyph, bool encrypted);
+
+// Strip delivery + encryption status prefix from message body text.
+[[nodiscard]] XMPP_TEST_EXPORT std::string strip_message_status_prefix(std::string message);
+
+// Outgoing PM self-message: status prefix then body (WeeChat private lines hide nick column).
 [[nodiscard]] XMPP_TEST_EXPORT std::string format_self_pm_line(std::string_view prefix,
                                                                  std::string_view body,
-                                                                 std::string_view glyph = k_glyph_pending);
+                                                                 std::string_view glyph = k_glyph_pending,
+                                                                 bool encrypted = false);
 
 // Update delivery glyph on the body; migrates legacy suffix and mistaken prefix glyphs.
 [[nodiscard]] XMPP_TEST_EXPORT std::string apply_delivery_glyph_to_line(std::string line,

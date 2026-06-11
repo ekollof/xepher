@@ -77,6 +77,37 @@ void line_data_set_message(void *line_data,
     weechat_hashtable_free(ht);
 }
 
+struct ParsedMessageBody {
+    bool encrypted = false;
+    std::string text;
+};
+
+void trim_leading_ascii_ws(std::string &message);
+
+std::size_t glyph_prefix_length(std::string_view message, std::string_view glyph);
+
+void trim_leading_ascii_ws(std::string &message)
+{
+    while (!message.empty()
+           && std::isspace(static_cast<unsigned char>(message.front())))
+    {
+        message.erase(message.begin());
+    }
+}
+
+std::size_t glyph_prefix_length(const std::string_view message, const std::string_view glyph)
+{
+    if (message.starts_with(glyph))
+        return glyph.size();
+    if (message.size() > glyph.size()
+        && message[0] == ' '
+        && message.substr(1).starts_with(glyph))
+    {
+        return glyph.size() + 1;
+    }
+    return 0;
+}
+
 }  // namespace
 
 std::string strip_status_glyph_prefix(std::string message)
@@ -87,31 +118,31 @@ std::string strip_status_glyph_prefix(std::string message)
         message.erase(message.begin());
     }
 
-    constexpr std::array glyphs{ k_glyph_pending, k_glyph_delivered, k_glyph_seen };
-    const auto glyph = std::ranges::find_if(glyphs, [&](const std::string_view spaced) {
-        if (message.starts_with(spaced))
-            return true;
-        const std::string_view bare = spaced.substr(spaced.find_first_not_of(' '));
-        return !bare.empty() && message.starts_with(bare);
-    });
-    if (glyph != glyphs.end())
+    constexpr std::array glyphs{ k_glyph_seen, k_glyph_delivered, k_glyph_pending };
+    for (const std::string_view glyph : glyphs)
     {
-        if (message.starts_with(*glyph))
-            message.erase(0, glyph->size());
-        else
-            message.erase(0, glyph->substr(glyph->find_first_not_of(' ')).size());
+        if (const std::size_t len = glyph_prefix_length(message, glyph); len > 0)
+        {
+            message.erase(0, len);
+            break;
+        }
     }
     return message;
 }
 
 std::string strip_status_glyph_suffix(std::string message)
 {
-    constexpr std::array glyphs{ k_glyph_pending, k_glyph_delivered, k_glyph_seen };
-    const auto glyph = std::ranges::find_if(glyphs, [&](std::string_view suffix) {
-        return message.ends_with(suffix);
-    });
-    if (glyph != glyphs.end())
-        message.erase(message.size() - glyph->size());
+    constexpr std::array glyphs{ k_glyph_seen, k_glyph_delivered, k_glyph_pending };
+    for (const std::string_view suffix : glyphs)
+    {
+        if (message.size() > suffix.size() && message[message.size() - suffix.size() - 1] == ' ')
+        {
+            if (message.substr(message.size() - suffix.size()) == suffix)
+                return message.substr(0, message.size() - suffix.size() - 1);
+        }
+        if (message.ends_with(suffix))
+            return message.substr(0, message.size() - suffix.size());
+    }
     return message;
 }
 
@@ -119,6 +150,70 @@ std::string strip_delivery_glyphs(std::string message)
 {
     message = strip_status_glyph_prefix(std::move(message));
     return strip_status_glyph_suffix(std::move(message));
+}
+
+std::string format_message_status_prefix(const std::string_view delivery_glyph,
+                                         const bool encrypted)
+{
+    std::string out;
+    const auto append_part = [&](const std::string_view part) {
+        if (part.empty())
+            return;
+        if (!out.empty())
+            out += ' ';
+        out += part;
+    };
+
+    append_part(delivery_glyph);
+    if (encrypted)
+        append_part(k_encrypted_glyph);
+    if (!out.empty())
+        out += ' ';
+    return out;
+}
+
+namespace {
+
+ParsedMessageBody parse_message_body_status(const std::string_view raw)
+{
+    ParsedMessageBody parsed;
+    std::string work = strip_delivery_glyphs(std::string(raw));
+    trim_leading_ascii_ws(work);
+
+    constexpr std::array delivery_glyphs{
+        k_glyph_seen, k_glyph_delivered, k_glyph_pending,
+    };
+    for (const std::string_view delivery_glyph : delivery_glyphs)
+    {
+        if (const std::size_t len = glyph_prefix_length(work, delivery_glyph); len > 0)
+        {
+            work.erase(0, len);
+            break;
+        }
+    }
+    trim_leading_ascii_ws(work);
+
+    if (work.starts_with(k_encrypted_glyph))
+    {
+        parsed.encrypted = true;
+        work.erase(0, k_encrypted_glyph.size());
+    }
+    trim_leading_ascii_ws(work);
+    parsed.text = std::move(work);
+    return parsed;
+}
+
+std::string rebuild_message_body_status(const std::string_view delivery_glyph,
+                                          const ParsedMessageBody &parsed)
+{
+    return format_message_status_prefix(delivery_glyph, parsed.encrypted) + parsed.text;
+}
+
+}  // namespace
+
+std::string strip_message_status_prefix(std::string message)
+{
+    return parse_message_body_status(message).text;
 }
 
 std::string clean_editable_line_body(const std::string_view raw)
@@ -133,29 +228,29 @@ std::string clean_editable_line_body(const std::string_view raw)
         body_sv.remove_prefix(1);
 
     std::string body(body_sv);
-    body = strip_delivery_glyphs(std::move(body));
+    body = strip_message_status_prefix(std::move(body));
 
     if (weechat::plugin::instance)
     {
         std::unique_ptr<char, decltype(&free)> stripped(
             weechat_string_remove_color(body.c_str(), nullptr), &free);
         if (stripped)
-            body = strip_delivery_glyphs(stripped.get());
+            body = strip_message_status_prefix(stripped.get());
     }
 
-    while (!body.empty()
-           && std::isspace(static_cast<unsigned char>(body.front())))
-    {
-        body.erase(body.begin());
-    }
+    trim_leading_ascii_ws(body);
     return body;
 }
 
 std::string format_self_pm_line(const std::string_view prefix,
                                 const std::string_view body,
-                                const std::string_view glyph)
+                                const std::string_view glyph,
+                                const bool encrypted)
 {
-    return fmt::format("{}\t{}{}", prefix, glyph, body);
+    return fmt::format("{}\t{}{}",
+                       prefix,
+                       format_message_status_prefix(glyph, encrypted),
+                       body);
 }
 
 std::string apply_delivery_glyph_to_line(std::string line, const std::string_view glyph)
@@ -163,13 +258,13 @@ std::string apply_delivery_glyph_to_line(std::string line, const std::string_vie
     const auto tab = line.find('\t');
     if (tab == std::string::npos)
     {
-        line = strip_delivery_glyphs(std::move(line));
-        return std::string(glyph) + line;
+        const ParsedMessageBody parsed = parse_message_body_status(line);
+        return rebuild_message_body_status(glyph, parsed);
     }
 
-    std::string prefix = strip_status_glyph_suffix(line.substr(0, tab));
-    std::string body = strip_delivery_glyphs(line.substr(tab + 1));
-    return fmt::format("{}\t{}{}", prefix, glyph, body);
+    const std::string prefix = strip_status_glyph_suffix(line.substr(0, tab));
+    const ParsedMessageBody parsed = parse_message_body_status(line.substr(tab + 1));
+    return fmt::format("{}\t{}", prefix, rebuild_message_body_status(glyph, parsed));
 }
 
 bool line_store_update_line_glyph_by_tag(struct t_gui_buffer *buffer,
