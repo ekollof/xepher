@@ -22,12 +22,6 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
     const auto inbound = ::xmpp::StanzaView(stanza);
 
-    // Cache hdata handles — stable for the process lifetime, resolved once.
-    static struct t_hdata *hdata_line      = weechat_hdata_get("line");
-    static struct t_hdata *hdata_line_data = weechat_hdata_get("line_data");
-    static struct t_hdata *hdata_lines     = weechat_hdata_get("lines");
-    static struct t_hdata *hdata_buffer    = weechat_hdata_get("buffer");
-
     // Helper: match a buffer-line tag against a target message ID regardless of
     // which ID namespace was used to tag the line.  Lines receive up to three
     // ID tags on live delivery:
@@ -66,24 +60,10 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
     // account.jid() returns a temporary; taking .data() on it is a dangling pointer.
     const std::string own_jid_str = account.jid();
 
-    const auto canonical_channel_key = [&](std::string_view partner_bare) -> std::string {
-        if (partner_bare.empty())
-            return {};
-        const std::string partner(partner_bare);
-        if (account.channels.contains(partner))
-            return partner;
-        for (const auto &[key, _] : account.channels)
-        {
-            if (::xmpp::bare_jid_iequals(key, partner_bare))
-                return key;
-        }
-        return partner;
-    };
-
     const auto find_channel_for_partner = [&](std::string_view partner_bare)
         -> weechat::channel *
     {
-        const std::string key = canonical_channel_key(partner_bare);
+        const std::string key = account.resolve_channel_key(partner_bare);
         if (key.empty())
             return nullptr;
         if (auto it = account.channels.find(key); it != account.channels.end())
@@ -469,7 +449,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                             msg_from ? msg_from : "",
                             from_bare_s2);
                         account.mam_cache_message(channel_jid, msg_id, cache_from,
-                                                  msg_timestamp, effective_body);
+                                                  msg_timestamp, effective_body,
+                                                  /*batched=*/true);
                     }
                 }
 
@@ -797,11 +778,11 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
             from_bare ? std::string_view(from_bare) : std::string_view{},
             to_bare ? std::string_view(to_bare) : std::string_view{},
             own_jid_str))
-        channel_id_storage = canonical_channel_key(*channel_jid);
+        channel_id_storage = account.resolve_channel_key(*channel_jid);
     else if (from_bare)
-        channel_id_storage = canonical_channel_key(from_bare);
+        channel_id_storage = account.resolve_channel_key(from_bare);
     else if (to_bare)
-        channel_id_storage = canonical_channel_key(to_bare);
+        channel_id_storage = account.resolve_channel_key(to_bare);
     const char *channel_id = channel_id_storage.empty() ? nullptr : channel_id_storage.c_str();
     parent_channel = channel_id ? find_channel_for_partner(channel_id) : nullptr;
     const char *pm_id = from_is_account ? to : from;
@@ -1126,13 +1107,14 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 // attribute instead.  Storing all three guarantees a cache hit
                 // regardless of which ID the next MAM replay uses as its stable_id.
                 const std::string ch(channel_id);
-                for (const std::string &cache_id : ::xmpp::omemo_plaintext_cache_ids({
-                         stanza_id ? std::string_view(stanza_id) : std::string_view{},
-                         origin_id ? std::string_view(origin_id) : std::string_view{},
-                         id ? std::string_view(id) : std::string_view{}}))
-                {
-                    account.mam_cache_store_omemo_plaintext(ch, cache_id, omemo_cleartext_storage);
-                }
+                account.mam_cache_store_omemo_plaintext_ids(
+                    ch,
+                    ::xmpp::omemo_plaintext_cache_ids({
+                        stanza_id ? std::string_view(stanza_id) : std::string_view{},
+                        origin_id ? std::string_view(origin_id) : std::string_view{},
+                        id ? std::string_view(id) : std::string_view{}}),
+                    omemo_cleartext_storage,
+                    /*batched=*/is_mam_replay);
             }
         }
         if (!cleartext)
@@ -1430,31 +1412,8 @@ message_handler_after_omemo:
     // in the buffer.  This prevents duplicates on every reconnect.
     if (delay && stanza_id && channel && channel->buffer)
     {
-        std::string needle = std::string("stanza_id_") + stanza_id;
-        struct t_gui_lines *own_lines   = (struct t_gui_lines*)
-            weechat_hdata_pointer(hdata_buffer,
-                                  channel->buffer, "lines");
-        bool already_shown = false;
-        if (own_lines)
-        {
-            struct t_gui_line *ln = (struct t_gui_line*)
-                weechat_hdata_pointer(hdata_lines, own_lines, "last_line");
-            while (ln && !already_shown)
-            {
-                struct t_gui_line_data *ld = (struct t_gui_line_data*)
-                    weechat_hdata_pointer(hdata_line, ln, "data");
-                if (ld)
-                {
-                    const char *tags = (const char*)
-                        weechat_hdata_string(hdata_line_data, ld, "tags");
-                    if (tags && std::string_view(tags).contains(needle))
-                        already_shown = true;
-                }
-                ln = (struct t_gui_line*)
-                    weechat_hdata_move(hdata_line, ln, -1);
-            }
-        }
-        if (already_shown)
+        const std::string needle = fmt::format("stanza_id_{}", stanza_id);
+        if (weechat::line_store_buffer_contains_any_tag(channel->buffer, {needle}))
             return 1;
     }
 

@@ -16,8 +16,10 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <functional>
 #include <optional>
 #include <expected>
+#include <span>
 #include <utility>
 #include <lmdb++.h>
 
@@ -189,7 +191,8 @@ namespace weechat
         weechat::connection connection;
         struct t_gui_buffer *buffer = nullptr;
         std::unordered_map<std::string, weechat::channel> channels;
-        std::unordered_map<std::string, weechat::user> users;
+        std::unordered_map<std::string, weechat::user,
+                            transparent_string_hash, std::equal_to<>> users;
 
         std::unordered_map<std::string, struct t_config_option *> options;
         
@@ -383,6 +386,15 @@ namespace weechat
         // In-memory mirror of LMDB feed_open:* keys for fast gate checks on
         // live pubsub pushes and MAM replay (synced on register/unregister).
         std::unordered_set<std::string> feed_open_keys_;
+        // In-memory mirror of LMDB feed_seen:* keys (synced on connect / mark_seen).
+        std::unordered_set<std::string> feed_seen_keys_;
+        // Deferred MAM-page LMDB writes (queued in RAM, one txn per page on MAM fin).
+        struct mam_cache_pending_write {
+            MDB_dbi dbi = 0;
+            std::string key;
+            std::string value;
+        };
+        std::vector<mam_cache_pending_write> mam_cache_write_queue_;
 
         // Runtime cache: map "feed_key + item_id" to Atom entry IDs so /feed reply
         // can reference the target entry's real atom:id in thr:in-reply-to@ref.
@@ -406,7 +418,14 @@ namespace weechat
         // Capability cache (XEP-0115)
         std::unordered_map<std::string, std::vector<std::string>> caps_cache;  // verification_hash -> features
         // Last seen disco features per peer bare JID.
-        std::unordered_map<std::string, std::unordered_set<std::string>> peer_features;
+        std::unordered_map<std::string,
+                            std::unordered_set<std::string,
+                                               transparent_string_hash, std::equal_to<>>,
+                            transparent_string_hash, std::equal_to<>> peer_features;
+        // Case-folded bare JID → canonical channels map key (lazy-filled).
+        mutable std::unordered_map<std::string, std::string,
+                                    transparent_string_hash, std::equal_to<>>
+            channel_key_cache_;
 
         // Cached bare JID — populated on connect, cleared on disconnect.
         // Avoids re-parsing xmpp_conn_get_bound_jid() on every stanza.
@@ -498,7 +517,9 @@ namespace weechat
         void mam_cache_init();
         void mam_cache_cleanup();
         void mam_cache_message(std::string_view channel_jid, std::string_view message_id,
-                              std::string_view from, time_t timestamp, std::string_view body);
+                              std::string_view from, time_t timestamp, std::string_view body,
+                              bool batched = false);
+        void mam_cache_write_batch_commit();
         void mam_cache_retract_message(std::string_view channel_jid, std::string_view message_id);
         bool mam_cache_is_retracted(std::string_view channel_jid, std::string_view message_id);
         void mam_cache_load_messages(std::string_view channel_jid, struct t_gui_buffer *buffer);
@@ -508,11 +529,17 @@ namespace weechat
         // OMEMO plaintext cache: store decrypted body on live delivery; look up on MAM replay
         void mam_cache_store_omemo_plaintext(std::string_view channel_jid, std::string_view msg_id,
                                              std::string_view body);
+        void mam_cache_store_omemo_plaintext_ids(std::string_view channel_jid,
+                                                 const std::vector<std::string> &msg_ids,
+                                                 std::string_view body,
+                                                 bool batched = false);
         std::expected<std::string, std::string> mam_cache_lookup_omemo_plaintext(std::string_view channel_jid,
                                                                      std::string_view msg_id);
         // ESFS download deduplication: record saved path by stable message ID; look up on MAM replay
         void mam_cache_store_esfs_download(std::string_view channel_jid, std::string_view stable_id,
                                            std::string_view saved_path);
+        void mam_cache_store_download_paths(std::string_view channel_jid, std::string_view stable_id,
+                                            std::string_view saved_path);
         std::expected<std::string, std::string> mam_cache_lookup_esfs_download(std::string_view channel_jid,
                                                                    std::string_view stable_id);
         void mam_cache_store_image_preview(std::string_view channel_jid, std::string_view stable_id,
@@ -534,6 +561,7 @@ namespace weechat
         void feed_open_unregister(std::string_view feed_key);
         [[nodiscard]] bool feed_is_open(std::string_view feed_key) const;
         void feed_open_sync_from_cache();
+        void feed_seen_sync_from_cache();
         void feed_dismiss(std::string_view feed_key);
         std::vector<std::string> feed_open_list();
 
@@ -611,6 +639,10 @@ namespace weechat
         void peer_features_update(std::string_view jid, const std::vector<std::string>& features);
         bool peer_supports_feature(std::string_view jid, std::string_view feature) const;
         bool peer_has_legacy_axolotl_only(std::string_view jid) const;
+
+        // Resolve partner bare JID to the canonical channels map key (case-insensitive).
+        [[nodiscard]] std::string resolve_channel_key(std::string_view partner_bare) const;
+        void invalidate_channel_key_cache(std::string_view canonical_key);
 
         // OG preview cache methods (XEP-0511)
         struct og_preview {

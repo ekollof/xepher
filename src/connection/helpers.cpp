@@ -381,9 +381,7 @@ static int esfs_download_cb(const void *pointer, void *data, int fd)
             "[ESFS] Saved decrypted file: {}", ctx.saved_path));
         if (ctx.account_ptr && !ctx.channel_jid.empty() && !ctx.stable_id.empty())
         {
-            ctx.account_ptr->mam_cache_store_esfs_download(
-                ctx.channel_jid, ctx.stable_id, ctx.saved_path);
-            ctx.account_ptr->mam_cache_store_image_preview(
+            ctx.account_ptr->mam_cache_store_download_paths(
                 ctx.channel_jid, ctx.stable_id, ctx.saved_path);
         }
 
@@ -497,8 +495,7 @@ esfs_download_sync(std::string_view cipher_url,
 
     if (!channel_jid.empty() && !stable_id.empty())
     {
-        account_ptr->mam_cache_store_esfs_download(channel_jid, stable_id, *path);
-        account_ptr->mam_cache_store_image_preview(channel_jid, stable_id, *path);
+        account_ptr->mam_cache_store_download_paths(channel_jid, stable_id, *path);
     }
 
     return path;

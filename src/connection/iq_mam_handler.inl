@@ -60,6 +60,7 @@ void weechat::connection::handle_mam_query_iq_error(xmpp_stanza_t *stanza)
 
     if (!recovered)
     {
+        account.mam_cache_write_batch_commit();
         weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
             "MAM query {} failed (IQ error) — ending catchup{}",
             failed_mam_query.id,
@@ -109,6 +110,7 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
                         fmt::format("pubsub:{}", feed_key),
                         plast_text);
                 }
+                account.mam_cache_write_batch_commit();
                 return true;
             }
         }
@@ -117,6 +119,9 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
     const ::xmpp::StanzaView fin = view.child("fin", "urn:xmpp:mam:2");
     if (!fin.valid())
         return false;
+
+    // Flush deferred per-message MAM cache writes for the completed page.
+    account.mam_cache_write_batch_commit();
 
     weechat::account::mam_query mam_query;
 

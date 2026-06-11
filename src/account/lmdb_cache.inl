@@ -36,14 +36,130 @@ void weechat::account::mam_cache_init()
         // Load capability cache from database
         caps_cache_load();
         feed_open_sync_from_cache();
+        feed_seen_sync_from_cache();
     } catch (const lmdb::error& ex) {
         weechat::UiPort::for_buffer(nullptr)->printf_error(
             fmt::format("xmpp: MAM cache init failed - {}", ex.what()));
     }
 }
 
+namespace {
+
+constexpr std::size_t k_mam_cache_max_messages_per_channel = 500;
+constexpr std::size_t k_mam_cache_load_limit = 100;
+
+void mam_cache_put_in_txn(MDB_txn *txn, MDB_dbi dbi,
+                           std::string_view key, std::string_view value)
+{
+    MDB_val k = {key.size(), const_cast<void *>(static_cast<const void *>(key.data()))};
+    MDB_val v = {value.size(), const_cast<void *>(static_cast<const void *>(value.data()))};
+    mdb_put(txn, dbi, &k, &v, 0);
+}
+
+[[nodiscard]] auto mam_cache_channel_from_message_key(std::string_view key) -> std::string_view
+{
+    const auto colon1 = key.find(':');
+    if (colon1 == std::string_view::npos)
+        return {};
+    const auto colon2 = key.find(':', colon1 + 1);
+    if (colon2 == std::string_view::npos)
+        return {};
+    return key.substr(0, colon1);
+}
+
+struct mam_msg_key_ts {
+    std::string key;
+    time_t timestamp = 0;
+};
+
+void mam_cache_prune_channel_messages(MDB_txn *txn, MDB_dbi messages_dbi,
+                                    std::string_view channel_jid)
+{
+    if (channel_jid.empty())
+        return;
+
+    const std::string prefix = fmt::format("{}:", channel_jid);
+    MDB_cursor *cursor_raw = nullptr;
+    if (mdb_cursor_open(txn, messages_dbi, &cursor_raw) != 0)
+        return;
+    std::unique_ptr<MDB_cursor, decltype(&mdb_cursor_close)> cursor(cursor_raw, &mdb_cursor_close);
+
+    MDB_val mkey = {prefix.size(), const_cast<void *>(static_cast<const void *>(prefix.data()))};
+    MDB_val mval;
+    std::vector<mam_msg_key_ts> keys;
+    keys.reserve(k_mam_cache_max_messages_per_channel + 64);
+
+    int rc = mdb_cursor_get(cursor.get(), &mkey, &mval, MDB_SET_RANGE);
+    while (rc == 0)
+    {
+        const std::string_view key_sv(static_cast<const char *>(mkey.mv_data), mkey.mv_size);
+        if (!key_sv.starts_with(prefix))
+            break;
+
+        const auto rest = key_sv.substr(prefix.size());
+        const auto colon = rest.find(':');
+        if (colon != std::string_view::npos)
+        {
+            if (const auto ts = parse_int64(rest.substr(0, colon)))
+                keys.push_back({std::string(key_sv), static_cast<time_t>(*ts)});
+        }
+
+        rc = mdb_cursor_get(cursor.get(), &mkey, &mval, MDB_NEXT);
+    }
+    cursor.reset();
+
+    if (keys.size() <= k_mam_cache_max_messages_per_channel)
+        return;
+
+    std::ranges::sort(keys, {}, &mam_msg_key_ts::timestamp);
+    const auto excess = keys.size() - k_mam_cache_max_messages_per_channel;
+    for (std::size_t i = 0; i < excess; ++i)
+    {
+        MDB_val del_key = {keys[i].key.size(),
+                           const_cast<void *>(static_cast<const void *>(keys[i].key.data()))};
+        mdb_del(txn, messages_dbi, &del_key, nullptr);
+    }
+}
+
+} // namespace
+
+void weechat::account::mam_cache_write_batch_commit()
+{
+    if (mam_cache_write_queue_.empty() || !mam_db_env)
+    {
+        mam_cache_write_queue_.clear();
+        return;
+    }
+
+    try {
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
+        std::unordered_set<std::string> pruned_channels;
+        for (const auto &pending : mam_cache_write_queue_)
+        {
+            mam_cache_put_in_txn(txn.handle(), pending.dbi, pending.key, pending.value);
+            if (pending.dbi == mam_dbi.messages.handle())
+            {
+                if (const auto channel = mam_cache_channel_from_message_key(pending.key);
+                    !channel.empty())
+                {
+                    pruned_channels.emplace(channel);
+                }
+            }
+        }
+        for (const auto &channel : pruned_channels)
+            mam_cache_prune_channel_messages(txn.handle(), mam_dbi.messages.handle(), channel);
+        txn.commit();
+    } catch (const lmdb::error&) {
+        // Silently ignore batch commit errors
+    }
+    mam_cache_write_queue_.clear();
+}
+
 void weechat::account::mam_cache_cleanup()
 {
+    mam_cache_write_batch_commit();
+
     try {
         if (mam_db_env)
         {
@@ -62,27 +178,29 @@ void weechat::account::mam_cache_message(std::string_view channel_jid,
                                          std::string_view message_id,
                                          std::string_view from,
                                          time_t timestamp,
-                                         std::string_view body)
+                                         std::string_view body,
+                                         bool batched)
 {
     if (!mam_db_env) return;
-    
+
+    // Key: channel_jid:timestamp:message_id
+    const std::string key = fmt::format("{}:{:020d}:{}", channel_jid, timestamp, message_id);
+    // Value: from|timestamp|body
+    const std::string value = fmt::format("{}|{}|{}", from, timestamp, body);
+
     try {
-        lmdb::txn parentTransaction{nullptr};
-        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
-        
-        // Key: channel_jid:timestamp:message_id
-        std::string key = fmt::format("{}:{:020d}:{}", channel_jid, timestamp, message_id);
-        
-        // Value: from|timestamp|body
-        std::string value = fmt::format("{}|{}|{}", from, timestamp, body);
-        
-        MDB_val k = {key.size(), (void*)key.data()};
-        MDB_val v = {value.size(), (void*)value.data()};
-        
-        mdb_put(txn.handle(), mam_dbi.messages.handle(), &k, &v, 0);
-        
+        if (batched) {
+            mam_cache_write_queue_.push_back(
+                {mam_dbi.messages.handle(), key, value});
+            return;
+        }
+
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
+        mam_cache_put_in_txn(txn.handle(), mam_dbi.messages.handle(), key, value);
+        mam_cache_prune_channel_messages(txn.handle(), mam_dbi.messages.handle(), channel_jid);
         txn.commit();
-    } catch (const lmdb::error& ex) {
+    } catch (const lmdb::error&) {
         // Silently ignore cache write errors
     }
 }
@@ -169,72 +287,101 @@ void weechat::account::mam_cache_load_messages(std::string_view channel_jid, str
         }
         rcursor.reset();
 
-        // Start with channel prefix
+        struct cached_message_row {
+            time_t timestamp = 0;
+            std::string message_id;
+            std::string from;
+            std::string body;
+            bool is_retracted = false;
+        };
+
+        // Keys sort ascending by timestamp; collect all rows then replay the
+        // newest k_mam_cache_load_limit in chronological order.
         const std::string prefix = fmt::format("{}:", channel_jid);
-        MDB_val key = {prefix.size(), (void*)prefix.data()};
+        MDB_val key = {prefix.size(), const_cast<void *>(static_cast<const void *>(prefix.data()))};
         MDB_val value;
-        
-        int count = 0;
+
+        std::vector<cached_message_row> rows;
+        rows.reserve(k_mam_cache_load_limit);
+
         int rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_SET_RANGE);
-        
-        while (rc == 0 && count < 100)  // Limit to last 100 cached messages
+        while (rc == 0)
         {
-            std::string key_str((char*)key.mv_data, key.mv_size);
-            
-            // Check if key still belongs to our channel
-            if (key_str.substr(0, prefix.size()) != prefix)
+            const std::string_view key_sv(static_cast<const char *>(key.mv_data), key.mv_size);
+            if (!key_sv.starts_with(prefix))
                 break;
-            
-            // Parse key: channel_jid:timestamp:message_id
-            size_t colon1 = key_str.find(':', prefix.size());
-            size_t colon2 = key_str.find(':', colon1 + 1);
-            
-            if (colon2 != std::string::npos)
+
+            const auto colon1 = key_sv.find(':', prefix.size());
+            const auto colon2 = key_sv.find(':', colon1 + 1);
+            if (colon1 == std::string_view::npos || colon2 == std::string_view::npos)
             {
-                std::string message_id = key_str.substr(colon2 + 1);
-                // Tag with id_<message-id> so MAM dedup can suppress later replays.
-                bool is_retracted = !message_id.empty() && retracted_ids.contains(message_id);
-                std::string tags = is_retracted
-                    ? "xmpp_cached,xmpp_retracted,no_highlight"
-                    : "xmpp_cached,no_highlight";
-                if (!message_id.empty())
-                    tags += ",id_" + message_id;
-
-                // Parse value: from|timestamp|body
-                std::string value_str((char*)value.mv_data, value.mv_size);
-                size_t pos1 = value_str.find('|');
-                size_t pos2 = value_str.find('|', pos1 + 1);
-                
-                if (pos1 != std::string::npos && pos2 != std::string::npos)
-                {
-                    std::string from = value_str.substr(0, pos1);
-                    std::string timestamp_str = value_str.substr(pos1 + 1, pos2 - pos1 - 1);
-                    std::string body = value_str.substr(pos2 + 1);
-                    const auto ts = parse_int64(timestamp_str);
-                    if (!ts)
-                        continue;
-                    time_t timestamp = static_cast<time_t>(*ts);
-
-                    // Display cached message with gray prefix
-                    if (is_retracted)
-                    {
-                        weechat::UiPort::for_buffer(buffer)->printf_date_tags(timestamp, tags.c_str(),
-                            fmt::format("{}{}\t{}[Message deleted]{}",
-                                        weechat::RuntimePort::default_runtime().color("darkgray"), from,
-                                        weechat::RuntimePort::default_runtime().color("darkgray"),
-                                        weechat::RuntimePort::default_runtime().color("resetcolor")));
-                    }
-                    else
-                    {
-                        weechat::UiPort::for_buffer(buffer)->printf_date_tags(timestamp, tags.c_str(),
-                            fmt::format("{}{}\t{}",
-                                        weechat::RuntimePort::default_runtime().color("darkgray"), from, body));
-                    }
-                    count++;
-                }
+                rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_NEXT);
+                continue;
             }
-            
+
+            const std::string message_id(key_sv.substr(colon2 + 1));
+            const std::string value_str(static_cast<const char *>(value.mv_data), value.mv_size);
+            const auto pos1 = value_str.find('|');
+            const auto pos2 = value_str.find('|', pos1 + 1);
+            if (pos1 == std::string::npos || pos2 == std::string::npos)
+            {
+                rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_NEXT);
+                continue;
+            }
+
+            const auto ts = parse_int64(value_str.substr(pos1 + 1, pos2 - pos1 - 1));
+            if (!ts)
+            {
+                rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_NEXT);
+                continue;
+            }
+
+            rows.push_back({
+                static_cast<time_t>(*ts),
+                message_id,
+                value_str.substr(0, pos1),
+                value_str.substr(pos2 + 1),
+                !message_id.empty() && retracted_ids.contains(message_id),
+            });
+
             rc = mdb_cursor_get(cursor.get(), &key, &value, MDB_NEXT);
+        }
+
+        if (rows.size() > k_mam_cache_load_limit)
+        {
+            std::ranges::partial_sort(
+                rows,
+                rows.begin() + static_cast<std::ptrdiff_t>(k_mam_cache_load_limit),
+                std::ranges::greater{},
+                &cached_message_row::timestamp);
+            rows.resize(k_mam_cache_load_limit);
+        }
+        std::ranges::sort(rows, {}, &cached_message_row::timestamp);
+
+        int count = 0;
+        for (const auto &row : rows)
+        {
+            std::string tags = row.is_retracted
+                ? "xmpp_cached,xmpp_retracted,no_highlight"
+                : "xmpp_cached,no_highlight";
+            if (!row.message_id.empty())
+                tags += ",id_" + row.message_id;
+
+            if (row.is_retracted)
+            {
+                weechat::UiPort::for_buffer(buffer)->printf_date_tags(row.timestamp, tags.c_str(),
+                    fmt::format("{}{}\t{}[Message deleted]{}",
+                                weechat::RuntimePort::default_runtime().color("darkgray"), row.from,
+                                weechat::RuntimePort::default_runtime().color("darkgray"),
+                                weechat::RuntimePort::default_runtime().color("resetcolor")));
+            }
+            else
+            {
+                weechat::UiPort::for_buffer(buffer)->printf_date_tags(row.timestamp, tags.c_str(),
+                    fmt::format("{}{}\t{}",
+                                weechat::RuntimePort::default_runtime().color("darkgray"), row.from, row.body));
+            }
+            ++count;
         }
         
         cursor.reset();
@@ -480,16 +627,25 @@ void weechat::account::mam_cursor_clear(std::string_view key)
 
 bool weechat::account::feed_item_seen(std::string_view feed_key, std::string_view item_id)
 {
-    if (!mam_db_env || item_id.empty()) return false;
+    if (item_id.empty())
+        return false;
 
-    std::string key = fmt::format("feed_seen:{}:{}", feed_key, item_id);
+    const std::string key = fmt::format("feed_seen:{}:{}", feed_key, item_id);
+    if (feed_seen_keys_.contains(key))
+        return true;
+
+    if (!mam_db_env)
+        return false;
+
     try {
-        lmdb::txn parentTransaction{nullptr};
-        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, MDB_RDONLY);
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, MDB_RDONLY);
         MDB_val k = {key.size(), (void*)key.data()};
         MDB_val v;
-        bool found = (mdb_get(txn.handle(), mam_dbi.cursors.handle(), &k, &v) == 0);
+        const bool found = (mdb_get(txn.handle(), mam_dbi.cursors.handle(), &k, &v) == 0);
         txn.abort();
+        if (found)
+            feed_seen_keys_.insert(key);
         return found;
     } catch (const lmdb::error&) {
         return false;
@@ -498,19 +654,62 @@ bool weechat::account::feed_item_seen(std::string_view feed_key, std::string_vie
 
 void weechat::account::feed_item_mark_seen(std::string_view feed_key, std::string_view item_id)
 {
-    if (!mam_db_env || item_id.empty()) return;
+    if (item_id.empty())
+        return;
 
-    std::string key = fmt::format("feed_seen:{}:{}", feed_key, item_id);
+    const std::string key = fmt::format("feed_seen:{}:{}", feed_key, item_id);
+    feed_seen_keys_.insert(key);
+
+    if (!mam_db_env)
+        return;
+
     static const char *val_str = "1";
     try {
-        lmdb::txn parentTransaction{nullptr};
-        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
         MDB_val k = {key.size(), (void*)key.data()};
         MDB_val v = {1, (void*)val_str};
         mdb_put(txn.handle(), mam_dbi.cursors.handle(), &k, &v, 0);
         txn.commit();
     } catch (const lmdb::error&) {
         // Silently ignore write errors
+    }
+}
+
+void weechat::account::feed_seen_sync_from_cache()
+{
+    feed_seen_keys_.clear();
+    if (!mam_db_env)
+        return;
+
+    static constexpr std::string_view prefix = "feed_seen:";
+    try {
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, MDB_RDONLY);
+
+        MDB_cursor *cursor = nullptr;
+        if (mdb_cursor_open(txn.handle(), mam_dbi.cursors.handle(), &cursor) != 0)
+        {
+            txn.abort();
+            return;
+        }
+
+        MDB_val k = {prefix.size(), (void*)prefix.data()};
+        MDB_val v;
+        int rc = mdb_cursor_get(cursor, &k, &v, MDB_SET_RANGE);
+        while (rc == 0)
+        {
+            std::string_view kv(static_cast<const char*>(k.mv_data), k.mv_size);
+            if (!kv.starts_with(prefix))
+                break;
+            feed_seen_keys_.emplace(kv);
+            rc = mdb_cursor_get(cursor, &k, &v, MDB_NEXT);
+        }
+
+        mdb_cursor_close(cursor);
+        txn.abort();
+    } catch (const lmdb::error&) {
+        // Return whatever we loaded
     }
 }
 
@@ -647,25 +846,48 @@ std::vector<std::string> weechat::account::feed_open_list()
     return result;
 }
 
-void weechat::account::mam_cache_store_omemo_plaintext(std::string_view channel_jid,
-                                                       std::string_view msg_id,
-                                                       std::string_view body)
+void weechat::account::mam_cache_store_omemo_plaintext_ids(std::string_view channel_jid,
+                                                           const std::vector<std::string> &msg_ids,
+                                                           std::string_view body,
+                                                           bool batched)
 {
-    if (!mam_db_env || channel_jid.empty() || msg_id.empty() || body.empty()) return;
+    if (!mam_db_env || channel_jid.empty() || body.empty() || msg_ids.empty())
+        return;
 
     try {
-        lmdb::txn parentTransaction{nullptr};
-        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+        if (batched) {
+            const std::string body_str(body);
+            for (const std::string &msg_id : msg_ids) {
+                if (msg_id.empty())
+                    continue;
+                mam_cache_write_queue_.push_back({
+                    mam_dbi.omemo_plaintext.handle(),
+                    fmt::format("{}:{}", channel_jid, msg_id),
+                    body_str});
+            }
+            return;
+        }
 
-        std::string key = fmt::format("{}:{}", channel_jid, msg_id);
-        MDB_val k = {key.size(), (void*)key.data()};
-        MDB_val v = {body.size(), (void*)body.data()};
-
-        mdb_put(txn.handle(), mam_dbi.omemo_plaintext.handle(), &k, &v, 0);
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
+        for (const std::string &msg_id : msg_ids) {
+            if (msg_id.empty())
+                continue;
+            const std::string key = fmt::format("{}:{}", channel_jid, msg_id);
+            mam_cache_put_in_txn(txn.handle(), mam_dbi.omemo_plaintext.handle(), key, body);
+        }
         txn.commit();
     } catch (const lmdb::error&) {
         // Silently ignore write errors
     }
+}
+
+void weechat::account::mam_cache_store_omemo_plaintext(std::string_view channel_jid,
+                                                       std::string_view msg_id,
+                                                       std::string_view body)
+{
+    const std::vector<std::string> ids{std::string(msg_id)};
+    mam_cache_store_omemo_plaintext_ids(channel_jid, ids, body, false);
 }
 
 std::expected<std::string, std::string> weechat::account::mam_cache_lookup_omemo_plaintext(
@@ -696,6 +918,26 @@ std::expected<std::string, std::string> weechat::account::mam_cache_lookup_omemo
     return std::unexpected("not found or db error");
 }
 
+void weechat::account::mam_cache_store_download_paths(std::string_view channel_jid,
+                                                      std::string_view stable_id,
+                                                      std::string_view saved_path)
+{
+    if (!mam_db_env || channel_jid.empty() || stable_id.empty() || saved_path.empty())
+        return;
+
+    try {
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
+
+        const std::string key = fmt::format("{}:{}", channel_jid, stable_id);
+        mam_cache_put_in_txn(txn.handle(), mam_dbi.esfs_downloads.handle(), key, saved_path);
+        mam_cache_put_in_txn(txn.handle(), mam_dbi.image_previews.handle(), key, saved_path);
+        txn.commit();
+    } catch (const lmdb::error&) {
+        // Silently ignore write errors
+    }
+}
+
 void weechat::account::mam_cache_store_esfs_download(std::string_view channel_jid,
                                                       std::string_view stable_id,
                                                       std::string_view saved_path)
@@ -703,14 +945,11 @@ void weechat::account::mam_cache_store_esfs_download(std::string_view channel_ji
     if (!mam_db_env || channel_jid.empty() || stable_id.empty() || saved_path.empty()) return;
 
     try {
-        lmdb::txn parentTransaction{nullptr};
-        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parentTransaction, 0);
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
 
-        std::string key = fmt::format("{}:{}", channel_jid, stable_id);
-        MDB_val k = {key.size(), (void*)key.data()};
-        MDB_val v = {saved_path.size(), (void*)saved_path.data()};
-
-        mdb_put(txn.handle(), mam_dbi.esfs_downloads.handle(), &k, &v, 0);
+        const std::string key = fmt::format("{}:{}", channel_jid, stable_id);
+        mam_cache_put_in_txn(txn.handle(), mam_dbi.esfs_downloads.handle(), key, saved_path);
         txn.commit();
     } catch (const lmdb::error&) {
         // Silently ignore write errors
@@ -990,16 +1229,20 @@ bool weechat::account::peer_supports_feature(std::string_view jid,
     if (jid.empty() || feature.empty())
         return false;
 
-    std::string bare(jid);
-    if (const auto slash = bare.find('/'); slash != std::string::npos)
-        bare.resize(slash);
+    std::string_view bare = jid;
+    std::string bare_storage;
+    if (const auto slash = jid.find('/'); slash != std::string_view::npos)
+    {
+        bare_storage = std::string(jid.substr(0, slash));
+        bare = bare_storage;
+    }
 
     auto it = peer_features.find(bare);
     if (it == peer_features.end())
         return false;
 
     const auto& [_, features] = *it;
-    return features.contains(std::string(feature));
+    return features.contains(feature);
 }
 
 bool weechat::account::peer_has_legacy_axolotl_only(std::string_view jid) const
