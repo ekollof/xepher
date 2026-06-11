@@ -302,7 +302,7 @@ int command__edit(const void *pointer, void *data,
             for (auto &e : el)
                 if (e.id == selected) { body = e.body; break; }
 
-            // Strip WeeChat colour codes from body before pre-filling
+            // Strip WeeChat colour codes and delivery-status glyphs before pre-filling
             std::string clean_body;
             if (!body.empty())
             {
@@ -310,6 +310,7 @@ int command__edit(const void *pointer, void *data,
                     weechat_string_remove_color(body.c_str(), nullptr), &free);
                 if (stripped) clean_body = stripped.get();
                 else clean_body = body;
+                clean_body = weechat::strip_status_glyph_suffix(std::move(clean_body));
             }
 
             std::string input = fmt::format("/edit-to {} {}", selected, clean_body);
