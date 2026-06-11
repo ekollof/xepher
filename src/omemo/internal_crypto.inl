@@ -408,7 +408,8 @@ struct scoped_session_cipher {
     OMEMO_ASSERT(!jid.empty(), "peer jid must be non-empty");
     OMEMO_ASSERT(remote_device_id != 0, "peer device id must be non-zero");
 
-    const omemo_lmdb_read_scope read_scope {self};
+    // No omemo_lmdb_read_scope here: session_cipher_encrypt writes session state
+    // via store callbacks; an open RO txn in the same thread deadlocks LMDB.
 
     // Per Conversations: Signal-encrypt innerKey(16) || authTag(16) = 32 bytes
     std::array<std::uint8_t, 32> bundle {};
@@ -459,7 +460,8 @@ struct scoped_session_cipher {
     if (out_is_duplicate)
         *out_is_duplicate = false;
 
-    const omemo_lmdb_read_scope read_scope {self};
+    // No omemo_lmdb_read_scope here: session_cipher_decrypt_* writes session state
+    // via store callbacks; an open RO txn in the same thread deadlocks LMDB.
 
     const auto scoped_cipher = scoped_session_cipher::create(self, jid, remote_device_id);
     if (!scoped_cipher)

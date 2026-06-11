@@ -645,9 +645,11 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
     OMEMO_ASSERT(!jid.empty(), "peer jid must be present when building a session from a bundle");
     OMEMO_ASSERT(remote_device_id != 0, "peer device id must be non-zero when building a session from a bundle");
 
-    const omemo_lmdb_read_scope read_scope {self};
-
-    const auto bundle = load_bundle(self, jid, remote_device_id);
+    // Read-only scope only for bundle load; process_pre_key_bundle writes sessions.
+    const auto bundle = [&]() -> std::optional<bundle_metadata> {
+        const omemo_lmdb_read_scope read_scope {self};
+        return load_bundle(self, jid, remote_device_id);
+    }();
     if (!bundle || bundle->prekeys.empty())
     {
         print_error(nullptr,
