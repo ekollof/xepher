@@ -30,6 +30,12 @@ struct icat_preview_request {
 // HTTP(S) URLs to a local cache file synchronously before calling icat.
 void invoke_icat_preview(const icat_preview_request &req, account &acct);
 
+// Stage a /tmp/xepher-upload-* snapshot into the image cache (so icat can read it
+// after the temp is removed), invoke /icat, then unlink the temp snapshot.
+void emit_upload_local_icat_preview(const icat_preview_request &req,
+                                    account &acct,
+                                    std::string_view local_path);
+
 // Blocking download of an image URL into the account image cache directory.
 [[nodiscard]] std::expected<std::string, std::string>
 download_image_to_cache_sync(account &acct, std::string_view url);

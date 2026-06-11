@@ -9,6 +9,7 @@
 #include <functional>
 #include <optional>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 #include <curl/curl.h>
@@ -111,6 +112,53 @@ void cache_image_path_background(account *acct,
     }).detach();
 }
 
+[[nodiscard]] std::string extension_from_path(std::string_view path)
+{
+    const auto dot = path.rfind('.');
+    if (dot == std::string_view::npos || dot + 1 >= path.size())
+        return ".bin";
+    const std::string_view ext = path.substr(dot);
+    if (ext == ".jpg" || ext == ".jpeg" || ext == ".png"
+        || ext == ".gif" || ext == ".webp")
+        return std::string(ext);
+    return ".bin";
+}
+
+[[nodiscard]] bool is_upload_temp_snapshot(std::string_view path)
+{
+    return path.rfind("/tmp/xepher-upload-", 0) == 0;
+}
+
+[[nodiscard]] std::optional<std::string>
+stage_upload_snapshot_for_icat(account &acct, std::string_view source_path)
+{
+    if (source_path.empty() || !std::filesystem::is_regular_file(source_path))
+        return std::nullopt;
+
+    if (!is_upload_temp_snapshot(source_path))
+        return std::string(source_path);
+
+    const std::string cache_dir = image_cache_dir(acct);
+    if (cache_dir.empty())
+        return std::nullopt;
+
+    std::error_code ec;
+    std::filesystem::create_directories(cache_dir, ec);
+
+    const std::string stem =
+        fmt::format("upload_{:x}", std::hash<std::string>{}(std::string(source_path)));
+    const std::string ext = extension_from_path(source_path);
+    std::string dest = fmt::format("{}/{}{}", cache_dir, stem, ext);
+    for (int suffix = 1; std::filesystem::exists(dest); ++suffix)
+        dest = fmt::format("{}/{}_{}{}", cache_dir, stem, suffix, ext);
+
+    std::filesystem::copy_file(source_path, dest,
+                               std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec)
+        return std::nullopt;
+    return dest;
+}
+
 [[nodiscard]] std::optional<std::string>
 resolve_local_icat_path(const icat_preview_request &req, account &acct)
 {
@@ -147,6 +195,25 @@ resolve_local_icat_path(const icat_preview_request &req, account &acct)
 }
 
 }  // namespace
+
+void emit_upload_local_icat_preview(const icat_preview_request &req,
+                                    account &acct,
+                                    const std::string_view local_path)
+{
+    if (!req.buffer || local_path.empty())
+        return;
+
+    const auto staged = stage_upload_snapshot_for_icat(acct, local_path);
+    if (!staged)
+        return;
+
+    icat_preview_request staged_req = req;
+    staged_req.source = *staged;
+    invoke_icat_preview(staged_req, acct);
+
+    if (is_upload_temp_snapshot(local_path))
+        ::unlink(std::string(local_path).c_str());
+}
 
 std::expected<std::string, std::string>
 download_image_to_cache_sync(account &acct, const std::string_view url)

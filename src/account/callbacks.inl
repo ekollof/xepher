@@ -417,8 +417,10 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
             ch.id,
             visible_link,  // body: aesgcm (or https) for the visible link
             std::optional<std::string>(data_url),  // oob/meta sources: always the https bytes location
-            std::optional<weechat::channel::file_metadata>(meta)
-        );
+            std::optional<weechat::channel::file_metadata>(meta),
+            ctx->local_path.empty()
+                ? std::optional<std::string>{}
+                : std::optional<std::string>(ctx->local_path));
         sent_rich = true;
     }
 
@@ -442,23 +444,20 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         }
     }
 
-    weechat::UiPort::for_buffer(status_buf)->printf_date_tags(0, "no_trigger,notify_none",
-        fmt::format("{}File uploaded! Sharing link… {}", weechat::RuntimePort::default_runtime().prefix("network"), visible_link));
-
-    if (!ctx->local_path.empty())
+    if (!sent_rich && !ctx->local_path.empty()
+        && is_image_mime_type(ctx->content_type))
     {
         weechat::icat_preview_request req;
         req.buffer = status_buf;
-        req.source = ctx->local_path;
         req.width = ctx->image_width;
         req.height = ctx->image_height;
         req.mime = ctx->content_type;
-        invoke_icat_preview(req, *ptr_account);
+        req.channel_jid = ctx->channel_id;
+        emit_upload_local_icat_preview(req, *ptr_account, ctx->local_path);
     }
 
-    if (!ctx->local_path.empty()
-        && ctx->local_path.rfind("/tmp/xepher-upload-", 0) == 0)
-        ::unlink(ctx->local_path.c_str());
+    weechat::UiPort::for_buffer(status_buf)->printf_date_tags(0, "no_trigger,notify_none",
+        fmt::format("{}File uploaded! Sharing link… {}", weechat::RuntimePort::default_runtime().prefix("network"), visible_link));
 
     return WEECHAT_RC_OK;
 }

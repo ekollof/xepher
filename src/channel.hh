@@ -397,7 +397,8 @@ namespace weechat
 
         int send_message(std::string to, std::string body,
                          std::optional<std::string> oob = {},
-                         std::optional<file_metadata> file_meta = {});
+                         std::optional<file_metadata> file_meta = {},
+                         std::optional<std::string> local_preview_path = {});
 
         // XEP-0231: send a small image (≤8 KiB) via BoB + XHTML-IM (plaintext only).
         int send_bob_image(std::string_view to,

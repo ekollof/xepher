@@ -1272,11 +1272,12 @@ stanza::message weechat::channel::make_file_share_stanza(xmpp_ctx_t *xmpp_ctx,
 
 int weechat::channel::send_message(std::string to, std::string body,
                                    std::optional<std::string> oob,
-                                   std::optional<file_metadata> file_meta)
+                                   std::optional<file_metadata> file_meta,
+                                   std::optional<std::string> local_preview_path)
 {
     // Reuse the main send path for regular text messages so PM OMEMO logic
     // (auto-enable, capability gating, encode/decode behavior) stays consistent.
-    if (!oob && !file_meta)
+    if (!oob && !file_meta && !local_preview_path)
         return send_message(std::string_view(to), std::string_view(body), /*skip_probe=*/false);
 
     std::string saved_id = stanza::uuid(account.context);
@@ -1371,6 +1372,19 @@ int weechat::channel::send_message(std::string to, std::string body,
             : std::string(body);
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, tag.c_str(),
             weechat::format_self_pm_line(prefix, display_body));
+    }
+
+    if (local_preview_path && file_meta
+        && is_image_mime_type(file_meta->content_type))
+    {
+        weechat::icat_preview_request req;
+        req.buffer = buffer;
+        req.width = file_meta->width;
+        req.height = file_meta->height;
+        req.mime = file_meta->content_type;
+        req.channel_jid = id;
+        req.stable_id = saved_id;
+        emit_upload_local_icat_preview(req, account, *local_preview_path);
     }
 
     return WEECHAT_RC_OK;
