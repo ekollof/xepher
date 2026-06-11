@@ -14,8 +14,14 @@
 //                   val: time_t (8 bytes, little-endian)
 //   retractions     key: <channel_jid>:<msg_id>
 //                   val: time_t (8 bytes) — when retracted
-//   cursors         key: "global" | "pm_open:<jid>" | <channel_jid>
-//                   val: RSM <last> cursor string or empty marker
+//   cursors         key: "global" | <channel_jid>
+//                   val: RSM <last> cursor string
+//   feed_seen       key: <feed_key>:<item_id>
+//                   val: "1"
+//   feed_open       key: <feed_key>
+//                   val: "1"
+//   pm_open         key: <bare_jid>
+//                   val: "1"
 //   omemo_plaintext key: <channel_jid>:<msg_id>
 //                   val: decrypted plaintext body
 //   capabilities    key: <node>#<ver>
@@ -124,7 +130,10 @@ static auto format_time_t(std::string_view sv) -> std::string
 // Per-table dump
 // ---------------------------------------------------------------------------
 
-enum class table_id { messages, timestamps, retractions, cursors, omemo_plaintext, capabilities };
+enum class table_id {
+    messages, timestamps, retractions, cursors, feed_seen, feed_open, pm_open,
+    omemo_plaintext, capabilities
+};
 
 static const char *table_name(table_id t)
 {
@@ -133,6 +142,9 @@ static const char *table_name(table_id t)
         case table_id::timestamps:      return "timestamps";
         case table_id::retractions:     return "retractions";
         case table_id::cursors:         return "cursors";
+        case table_id::feed_seen:       return "feed_seen";
+        case table_id::feed_open:       return "feed_open";
+        case table_id::pm_open:         return "pm_open";
         case table_id::omemo_plaintext: return "omemo_plaintext";
         case table_id::capabilities:    return "capabilities";
     }
@@ -219,6 +231,9 @@ static std::size_t dump_table(MDB_env *env, table_id tid,
                                          std::string(ksv), format_time_t(vsv));
                 break;
             case table_id::cursors:
+            case table_id::feed_seen:
+            case table_id::feed_open:
+            case table_id::pm_open:
             case table_id::omemo_plaintext:
                 std::cout << std::format("  key: {}\n  val: {}\n\n",
                                          std::string(ksv), format_value(vsv));
@@ -256,11 +271,14 @@ static std::size_t dump_table(MDB_env *env, table_id tid,
 // CLI
 // ---------------------------------------------------------------------------
 
-static const std::array<table_id, 6> all_tables = {
+static const std::array<table_id, 9> all_tables = {
     table_id::messages,
     table_id::timestamps,
     table_id::retractions,
     table_id::cursors,
+    table_id::feed_seen,
+    table_id::feed_open,
+    table_id::pm_open,
     table_id::omemo_plaintext,
     table_id::capabilities,
 };
@@ -280,7 +298,10 @@ static void print_usage(const char *argv0)
         "  messages        <channel>:<ts_20d>:<msg_id>  =>  <from>|<ts>|<body>\n"
         "  timestamps      <channel>                    =>  time_t (last MAM fetch)\n"
         "  retractions     <channel>:<msg_id>           =>  time_t (when retracted)\n"
-        "  cursors         global | pm_open:<jid> | ... =>  RSM cursor string\n"
+        "  cursors         global | <channel_jid>           =>  RSM cursor string\n"
+        "  feed_seen       <feed_key>:<item_id>             =>  1\n"
+        "  feed_open       <feed_key>                       =>  1\n"
+        "  pm_open         <bare_jid>                       =>  1\n"
         "  omemo_plaintext <channel>:<msg_id>           =>  decrypted body\n"
         "  capabilities    <node>#<ver>                 =>  newline-separated features\n",
         argv0);

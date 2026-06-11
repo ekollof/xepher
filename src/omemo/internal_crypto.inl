@@ -277,6 +277,26 @@ struct axolotl_omemo_payload {
     std::vector<std::uint8_t> payload;       // AES-128-GCM ciphertext (auth tag stripped)
 };
 
+namespace {
+
+// AES-128-GCM is opened once per thread; setkey/setiv run per message.
+[[nodiscard]] auto omemo_aes128_gcm_cipher() -> std::expected<gcry_cipher_hd_t, std::string>
+{
+    thread_local gcry_cipher_hd_t handle = nullptr;
+    if (!handle)
+    {
+        if (gcry_cipher_open(&handle, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_GCM, 0) != 0)
+            return std::unexpected("cipher open failed");
+    }
+    else if (gcry_cipher_reset(handle) != 0)
+    {
+        return std::unexpected("cipher reset failed");
+    }
+    return handle;
+}
+
+} // namespace
+
 [[maybe_unused]] [[nodiscard]] auto axolotl_omemo_encrypt(std::string_view plaintext) -> std::expected<axolotl_omemo_payload, std::string>
 {
     if (plaintext.empty())
@@ -288,21 +308,19 @@ struct axolotl_omemo_payload {
     gcry_randomize(key_span.data(), key_span.size(), GCRY_STRONG_RANDOM);
     gcry_randomize(iv_span.data(), iv_span.size(), GCRY_STRONG_RANDOM);
 
-    gcry_cipher_hd_t cipher_raw = nullptr;
-    // AES-128 = GCRY_CIPHER_AES (= GCRY_CIPHER_AES128)
-    if (gcry_cipher_open(&cipher_raw, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_GCM, 0) != 0)
-        return std::unexpected("cipher open failed");
-    unique_gcry_cipher cipher {cipher_raw};
+    auto cipher = omemo_aes128_gcm_cipher();
+    if (!cipher)
+        return std::unexpected(cipher.error());
 
-    if (gcry_cipher_setkey(cipher.get(), key_span.data(), key_span.size()) != 0
-        || gcry_cipher_setiv(cipher.get(), iv_span.data(), iv_span.size()) != 0)
+    if (gcry_cipher_setkey(*cipher, key_span.data(), key_span.size()) != 0
+        || gcry_cipher_setiv(*cipher, iv_span.data(), iv_span.size()) != 0)
     {
         return std::unexpected("cipher key/iv failed");
     }
 
     std::vector<std::uint8_t> ciphertext(plaintext.size());
     std::span<std::uint8_t> ct_span = ciphertext;
-    if (gcry_cipher_encrypt(cipher.get(), ct_span.data(), ct_span.size(),
+    if (gcry_cipher_encrypt(*cipher, ct_span.data(), ct_span.size(),
                             plaintext.data(), plaintext.size()) != 0)
     {
         return std::unexpected("encrypt failed");
@@ -310,7 +328,7 @@ struct axolotl_omemo_payload {
 
     // Retrieve GCM authentication tag (16 bytes)
     auto authtag_span = std::span(result.authtag);
-    if (gcry_cipher_gettag(cipher.get(), authtag_span.data(), authtag_span.size()) != 0)
+    if (gcry_cipher_gettag(*cipher, authtag_span.data(), authtag_span.size()) != 0)
         return std::unexpected("gettag failed");
 
     result.payload = std::move(ciphertext);  // (span not needed after this point)
@@ -327,22 +345,21 @@ struct axolotl_omemo_payload {
     if (ciphertext.empty())
         return std::unexpected("empty ciphertext");
 
-    gcry_cipher_hd_t cipher_raw = nullptr;
-    if (gcry_cipher_open(&cipher_raw, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_GCM, 0) != 0)
-        return std::unexpected("cipher open failed");
-    unique_gcry_cipher cipher {cipher_raw};
+    auto cipher = omemo_aes128_gcm_cipher();
+    if (!cipher)
+        return std::unexpected(cipher.error());
 
     auto key_span = std::span(key);
     auto iv_span  = std::span(iv);
-    if (gcry_cipher_setkey(cipher.get(), key_span.data(), key_span.size()) != 0
-        || gcry_cipher_setiv(cipher.get(), iv_span.data(), iv_span.size()) != 0)
+    if (gcry_cipher_setkey(*cipher, key_span.data(), key_span.size()) != 0
+        || gcry_cipher_setiv(*cipher, iv_span.data(), iv_span.size()) != 0)
     {
         return std::unexpected("cipher key/iv failed");
     }
 
     std::vector<std::uint8_t> plaintext(ciphertext.size());
     std::span<std::uint8_t> pt_span = plaintext;
-    if (gcry_cipher_decrypt(cipher.get(), pt_span.data(), pt_span.size(),
+    if (gcry_cipher_decrypt(*cipher, pt_span.data(), pt_span.size(),
                             ciphertext.data(), ciphertext.size()) != 0)
     {
         return std::unexpected("decrypt failed");
@@ -350,7 +367,7 @@ struct axolotl_omemo_payload {
 
     // Verify the GCM authentication tag
     auto authtag_span = std::span(authtag);
-    if (gcry_cipher_checktag(cipher.get(), authtag_span.data(), authtag_span.size()) != 0)
+    if (gcry_cipher_checktag(*cipher, authtag_span.data(), authtag_span.size()) != 0)
     {
         print_error(nullptr, "omemo: legacy OMEMO payload GCM authentication failed");
         return std::unexpected("auth tag failed");

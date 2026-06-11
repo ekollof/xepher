@@ -447,6 +447,8 @@ namespace weechat
             lmdb::dbi retractions = 0;     // XEP-0424 retracted message IDs
             lmdb::dbi cursors = 0;         // RSM cursor persistence for MAM queries
             lmdb::dbi feed_seen = 0;       // feed item dedup keys (feed_key:item_id)
+            lmdb::dbi feed_open = 0;       // open feed buffer keys (feed_key)
+            lmdb::dbi pm_open = 0;         // open PM buffer keys (bare jid)
             lmdb::dbi omemo_plaintext = 0; // decrypted OMEMO body cache (keyed channel_jid:msg_id)
             lmdb::dbi esfs_downloads = 0;  // ESFS downloaded file paths (keyed channel_jid:stable_id → saved_path)
             lmdb::dbi image_previews = 0;  // local image paths for icat MAM replay (keyed channel_jid:stable_id)
@@ -547,7 +549,7 @@ namespace weechat
                                            std::string_view local_path);
         std::expected<std::string, std::string> mam_cache_lookup_image_preview(std::string_view channel_jid,
                                                                    std::string_view stable_id);
-        // PM buffer persistence across restarts (stored in cursors LMDB table)
+        // PM buffer persistence across restarts (stored in pm_open LMDB table)
         void pm_open_register(std::string_view pm_jid);
         void pm_open_unregister(std::string_view pm_jid);
         std::vector<std::string> pm_open_list();
@@ -557,13 +559,14 @@ namespace weechat
         // Feed item deduplication (stored in cursors LMDB table)
         bool feed_item_seen(std::string_view feed_key, std::string_view item_id);
         void feed_item_mark_seen(std::string_view feed_key, std::string_view item_id);
-        // Feed buffer persistence across restarts (stored in cursors LMDB table)
+        // Feed buffer persistence across restarts (stored in feed_open LMDB table)
         void feed_open_register(std::string_view feed_key);
         void feed_open_unregister(std::string_view feed_key);
         [[nodiscard]] bool feed_is_open(std::string_view feed_key) const;
         void feed_open_sync_from_cache();
         void feed_seen_sync_from_cache();
         void migrate_feed_seen_from_cursors();
+        void migrate_open_buffers_from_cursors();
         void feed_dismiss(std::string_view feed_key);
         std::vector<std::string> feed_open_list();
 
