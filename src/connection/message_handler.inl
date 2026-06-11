@@ -1840,13 +1840,12 @@ message_handler_after_omemo:
             oob_suffix.clear();
     }
 
-    for (const auto &sfs : ::xmpp::collect_sfs_shares(media_view))
-    {
-        if (sfs.encrypted)
-        {
-            const auto &enc = *sfs.encrypted;
-            const std::string esfs_stable_id = stable_id ? std::string(stable_id) : std::string();
-            const std::string esfs_channel_jid = channel_id ? std::string(channel_id) : std::string();
+    bool handled_encrypted_media = false;
+    const std::string esfs_stable_id = stable_id ? std::string(stable_id) : std::string();
+    const std::string esfs_channel_jid = channel_id ? std::string(channel_id) : std::string();
+    const auto handle_encrypted_media_share =
+        [&](const ::xmpp::EncryptedMediaShare &enc) {
+            handled_encrypted_media = true;
 
             bool already_downloaded = false;
             std::optional<std::string> esfs_local_path;
@@ -1900,6 +1899,13 @@ message_handler_after_omemo:
                     enc.meta.mime,
                 };
             }
+        };
+
+    for (const auto &sfs : ::xmpp::collect_sfs_shares(media_view))
+    {
+        if (sfs.encrypted)
+        {
+            handle_encrypted_media_share(*sfs.encrypted);
             continue;
         }
 
@@ -1925,6 +1931,14 @@ message_handler_after_omemo:
             sims_suffix += ::xmpp::format_file_share_suffix(
                 sfs.meta.name, sfs.meta.mime, sfs.meta.size_raw, sfs_url);
         }
+    }
+
+    // XEP-0454: converse.js and similar clients put aesgcm:// in the OMEMO body
+    // without ESFS <file-sharing> metadata.
+    if (!handled_encrypted_media && text)
+    {
+        if (auto aesgcm = ::xmpp::parse_aesgcm_body_share(text))
+            handle_encrypted_media_share(*aesgcm);
     }
 
     // XEP-0511: Link Metadata — parse <rdf:Description> containing OpenGraph metadata.

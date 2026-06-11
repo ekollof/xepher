@@ -43,6 +43,7 @@
 #include "xmpp/message_forward.hh"
 #include "xmpp/message_body.hh"
 #include "xmpp/message_media.hh"
+#include "xmpp/message_aesgcm.hh"
 #include "xmpp/message_sticker_emoji.hh"
 #include "xmpp/message_bob.hh"
 #include "xmpp/message_omemo.hh"
@@ -1079,6 +1080,49 @@ TEST_CASE("collect_custom_emoji_previews resolves XEP-0514 emoji markup")
     CHECK(keys.contains("sha3-256:ENeyvkxcfv8dmL4HBrF3JU1OX1BfpNV3YbhlEb20ReU="));
 
     xmpp_stanza_release(msg);
+}
+
+TEST_CASE("parse_aesgcm_body_share parses XEP-0454 example URL")
+{
+    constexpr std::string_view body =
+        "aesgcm://download.montague.tld/4a771ac1-f0b2-4a4a-9700-f2a26fa2bb67/tr%C3%A8s%20cool.jpg"
+        "#8c3d050e9386ec173861778f68e9af38a97aaf82faa4063b4d0878a61261534410c8a84331eaac851759f587";
+
+    const auto share = xmpp::parse_aesgcm_body_share(body);
+    REQUIRE(share.has_value());
+    CHECK(share->ciphertext_url ==
+          "https://download.montague.tld/4a771ac1-f0b2-4a4a-9700-f2a26fa2bb67/tr%C3%A8s%20cool.jpg");
+    CHECK(share->iv_b64 == "jD0FDpOG7Bc4YXeP");
+    CHECK(share->key_b64 ==
+          "aOmvOKl6r4L6pAY7TQh4phJhU0QQyKhDMeqshRdZ9Yc=");
+    CHECK(share->meta.name == "tr%C3%A8s%20cool.jpg");
+    CHECK(share->meta.mime == "image/jpeg");
+}
+
+TEST_CASE("parse_aesgcm_body_share accepts optional thumbnail line")
+{
+    constexpr std::string_view body =
+        "aesgcm://upload.example/photo.png#"
+        "0123456789abcdef01234567"
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"
+        "data:image/jpeg,/9j/4AAQ";
+
+    const auto share = xmpp::parse_aesgcm_body_share(body);
+    REQUIRE(share.has_value());
+    CHECK(share->ciphertext_url == "https://upload.example/photo.png");
+    CHECK(share->meta.mime == "image/png");
+}
+
+TEST_CASE("parse_aesgcm_body_share rejects non-aesgcm bodies")
+{
+    CHECK_FALSE(xmpp::parse_aesgcm_body_share("https://example.com/a.jpg"));
+    CHECK_FALSE(xmpp::parse_aesgcm_body_share(
+        "aesgcm://example.com/a.jpg#tooshort"));
+    CHECK_FALSE(xmpp::parse_aesgcm_body_share(
+        "aesgcm://example.com/a.jpg#"
+        "0123456789abcdef0123456789abcdef"
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"
+        "not-a-thumbnail"));
 }
 
 TEST_CASE("collect_sfs_shares parses plain and encrypted sources")
