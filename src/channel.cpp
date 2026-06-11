@@ -243,6 +243,18 @@ weechat::channel::channel(weechat::account& account,
 
     add_nicklist_groups();
 
+    if (type == chat_type::MUC)
+    {
+        std::string display_name;
+        if (const auto bm_it = account.bookmarks.find(std::string(id));
+            bm_it != account.bookmarks.end() && !bm_it->second.name.empty())
+            display_name = bm_it->second.name;
+        else if (auto cached = account.muc_title_cache_get(id))
+            display_name = std::move(*cached);
+        if (!display_name.empty())
+            apply_muc_display_name(display_name);
+    }
+
     // Smart filter: assume we are joining (initial presence flood) for MUC channels.
     // Will be cleared when status 110 (self-presence) is received.
     if (type == weechat::channel::chat_type::MUC)
@@ -615,6 +627,13 @@ void weechat::channel::update_name(const char* name)
         weechat_buffer_set(buffer, "short_name", "");
 }
 
+void weechat::channel::apply_muc_display_name(const std::string_view display_name)
+{
+    if (type != chat_type::MUC || display_name.empty() || !buffer)
+        return;
+    update_name(std::string(display_name).c_str());
+}
+
 void weechat::channel::apply_muc_info(const muc_info &incoming)
 {
     // Disco#info refresh is authoritative for mode flags (XEP-0045 §6.4 lists
@@ -633,7 +652,11 @@ void weechat::channel::apply_muc_info(const muc_info &incoming)
 
     if (incoming.description)       muc_info_.description       = incoming.description;
     if (incoming.language)          muc_info_.language          = incoming.language;
-    if (incoming.subject)           muc_info_.subject           = incoming.subject;
+    if (incoming.subject)
+    {
+        muc_info_.subject = incoming.subject;
+        update_topic(incoming.subject->c_str(), nullptr, 0);
+    }
     if (incoming.logs_url)          muc_info_.logs_url          = incoming.logs_url;
     if (incoming.occupants)         muc_info_.occupants         = incoming.occupants;
     if (incoming.max_users)         muc_info_.max_users         = incoming.max_users;

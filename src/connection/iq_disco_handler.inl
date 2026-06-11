@@ -1265,12 +1265,19 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                         weechat::RuntimePort::default_runtime().color("reset")));
                 }
 
-                if (category == "conference")
+                if (category == "conference" && !name.empty())
                 {
-                    if (auto ptr_channel = account.channels.find(from); ptr_channel != account.channels.end())
+                    const std::string room_bare = ::jid(nullptr, from ? from : "").bare;
+                    if (!room_bare.empty())
+                        account.muc_title_cache_put(room_bare, name);
+                    const std::string lookup_jid = room_bare.empty()
+                        ? (from ? std::string(from) : std::string{})
+                        : room_bare;
+                    if (auto ptr_channel = account.channels.find(lookup_jid);
+                        ptr_channel != account.channels.end())
                     {
                         auto& [_, ch] = *ptr_channel;
-                        ch.update_name(name.data());
+                        ch.apply_muc_display_name(name);
                     }
                 }
 

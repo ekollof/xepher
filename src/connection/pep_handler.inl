@@ -205,12 +205,18 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
                     }
                 }
                 
-                // Autodisco the room
+                if (!name.empty())
+                    account.muc_title_cache_put(item_id, name);
+
+                // Autodisco the room (tracked for muc_info before join completes)
+                const std::string disco_id = stanza::uuid(account.context);
+                account.muc_modes_queries[disco_id] = item_id;
+                account.muc_modes_fetched.insert(item_id);
                 account.connection.send(stanza::iq()
                             .from(to)
                             .to(item_id)
                             .type("get")
-                            .id(stanza::uuid(account.context))
+                            .id(disco_id)
                             .xep0030()
                             .query()
                             .build(account.context)

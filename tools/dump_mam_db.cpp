@@ -26,6 +26,8 @@
 //                   val: decrypted plaintext body
 //   capabilities    key: <node>#<ver>
 //                   val: newline-separated feature strings
+//   muc_titles      key: <room_bare_jid>
+//                   val: display name string
 //
 // Build via tools/Makefile (not the root Makefile).
 
@@ -132,7 +134,7 @@ static auto format_time_t(std::string_view sv) -> std::string
 
 enum class table_id {
     messages, timestamps, retractions, cursors, feed_seen, feed_open, pm_open,
-    omemo_plaintext, capabilities
+    omemo_plaintext, capabilities, muc_titles
 };
 
 static const char *table_name(table_id t)
@@ -147,6 +149,7 @@ static const char *table_name(table_id t)
         case table_id::pm_open:         return "pm_open";
         case table_id::omemo_plaintext: return "omemo_plaintext";
         case table_id::capabilities:    return "capabilities";
+        case table_id::muc_titles:      return "muc_titles";
     }
     return "unknown";
 }
@@ -271,7 +274,7 @@ static std::size_t dump_table(MDB_env *env, table_id tid,
 // CLI
 // ---------------------------------------------------------------------------
 
-static const std::array<table_id, 9> all_tables = {
+static const std::array<table_id, 10> all_tables = {
     table_id::messages,
     table_id::timestamps,
     table_id::retractions,
@@ -281,6 +284,7 @@ static const std::array<table_id, 9> all_tables = {
     table_id::pm_open,
     table_id::omemo_plaintext,
     table_id::capabilities,
+    table_id::muc_titles,
 };
 
 static void print_usage(const char *argv0)
@@ -303,7 +307,8 @@ static void print_usage(const char *argv0)
         "  feed_open       <feed_key>                       =>  1\n"
         "  pm_open         <bare_jid>                       =>  1\n"
         "  omemo_plaintext <channel>:<msg_id>           =>  decrypted body\n"
-        "  capabilities    <node>#<ver>                 =>  newline-separated features\n",
+        "  capabilities    <node>#<ver>                 =>  newline-separated features\n"
+        "  muc_titles      <room_bare_jid>                =>  display name\n",
         argv0);
 }
 

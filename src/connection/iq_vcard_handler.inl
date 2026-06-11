@@ -230,16 +230,15 @@ bool weechat::connection::handle_bookmarks_iq_event(xmpp_stanza_t *stanza)
         if (account.bookmarks.empty())
             account.bookmarks.clear();
 
-        for (const ::xmpp::StanzaView conference : ::xmpp::StanzaView(storage))
+        for (const ::xmpp::StanzaView conference_el : ::xmpp::StanzaView(storage))
         {
-            const char *name = conference.name().data();
-            if (weechat_strcasecmp(name, "conference") != 0)
+            if (weechat_strcasecmp(conference_el.name().data(), "conference") != 0)
                 continue;
 
-            const std::string jid = conference.attr_string("jid");
-            const std::string autojoin = conference.attr_string("autojoin");
-            const std::string bookmark_name = conference.attr_string("name");
-            const ::xmpp::StanzaView nick_el = conference.child("nick");
+            const std::string jid = conference_el.attr_string("jid");
+            const std::string autojoin = conference_el.attr_string("autojoin");
+            const std::string bookmark_name = conference_el.attr_string("name");
+            const ::xmpp::StanzaView nick_el = conference_el.child("nick");
             const std::string bookmark_nick = nick_el.valid() ? nick_el.text() : std::string {};
 
             if (jid.empty())
@@ -252,11 +251,17 @@ bool weechat::connection::handle_bookmarks_iq_event(xmpp_stanza_t *stanza)
             account.bookmarks[jid].autojoin = !autojoin.empty()
                 && ::xmpp::is_bookmark_autojoin_true(autojoin);
 
+            if (!bookmark_name.empty())
+                account.muc_title_cache_put(jid, bookmark_name);
+
+            const std::string disco_id = stanza::uuid(account.context);
+            account.muc_modes_queries[disco_id] = jid;
+            account.muc_modes_fetched.insert(jid);
             account.connection.send(stanza::iq()
                         .from(to)
                         .to(jid)
                         .type("get")
-                        .id(stanza::uuid(account.context))
+                        .id(disco_id)
                         .xep0030()
                         .query()
                         .build(account.context)
@@ -278,14 +283,6 @@ bool weechat::connection::handle_bookmarks_iq_event(xmpp_stanza_t *stanza)
                     const std::string cmd =
                         ::xmpp::bookmark_enter_command(jid, bookmark_nick);
                     weechat_command(account.buffer, cmd.c_str());
-                    struct t_gui_buffer *ptr_buffer = nullptr;
-                    if (auto ptr_channel = account.channels.find(jid); ptr_channel != account.channels.end())
-                    {
-                        auto& [_, ch] = *ptr_channel;
-                        ptr_buffer = ch.buffer;
-                        if (ptr_buffer)
-                            ch.update_name(name);
-                    }
                 }
             }
         }

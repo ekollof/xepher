@@ -14,7 +14,7 @@ void weechat::account::mam_cache_init()
             std::filesystem::path(mam_db_path.data()).parent_path());
 
         mam_db_env = lmdb::env::create();
-        mam_db_env.set_max_dbs(14);
+        mam_db_env.set_max_dbs(15);
         mam_db_env.set_mapsize((size_t)1048576 * 1000); // 1000MB
         mam_db_env.open(mam_db_path.data(), MDB_NOSUBDIR, 0600);
 
@@ -33,6 +33,7 @@ void weechat::account::mam_cache_init()
         mam_dbi.esfs_downloads  = lmdb::dbi::open(transaction, "esfs_downloads",  MDB_CREATE);
         mam_dbi.image_previews  = lmdb::dbi::open(transaction, "image_previews",  MDB_CREATE);
         mam_dbi.og_previews     = lmdb::dbi::open(transaction, "og_previews",     MDB_CREATE);
+        mam_dbi.muc_titles      = lmdb::dbi::open(transaction, "muc_titles",      MDB_CREATE);
 
         transaction.commit();
 
@@ -1344,6 +1345,41 @@ bool weechat::account::caps_cache_get(std::string_view verification_hash,
         return true;
     }
     return false;
+}
+
+void weechat::account::muc_title_cache_put(
+    const std::string_view room_jid,
+    const std::string_view title)
+{
+    if (!mam_db_env || room_jid.empty() || title.empty())
+        return;
+
+    try {
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
+        mam_cache_put_in_txn(txn.handle(), mam_dbi.muc_titles.handle(), room_jid, title);
+        txn.commit();
+    } catch (const lmdb::error &) {
+    }
+}
+
+std::optional<std::string> weechat::account::muc_title_cache_get(
+    const std::string_view room_jid)
+{
+    if (!mam_db_env || room_jid.empty())
+        return std::nullopt;
+
+    try {
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, MDB_RDONLY);
+        MDB_val key{room_jid.size(), const_cast<void *>(static_cast<const void *>(room_jid.data()))};
+        MDB_val value{};
+        if (mdb_get(txn.handle(), mam_dbi.muc_titles.handle(), &key, &value) != 0)
+            return std::nullopt;
+        return std::string(static_cast<const char *>(value.mv_data), value.mv_size);
+    } catch (const lmdb::error &) {
+        return std::nullopt;
+    }
 }
 
 void weechat::account::peer_features_update(std::string_view jid,

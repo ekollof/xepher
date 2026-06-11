@@ -295,6 +295,7 @@ namespace weechat
 
         void update_topic(const char* title, const char* creator, int last_set);
         void update_name(const char* name);
+        void apply_muc_display_name(std::string_view display_name);
         void update_purpose(const char* purpose, const char* creator, int last_set);
 
         // XEP-0045 §10.2: store the last muc#roomconfig form received from

@@ -461,6 +461,7 @@ namespace weechat
             lmdb::dbi esfs_downloads = 0;  // ESFS downloaded file paths (keyed channel_jid:stable_id → saved_path)
             lmdb::dbi image_previews = 0;  // local image paths for icat MAM replay (keyed channel_jid:stable_id)
             lmdb::dbi og_previews = 0;     // XEP-0511 OG preview cache (keyed by URL)
+            lmdb::dbi muc_titles = 0;      // MUC display names (keyed room bare JID)
         } mam_dbi;
         std::string mam_db_path;
 
@@ -649,6 +650,9 @@ namespace weechat
         void caps_cache_load();
         void caps_cache_save(std::string_view verification_hash, const std::vector<std::string>& features);
         bool caps_cache_get(std::string_view verification_hash, std::vector<std::string>& features);
+
+        void muc_title_cache_put(std::string_view room_jid, std::string_view title);
+        [[nodiscard]] std::optional<std::string> muc_title_cache_get(std::string_view room_jid);
         void peer_features_update(std::string_view jid, const std::vector<std::string>& features);
         bool peer_supports_feature(std::string_view jid, std::string_view feature) const;
         bool peer_has_legacy_axolotl_only(std::string_view jid) const;
