@@ -62,7 +62,19 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
 
     const auto enc_ns = enc_view.xmlns();
     if (enc_ns)
-        XDEBUG("OMEMO decode: <encrypted> xmlns='{}'", *enc_ns);
+        XDEBUG("OMEMO decode: <encrypted> xmlns='{}' peer='{}' sid={} payload={} mam_replay={}",
+               *enc_ns, jid, *sender_device_id,
+               payload_view.valid() && !payload.empty() ? "yes" : "no",
+               suppress_peer_traffic ? "yes" : "no");
+
+    // Inbound copies of messages sent from this device cannot be decrypted — the
+    // Signal protocol never establishes {own_jid, own_device_id} as an inbound
+    // session. Catches any handler path that still reaches decode().
+    if (*sender_device_id == device_id)
+    {
+        XDEBUG("OMEMO decode: skipping self-sent stanza (sid == own device_id {})", device_id);
+        return std::nullopt;
+    }
 
     if (!enc_ns || *enc_ns != kLegacyOmemoNs)
     {
@@ -156,10 +168,14 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                 continue;
             }
 
+            XDEBUG("OMEMO decode: decrypting transport key for {}/{} prekey={} bytes={}",
+                   jid, *sender_device_id, is_prekey, serialized.size());
             legacy_transport_key = decrypt_axolotl_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
                                                                  is_prekey ? &used_prekey_id : nullptr,
                                                                  &ratchet_message_counter,
                                                                  out_is_duplicate);
+            XDEBUG("OMEMO decode: transport key decrypt {} for {}/{}",
+                   legacy_transport_key ? "ok" : "failed", jid, *sender_device_id);
             if (!legacy_transport_key && !quiet && !(out_is_duplicate && *out_is_duplicate))
                 print_error(buffer, "OMEMO (legacy) Signal decryption of transport key failed.");
         }
@@ -195,10 +211,14 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             if (serialized.empty())
                 continue;
 
+            XDEBUG("OMEMO decode: decrypting legacy flat <key> for {}/{} prekey={}",
+                   jid, *sender_device_id, is_prekey);
             legacy_transport_key = decrypt_axolotl_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
                                                                  is_prekey ? &used_prekey_id : nullptr,
                                                                  &ratchet_message_counter,
                                                                  out_is_duplicate);
+            XDEBUG("OMEMO decode: legacy flat <key> decrypt {} for {}/{}",
+                   legacy_transport_key ? "ok" : "failed", jid, *sender_device_id);
         }
     }
 
