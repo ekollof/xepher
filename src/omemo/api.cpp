@@ -32,6 +32,7 @@
 #include <omemo/session_builder.h>
 #include <omemo/session_cipher.h>
 #include <session_record.h>
+#include <session_state.h>
 #include <session_pre_key.h>
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>

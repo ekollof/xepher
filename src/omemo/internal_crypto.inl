@@ -397,6 +397,57 @@ struct scoped_session_cipher {
     [[nodiscard]] session_cipher *get() const { return cipher.get(); }
 };
 
+[[nodiscard]] auto load_bytes(omemo &self, std::string_view key) -> std::optional<std::vector<std::uint8_t>>;
+
+enum class prekey_decrypt_strategy {
+    inner_only,           // XEP-0384 §4.3: session ephemeral matches exchange
+    full_exchange,        // XEP-0384 §4.3/§5.6: process whole OMEMOKeyExchange
+    inner_first_fallback, // session exists but stored ephemeral unavailable
+};
+
+// XEP-0384 §4.3: when a session exists, compare the X3DH ephemeral (base key)
+// in the incoming PreKeySignalMessage with the ephemeral stored in the session.
+[[nodiscard]] auto choose_prekey_decrypt_strategy(omemo &self,
+                                                  std::string_view jid,
+                                                  std::uint32_t remote_device_id,
+                                                  const pre_key_signal_message *message,
+                                                  bool session_exists,
+                                                  const signal_message *inner)
+    -> prekey_decrypt_strategy
+{
+    if (!session_exists || !inner)
+        return prekey_decrypt_strategy::full_exchange;
+
+    const ec_public_key *exchange_base = pre_key_signal_message_get_base_key(message);
+    if (!exchange_base)
+        return prekey_decrypt_strategy::inner_first_fallback;
+
+    const auto stored = load_bytes(self, key_for_session(jid, remote_device_id));
+    if (!stored || stored->empty())
+        return prekey_decrypt_strategy::inner_first_fallback;
+
+    session_record *record_raw = nullptr;
+    if (session_record_deserialize(&record_raw, stored->data(), stored->size(), self.context) != 0)
+        return prekey_decrypt_strategy::inner_first_fallback;
+    libsignal::object<session_record> record {record_raw};
+
+    const uint32_t version = pre_key_signal_message_get_message_version(message);
+    if (session_record_has_session_state(record.get(), version, exchange_base) == 1)
+        return prekey_decrypt_strategy::inner_only;
+
+    const session_state *state = session_record_get_state(record.get());
+    if (!state)
+        return prekey_decrypt_strategy::inner_first_fallback;
+
+    const ec_public_key *session_base = session_state_get_alice_base_key(state);
+    if (!session_base)
+        return prekey_decrypt_strategy::inner_first_fallback;
+
+    return ec_public_key_compare(session_base, exchange_base) == 0
+        ? prekey_decrypt_strategy::inner_only
+        : prekey_decrypt_strategy::full_exchange;
+}
+
 // Signal-encrypt the legacy transport key bundle: innerKey(16) || authTag(16) = 32 bytes.
 [[nodiscard]] auto encrypt_axolotl_transport_key(omemo &self, std::string_view jid,
                                                 std::uint32_t remote_device_id,
@@ -409,6 +460,7 @@ struct scoped_session_cipher {
     OMEMO_ASSERT(remote_device_id != 0, "peer device id must be non-zero");
 
     const omemo_lmdb_write_scope write_scope {self};
+    const signal_store_peer_scope peer_scope {self, jid, remote_device_id};
 
     // Per Conversations: Signal-encrypt innerKey(16) || authTag(16) = 32 bytes
     std::array<std::uint8_t, 32> bundle {};
@@ -463,6 +515,7 @@ struct scoped_session_cipher {
            jid, remote_device_id, is_prekey, serialized.size());
 
     const omemo_lmdb_write_scope write_scope {self};
+    const signal_store_peer_scope peer_scope {self, jid, remote_device_id};
 
     const auto scoped_cipher = scoped_session_cipher::create(self, jid, remote_device_id);
     if (!scoped_cipher)
@@ -512,37 +565,46 @@ struct scoped_session_cipher {
             signal_protocol_session_contains_session(self.store_context,
                                                      &scoped_cipher->address.address) == 1;
 
-        // When a session already exists (typical MAM replay), try the embedded
-        // SignalMessage first.  PreKeySignalMessage decrypt can stall or fail on
-        // consumed one-time prekeys from archived stanzas.
-        if (session_exists && inner)
+        const auto strategy = choose_prekey_decrypt_strategy(
+            self, jid, remote_device_id, message.get(), session_exists, inner);
+        XDEBUG("omemo: (legacy) XEP-0384 §4.3 prekey strategy={} for {}/{} session_exists={}",
+               strategy == prekey_decrypt_strategy::inner_only ? "inner_only"
+               : strategy == prekey_decrypt_strategy::full_exchange ? "full_exchange"
+                                                                    : "inner_first_fallback",
+               jid, remote_device_id, session_exists);
+
+        switch (strategy)
         {
-            XDEBUG("omemo: (legacy) trying inner SignalMessage first for {}/{} (session exists)",
+        case prekey_decrypt_strategy::inner_only:
+            XDEBUG("omemo: (legacy) decrypting inner SignalMessage only for {}/{}",
                    jid, remote_device_id);
             result = session_cipher_decrypt_signal_message(cipher, inner, nullptr, &plaintext_raw);
-        }
-
-        if (result != 0 && plaintext_raw == nullptr)
-        {
-            XDEBUG("omemo: (legacy) decrypting PreKeySignalMessage for {}/{}",
+            break;
+        case prekey_decrypt_strategy::full_exchange:
+            XDEBUG("omemo: (legacy) decrypting full PreKeySignalMessage for {}/{}",
                    jid, remote_device_id);
             result = session_cipher_decrypt_pre_key_signal_message(cipher, message.get(), nullptr,
                                                                    &plaintext_raw);
-        }
-
-        // Prekey path failed but a session exists — fall back to inner SignalMessage
-        // if we did not already try it above.
-        if (result != 0 && plaintext_raw == nullptr && inner && !session_exists)
-        {
-            print_error(nullptr,
-                        fmt::format("omemo: (legacy) prekey decrypt failed for {}/{}: rc={}; trying inner SignalMessage",
-                                    jid, remote_device_id, result));
-            result = session_cipher_decrypt_signal_message(cipher, inner, nullptr, &plaintext_raw);
-        }
-        else if (result != 0 && plaintext_raw == nullptr && inner && session_exists)
-        {
-            XDEBUG("omemo: (legacy) inner SignalMessage fallback failed for {}/{}: rc={}",
+            XDEBUG("omemo: (legacy) PreKeySignalMessage decrypt done for {}/{} rc={}",
                    jid, remote_device_id, result);
+            break;
+        case prekey_decrypt_strategy::inner_first_fallback:
+            if (inner)
+            {
+                XDEBUG("omemo: (legacy) trying inner SignalMessage first for {}/{} (ephemeral unknown)",
+                       jid, remote_device_id);
+                result = session_cipher_decrypt_signal_message(cipher, inner, nullptr, &plaintext_raw);
+            }
+            if (result != 0 && plaintext_raw == nullptr)
+            {
+                XDEBUG("omemo: (legacy) decrypting PreKeySignalMessage fallback for {}/{}",
+                       jid, remote_device_id);
+                result = session_cipher_decrypt_pre_key_signal_message(cipher, message.get(), nullptr,
+                                                                       &plaintext_raw);
+                XDEBUG("omemo: (legacy) PreKeySignalMessage decrypt done for {}/{} rc={}",
+                       jid, remote_device_id, result);
+            }
+            break;
         }
     }
     else

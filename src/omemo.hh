@@ -209,6 +209,14 @@ namespace weechat {
             std::optional<lmdb::txn> lmdb_write_txn_;
             int lmdb_write_txn_depth_ = 0;
 
+            // libsignal store callbacks may pass signal_protocol_address values whose
+            // name/name_len are not valid JID strings (raw protobuf bytes).  While
+            // signal_store_peer_depth_ > 0, store callbacks use the owned strings
+            // pinned by signal_store_peer_scope instead of address->name.
+            std::string signal_store_peer_jid_;
+            std::uint32_t signal_store_peer_device_id_ = 0;
+            int signal_store_peer_depth_ = 0;
+
             class bundle_request
             {
             public:

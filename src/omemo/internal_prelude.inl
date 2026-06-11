@@ -165,6 +165,42 @@ public:
     omemo_lmdb_write_scope &operator=(const omemo_lmdb_write_scope &) = delete;
 };
 
+// Pins the active peer JID/device for nested libsignal store callbacks.
+class signal_store_peer_scope {
+    omemo &self_;
+    std::string prior_jid_;
+    std::uint32_t prior_device_id_ = 0;
+    int prior_depth_ = 0;
+
+public:
+    signal_store_peer_scope(omemo &self, std::string_view jid, std::uint32_t device_id)
+        : self_(self),
+          prior_jid_(std::move(self.signal_store_peer_jid_)),
+          prior_device_id_(self.signal_store_peer_device_id_),
+          prior_depth_(self.signal_store_peer_depth_)
+    {
+        if (self_.signal_store_peer_depth_++ == 0)
+        {
+            self_.signal_store_peer_jid_ = std::string(jid);
+            self_.signal_store_peer_device_id_ = device_id;
+        }
+    }
+
+    ~signal_store_peer_scope()
+    {
+        if (self_.signal_store_peer_depth_ > 0 && --self_.signal_store_peer_depth_ == 0)
+        {
+            self_.signal_store_peer_jid_ = std::move(prior_jid_);
+            self_.signal_store_peer_device_id_ = prior_device_id_;
+        }
+        else
+            self_.signal_store_peer_depth_ = prior_depth_;
+    }
+
+    signal_store_peer_scope(const signal_store_peer_scope &) = delete;
+    signal_store_peer_scope &operator=(const signal_store_peer_scope &) = delete;
+};
+
 [[nodiscard]] auto eval_path(std::string_view expression) -> std::string
 {
     std::string expr_str(expression);  // ensure null-terminated for C API
@@ -252,9 +288,15 @@ void store_axolotl_devicelist(omemo &self, std::string_view jid, std::string_vie
 {
     if (!self.db_env || jid.empty())
         return;
-    auto txn = lmdb::txn::begin(self.db_env);
-    self.dbi.omemo.put(txn, key_for_axolotl_devicelist(jid), devicelist);
-    txn.commit();
+    const auto key = key_for_axolotl_devicelist(jid);
+    if (self.lmdb_write_txn_)
+        self.dbi.omemo.put(*self.lmdb_write_txn_, key, devicelist);
+    else
+    {
+        auto txn = lmdb::txn::begin(self.db_env);
+        self.dbi.omemo.put(txn, key, devicelist);
+        txn.commit();
+    }
     self.axolotl_devicelist_cache_[std::string(jid)] = std::string(devicelist);
 }
 
@@ -270,10 +312,25 @@ void store_axolotl_devicelist(omemo &self, std::string_view jid, std::string_vie
 
     if (!self.db_env || jid.empty())
         return std::nullopt;
-    auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+
+    const auto key = key_for_axolotl_devicelist(jid);
     std::string_view value;
-    if (!self.dbi.omemo.get(txn, key_for_axolotl_devicelist(jid), value))
-        return std::nullopt;
+    if (self.lmdb_write_txn_)
+    {
+        if (!self.dbi.omemo.get(*self.lmdb_write_txn_, key, value))
+            return std::nullopt;
+    }
+    else if (self.lmdb_read_txn_)
+    {
+        if (!self.dbi.omemo.get(*self.lmdb_read_txn_, key, value))
+            return std::nullopt;
+    }
+    else
+    {
+        auto txn = lmdb::txn::begin(self.db_env, nullptr, MDB_RDONLY);
+        if (!self.dbi.omemo.get(txn, key, value))
+            return std::nullopt;
+    }
     auto stored = std::string(value);
     self.axolotl_devicelist_cache_[jid_key] = stored;
     return stored;

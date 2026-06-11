@@ -107,15 +107,6 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     bool found_keys_elem = false;
     bool found_keys_for_our_bare_jid = false;
     bool found_key_for_us = false;
-    const auto should_skip_mam_prekey_decrypt = [&](bool is_prekey_msg) -> bool {
-        if (!suppress_peer_traffic || !is_prekey_msg || !sender_device_id)
-            return false;
-        if (has_session(jid, *sender_device_id))
-            return false;
-        XDEBUG("OMEMO decode: skipping MAM PreKeySignalMessage for {}/{} (no session)",
-               jid, *sender_device_id);
-        return true;
-    };
     for (const ::xmpp::StanzaView child : header)
     {
         if (legacy_transport_key)
@@ -177,9 +168,6 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                 continue;
             }
 
-            if (should_skip_mam_prekey_decrypt(is_prekey))
-                continue;
-
             XDEBUG("OMEMO decode: decrypting transport key for {}/{} prekey={} bytes={}",
                    jid, *sender_device_id, is_prekey, serialized.size());
             legacy_transport_key = decrypt_axolotl_transport_key(*this, jid, *sender_device_id, serialized, is_prekey,
@@ -221,9 +209,6 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
 
             const auto serialized = base64_decode(*account->context, key_stanza.text());
             if (serialized.empty())
-                continue;
-
-            if (should_skip_mam_prekey_decrypt(is_prekey))
                 continue;
 
             XDEBUG("OMEMO decode: decrypting legacy flat <key> for {}/{} prekey={}",
@@ -396,18 +381,29 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
             deferred_live_key_transports.insert(hb_key);
         }
     }
-    // XEP-0384 §6 SHOULD: after successfully decrypting a PreKeySignalMessage,
-    // send back an empty OMEMO message so the sender knows it can stop sending OMEMOKeyExchanges.
-    if (decoded_as_prekey && !global_mam_catchup && account && sender_device_id)
+    // XEP-0384 §6: after successfully decrypting a PreKeySignalMessage, send back an
+    // empty OMEMO message so the sender can stop sending OMEMOKeyExchanges.  During
+    // MAM catch-up the reply is deferred until <fin> (§6 also requires this empty
+    // message after key exchange during catch-up to forward the ratchet).
+    if (decoded_as_prekey && account && sender_device_id)
     {
         const std::string bare_jid = normalize_bare_jid(*account->context, jid);
         const auto pk_key = std::make_pair(bare_jid, *sender_device_id);
         if (!prekey_reply_sent.contains(pk_key))
         {
             prekey_reply_sent.insert(pk_key);
-            XDEBUG("omemo (legacy): queueing prekey-reply key-transport to {}/{}",
-                   bare_jid, *sender_device_id);
-            deferred_live_key_transports.insert(pk_key);
+            if (global_mam_catchup)
+            {
+                XDEBUG("omemo (legacy): deferring prekey-reply key-transport to {}/{} (MAM catchup)",
+                       bare_jid, *sender_device_id);
+                postponed_key_transports.insert(pk_key);
+            }
+            else
+            {
+                XDEBUG("omemo (legacy): queueing prekey-reply key-transport to {}/{}",
+                       bare_jid, *sender_device_id);
+                deferred_live_key_transports.insert(pk_key);
+            }
         }
     }
     return std::string(*result);

@@ -633,11 +633,49 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
 
 [[nodiscard]] auto signal_address_name(const signal_protocol_address *address) -> std::string
 {
-    if (!address || !address->name || address->name_len == 0)
+    if (!address || !address->name)
         return {};
     constexpr std::size_t k_max_jid_len = 1024;
-    const std::size_t len = std::min<std::size_t>(address->name_len, k_max_jid_len);
-    return std::string {address->name, len};
+    if (address->name_len > 0)
+    {
+        const std::size_t len = std::min<std::size_t>(address->name_len, k_max_jid_len);
+        return std::string {address->name, len};
+    }
+    // libsignal occasionally leaves name_len unset; treat name as null-terminated.
+    const char *name = address->name;
+    std::size_t len = 0;
+    while (len < k_max_jid_len && name[len] != '\0')
+        ++len;
+    return len > 0 ? std::string {name, len} : std::string {};
+}
+
+[[nodiscard]] auto is_plausible_signal_jid(std::string_view jid) -> bool
+{
+    return !jid.empty() && jid.contains('@') && jid.size() <= 1024;
+}
+
+[[nodiscard]] auto resolve_signal_peer(omemo &self, const signal_protocol_address *address)
+    -> std::pair<std::string, std::uint32_t>
+{
+    // AGENTS.md: libsignal callbacks are a C ABI boundary — copy out immediately,
+    // never trust address->name or address->device_id as durable fields.  During
+    // encrypt/decrypt, signal_store_peer_scope pins the known peer; use only that.
+    if (self.signal_store_peer_depth_ > 0
+        && is_plausible_signal_jid(self.signal_store_peer_jid_)
+        && is_valid_omemo_device_id(self.signal_store_peer_device_id_))
+    {
+        return {self.signal_store_peer_jid_, self.signal_store_peer_device_id_};
+    }
+
+    std::string jid = signal_address_name(address);
+    if (!is_plausible_signal_jid(jid))
+        jid.clear();
+
+    std::uint32_t device_id = 0;
+    if (address && is_valid_omemo_device_id(static_cast<std::uint32_t>(address->device_id)))
+        device_id = static_cast<std::uint32_t>(address->device_id);
+
+    return {std::move(jid), device_id};
 }
 
 [[nodiscard]] auto make_signal_address(std::string_view jid, std::int32_t device_id)
@@ -778,6 +816,7 @@ static std::size_t repair_prekeys_index(omemo &self, xmpp_ctx_t *context)
 
     libsignal::session_builder builder(self.store_context, &address.address, self.context);
     const omemo_lmdb_write_scope write_scope {self};
+    const signal_store_peer_scope peer_scope {self, jid, remote_device_id};
     try
     {
         builder.process_pre_key_bundle(pre_key_bundle);
@@ -832,21 +871,30 @@ int identity_save(const signal_protocol_address *address, std::uint8_t *key_data
     if (!self || !address || !key_data)
         return SG_ERR_INVAL;
 
-    const std::string addr_name = signal_address_name(address);
-    const auto device_id = static_cast<std::uint32_t>(address->device_id);
+    auto [addr_name, device_id] = resolve_signal_peer(*self, address);
+    if (addr_name.empty() || device_id == 0)
+    {
+        XDEBUG("omemo: identity_save skipped — unresolved peer address");
+        return SG_ERR_INVAL;
+    }
 
     // Only assign trust for truly new identities (not overwrites of known key).
-    const auto existing = load_bytes(*self, key_for_identity(addr_name, address->device_id));
+    XDEBUG("omemo: identity_save enter {}/{}", addr_name, device_id);
+
+    const auto existing = load_bytes(*self, key_for_identity(addr_name, device_id));
     if (!existing)
     {
         // BTBV: first key for this JID → BLIND; JID already has VERIFIED/UNTRUSTED → UNDECIDED.
         const omemo_trust trust = get_default_trust(*self, addr_name);
+        XDEBUG("omemo: identity_save assigning trust {} for new {}/{}",
+               static_cast<int>(trust), addr_name, device_id);
         store_tofu_trust(*self, addr_name, device_id, trust);
         XDEBUG("omemo: new identity for {}/{} — assigned trust {}",
                addr_name, device_id, static_cast<int>(trust));
     }
 
-    store_bytes(*self, key_for_identity(addr_name, address->device_id), key_data, key_len);
+    store_bytes(*self, key_for_identity(addr_name, device_id), key_data, key_len);
+    XDEBUG("omemo: identity_save done {}/{}", addr_name, device_id);
     return SG_SUCCESS;
 }
 
@@ -857,10 +905,11 @@ int identity_is_trusted(const signal_protocol_address *address, std::uint8_t *ke
     if (!self || !address || !key_data)
         return SG_ERR_INVAL;
 
-    const std::string addr_name = signal_address_name(address);
-    const auto device_id = static_cast<std::uint32_t>(address->device_id);
+    const auto [addr_name, device_id] = resolve_signal_peer(*self, address);
+    if (addr_name.empty() || device_id == 0)
+        return 0;
 
-    const auto stored = load_bytes(*self, key_for_identity(addr_name, address->device_id));
+    const auto stored = load_bytes(*self, key_for_identity(addr_name, device_id));
     if (!stored)
     {
         // No stored key yet — this will be a new identity; trust per BTBV default.
@@ -971,7 +1020,11 @@ int session_load(signal_buffer **record, signal_buffer **user_record,
     if (!self || !record || !address)
         return SG_ERR_INVAL;
 
-    const auto stored = load_bytes(*self, key_for_session(signal_address_name(address), address->device_id));
+    const auto [jid, device_id] = resolve_signal_peer(*self, address);
+    if (jid.empty() || device_id == 0)
+        return 0;
+
+    const auto stored = load_bytes(*self, key_for_session(jid, device_id));
     if (!stored)
         return 0;
 
@@ -993,27 +1046,41 @@ int session_get_sub_devices(signal_int_list **sessions, const char *name,
         return SG_ERR_NOMEM;
 
     const auto prefix = fmt::format("session:{}:", std::string_view {name, name_len});
-    auto transaction = lmdb::txn::begin(self->db_env, nullptr, MDB_RDONLY);
-    auto cursor = lmdb::cursor::open(transaction, self->dbi.omemo);
-    std::string_view key;
-    std::string_view value;
-    int count = 0;
+    const auto scan_sessions = [&](lmdb::cursor &cursor) -> int {
+        std::string_view key;
+        std::string_view value;
+        int count = 0;
 
-    for (bool found = cursor.get(key, value, MDB_FIRST); found;
-         found = cursor.get(key, value, MDB_NEXT))
-    {
-        if (!key.starts_with(prefix))
-            continue;
-
-        const auto device_part = key.substr(prefix.size());
-        if (const auto device_id = parse_uint32(device_part))
+        for (bool found = cursor.get(key, value, MDB_FIRST); found;
+             found = cursor.get(key, value, MDB_NEXT))
         {
-            signal_int_list_push_back(*sessions, static_cast<int>(*device_id));
-            ++count;
+            if (!key.starts_with(prefix))
+                continue;
+
+            const auto device_part = key.substr(prefix.size());
+            if (const auto device_id = parse_uint32(device_part))
+            {
+                signal_int_list_push_back(*sessions, static_cast<int>(*device_id));
+                ++count;
+            }
         }
+        return count;
+    };
+
+    if (self->lmdb_write_txn_)
+    {
+        auto cursor = lmdb::cursor::open(*self->lmdb_write_txn_, self->dbi.omemo);
+        return scan_sessions(cursor);
+    }
+    if (self->lmdb_read_txn_)
+    {
+        auto cursor = lmdb::cursor::open(*self->lmdb_read_txn_, self->dbi.omemo);
+        return scan_sessions(cursor);
     }
 
-    return count;
+    auto transaction = lmdb::txn::begin(self->db_env, nullptr, MDB_RDONLY);
+    auto cursor = lmdb::cursor::open(transaction, self->dbi.omemo);
+    return scan_sessions(cursor);
 }
 
 int session_store_record(const signal_protocol_address *address, std::uint8_t *record,
@@ -1027,7 +1094,10 @@ int session_store_record(const signal_protocol_address *address, std::uint8_t *r
     if (!self || !address || !record)
         return SG_ERR_INVAL;
 
-    store_bytes(*self, key_for_session(signal_address_name(address), address->device_id), record, record_len);
+    const auto [jid, device_id] = resolve_signal_peer(*self, address);
+    if (jid.empty() || device_id == 0)
+        return SG_ERR_INVAL;
+    store_bytes(*self, key_for_session(jid, device_id), record, record_len);
     return SG_SUCCESS;
 }
 
@@ -1037,7 +1107,10 @@ int session_contains(const signal_protocol_address *address, void *user_data)
     if (!self || !address)
         return 0;
 
-    return load_bytes(*self, key_for_session(signal_address_name(address), address->device_id)) ? 1 : 0;
+    const auto [jid, device_id] = resolve_signal_peer(*self, address);
+    if (jid.empty() || device_id == 0)
+        return 0;
+    return load_bytes(*self, key_for_session(jid, device_id)) ? 1 : 0;
 }
 
 int session_delete(const signal_protocol_address *address, void *user_data)
@@ -1046,8 +1119,10 @@ int session_delete(const signal_protocol_address *address, void *user_data)
     if (!self || !address)
         return SG_ERR_INVAL;
 
-    const auto session_key =
-        key_for_session(signal_address_name(address), address->device_id);
+    const auto [jid, device_id] = resolve_signal_peer(*self, address);
+    if (jid.empty() || device_id == 0)
+        return SG_ERR_INVAL;
+    const auto session_key = key_for_session(jid, device_id);
     const bool had_session = load_bytes(*self, session_key).has_value();
     delete_bytes(*self, session_key);
     return had_session ? 1 : 0;
