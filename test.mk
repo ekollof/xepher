@@ -32,7 +32,7 @@ tests/xmpp.cov.so: $(COVS) $(DEPS) $(HDRS)
 # tests/run is built from tests/; rewrite repo-root -I paths (incl. vendored doctest).
 TEST_CPPFLAGS := $(subst -Ideps,-I../deps,$(subst -Isrc,-I../src,$(subst -Ilibstrophe,-I../libstrophe,$(CPPFLAGS))))
 
-tests/run: $(COVS) tests/main.cc tests/xmpp.cov.so $(wildcard tests/*.inl)
+tests/run: $(COVS) tests/main.cc tests/xmpp.cov.so $(wildcard tests/*.inl) $(HDRS)
 	cd tests && $(CXX) $(TEST_CPPFLAGS) $(LDFLAGS) -o run main.cc $(patsubst %,../%,$(DEPS)) $(LDLIBS) \
 		$(TEST_LDFLAGS) $(PWD)/tests/xmpp.cov.so
 
