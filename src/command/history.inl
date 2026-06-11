@@ -365,7 +365,12 @@ int command__edit_to(const void *pointer, void *data,
     }
 
     const char *target_id  = argv[1];
-    const char *new_text   = argv_eol[2];
+    std::string new_text   = argv_eol[2];
+    if (weechat::config::instance
+        && weechat::config::instance->look.emoticons.boolean())
+    {
+        new_text = replace_emoticons(new_text);
+    }
     const char *type       = (ptr_channel->type == weechat::channel::chat_type::MUC)
                               ? "groupchat" : "chat";
 
@@ -389,7 +394,7 @@ int command__edit_to(const void *pointer, void *data,
     // immediately.  Servers do not carbon-copy self-sent corrections, so without
     // this the buffer would keep showing the old text.
     {
-        std::string new_msg = std::string("📝 ") + new_text;
+        std::string new_msg = fmt::format("📝 {}", new_text);
         buffer__update_line_by_id(buffer, target_id, new_msg.c_str());
     }
 
