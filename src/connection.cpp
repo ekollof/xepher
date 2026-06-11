@@ -58,14 +58,26 @@ void weechat::connection::send(xmpp_stanza_t *stanza)
 {
     append_raw_xml_trace(account, "SEND", stanza);
 
-    // Increment outbound counter for actual stanzas (not SM elements)
     const char *name = xmpp_stanza_get_name(stanza);
-    if (name && account.sm_enabled)
+    if (name)
     {
-        std::string stanza_name(name);
-        if (stanza_name == "message" || stanza_name == "presence" || stanza_name == "iq")
+        const std::string_view stanza_name(name);
+        const bool is_app_stanza = stanza_name == "message"
+            || stanza_name == "presence"
+            || stanza_name == "iq";
+
+        // XEP-0198 §3.1: defer application stanzas until SM negotiation completes.
+        if (account.sm_awaiting_negotiation && is_app_stanza)
         {
-            account.sm_h_outbound++;
+            xmpp_stanza_t *copy = xmpp_stanza_copy(stanza);
+            account.sm_pending_replay.push_back(
+                std::shared_ptr<xmpp_stanza_t>(copy, xmpp_stanza_release));
+            return;
+        }
+
+        if (is_app_stanza && account.sm_enabled)
+        {
+            sm_increment_handled_count(account.sm_h_outbound);
             // Keep a copy in the retransmit queue (XEP-0198 §5)
             xmpp_stanza_t *copy = xmpp_stanza_copy(stanza);
             account.sm_outqueue.emplace_back(

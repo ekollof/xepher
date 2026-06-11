@@ -175,14 +175,20 @@ namespace weechat
         bool sm_enabled = false;
         bool sm_available = true;       // Can we try to enable SM?
         bool sm_handlers_registered = false;  // Track if handlers are already added
+        bool sm_awaiting_negotiation = false; // enable/resume sent; defer app stanzas
+        bool sm_resume_attempted = false;     // current connect tried <resume/>
+        bool sm_post_connect_done = false;    // run_post_connect_setup completed
         std::string sm_id;              // session ID for resumption
         uint32_t sm_h_inbound = 0;      // stanzas we've received and handled
         uint32_t sm_h_outbound = 0;     // stanzas we've sent
         uint32_t sm_last_ack = 0;       // last h value acknowledged by server
+        time_t sm_last_ack_log = 0;     // throttle ack debug logging
         struct t_hook *sm_ack_timer_hook = nullptr;
         // Unacknowledged outbound stanzas: (outbound_seq, stanza_copy)
         // seq is 1-based (matches sm_h_outbound at time of send)
         std::deque<std::pair<uint32_t, std::shared_ptr<xmpp_stanza_t>>> sm_outqueue;
+        // Stanzas to re-send after resume failure → fresh <enable/> (new h values).
+        std::deque<std::shared_ptr<xmpp_stanza_t>> sm_pending_replay;
 
         std::string name;
         weechat::xmpp::pgp pgp;

@@ -572,12 +572,20 @@ void weechat::account::disconnect(int reconnect)
         }
     }
     
+    // XEP-0198 §4: final ack before graceful stream close (best-effort).
+    if (is_connected && connection && sm_enabled)
+        connection.send_sm_graceful_ack();
+
     // Clean up Stream Management hooks
     if (sm_ack_timer_hook)
     {
         weechat_unhook(sm_ack_timer_hook);
         sm_ack_timer_hook = nullptr;
     }
+
+    sm_awaiting_negotiation = false;
+    sm_resume_attempted = false;
+    sm_pending_replay.clear();
     
     // Clean up deferred MAM page timer and queue
     if (mam_defer_timer)

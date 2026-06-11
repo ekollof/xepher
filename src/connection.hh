@@ -95,6 +95,9 @@ namespace weechat {
         bool sm_handler(xmpp_stanza_t *stanza);
 
         bool conn_handler(event status, int error, xmpp_stream_error_t *stream_error);
+        void run_post_connect_setup(bool resumed_session);
+
+        void send_sm_graceful_ack();
 
         xmpp_stanza_t *get_caps(::xmpp::StanzaView request,
                                 std::optional<std::string> *hash = nullptr,

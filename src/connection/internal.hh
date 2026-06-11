@@ -39,6 +39,17 @@ inline void signal_worker_pipe(int fd)
 // Returns unexpected on any parse error, overflow, or zero value.
 [[nodiscard]] std::expected<std::uint32_t, std::string> parse_omemo_device_id(std::string_view value);
 
+// XEP-0198 §4: increment handled-stanza counter (wrap UINT32_MAX → 0).
+inline void sm_increment_handled_count(std::uint32_t &h) noexcept
+{
+    if (h == UINT32_MAX)
+        h = 0;
+    else
+        ++h;
+}
+
+void sm_start_ack_timer(weechat::account &account);
+
 // ── raw XML trace helpers ─────────────────────────────────────────────────────
 // Compute the log-file path for the given account.
 [[nodiscard]] std::string raw_xml_trace_path(weechat::account &account);
