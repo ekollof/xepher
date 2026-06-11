@@ -23,6 +23,7 @@ namespace stanza {
 
 namespace weechat
 {
+    class UiPort;
     class account;
     class user;
 
@@ -356,9 +357,14 @@ namespace weechat
         void count_nicklist_presence(int &online, int &offline) const;
         std::string find_member_by_nick(std::string_view nick) const;
 
-        // For MUC OMEMO: returns true only if every known occupant has a real_jid
-        // (i.e., the room is non-anonymous and we have seen their real JID in presence).
-        bool all_occupants_have_real_jid() const;
+        // For MUC OMEMO: true only when every *online* occupant has a real_jid.
+        [[nodiscard]] bool all_occupants_have_real_jid() const;
+
+        // Online occupant nicks lacking real_jid (empty when all present members have one).
+        [[nodiscard]] std::vector<std::string> online_occupants_missing_real_jid() const;
+
+        // Log (XDEBUG) and print the standard real-JID guard error for send /omemo.
+        void notify_omemo_missing_real_jids(weechat::UiPort &ui) const;
 
         // XEP-0384 §5.8: OMEMO group chat requires a non-anonymous MUC.
         [[nodiscard]] bool muc_supports_omemo() const;

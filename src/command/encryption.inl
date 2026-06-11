@@ -1,3 +1,33 @@
+namespace {
+
+void show_channel_omemo_devices(weechat::account *account,
+                                weechat::channel *channel,
+                                struct t_gui_buffer *buffer)
+{
+    if (!account || !account->omemo || !channel)
+        return;
+
+    auto ui = weechat::UiPort::for_buffer(buffer);
+    if (channel->type == weechat::channel::chat_type::MUC)
+    {
+        const auto recipients = channel->omemo_recipient_list();
+        if (recipients.empty())
+        {
+            ui->printf_info(fmt::format(
+                "{}: no OMEMO recipients discovered for this MUC yet",
+                WEECHAT_XMPP_PLUGIN_NAME));
+            return;
+        }
+        for (const auto &bare : recipients)
+            account->omemo.show_devices(buffer, bare.c_str());
+        return;
+    }
+
+    account->omemo.show_devices(buffer, channel->name.data());
+}
+
+}  // namespace
+
 int command__omemo(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
@@ -45,10 +75,10 @@ int command__omemo(const void *pointer, void *data,
                 ptr_channel ? ptr_channel->name.data() : nullptr,
                 ptr_channel ? ptr_channel->omemo.enabled : 0);
 
-            // Also show own devices and peer device list if in a channel
+            // Also show own devices and per-occupant lists in MUC (not the room JID)
             ptr_account->omemo.show_devices(buffer, ptr_account->jid().data());
             if (ptr_channel)
-                ptr_account->omemo.show_devices(buffer, ptr_channel->name.data());
+                show_channel_omemo_devices(ptr_account, ptr_channel, buffer);
 
             return WEECHAT_RC_OK;
         }
@@ -192,10 +222,17 @@ int command__omemo(const void *pointer, void *data,
             const char *jid = nullptr;
             if (argc > 2)
                 jid = argv[2];
-            else if (ptr_channel)
+            else if (ptr_channel
+                     && ptr_channel->type != weechat::channel::chat_type::MUC)
                 jid = ptr_channel->name.data();
             if (!jid)
             {
+                if (ptr_channel
+                    && ptr_channel->type == weechat::channel::chat_type::MUC)
+                {
+                    show_channel_omemo_devices(ptr_account, ptr_channel, buffer);
+                    return WEECHAT_RC_OK;
+                }
         ui->printf_error(fmt::format("{}: usage: /omemo devices <jid>  (or run in a channel buffer)",
                     WEECHAT_XMPP_PLUGIN_NAME));
                 return WEECHAT_RC_OK;
@@ -207,19 +244,6 @@ int command__omemo(const void *pointer, void *data,
         if (weechat_strcasecmp(argv[1], "fetch") == 0)
         {
             if (!require_omemo()) return WEECHAT_RC_OK;
-
-            const char *jid = nullptr;
-            if (argc > 2)
-                jid = argv[2];
-            else if (ptr_channel)
-                jid = ptr_channel->name.data();
-
-            if (!jid)
-            {
-        ui->printf_error(fmt::format("{}: usage: /omemo fetch [<jid>] [<device-id>]",
-                    WEECHAT_XMPP_PLUGIN_NAME));
-                return WEECHAT_RC_OK;
-            }
 
             std::optional<std::uint32_t> device_id;
             if (argc > 3)
@@ -234,13 +258,52 @@ int command__omemo(const void *pointer, void *data,
                 }
             }
 
-            ptr_account->omemo.force_fetch(*ptr_account, buffer, jid, device_id);
+            if (argc > 2)
+            {
+                ptr_account->omemo.force_fetch(*ptr_account, buffer, argv[2], device_id);
+                return WEECHAT_RC_OK;
+            }
+
+            if (ptr_channel && ptr_channel->type == weechat::channel::chat_type::MUC)
+            {
+                const auto recipients = ptr_channel->omemo_recipient_list();
+                if (recipients.empty())
+                {
+        ui->printf_error(fmt::format(
+                        "{}: no OMEMO recipients discovered for this MUC yet",
+                        WEECHAT_XMPP_PLUGIN_NAME));
+                    return WEECHAT_RC_OK;
+                }
+                for (const auto &bare : recipients)
+                    ptr_account->omemo.force_fetch(*ptr_account, buffer, bare.c_str(), device_id);
+                return WEECHAT_RC_OK;
+            }
+
+            if (ptr_channel)
+            {
+                ptr_account->omemo.force_fetch(*ptr_account, buffer,
+                                               ptr_channel->name.data(), device_id);
+                return WEECHAT_RC_OK;
+            }
+
+        ui->printf_error(fmt::format("{}: usage: /omemo fetch [<jid>] [<device-id>]",
+                    WEECHAT_XMPP_PLUGIN_NAME));
             return WEECHAT_RC_OK;
         }
 
         if (weechat_strcasecmp(argv[1], "kex") == 0)
         {
             if (!require_omemo()) return WEECHAT_RC_OK;
+
+            if (argc < 3
+                && ptr_channel
+                && ptr_channel->type == weechat::channel::chat_type::MUC)
+            {
+        ui->printf_error(fmt::format(
+                    "{}: usage: /omemo kex <occupant-jid> [<device-id>] in MUC buffers",
+                    WEECHAT_XMPP_PLUGIN_NAME));
+                return WEECHAT_RC_OK;
+            }
 
             const char *jid = nullptr;
             if (argc > 2)
@@ -308,9 +371,7 @@ int command__omemo(const void *pointer, void *data,
         }
         if (!ptr_channel->all_occupants_have_real_jid())
         {
-            ui->printf_error(fmt::format(
-                "{}: OMEMO requires real JIDs visible for all online occupants",
-                WEECHAT_XMPP_PLUGIN_NAME));
+            ptr_channel->notify_omemo_missing_real_jids(*ui);
             return WEECHAT_RC_OK;
         }
     }

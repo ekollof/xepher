@@ -7,6 +7,7 @@
 #include <time.h>
 #include <regex>
 #include <fmt/core.h>
+#include <fmt/ranges.h>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -990,15 +991,51 @@ std::string weechat::channel::find_member_by_nick(std::string_view nick) const
 bool weechat::channel::all_occupants_have_real_jid() const
 {
     if (type != weechat::channel::chat_type::MUC)
-        return true; // non-MUC: not applicable
+        return true;
 
-    if (members.empty())
-        return false; // no occupants known yet → treat as unsafe for OMEMO
+    bool any_online = false;
+    for (const auto &[_, member] : members)
+    {
+        if (!member.present)
+            continue;
+        any_online = true;
+        if (!member.real_jid || member.real_jid->empty())
+            return false;
+    }
+    return any_online;
+}
 
-    return std::ranges::all_of(members, [](const auto& p) {
-        const auto& [_, m] = p;
-        return m.real_jid.has_value() && !m.real_jid->empty();
-    });
+std::vector<std::string> weechat::channel::online_occupants_missing_real_jid() const
+{
+    std::vector<std::string> missing;
+    if (type != weechat::channel::chat_type::MUC)
+        return missing;
+
+    for (const auto &[nick, member] : members)
+    {
+        if (!member.present)
+            continue;
+        if (!member.real_jid || member.real_jid->empty())
+            missing.push_back(nick);
+    }
+    std::ranges::sort(missing);
+    return missing;
+}
+
+void weechat::channel::notify_omemo_missing_real_jids(weechat::UiPort &ui) const
+{
+    const auto missing = online_occupants_missing_real_jid();
+    const std::string missing_list = missing.empty()
+        ? std::string{"(unknown)"}
+        : fmt::format("{}", fmt::join(missing, ", "));
+
+    XDEBUG("omemo: online occupants missing real_jid in {}: {}", name, missing_list);
+
+    ui.printf_date_tags(0, "notify_none",
+        fmt::format("{}{}",
+                    weechat::RuntimePort::default_runtime().prefix("error"),
+                    fmt::format("OMEMO requires real JIDs visible for all online occupants (missing: {})",
+                                missing_list)));
 }
 
 bool weechat::channel::muc_supports_omemo() const
@@ -1433,9 +1470,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         }
         if (!all_occupants_have_real_jid())
         {
-            weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}: OMEMO requires real JIDs visible for all online occupants",
-                            weechat::RuntimePort::default_runtime().prefix("error")));
+            notify_omemo_missing_real_jids(*weechat::UiPort::for_buffer(buffer));
             return WEECHAT_RC_ERROR;
         }
     }

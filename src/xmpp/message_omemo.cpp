@@ -100,12 +100,17 @@ bool should_auto_enable_channel_omemo(
         && !is_mam_replay;
 }
 
-std::string resolve_omemo_decode_jid(
+std::optional<std::string> resolve_omemo_decode_jid(
+    const bool is_muc,
     std::string_view from_bare,
     std::optional<std::string_view> muc_sender_real_jid)
 {
-    if (muc_sender_real_jid && !muc_sender_real_jid->empty())
-        return std::string(*muc_sender_real_jid);
+    if (is_muc)
+    {
+        if (muc_sender_real_jid && !muc_sender_real_jid->empty())
+            return std::string(*muc_sender_real_jid);
+        return std::nullopt;
+    }
     return std::string(from_bare);
 }
 

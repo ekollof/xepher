@@ -60,7 +60,10 @@ struct OmemoSelfCopyAdvice {
     bool channel_omemo_enabled,
     bool is_mam_replay);
 
-[[nodiscard]] XMPP_TEST_EXPORT std::string resolve_omemo_decode_jid(
+// PM: peer bare JID from the stanza. MUC: sender real bare JID only — nullopt when unknown
+// (never fall back to the room JID for Signal session lookup).
+[[nodiscard]] XMPP_TEST_EXPORT std::optional<std::string> resolve_omemo_decode_jid(
+    bool is_muc,
     std::string_view from_bare,
     std::optional<std::string_view> muc_sender_real_jid);
 

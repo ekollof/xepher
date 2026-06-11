@@ -1049,9 +1049,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         // For MUC OMEMO (plan §4.1): the stanza 'from' is room@service/nick.
         // We must pass the *sender's real bare JID* (from the member table) to
         // decode() so that Signal sessions and trust are looked up correctly.
-        // If we don't have the real JID yet (semi-anonymous or race), fall back
-        // to the room bare JID — decode will fail gracefully and we show a
-        // placeholder (as recommended by the plan).
+        // If we don't have the real JID yet (semi-anonymous or race), skip decode
+        // entirely — never use the room bare JID for Signal session lookup.
         //
         // Note on MAM replay safety (plan §7): the early cache check above
         // (using channel_id + stable_id) should already have supplied the
@@ -1074,8 +1073,27 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 }
             }
         }
-        const std::string decode_jid_storage =
-            ::xmpp::resolve_omemo_decode_jid(from_bare, muc_sender_real_jid);
+        const bool is_muc_omemo = channel
+            && channel->type == weechat::channel::chat_type::MUC;
+        const auto decode_jid_opt =
+            ::xmpp::resolve_omemo_decode_jid(is_muc_omemo, from_bare, muc_sender_real_jid);
+        if (!decode_jid_opt)
+        {
+            const std::string sender_nick = ::jid(nullptr, from).resource;
+            XDEBUG("omemo: skipping MUC decode — no real_jid for occupant nick={} in {}",
+                   sender_nick.empty() ? from : sender_nick, channel_id ? channel_id : from_bare);
+            if (is_mam_replay)
+            {
+                intext_storage = std::string(::xmpp::k_omemo_undecryptable_placeholder);
+                encrypted = nullptr;
+                goto message_handler_after_omemo;
+            }
+            weechat::UiPort::for_buffer(channel->buffer)->printf_error(
+                fmt::format("OMEMO: cannot decrypt MUC message — real JID unknown for occupant {}",
+                            sender_nick.empty() ? from : sender_nick));
+            return 1;
+        }
+        const std::string &decode_jid_storage = *decode_jid_opt;
         const char *decode_jid = decode_jid_storage.c_str();
 
         // Always attempt decryption — MAM messages can be decrypted if the

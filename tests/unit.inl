@@ -1175,10 +1175,12 @@ TEST_CASE("message_omemo parses axolotl header and decode jid")
     CHECK_FALSE(xmpp::is_own_device_omemo_self_copy(enc, 1u));
     CHECK_FALSE(xmpp::axolotl_payload_is_empty(enc));
 
-    CHECK(xmpp::resolve_omemo_decode_jid("room@conf.example", std::nullopt)
-          == "room@conf.example");
     CHECK(xmpp::resolve_omemo_decode_jid(
-              "room@conf.example", std::string_view("alice@example.org"))
+              false, "alice@example.org", std::nullopt)
+          == "alice@example.org");
+    CHECK(!xmpp::resolve_omemo_decode_jid(true, "room@conf.example", std::nullopt));
+    CHECK(xmpp::resolve_omemo_decode_jid(
+              true, "room@conf.example", std::string_view("alice@example.org"))
           == "alice@example.org");
 
     xmpp_stanza_release(msg);
