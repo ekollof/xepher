@@ -340,7 +340,6 @@ obj/%.cov.o: src/%.cpp
 
 .PHONY: diff
 deps/diff/libdiff.a:
-	git submodule update --init --recursive deps/diff
 	echo "HAVE___PROGNAME=1" > deps/diff/configure.local
 	cd deps/diff && env -u MAKEFLAGS CC="$(CC)" ./configure
 	$(MAKE) -C deps/diff CC="$(CC)" CFLAGS=-fPIC
