@@ -268,6 +268,32 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
             // is absent.  Publishing here — before the result arrives — would
             // overwrite sibling clients' device entries and trigger a ping-pong
             // storm with any other active client on the same account.
+
+            // Probe our own bundle node to verify it still exists on the server.
+            // needs_bundle_publish() only fires when local prekeys changed; if
+            // the server lost the node (e.g. purged) but our prekeys are
+            // unchanged, the bundle would never be republished and peers cannot
+            // send OMEMO to us.  The item-not-found error handler republishes it.
+            if (account.omemo.device_id != 0)
+            {
+                const auto bundle_node = fmt::format(
+                    "eu.siacs.conversations.axolotl.bundles:{}",
+                    account.omemo.device_id);
+                std::string bundle_uid = stanza::uuid(account.context);
+                stanza::xep0060::items bundle_items(bundle_node);
+                stanza::xep0060::pubsub bundle_ps;
+                bundle_ps.items(bundle_items);
+                this->send(stanza::iq()
+                            .from(account.jid())
+                            .to(account.jid())
+                            .type("get")
+                            .id(bundle_uid)
+                            .xep0060()
+                            .pubsub(bundle_ps)
+                            .build(account.context)
+                            .get());
+                account.omemo.pending_iq_jid[bundle_uid] = std::string(account.jid());
+            }
         }
     }
 
