@@ -559,8 +559,10 @@ void store_tofu_trust(omemo &self,
 void request_axolotl_devicelist(weechat::account &account, std::string_view jid)
 {
     const std::string target_jid = normalize_bare_jid(account.context, jid);
-    if (::xmpp::is_pubsub_component_jid(
-            target_jid, std::span<const std::string>{account.known_pubsub_services}))
+    // Skip actual PubSub components (domain-only or service-local JIDs), but never
+    // user bare JIDs — a contact's PEP service is their bare JID and is exactly
+    // where legacy OMEMO devicelists live.
+    if (::xmpp::is_pubsub_component_jid(target_jid, {}))
     {
         XDEBUG("omemo: skipping devicelist for pubsub service JID {}", target_jid);
         return;
