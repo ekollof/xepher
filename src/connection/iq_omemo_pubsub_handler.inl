@@ -351,9 +351,43 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                     }
                     else if (type && weechat_strcasecmp(type, "error") == 0)
                     {
-                        weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
-                            "omemo: legacy bundle fetch for {}/{} returned error",
-                            bundle_jid, bundle_device_id));
+                        // If our own bundle node is missing on the server
+                        // (item-not-found), republish it. needs_bundle_publish()
+                        // on connect only fires when local prekeys changed; if
+                        // the server lost the node but our prekeys are
+                        // unchanged, the bundle would never be republished
+                        // without this check, and peers cannot reply with OMEMO.
+                        const ::xmpp::StanzaView berr = view.child("error");
+                        const std::string own_bare =
+                            ::jid(nullptr, account.jid()).bare;
+                        const bool own_bundle_missing =
+                            berr.valid()
+                            && berr.child("item-not-found",
+                                          "urn:ietf:params:xml:ns:xmpp-stanzas").valid()
+                            && account.omemo
+                            && bundle_device_id == account.omemo.device_id
+                            && !own_bare.empty()
+                            && ::jid(nullptr, bundle_jid).bare == own_bare;
+
+                        if (own_bundle_missing)
+                        {
+                            weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                                "omemo: our bundle node is missing on the server "
+                                "— republishing device {}",
+                                account.omemo.device_id));
+                            std::string jid_str(account.jid());
+                            if (std::shared_ptr<xmpp_stanza_t> bundle_sp {
+                                    account.omemo.get_axolotl_bundle(
+                                        account.context, jid_str.data(), nullptr),
+                                    xmpp_stanza_release})
+                                account.connection.send(bundle_sp.get());
+                        }
+                        else
+                        {
+                            weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+                                "omemo: legacy bundle fetch for {}/{} returned error",
+                                bundle_jid, bundle_device_id));
+                        }
                         if (bundle_device_id != 0 && !bundle_jid.empty())
                         {
                             for (auto &[_, ch] : account.channels)
