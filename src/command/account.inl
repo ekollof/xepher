@@ -586,7 +586,7 @@ void command__add_account(const char *name, const char *jid, const char *passwor
     if (jid)
         account->nickname(::jid(nullptr, jid).local);
 
-            weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("{}: account {}{}{} {}({}{}{}){} added")), weechat::RuntimePort::default_runtime().color("chat_server"), account->name.data(), weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("chat_server"), jid ? jid : "???", weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("reset")));
+            weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("{}: account {}{}{} {}({}{}{}){} added")), WEECHAT_XMPP_PLUGIN_NAME, weechat::RuntimePort::default_runtime().color("chat_server"), account->name.data(), weechat::RuntimePort::default_runtime().color("reset"), weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("chat_server"), jid ? jid : "???", weechat::RuntimePort::default_runtime().color("chat_delimiters"), weechat::RuntimePort::default_runtime().color("reset")));
 }
 
 void command__account_add(struct t_gui_buffer *buffer, int argc, char **argv)
@@ -945,7 +945,7 @@ void command__account_delete(struct t_gui_buffer *buffer, int argc, char **argv)
     }
     weechat::accounts.erase(account->name);
     weechat::UiPort::for_buffer(nullptr)->printf(fmt::format(fmt::runtime(_("{}: account {}{}{} has been deleted")),
-        weechat::RuntimePort::default_runtime().color("chat_server"), !account_name.empty() ? account_name.data() : "???", weechat::RuntimePort::default_runtime().color("reset")));
+        WEECHAT_XMPP_PLUGIN_NAME, weechat::RuntimePort::default_runtime().color("chat_server"), !account_name.empty() ? account_name.data() : "???", weechat::RuntimePort::default_runtime().color("reset")));
 }
 
 int command__account(const void *pointer, void *data,
