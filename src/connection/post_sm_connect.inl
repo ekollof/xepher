@@ -221,6 +221,7 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
         }
     }
 
+    account.omemo.init(account.buffer, account.name.data());
 
     if (!resumed_session)
     {
@@ -296,8 +297,6 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
             }
         }
     }
-
-    account.omemo.init(account.buffer, account.name.data());
 
 
     if (!resumed_session)
