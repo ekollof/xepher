@@ -376,10 +376,8 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                                 "— republishing device {}",
                                 account.omemo.device_id));
                             std::string jid_str(account.jid());
-                            if (std::shared_ptr<xmpp_stanza_t> bundle_sp {
-                                    account.omemo.get_axolotl_bundle(
-                                        account.context, jid_str.data(), nullptr),
-                                    xmpp_stanza_release})
+                            if (auto bundle_sp = account.omemo.build_axolotl_bundle(
+                                    account.context, jid_str.data(), nullptr))
                                 account.connection.send(bundle_sp.get());
                         }
                         else

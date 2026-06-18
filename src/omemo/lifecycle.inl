@@ -20,15 +20,12 @@ XMPP_TEST_EXPORT bool weechat::xmpp::omemo::needs_bundle_publish(xmpp_ctx_t *con
     return ensure_prekeys(*this, context);
 }
 
-XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ctx_t *context, char *from, char *to)
+XMPP_TEST_EXPORT std::shared_ptr<xmpp_stanza_t> weechat::xmpp::omemo::build_axolotl_bundle(xmpp_ctx_t *context, const char *from, const char *to)
 {
-    (void) from;
-    (void) to;
-
     OMEMO_ASSERT(context != nullptr, "xmpp context must be present when publishing our legacy OMEMO bundle");
 
     if (!*this)
-        return nullptr;
+        return {};
 
     ensure_local_identity(*this);
     ensure_registration_id(*this);
@@ -36,7 +33,7 @@ XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ct
 
     const auto bundle = make_local_bundle_metadata(*this);
     if (!bundle)
-        return nullptr;
+        return {};
 
     const auto signed_pre_key_id = parse_uint32(bundle->signed_pre_key_id).value_or(0);
     if (!is_valid_omemo_device_id(device_id))
@@ -44,14 +41,14 @@ XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ct
         print_error(nullptr,
                     fmt::format("omemo: refusing to publish legacy bundle: invalid local device id {}",
                                 device_id));
-        return nullptr;
+        return {};
     }
     if (signed_pre_key_id == 0)
     {
         print_error(nullptr,
                     fmt::format("omemo: refusing to publish legacy bundle for device {}: invalid signed prekey id '{}'",
                                 device_id, bundle->signed_pre_key_id));
-        return nullptr;
+        return {};
     }
     if (bundle->prekeys.size() < kMinPreKeyCount)
     {
@@ -60,7 +57,7 @@ XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ct
                                 device_id,
                                 bundle->prekeys.size(),
                                 kMinPreKeyCount));
-        return nullptr;
+        return {};
     }
 
     XDEBUG("omemo: publishing legacy bundle for device {} with {} prekeys",
@@ -109,8 +106,14 @@ XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ct
     if (to)
         iq_spec.to(to);
 
-    auto iq_sp = iq_spec.build(context);
+    return iq_spec.build(context);
+}
 
+XMPP_TEST_EXPORT xmpp_stanza_t *weechat::xmpp::omemo::get_axolotl_bundle(xmpp_ctx_t *context, char *from, char *to)
+{
+    auto iq_sp = build_axolotl_bundle(context, from, to);
+    if (!iq_sp)
+        return nullptr;
     xmpp_stanza_clone(iq_sp.get());  // bump refcount; shared_ptr dtor will release its ref
     return iq_sp.get();              // caller owns one ref; must call xmpp_stanza_release()
 }

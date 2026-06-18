@@ -240,6 +240,11 @@ namespace weechat {
 
             XMPP_TEST_EXPORT xmpp_stanza_t *get_axolotl_bundle(xmpp_ctx_t *context, char *from, char *to);
 
+            // Builder-native variant: returns the publish-IQ as a shared_ptr
+            // directly from stanza::spec::build(), avoiding the raw-pointer
+            // ownership-transfer dance. Prefer this in new code.
+            XMPP_TEST_EXPORT std::shared_ptr<xmpp_stanza_t> build_axolotl_bundle(xmpp_ctx_t *context, const char *from, const char *to);
+
             // Returns true when the local prekey pool has changed since the last
             // call (new keys generated, repaired, or signed-prekey rotated) and
             // the bundle should be published to PEP.  Returns false when the
