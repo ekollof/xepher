@@ -2205,36 +2205,29 @@ message_handler_after_omemo:
                     continue;
                 // For MUC messages, 'from' is room@conference/nick (occupant JID).
                 // MUCs don't route IQs to occupants, so we need a real JID.
-                // 1. Self-sent messages (echo from another client on our account):
-                //    use our own bare JID — our other client (e.g. Movim) has the BoB data.
-                // 2. Non-anonymous MUCs: resolve real JID from the member list.
-                // 3. Semi-anonymous MUCs (non-moderator): fall back to the occupant's
-                //    bare JID via the server (works for some MUC implementations that
-                //    proxy IQs to the occupant's full JID).
+                // Use the member list for non-anonymous rooms; fall back to the
+                // occupant JID for semi-anonymous rooms (some MUC implementations
+                // proxy IQs to the occupant's full JID).
+                //
+                // Note: we do NOT special-case "self" messages here. Self-detection
+                // in MUCs is based on the configured account nickname, but another
+                // client (e.g. Movim) may use the same nick from a different
+                // account. The member list gives us the real JID, which is the only
+                // reliable routing target.
                 const char *bob_target = from;
                 std::string real_jid_storage;
                 if (channel->type == weechat::channel::chat_type::MUC && nick)
                 {
-                    if (is_from_self)
+                    const std::string member_key = channel->find_member_by_nick(nick);
+                    if (!member_key.empty())
                     {
-                        real_jid_storage = ::jid(nullptr, account.jid()).bare;
-                        if (!real_jid_storage.empty())
-                            bob_target = real_jid_storage.c_str();
-                    }
-                    if (bob_target == from)
-                    {
-                        const std::string member_key =
-                            channel->find_member_by_nick(nick);
-                        if (!member_key.empty())
+                        if (auto mit = channel->members.find(member_key);
+                            mit != channel->members.end()
+                            && mit->second.real_jid
+                            && !mit->second.real_jid->empty())
                         {
-                            if (auto mit = channel->members.find(member_key);
-                                mit != channel->members.end()
-                                && mit->second.real_jid
-                                && !mit->second.real_jid->empty())
-                            {
-                                real_jid_storage = *mit->second.real_jid;
-                                bob_target = real_jid_storage.c_str();
-                            }
+                            real_jid_storage = *mit->second.real_jid;
+                            bob_target = real_jid_storage.c_str();
                         }
                     }
                     if (bob_target == from)
@@ -2242,6 +2235,11 @@ message_handler_after_omemo:
                         XDEBUG("BoB: no real JID for MUC occupant {} — "
                                "trying occupant JID as last resort for cid {}",
                                nick, bob.cid);
+                    }
+                    else
+                    {
+                        XDEBUG("BoB: resolved MUC occupant {} to real JID {} "
+                               "for cid {}", nick, bob_target, bob.cid);
                     }
                 }
                 ::xmpp::bob_start_fetch(account, bob_target, bob.cid, bob.mime,
