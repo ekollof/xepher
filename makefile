@@ -56,6 +56,9 @@ OPTFLAGS := -O2
 CPPDEFINES := -DNDEBUG
 endif
 
+# fmt 11+ no longer exposes fmt::format from <fmt/core.h> by default.
+CPPDEFINES += -DFMT_DEPRECATED_HEAVY_CORE
+
 SANFLAGS :=
 SANLDFLAGS :=
 ifneq ($(ASAN),)
