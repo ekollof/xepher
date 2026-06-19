@@ -750,14 +750,31 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
         auto& new_member = members[std::string(id)];
         new_member.id = id;
         if (real_jid)
-            new_member.real_jid = std::string(*real_jid);
+        {
+            // Guard against MUC JID being reported as an occupant's "real" JID (some servers or
+            // configurations list the room itself or virtual occupants with jid= the MUC bare).
+            // Treating the MUC bare as a "real user JID" pollutes OMEMO peer state and causes
+            // bundle requests and sessions using room@conf[/nick-or-device] (the "speed bump"
+            // reported in issue #6).
+            std::string provided = ::jid(nullptr, std::string(*real_jid)).bare;
+            if (provided == this->id)
+                real_jid = std::nullopt;
+            else
+                new_member.real_jid = std::string(*real_jid);
+        }
         member = &new_member;
     }
     else
     {
         member = *member_opt;
         if (real_jid)
-            member->real_jid = std::string(*real_jid);
+        {
+            std::string provided = ::jid(nullptr, std::string(*real_jid)).bare;
+            if (provided == this->id)
+                real_jid = std::nullopt;
+            else
+                member->real_jid = std::string(*real_jid);
+        }
     }
     member->present = opts.online;
 

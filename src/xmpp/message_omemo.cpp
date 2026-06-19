@@ -108,7 +108,11 @@ std::optional<std::string> resolve_omemo_decode_jid(
     if (is_muc)
     {
         if (muc_sender_real_jid && !muc_sender_real_jid->empty())
+        {
+            if (*muc_sender_real_jid == from_bare)
+                return std::nullopt;  // server reported the MUC itself as the "real" JID for this occupant — ignore (issue #6 speed bump: prevents room@conf being used as OMEMO peer)
             return std::string(*muc_sender_real_jid);
+        }
         return std::nullopt;
     }
     return std::string(from_bare);
