@@ -207,6 +207,12 @@ namespace weechat
     public:
         std::vector<weechat::channel::unread> unreads;
 
+        // XEP-0490: track the last incoming MUC message so send_reads() can
+        // publish MDS PEP when leaving the buffer.  MUC messages suppress
+        // <displayed> markers (XEP-0333 §4.1) so they never populate
+        // `unreads`; this separate field bridges that gap.
+        std::optional<weechat::channel::unread> muc_last_seen;
+
     public:
         std::string id;
         std::string name;

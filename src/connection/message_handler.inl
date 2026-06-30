@@ -856,6 +856,22 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         }
     }
 
+    // XEP-0490: track the last incoming MUC message for MDS PEP publishing.
+    // MUC messages suppress <displayed> markers (XEP-0333 §4.1) so they
+    // never populate `unreads`.  Record the stanza-id here so send_reads()
+    // can publish MDS PEP when the user leaves the MUC buffer.
+    if (is_muc_channel && channel && !is_self_outbound_copy
+        && !is_mam_replay && !is_delayed_delivery && stanza_id)
+    {
+        weechat::channel::unread muc_seen;
+        muc_seen.id = id ? id : std::string{};
+        if (stanza_id)
+            muc_seen.stanza_id = std::string(stanza_id);
+        if (stanza_id_by)
+            muc_seen.stanza_id_by = std::string(stanza_id_by);
+        channel->muc_last_seen = std::move(muc_seen);
+    }
+
     // XEP-0249: Direct MUC Invitations
     if (auto invite = ::xmpp::parse_direct_muc_invite(::xmpp::StanzaView(stanza)))
     {

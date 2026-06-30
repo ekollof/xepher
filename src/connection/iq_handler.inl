@@ -94,6 +94,75 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         return true;
     }
 
+    // XEP-0490: MDS fetch result — synchronize displayed state from other devices.
+    // The IQ result contains <items node='urn:xmpp:mds:displayed:0'> with one
+    // <item> per conversation, each holding a <displayed> element with the
+    // last-read <stanza-id>.  Clear local unreads for each conversation so
+    // that messages already read on other devices are not shown as new.
+    if (id && account.pending_mds_fetch_iq_
+        && *account.pending_mds_fetch_iq_ == id)
+    {
+        account.pending_mds_fetch_iq_.reset();
+        if (type && weechat_strcasecmp(type, "result") == 0)
+        {
+            const ::xmpp::StanzaView pubsub_el = view.child("pubsub", "http://jabber.org/protocol/pubsub");
+            const ::xmpp::StanzaView items_el = pubsub_el.valid()
+                ? pubsub_el.child("items", "http://jabber.org/protocol/pubsub") : ::xmpp::StanzaView{};
+            const std::string items_node = items_el.valid() ? items_el.attr_string("node") : std::string{};
+
+            if (!items_node.empty() && weechat_strcasecmp(items_node.c_str(), "urn:xmpp:mds:displayed:0") == 0)
+            {
+                int synced = 0;
+                for (const ::xmpp::StanzaView item : items_el)
+                {
+                    if (weechat_strcasecmp(item.name().data(), "item") != 0)
+                        continue;
+
+                    const std::string peer_jid_str = item.attr_string("id");
+                    if (peer_jid_str.empty())
+                        continue;
+
+                    const ::xmpp::StanzaView displayed_elem = item.child("displayed", "urn:xmpp:mds:displayed:0");
+                    if (!displayed_elem.valid())
+                        continue;
+
+                    const ::xmpp::StanzaView sid_elem = displayed_elem.child("stanza-id", "urn:xmpp:sid:0");
+                    const std::string last_id_str = sid_elem.valid() ? sid_elem.attr_string("id") : std::string{};
+
+                    if (auto ch_it = account.channels.find(peer_jid_str); ch_it != account.channels.end())
+                    {
+                        auto& [_, ch] = *ch_it;
+                        if (!last_id_str.empty())
+                        {
+                            auto &u = ch.unreads;
+                            auto it = std::begin(u);
+                            while (it != std::end(u))
+                            {
+                                bool match = (it->id == last_id_str);
+                                it = u.erase(it);
+                                if (match)
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            ch.unreads.clear();
+                        }
+                        synced++;
+                    }
+                }
+                XDEBUG("MDS fetch: synced displayed state for {} conversation(s)", synced);
+            }
+        }
+        else if (type && weechat_strcasecmp(type, "error") == 0)
+        {
+            const auto err_detail = ::xmpp::iq_error_text(
+                ::xmpp::StanzaView(stanza).child("error"));
+            XDEBUG("MDS fetch failed: {}", err_detail);
+        }
+        return true;
+    }
+
     // XEP-0441: MAM Preferences — handle <prefs xmlns='urn:xmpp:mam:2'> result/error
     if (id && account.mam_prefs_queries.contains(id))
     {

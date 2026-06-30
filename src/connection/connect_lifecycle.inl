@@ -144,6 +144,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
 
         account.jid_bare_cache_.clear();
         account.pending_carbons_enable_iq_.reset();
+        account.pending_mds_fetch_iq_.reset();
 
         const char *status_text = status == event::disconnect ? "disconnect" :
                                   status == event::fail ? "fail" :

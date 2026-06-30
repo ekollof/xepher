@@ -206,6 +206,8 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
         // XEP-0490 §4: fetch own MDS node on connect to synchronize displayed
         // state across devices (not just push notifications from this session).
         {
+            const std::string mds_fetch_id = stanza::uuid(account.context);
+            account.pending_mds_fetch_iq_ = mds_fetch_id;
             stanza::xep0060::items mds_items("urn:xmpp:mds:displayed:0");
             stanza::xep0060::pubsub mds_ps;
             mds_ps.items(mds_items);
@@ -213,7 +215,7 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
                         .from(account.jid())
                         .to(account.jid())
                         .type("get")
-                        .id(stanza::uuid(account.context))
+                        .id(mds_fetch_id)
                         .xep0060()
                         .pubsub(mds_ps)
                         .build(account.context)

@@ -1953,18 +1953,8 @@ void weechat::channel::send_link_preview(std::string_view to, std::string_view u
 
 void weechat::channel::send_reads()
 {
-    // XEP-0333 §4.1: SHOULD NOT send Chat Markers to a MUC room.
-    // Markers in MUC reveal presence to all participants and have no useful
-    // effect.  Flush unreads silently so the queue doesn't grow unbounded.
-    if (type == weechat::channel::chat_type::MUC)
-    {
-        unreads.clear();
-        return;
-    }
-
-    auto i = std::begin(unreads);
-
-    // Capture the last unread entry for XEP-0490 MDS PEP publish below
+    // Capture the last unread entry for XEP-0490 MDS PEP publish below.
+    // Must happen BEFORE the queue is cleared or erased.
     std::string last_unread_id;
     std::string last_unread_stanza_id;
     std::string last_unread_stanza_id_by;
@@ -1978,48 +1968,65 @@ void weechat::channel::send_reads()
             last_unread_stanza_id_by = *back.stanza_id_by;
     }
 
-    while (i != std::end(unreads))
+    // XEP-0333 §4.1: SHOULD NOT send Chat Markers to a MUC room.
+    // Markers in MUC reveal presence to all participants and have no useful
+    // effect.  Flush unreads without sending individual markers, but still
+    // publish MDS PEP below so other devices can sync read state.
+    if (type == weechat::channel::chat_type::MUC)
     {
-        auto* unread = &*i;
+        unreads.clear();
+    }
+    else
+    {
+        auto i = std::begin(unreads);
+        while (i != std::end(unreads))
+        {
+            auto* unread = &*i;
 
-        // XEP-0333: <displayed> markers MUST use the correct message type
-        // (chat for PM, groupchat for MUC) so the server routes them correctly.
-        const char *marker_type = (this->type == weechat::channel::chat_type::MUC)
-                                   ? "groupchat" : "chat";
-        // XEP-0333 §4.3: In a MUC that supports XEP-0359, MUST use the
-        // MUC-assigned stanza-id, NOT the sender's message id attribute.
-        const std::string displayed_id =
-            (this->type == weechat::channel::chat_type::MUC
-             && unread->stanza_id.has_value())
-            ? *unread->stanza_id : unread->id;
-        stanza::message msg;
-        msg.to(id).type(marker_type)
-           .chat_marker_displayed(displayed_id)
-           .no_store();  // XEP-0334: chat marker replies MUST NOT be stored
-        if (unread->thread.has_value())
-            msg.thread(*unread->thread);
-        account.connection.send(msg.build(account.context).get());
+            // XEP-0333: <displayed> markers MUST use the correct message type
+            // (chat for PM, groupchat for MUC) so the server routes them correctly.
+            const std::string displayed_id = unread->id;
+            stanza::message msg;
+            msg.to(id).type("chat")
+               .chat_marker_displayed(displayed_id)
+               .no_store();  // XEP-0334: chat marker replies MUST NOT be stored
+            if (unread->thread.has_value())
+                msg.thread(*unread->thread);
+            account.connection.send(msg.build(account.context).get());
 
-        i = unreads.erase(i);
+            i = unreads.erase(i);
+        }
     }
 
     // XEP-0490: Message Displayed Synchronization
     // Publish to own PEP node so other devices know we've displayed up to
-    // last_unread_id in this channel.  The item id is the peer's bare JID.
+    // the last message in this channel.  The item id is the peer's bare JID
+    // (for PM) or the MUC JID (for groupchat).
     //
-    // <iq type='set'>
-    //   <pubsub xmlns='http://jabber.org/protocol/pubsub'>
-    //     <publish node='urn:xmpp:mds:displayed:0'>
-    //       <item id='peer@example.org'>
-    //         <displayed xmlns='urn:xmpp:mds:displayed:0'>
-    //           <stanza-id xmlns='urn:xmpp:sid:0' by='peer@example.org'
-    //                      id='last-stanza-id'/>
-    //         </displayed>
-    //       </item>
-    //     </publish>
-    //   </pubsub>
-    // </iq>
-    if (!last_unread_id.empty())
+    // For PM: uses the last entry from `unreads` (populated by incoming
+    // <markable> messages).  For MUC: uses `muc_last_seen` (populated by
+    // the message handler) because MUC messages suppress <displayed> markers
+    // per XEP-0333 §4.1.
+    std::string mds_id;
+    std::string mds_stanza_id;
+    std::string mds_stanza_id_by;
+    if (type == weechat::channel::chat_type::MUC && muc_last_seen.has_value())
+    {
+        mds_id = muc_last_seen->id;
+        if (muc_last_seen->stanza_id.has_value())
+            mds_stanza_id = *muc_last_seen->stanza_id;
+        if (muc_last_seen->stanza_id_by.has_value())
+            mds_stanza_id_by = *muc_last_seen->stanza_id_by;
+        muc_last_seen.reset();
+    }
+    else if (!last_unread_id.empty())
+    {
+        mds_id = last_unread_id;
+        mds_stanza_id = last_unread_stanza_id;
+        mds_stanza_id_by = last_unread_stanza_id_by;
+    }
+
+    if (!mds_id.empty())
     {
         // XEP-0490: the <stanza-id> element in the MDS PEP publish MUST use:
         //   id  = server-assigned stanza-id (fall back to client id if unavailable)
@@ -2027,12 +2034,12 @@ void weechat::channel::send_reads()
         //         assigned that stanza-id, NOT the peer's bare JID.
         // Derive server domain from account JID as fallback for `by`.
         const std::string server_domain = ::jid(nullptr, account.jid()).domain;
-        const std::string mds_by_s  = !last_unread_stanza_id_by.empty()
-                                        ? last_unread_stanza_id_by
+        const std::string mds_by_s  = !mds_stanza_id_by.empty()
+                                        ? mds_stanza_id_by
                                         : (!server_domain.empty() ? server_domain : id);
-        const std::string mds_sid_s = !last_unread_stanza_id.empty()
-                                        ? last_unread_stanza_id
-                                        : last_unread_id;
+        const std::string mds_sid_s = !mds_stanza_id.empty()
+                                        ? mds_stanza_id
+                                        : mds_id;
 
         // Build <stanza-id xmlns='urn:xmpp:sid:0' by='...' id='...'/>
         struct sid_spec : stanza::spec {

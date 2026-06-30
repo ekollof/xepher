@@ -338,6 +338,9 @@ namespace weechat
         // XEP-0280: pending carbons enable IQ id (connect-time negotiation).
         std::optional<std::string> pending_carbons_enable_iq_;
 
+        // XEP-0490: pending MDS fetch IQ id (connect-time sync of displayed state).
+        std::optional<std::string> pending_mds_fetch_iq_;
+
         // XEP-0231: BoB image fetches for XHTML-IM cid:…@bob.xmpp.org stickers.
         struct bob_icat_context {
             std::string cid;
