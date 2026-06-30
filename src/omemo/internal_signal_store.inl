@@ -29,6 +29,7 @@ void ensure_db_open(omemo &self)
         self.db_env.set_max_dbs(4);
         self.db_env.set_mapsize(128U * 1024U * 1024U);
         self.db_env.open(self.db_path.c_str(), MDB_NOSUBDIR | MDB_CREATE, 0600);
+        self.db_env.reader_check();
     }
 
     auto transaction = lmdb::txn::begin(self.db_env);

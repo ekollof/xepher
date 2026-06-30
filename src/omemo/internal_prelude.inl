@@ -123,8 +123,9 @@ class omemo_lmdb_read_scope {
 public:
     explicit omemo_lmdb_read_scope(omemo &self) : self_(self)
     {
-        if (self_.lmdb_read_txn_depth_++ == 0)
+        if (self_.lmdb_read_txn_depth_ == 0)
             self_.lmdb_read_txn_.emplace(lmdb::txn::begin(self_.db_env, nullptr, MDB_RDONLY));
+        ++self_.lmdb_read_txn_depth_;
     }
 
     ~omemo_lmdb_read_scope()
@@ -145,8 +146,9 @@ class omemo_lmdb_write_scope {
 public:
     explicit omemo_lmdb_write_scope(omemo &self) : self_(self)
     {
-        if (self_.lmdb_write_txn_depth_++ == 0)
+        if (self_.lmdb_write_txn_depth_ == 0)
             self_.lmdb_write_txn_.emplace(lmdb::txn::begin(self_.db_env));
+        ++self_.lmdb_write_txn_depth_;
     }
 
     ~omemo_lmdb_write_scope()

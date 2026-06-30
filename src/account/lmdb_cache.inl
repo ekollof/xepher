@@ -17,6 +17,7 @@ void weechat::account::mam_cache_init()
         mam_db_env.set_max_dbs(15);
         mam_db_env.set_mapsize((size_t)1048576 * 1000); // 1000MB
         mam_db_env.open(mam_db_path.data(), MDB_NOSUBDIR, 0600);
+        mam_db_env.reader_check();
 
         lmdb::txn parentTransaction{nullptr};
         lmdb::txn transaction = lmdb::txn::begin(mam_db_env, parentTransaction);
