@@ -1,3 +1,25 @@
+xepher (0.10.0-1) unstable; urgency=medium
+
+  * Update to v0.10.0
+  * Feat: XEP-0490 MDS sync — publish MDS PEP for MUC and process MDS fetch on connect
+  * Feat: emoji shortcode tab completion and GitHub emoji conversion
+  * Feat: XEP-0045 MUC admin, registration, invites, /decline, /names
+  * Feat: nicklist sorting (online first) and offline roster display
+  * Feat: XEP-0231 BoB send, hosting, and caps advertisement
+  * Feat: Movim stickers, XEP-0449 stickers, XEP-0514 custom emoji via icat
+  * Feat: emoticon to emoji conversion in outgoing messages
+  * Fix(omemo): LMDB txn scoping, prekey decrypt, session bootstrap, MUC real-JID guards
+  * Fix(sm): preserve SM state on unexpected disconnect for auto-reconnect resume
+  * Fix(lmdb): recover from stale reader slots and prevent depth counter corruption
+  * Fix(fmt): add FMT_DEPRECATED_HEAVY_CORE for fmt 11 compatibility
+  * Fix(muc): prevent bare JID from being treated as occupant real JID
+  * Fix(edit/retract): delivery glyph alignment, /edit prefill, /reply local echo
+  * Perf: OMEMO GCM cipher reuse, scoped LMDB reads, on-demand MUC key fetch
+  * Perf: batch LMDB writes during MAM replay, cap backward buffer line scans
+  * Refactor: port abstraction phases 1-6 (StanzaView, UiPort, BufferPort, RenderEvent)
+
+ -- Emiel Kollof <emiel@kollof.nl>  Mon, 30 Jun 2026 12:00:00 +0000
+
 xepher (0.9.0-1) unstable; urgency=medium
 
   * Update to v0.9.0
