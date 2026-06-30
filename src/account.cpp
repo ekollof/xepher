@@ -653,6 +653,14 @@ void weechat::account::disconnect(int reconnect)
     // calling disconnect() again (avoiding recursion).
     if (!reconnect)
     {
+        // XEP-0198: Clear SM state on manual disconnect — user explicitly
+        // ended the session, so don't attempt resumption on next connect.
+        sm_id.clear();
+        sm_h_inbound = 0;
+        sm_h_outbound = 0;
+        sm_last_ack = 0;
+        sm_outqueue.clear();
+        sm_enabled = false;
         std::vector<struct t_gui_buffer *> to_close;
         for (auto &[name, ch] : channels)
             if (ch.buffer)

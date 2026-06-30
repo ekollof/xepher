@@ -207,21 +207,21 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 err_text ? err_text : ""));
         }
         
-        // Drop SM state on any disconnect so abrupt socket loss does not resume
-        // a session the server has already torn down.
-        if (status == event::disconnect)
+        // XEP-0198 §5: Preserve SM state on unexpected disconnect so the
+        // reconnect timer can attempt <resume/>. Only clear on <conflict/>
+        // (server kicked us) — the server has already torn down that session.
+        if (stream_error && stream_error->type == XMPP_SE_CONFLICT)
         {
-            if (!account.sm_id.empty() && error == 0)
-            {
-                weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
-                    "SM session {} closed by server", account.sm_id));
-            }
-            account.sm_id = "";
+            account.sm_id.clear();
             account.sm_h_inbound = 0;
             account.sm_h_outbound = 0;
             account.sm_last_ack = 0;
             account.sm_outqueue.clear();
-            account.sm_pending_replay.clear();
+        }
+        else if (status == event::disconnect && !account.sm_id.empty())
+        {
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                "SM session {} preserved for resumption", account.sm_id));
         }
 
         // On <conflict>, the server kicked us because another session connected
