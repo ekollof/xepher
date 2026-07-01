@@ -756,8 +756,8 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
             // Treating the MUC bare as a "real user JID" pollutes OMEMO peer state and causes
             // bundle requests and sessions using room@conf[/nick-or-device] (the "speed bump"
             // reported in issue #6).
-            std::string provided = ::jid(nullptr, std::string(*real_jid)).bare;
-            if (provided == this->id)
+            const std::string provided_bare = ::jid(nullptr, std::string(*real_jid)).bare;
+            if (provided_bare == this->id)
                 real_jid = std::nullopt;
             else
                 new_member.real_jid = std::string(*real_jid);
@@ -769,8 +769,8 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
         member = *member_opt;
         if (real_jid)
         {
-            std::string provided = ::jid(nullptr, std::string(*real_jid)).bare;
-            if (provided == this->id)
+            const std::string provided_bare = ::jid(nullptr, std::string(*real_jid)).bare;
+            if (provided_bare == this->id)
                 real_jid = std::nullopt;
             else
                 member->real_jid = std::string(*real_jid);
@@ -781,15 +781,13 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     // Drop stale nick-only member stubs once the full occupant id is known.
     if (type == weechat::channel::chat_type::MUC)
     {
-        const auto slash = member->id.rfind('/');
-        if (slash != std::string::npos && slash + 1 < member->id.size())
+        const std::string_view member_id_sv {member->id};
+        const auto slash = member_id_sv.rfind('/');
+        if (slash != std::string_view::npos && slash + 1 < member_id_sv.size())
         {
-            const std::string nick_only = member->id.substr(slash + 1);
-            if (auto dup = members.find(nick_only);
-                dup != members.end() && dup->first != member->id)
-            {
-                members.erase(dup);
-            }
+            const std::string nick_only {member_id_sv.substr(slash + 1)};
+            if (nick_only != member->id && members.contains(nick_only))
+                members.erase(nick_only);
         }
     }
 
@@ -890,14 +888,8 @@ std::optional<weechat::channel::member*> weechat::channel::member_search(const c
 
     // Fallback: handlers often pass a bare nick while presence stores room@conf/nick.
     const std::string full_id = find_member_by_nick(id);
-    if (!full_id.empty())
-    {
-        for (auto& [_, m] : members)
-        {
-            if (weechat_strcasecmp(m.id.c_str(), full_id.c_str()) == 0)
-                return &m;
-        }
-    }
+    if (!full_id.empty() && members.contains(full_id))
+        return &members.at(full_id);
 
     return std::nullopt;
 }
@@ -1095,10 +1087,11 @@ std::vector<std::string> weechat::channel::online_occupants_missing_real_jid() c
         }
         if (!member.real_jid || member.real_jid->empty())
         {
-            const auto slash = member_id.rfind('/');
-            missing.push_back(slash != std::string::npos
-                ? member_id.substr(slash + 1)
-                : member_id);
+            const std::string_view mid {member_id};
+            const auto slash = mid.rfind('/');
+            missing.push_back(slash == std::string_view::npos
+                ? std::string(mid)
+                : std::string(mid.substr(slash + 1)));
         }
     }
     std::ranges::sort(missing);
