@@ -1,3 +1,13 @@
+xepher (0.10.1-1) unstable; urgency=medium
+
+  * Update to v0.10.1
+  * Build: migrate to CMake + Ninja with thin gmake/make wrapper
+  * Build: CTest doctests, cmake/ninja packaging deps, ccache launcher
+  * Refactor: ConnectionPort, parse_presence, string_view member APIs
+  * Fix(muc): real-JID member lookup and null-safe account JID
+
+ -- Emiel Kollof <emiel@kollof.nl>  Wed, 01 Jul 2026 12:00:00 +0000
+
 xepher (0.10.0-1) unstable; urgency=medium
 
   * Update to v0.10.0
@@ -17,12 +27,8 @@ xepher (0.10.0-1) unstable; urgency=medium
   * Perf: OMEMO GCM cipher reuse, scoped LMDB reads, on-demand MUC key fetch
   * Perf: batch LMDB writes during MAM replay, cap backward buffer line scans
   * Refactor: port abstraction phases 1-6 (StanzaView, UiPort, BufferPort, RenderEvent)
-  * Refactor: ConnectionPort, parse_presence, string_view member APIs
-  * Fix(muc): real-JID member lookup and null-safe account JID
-  * Build: migrate to CMake + Ninja with thin gmake/make wrapper
-  * Build: CTest doctests, cmake/ninja packaging deps, ccache launcher
 
- -- Emiel Kollof <emiel@kollof.nl>  Wed, 01 Jul 2026 12:00:00 +0000
+ -- Emiel Kollof <emiel@kollof.nl>  Mon, 30 Jun 2026 12:00:00 +0000
 
 xepher (0.9.0-1) unstable; urgency=medium
 

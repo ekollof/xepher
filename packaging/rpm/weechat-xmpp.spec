@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        0.10.0
+Version:        0.10.1
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -72,6 +72,13 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Wed Jul 01 2026 Emiel Kollof <emiel@kollof.nl> - 0.10.1-1
+- Update to v0.10.1
+- Build: migrate to CMake + Ninja with thin gmake/make wrapper
+- Build: CTest doctests, cmake/ninja packaging deps, ccache launcher
+- Refactor: ConnectionPort, parse_presence, string_view member APIs
+- Fix(muc): real-JID member lookup and null-safe account JID
+
 * Mon Jun 30 2026 Emiel Kollof <emiel@kollof.nl> - 0.10.0-1
 - Update to v0.10.0
 - Feat: XEP-0490 MDS sync — publish MDS PEP for MUC and process MDS fetch on connect
