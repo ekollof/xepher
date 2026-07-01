@@ -27,6 +27,7 @@ xepher_install_alpine_deps() {
         alpine-sdk \
         git bison flex flex-dev make pkgconf \
         clang cmake ninja \
+        expat-dev \
         libstrophe-dev \
         libxml2-dev \
         lmdb-dev \
@@ -102,6 +103,7 @@ makedepends="
     clang
     cmake
     ninja
+    expat-dev
     bison
     flex
     make

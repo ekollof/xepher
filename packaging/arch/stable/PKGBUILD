@@ -1,6 +1,6 @@
 # Maintainer: Emiel Kollof <emiel@kollof.nl>
 pkgname=xepher
-pkgver=0.10.1
+pkgver=0.10.2
 pkgrel=1
 pkgdesc="Xepher — WeeChat plugin for XMPP/Jabber protocol"
 arch=('x86_64' 'aarch64')

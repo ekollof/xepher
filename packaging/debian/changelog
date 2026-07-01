@@ -1,3 +1,10 @@
+xepher (0.10.2-1) unstable; urgency=medium
+
+  * Update to v0.10.2
+  * Fix(packaging): cmake/ninja in Fedora CI deps, expat-devel for Void
+
+ -- Emiel Kollof <emiel@kollof.nl>  Wed, 01 Jul 2026 14:00:00 +0000
+
 xepher (0.10.1-1) unstable; urgency=medium
 
   * Update to v0.10.1
@@ -28,7 +35,7 @@ xepher (0.10.0-1) unstable; urgency=medium
   * Perf: batch LMDB writes during MAM replay, cap backward buffer line scans
   * Refactor: port abstraction phases 1-6 (StanzaView, UiPort, BufferPort, RenderEvent)
 
- -- Emiel Kollof <emiel@kollof.nl>  Mon, 30 Jun 2026 12:00:00 +0000
+ -- Emiel Kollof <emiel@kollof.nl>  Tue, 30 Jun 2026 12:00:00 +0000
 
 xepher (0.9.0-1) unstable; urgency=medium
 
