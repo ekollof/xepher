@@ -20,6 +20,7 @@ xepher_install_fedora_deps() {
     xepher_as_root dnf install -y \
         rpm-build rpmdevtools \
         clang cmake ninja-build git bison flex \
+        expat-devel \
         libstrophe-devel \
         libxml2-devel \
         lmdb-devel \

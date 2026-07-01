@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        0.10.2
+Version:        0.10.3
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -73,6 +73,10 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Wed Jul 01 2026 Emiel Kollof <emiel@kollof.nl> - 0.10.3-1
+- Update to v0.10.3
+- Fix(build): ignore Clang unused-command-line-argument for RPM %optflags
+
 * Wed Jul 01 2026 Emiel Kollof <emiel@kollof.nl> - 0.10.2-1
 - Update to v0.10.2
 - Fix(packaging): cmake/ninja in Fedora CI deps, expat-devel for Void/RPM

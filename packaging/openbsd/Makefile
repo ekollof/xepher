@@ -1,6 +1,6 @@
 COMMENT =	WeeChat plugin for XMPP/Jabber protocol
 
-V =		0.10.2
+V =		0.10.3
 GH_ACCOUNT =	ekollof
 GH_PROJECT =	xepher
 GH_TAGNAME =	v${V}

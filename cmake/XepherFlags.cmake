@@ -15,6 +15,8 @@ function(xepher_apply_common_compile_options target)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(${target} PRIVATE
             -Wno-gnu-zero-variadic-macro-arguments
+            # RPM %optflags inject GCC-only -specs=...; Clang treats them as unused.
+            -Wno-unused-command-line-argument
         )
     endif()
 
