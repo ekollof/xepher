@@ -505,7 +505,8 @@ int weechat::channel::add_self_typing(weechat::user *user)
     }
 
     (void)the_typing;  // Used for side effects, suppress warning
-    self_typing_cb(this, nullptr, 0);
+    if (ret)
+        self_typing_cb(this, nullptr, 0);
 
     if (!self_typing_hook_timer)
         self_typing_hook_timer = (struct t_hook *)weechat_hook_timer(
