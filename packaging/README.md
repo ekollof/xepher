@@ -163,10 +163,14 @@ All packages install:
 
 ### Build Dependencies
 - clang/clang++ (>= 14) with C++23 support
+- cmake (>= 3.22) and ninja (Unix Makefiles fallback if ninja is absent)
 - git
 - bison
 - flex
 - Development headers for all runtime dependencies
+
+Packages build via the thin `makefile` wrapper: `make PACKAGE_BUILD=1 weechat-xmpp`.
+On FreeBSD/OpenBSD use `gmake` instead of `make`.
 
 ## Testing Packages
 

@@ -21,7 +21,9 @@ WANTLIB += signal-protocol-c ssl strophe xml2 z
 COMPILER =	base-clang ports-gcc
 
 BUILD_DEPENDS =	devel/bison \
+		devel/cmake \
 		devel/flex \
+		devel/ninja \
 		net/weechat
 
 LIB_DEPENDS =	databases/lmdb \

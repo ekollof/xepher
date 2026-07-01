@@ -10,6 +10,8 @@ URL:            https://github.com/ekollof/xepher
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  clang >= 14
+BuildRequires:  cmake >= 3.22
+BuildRequires:  ninja-build
 BuildRequires:  git
 BuildRequires:  bison
 BuildRequires:  flex

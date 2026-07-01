@@ -61,6 +61,8 @@ depends=(
 )
 makedepends=(
     'clang'
+    'cmake'
+    'ninja'
     'git'
     'bison'
     'flex'
@@ -70,8 +72,8 @@ sha256sums=('SKIP')
 
 build() {
     cd "\${srcdir}/xepher-\${pkgver}"
-    # Tarball has no .git; make clean would remove seeded deps/diff/libdiff.a.
-    rm -rf obj
+    # Tarball has no .git; libdiff.a is pre-seeded in prepare_source_tree.
+    rm -rf obj build
     rm -f xmpp.so
     make PACKAGE_BUILD=1 weechat-xmpp
 }

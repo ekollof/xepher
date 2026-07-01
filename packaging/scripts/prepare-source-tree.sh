@@ -4,7 +4,7 @@
 # Copies the read-only /project mount into a writable destination and removes
 # host build artifacts so each container compiles fresh.  Pre-builds deps/diff
 # while .git is still available — RPM/Arch/Alpine tarballs omit .git, but the
-# makefile's libdiff.a rule runs `git submodule` when that file is missing.
+# packaging flow seeds libdiff.a before stripping VCS metadata.
 #
 # Source with:  . /project/packaging/scripts/prepare-source-tree.sh
 
@@ -27,10 +27,10 @@ prepare_source_tree() {
 
     if [ -f "$DEST/makefile" ] || [ -f "$DEST/Makefile" ]; then
         make -C "$DEST" clean
-        # Seed libdiff.a before tarballs drop .git (see makefile deps/diff rule).
-        make -C "$DEST" deps/diff/libdiff.a
+        # Seed libdiff.a before tarballs drop .git (see makefile seed-libdiff).
+        make -C "$DEST" seed-libdiff
     else
         rm -f "$DEST/xmpp.so"
-        rm -rf "$DEST/obj"
+        rm -rf "$DEST/obj" "$DEST/build"
     fi
 }

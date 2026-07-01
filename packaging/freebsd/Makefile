@@ -22,7 +22,9 @@ LIB_DEPENDS=	libcurl.so:ftp/curl \
 RUN_DEPENDS=	weechat>=4.0:irc/weechat
 
 BUILD_DEPENDS=	bison:devel/bison \
+		cmake:devel/cmake \
 		flex:devel/flex \
+		ninja:devel/ninja \
 		weechat:irc/weechat
 
 USES=		compiler:c++23-lang gmake pkgconfig ssl

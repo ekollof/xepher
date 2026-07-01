@@ -59,6 +59,7 @@ CMAKE_ARGS += -DCMAKE_CXX_COMPILER_LAUNCHER=
 endif
 CMAKE_ARGS += -DCMAKE_BUILD_TYPE=$(if $(DEBUG),Debug,Release)
 CMAKE_ARGS += -DXEPHER_PACKAGE_BUILD=$(if $(PACKAGE_BUILD),ON,OFF)
+CMAKE_ARGS += -DXEPHER_BUILD_TOOLS=$(if $(PACKAGE_BUILD),OFF,ON)
 CMAKE_ARGS += -DXEPHER_ENABLE_ASAN=$(if $(ASAN),ON,OFF)
 
 BUILD_ARGS := --build $(BUILD_DIR) -j$(NPROC)
@@ -71,7 +72,7 @@ export OBJCOPY
 
 .DEFAULT_GOAL := all
 
-.PHONY: all configure weechat-xmpp xmpp.so test clean distclean install install-deps release coverage debug check diff tools
+.PHONY: all configure weechat-xmpp xmpp.so test clean distclean install install-deps release coverage debug check diff tools seed-libdiff
 
 configure:
 	$(CMAKE) $(CMAKE_ARGS)
@@ -141,3 +142,13 @@ check:
 
 diff:
 	$(CMAKE) $(BUILD_ARGS) --target xepher_libdiff
+
+# Seed vendored libdiff.a without a full CMake configure (packaging tarballs lack .git).
+seed-libdiff:
+	@if [ ! -f deps/diff/libdiff.a ]; then \
+		echo ">>> Seeding deps/diff/libdiff.a"; \
+		cd deps/diff && \
+		echo "HAVE___PROGNAME=1" > configure.local && \
+		env -u MAKEFLAGS CC="$(CC)" sh ./configure && \
+		env -u MAKEFLAGS $(MAKE) CC="$(CC)" CFLAGS="-fPIC"; \
+	fi

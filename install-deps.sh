@@ -17,7 +17,7 @@ echo "Detected OS: $OS"
 
 # Common packages across distros
 # Runtime deps: libstrophe, libxml2, lmdb, libomemo-c (libsignal-protocol-c), gpgme, libfmt, libcurl, libssl/libcrypto (OpenSSL)
-# Build deps: clang/clang++, bison, flex, git
+# Build deps: clang/clang++, cmake (>= 3.22), ninja, bison, flex, git
 
 case "$OS" in
     ubuntu|debian|linuxmint|pop)
@@ -26,6 +26,8 @@ case "$OS" in
         sudo apt-get install -y \
             build-essential \
             clang \
+            cmake \
+            ninja-build \
             git \
             bison \
             flex \
@@ -45,6 +47,8 @@ case "$OS" in
         echo "Installing dependencies for Fedora/RHEL-based system..."
         sudo dnf install -y \
             clang \
+            cmake \
+            ninja-build \
             git \
             bison \
             flex \
@@ -64,6 +68,8 @@ case "$OS" in
         echo "Installing dependencies for Arch-based system..."
         sudo pacman -Sy --needed --noconfirm \
             clang \
+            cmake \
+            ninja \
             git \
             bison \
             flex \
@@ -101,6 +107,8 @@ case "$OS" in
         echo "Installing dependencies for Void Linux..."
         sudo xbps-install -Sy \
             clang \
+            cmake \
+            ninja \
             git \
             bison \
             flex \
@@ -119,6 +127,8 @@ case "$OS" in
         echo "Installing dependencies for Alpine Linux..."
         sudo apk add --no-cache \
             clang \
+            cmake \
+            ninja \
             git \
             bison \
             flex \
@@ -155,6 +165,8 @@ case "$OS" in
         echo "Installing dependencies for FreeBSD..."
         sudo pkg install -y \
             llvm \
+            cmake \
+            ninja \
             gmake \
             git \
             bison \
@@ -174,6 +186,8 @@ case "$OS" in
     openbsd)
         echo "Installing dependencies for OpenBSD..."
         doas pkg_add \
+            cmake \
+            ninja \
             gmake \
             git \
             bison \
@@ -212,6 +226,8 @@ case "$OS" in
         echo "Installing dependencies for macOS (Homebrew)..."
         brew install \
             llvm \
+            cmake \
+            ninja \
             make \
             bison \
             flex \
@@ -238,7 +254,7 @@ case "$OS" in
         echo ""
         echo "Please install the following packages manually:"
         echo "  Runtime: libstrophe, libxml2, lmdb, libsignal-protocol-c, gpgme, libfmt, libcurl, openssl, weechat"
-        echo "  Build: clang/clang++ (>= 13), bison, flex, git"
+        echo "  Build: clang/clang++ (>= 14), cmake (>= 3.22), ninja, bison, flex, git"
         exit 1
         ;;
 esac

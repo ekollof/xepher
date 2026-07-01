@@ -23,7 +23,7 @@ xepher_install_void_deps() {
     xbps-install -y \
         base-devel \
         git bison flex make pkg-config \
-        clang \
+        clang cmake ninja \
         libstrophe-devel \
         libxml2-devel \
         lmdb-devel \

@@ -26,7 +26,7 @@ xepher_install_alpine_deps() {
     apk add --no-cache \
         alpine-sdk \
         git bison flex flex-dev make pkgconf \
-        clang \
+        clang cmake ninja \
         libstrophe-dev \
         libxml2-dev \
         lmdb-dev \
@@ -100,6 +100,8 @@ depends="
 "
 makedepends="
     clang
+    cmake
+    ninja
     bison
     flex
     make
@@ -122,8 +124,8 @@ sha256sums="${SHA256}  xepher-${VERSION}.tar.gz"
 
 build() {
     cd "\${srcdir}/xepher-\${pkgver}"
-    # Tarball has no .git; make clean would remove seeded deps/diff/libdiff.a.
-    rm -rf obj
+    # Tarball has no .git; libdiff.a is pre-seeded in prepare_source_tree.
+    rm -rf obj build
     rm -f xmpp.so
     make PACKAGE_BUILD=1 weechat-xmpp
 }

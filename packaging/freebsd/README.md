@@ -47,5 +47,6 @@ make package
 
 ## Notes
 
-- `PACKAGE_BUILD=1` skips the dev-only `.source` ELF section (see `AGENTS.md`).
+- `PACKAGE_BUILD=1` skips the dev-only `.source` ELF section and developer tools (see `AGENTS.md`).
+- Build uses CMake via the `gmake` wrapper; `cmake` and `ninja` are in `BUILD_DEPENDS`.
 - Vendored `deps/diff` is built in `pre-build` (GitHub release tarballs have no `.git`).

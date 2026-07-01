@@ -31,9 +31,9 @@ DESTDIR="${BUILD_DIR}/destdir"
 PLIST="${BUILD_DIR}/plist"
 
 cp -a "${PROJECT_DIR}/." "${SRC}/"
-make -C "${SRC}" clean
-make -C "${SRC}" deps/diff/libdiff.a
-make -C "${SRC}" PACKAGE_BUILD=1 weechat-xmpp
+gmake -C "${SRC}" clean
+gmake -C "${SRC}" seed-libdiff
+gmake -C "${SRC}" PACKAGE_BUILD=1 weechat-xmpp
 
 install -d "${DESTDIR}/usr/local/lib/weechat/plugins"
 install -d "${DESTDIR}/usr/local/share/doc/xepher"
