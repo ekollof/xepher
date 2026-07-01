@@ -67,6 +67,10 @@ int input__typing(struct t_gui_buffer *buffer)
     weechat::account *account = nullptr;
     weechat::channel *channel = nullptr;
 
+    if (!buffer
+        || weechat_buffer_get_pointer(buffer, "plugin") != weechat_plugin)
+        return WEECHAT_RC_OK;
+
     buffer__get_account_and_channel(buffer, &account, &channel);
 
     if (account && account->connected() && channel)

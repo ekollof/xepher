@@ -23,10 +23,33 @@ void buffer__get_account_and_channel(struct t_gui_buffer *buffer,
     if (!buffer)
         return;
 
-    *account = nullptr;
-    *channel = nullptr;
+    if (account)
+        *account = nullptr;
+    if (channel)
+        *channel = nullptr;
 
-    /* look for a account or channel using this buffer */
+    if (weechat_buffer_get_pointer(buffer, "plugin") != weechat_plugin)
+        return;
+
+    if (auto *ch = static_cast<weechat::channel *>(
+            weechat_buffer_get_pointer(buffer, XMPP_BUFFER_CHANNEL_PTR)))
+    {
+        if (account)
+            *account = &ch->account;
+        if (channel)
+            *channel = ch;
+        return;
+    }
+
+    if (auto *acc = static_cast<weechat::account *>(
+            weechat_buffer_get_pointer(buffer, XMPP_BUFFER_ACCOUNT_PTR)))
+    {
+        if (account)
+            *account = acc;
+        return;
+    }
+
+    /* Fallback: linear scan (buffers without cached pointers). */
     for (auto& [_, acc] : weechat::accounts)
     {
         if (acc.buffer == buffer)

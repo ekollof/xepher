@@ -88,8 +88,11 @@ int weechat::account::activity_cb(const void *pointer, void *data,
     if (!account || !account->connection || !xmpp_conn_is_connected(account->connection))
         return WEECHAT_RC_OK;
 
-    // Update last activity timestamp
     account->last_activity = time(nullptr);
+
+    // Steady-state fast path: already active and not idle — skip stanza work.
+    if (account->csi_active && !account->xep0319_idle_sent)
+        return WEECHAT_RC_OK;
 
     // If currently inactive, send active
     if (!account->csi_active)

@@ -4,6 +4,10 @@
 
 #pragma once
 
+// O(1) buffer→object pointers set at buffer creation (see channel/account).
+inline constexpr const char *XMPP_BUFFER_CHANNEL_PTR = "xmpp_channel_pointer";
+inline constexpr const char *XMPP_BUFFER_ACCOUNT_PTR = "xmpp_account_pointer";
+
 void buffer__get_account_and_channel(struct t_gui_buffer *buffer,
                                      weechat::account **account,
                                      weechat::channel **channel);

@@ -389,21 +389,20 @@ XMPP_TEST_EXPORT std::vector<std::string>
 emoji_shortcode_completions(std::string_view prefix, const std::size_t limit)
 {
     std::vector<std::string> codes;
-    codes.reserve(std::min(limit, emoji_shortcode_map().size()));
+    codes.reserve(std::min(limit, std::size(k_emoji_shortcodes)));
 
-    for (const auto &[code, _] : emoji_shortcode_map())
+    const auto begin = std::begin(k_emoji_shortcodes);
+    const auto end = std::end(k_emoji_shortcodes);
+    auto it = std::ranges::lower_bound(
+        begin, end, prefix, std::ranges::less{},
+        &emoji_shortcode_entry::code);
+
+    for (; it != end && codes.size() < limit; ++it)
     {
-        if (!prefix.empty() && !code.starts_with(prefix))
-            continue;
-        codes.emplace_back(code);
+        if (!it->code.starts_with(prefix))
+            break;
+        codes.emplace_back(fmt::format(":{}:", it->code));
     }
-
-    std::ranges::sort(codes);
-    if (codes.size() > limit)
-        codes.resize(limit);
-
-    for (auto &code : codes)
-        code = fmt::format(":{}:", code);
 
     return codes;
 }

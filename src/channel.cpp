@@ -242,6 +242,8 @@ weechat::channel::channel(weechat::account& account,
     omemo.bundle_requests = weechat_hashtable_new(64,
             WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_POINTER, nullptr, nullptr);
 
+    weechat_buffer_set_pointer(buffer, XMPP_BUFFER_CHANNEL_PTR, this);
+
     add_nicklist_groups();
 
     if (type == chat_type::MUC)

@@ -865,6 +865,7 @@ struct t_gui_buffer *weechat::account::create_buffer()
                                (void*)&buffer__nickcmp_cb);
     weechat_buffer_set_pointer(buffer, "nicklist_callback_pointer",
                                this);
+    weechat_buffer_set_pointer(buffer, XMPP_BUFFER_ACCOUNT_PTR, this);
 
     return buffer;
 }
