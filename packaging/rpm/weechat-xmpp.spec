@@ -90,6 +90,10 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 - Perf: OMEMO GCM cipher reuse, scoped LMDB reads, on-demand MUC key fetch
 - Perf: batch LMDB writes during MAM replay, cap backward buffer line scans
 - Refactor: port abstraction phases 1-6 (StanzaView, UiPort, BufferPort, RenderEvent)
+- Refactor: ConnectionPort, parse_presence, string_view member APIs
+- Fix(muc): real-JID member lookup and null-safe account JID
+- Build: migrate to CMake + Ninja with thin gmake/make wrapper
+- Build: CTest doctests, cmake/ninja packaging deps, ccache launcher
 
 * Wed Jun 10 2026 Emiel Kollof <emiel@kollof.nl> - 0.9.0-1
 - Update to v0.9.0
