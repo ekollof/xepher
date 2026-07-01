@@ -30,11 +30,8 @@ export CC
 export CXX
 
 CMAKE ?= cmake
-ifneq ($(shell command -v ninja 2>/dev/null),)
+NINJA ?= ninja
 CMAKE_GENERATOR := -G Ninja
-else
-CMAKE_GENERATOR := -G "Unix Makefiles"
-endif
 
 CMAKE_ARGS := -S . -B $(BUILD_DIR) $(CMAKE_GENERATOR)
 CMAKE_ARGS += -DCMAKE_C_COMPILER=$(CC) -DCMAKE_CXX_COMPILER=$(CXX)
@@ -43,12 +40,6 @@ CMAKE_ARGS += -DXEPHER_PACKAGE_BUILD=$(if $(PACKAGE_BUILD),ON,OFF)
 CMAKE_ARGS += -DXEPHER_ENABLE_ASAN=$(if $(ASAN),ON,OFF)
 
 BUILD_ARGS := --build $(BUILD_DIR) -j$(NPROC)
-
-PREFIX ?= /usr/local
-LIBDIR ?= $(PREFIX)/lib
-OBJCOPY ?= $(shell command -v objcopy 2>/dev/null || command -v llvm-objcopy 2>/dev/null || true)
-export LIBDIR
-export OBJCOPY
 
 .DEFAULT_GOAL := all
 
