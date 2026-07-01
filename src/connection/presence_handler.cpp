@@ -19,6 +19,7 @@
 #include "weechat/runtime_port.hh"
 #include "color.hh"
 #include "xmpp/node.hh"
+#include "xmpp/presence.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/stanza_view.hh"
 #include "xmpp/atom.hh"

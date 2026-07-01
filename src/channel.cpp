@@ -727,7 +727,8 @@ bool weechat::channel::include_room_config_field_in_submit(
     return !f.values.empty();
 }
 
-std::optional<weechat::channel::member*> weechat::channel::add_member(const char *id, const char *client,
+std::optional<weechat::channel::member*> weechat::channel::add_member(std::string_view id,
+                                                                       std::string_view client,
                                                                        std::optional<std::string_view> real_jid,
                                                                        weechat::user *known_user,
                                                                        add_member_opts opts)
@@ -748,7 +749,7 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     if (!member_opt)
     {
         auto& new_member = members[std::string(id)];
-        new_member.id = id;
+        new_member.id = std::string(id);
         if (real_jid)
         {
             // Guard against MUC JID being reported as an occupant's "real" JID (some servers or
@@ -813,22 +814,23 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     const char *jid_resource = jid_resource_s.empty() ? nullptr : jid_resource_s.c_str();
 
     // Determine the resource nick used for smart-filter lookup
-    const char *res_nick = jid_resource ? jid_resource : id;
+    const std::string id_s(id);
+    const char *res_nick = jid_resource ? jid_resource : id_s.c_str();
     std::string enter_tags = smart_filter_nick(res_nick)
         ? "xmpp_presence,enter,log4,xmpp_smart_filter,no_trigger"
         : "xmpp_presence,enter,log4,no_trigger";
 
     std::string user_prefix = user->as_prefix_raw();
 
-    if (weechat_strcasecmp(jid_bare, id) == 0
+    if (weechat_strcasecmp(jid_bare, id_s.c_str()) == 0
              && type == weechat::channel::chat_type::MUC)
     {
         std::string msg = fmt::format("{}{}{}{}{} {}{}{}{} {}{}{}{}{}{}{}{}{}{}{}{}{}{}",
                                       weechat::RuntimePort::default_runtime().prefix("join"),
                                       user_prefix,
-                                      client ? " (" : "",
-                                      client ? client : "",
-                                      client ? ")" : "",
+                                      !client.empty() ? " (" : "",
+                                      !client.empty() ? client : "",
+                                      !client.empty() ? ")" : "",
                                       user->profile.status.has_value() ? "is " : "",
                                       weechat::RuntimePort::default_runtime().xmpp_color("irc.color.message_join").c_str(),
                                       user->profile.status.has_value() ? user->profile.status->c_str() : (user->profile.idle.has_value() ? "idle" : "entered"),
@@ -875,14 +877,15 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     return member;
 }
 
-std::optional<weechat::channel::member*> weechat::channel::member_search(const char *id)
+std::optional<weechat::channel::member*> weechat::channel::member_search(std::string_view id)
 {
-    if (!id)
+    if (id.empty())
         return std::nullopt;
 
+    const std::string id_s(id);
     for (auto& [_, m] : members)
     {
-        if (weechat_strcasecmp(m.id.c_str(), id) == 0)
+        if (weechat_strcasecmp(m.id.c_str(), id_s.c_str()) == 0)
             return &m;
     }
 
@@ -894,7 +897,8 @@ std::optional<weechat::channel::member*> weechat::channel::member_search(const c
     return std::nullopt;
 }
 
-std::optional<weechat::channel::member*> weechat::channel::remove_member(const char *id, const char *reason)
+std::optional<weechat::channel::member*> weechat::channel::remove_member(std::string_view id,
+                                                                         std::string_view reason)
 {
     weechat::user *user;
 
@@ -910,12 +914,13 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
     const char *jid_bare = jid_bare_s.empty() ? nullptr : jid_bare_s.c_str();
     const char *jid_resource = jid_resource_s.empty() ? nullptr : jid_resource_s.c_str();
 
-    const char *res_nick = jid_resource ? jid_resource : id;
+    const std::string id_s(id);
+    const char *res_nick = jid_resource ? jid_resource : id_s.c_str();
     std::string leave_tags = smart_filter_nick(res_nick)
         ? "xmpp_presence,leave,log4,xmpp_smart_filter,no_trigger"
         : "xmpp_presence,leave,log4,no_trigger";
 
-    if (weechat_strcasecmp(jid_bare, id) == 0
+    if (weechat_strcasecmp(jid_bare, id_s.c_str()) == 0
         && type == weechat::channel::chat_type::MUC)
     {
         std::string msg = fmt::format("{}{} {}left{} {} {}{}{}",
@@ -924,9 +929,9 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
                                       weechat::RuntimePort::default_runtime().xmpp_color("irc.color.message_quit").c_str(),
                                       weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str(),
                                       id,
-                                      reason ? "[" : "",
-                                      reason ? reason : "",
-                                      reason ? "]" : "");
+                                      !reason.empty() ? "[" : "",
+                                      !reason.empty() ? reason : "",
+                                      !reason.empty() ? "]" : "");
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, leave_tags.c_str(), msg);
     }
     else
@@ -938,9 +943,9 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
                                       weechat::RuntimePort::default_runtime().xmpp_color("irc.color.message_quit").c_str(),
                                       weechat::RuntimePort::default_runtime().xmpp_color("reset").c_str(),
                                       id,
-                                      reason ? "[" : "",
-                                      reason ? reason : "",
-                                      reason ? "]" : "");
+                                      !reason.empty() ? "[" : "",
+                                      !reason.empty() ? reason : "",
+                                      !reason.empty() ? "]" : "");
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, leave_tags.c_str(), msg);
     }
 
@@ -950,9 +955,9 @@ std::optional<weechat::channel::member*> weechat::channel::remove_member(const c
     return member_opt;
 }
 
-void weechat::channel::set_member_offline(const char *id, weechat::user *known_user)
+void weechat::channel::set_member_offline(std::string_view id, weechat::user *known_user)
 {
-    if (!id || type != chat_type::MUC || !muc_info_.show_unavailable_members)
+    if (id.empty() || type != chat_type::MUC || !muc_info_.show_unavailable_members)
         return;
 
     weechat::user *user = known_user ? known_user : user::search(&account, id);
@@ -964,7 +969,7 @@ void weechat::channel::set_member_offline(const char *id, weechat::user *known_u
     if (!member_opt)
     {
         auto& new_member = members[std::string(id)];
-        new_member.id = id;
+        new_member.id = std::string(id);
         member = &new_member;
     }
     else

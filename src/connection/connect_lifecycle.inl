@@ -11,17 +11,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         account.disconnected = 0;
 
         // Populate bare JID cache (avoids re-parsing bound JID on every stanza)
-        {
-            const char *bound = xmpp_conn_get_bound_jid(static_cast<xmpp_conn_t*>(*this));
-            if (bound && bound[0] != '\0')
-            {
-                const std::string_view full {bound};
-                const auto slash = full.find('/');
-                account.jid_bare_cache_ = slash == std::string_view::npos
-                    ? std::string(full)
-                    : std::string(full.substr(0, slash));
-            }
-        }
+        account.connection_port().refresh_bare_cache();
 
         // Only add handlers once (they persist across reconnects via libstrophe)
         if (!account.sm_handlers_registered)
@@ -148,7 +138,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         account.sm_awaiting_negotiation = false;
         account.sm_resume_attempted = false;
 
-        account.jid_bare_cache_.clear();
+        account.connection_port().clear_bare_cache();
         account.pending_carbons_enable_iq_.reset();
         account.pending_mds_fetch_iq_.reset();
 

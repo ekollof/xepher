@@ -219,6 +219,7 @@ SRCS=src/plugin.cpp \
 	 src/weechat/ui_port.cpp \
 	 src/weechat/icat_preview.cpp \
 	 src/weechat/runtime_port.cpp \
+	 src/weechat/connection_port.cpp \
 	 src/weechat/render_event.cpp \
 	 src/weechat/buffer_port.cpp \
 	 src/config/breadcrumb.cpp \

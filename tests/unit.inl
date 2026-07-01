@@ -24,6 +24,7 @@
 #include "color.hh"
 #include "strophe.hh"
 #include "xmpp/node.hh"
+#include "xmpp/presence.hh"
 #include "xmpp/stanza_view.hh"
 #include "xmpp/atom.hh"
 #include "xmpp/xhtml.hh"
@@ -567,19 +568,6 @@ TEST_CASE("presence show/status extraction")
     unit_strophe_env env;
     REQUIRE(env.ctx != nullptr);
 
-    // Helper: return first child with given name's text via real plugin symbols
-    auto first_child_text = [&](xmpp_stanza_t *parent, const char *child_name)
-        -> std::optional<std::string>
-    {
-        xmpp_stanza_t *ch = xmpp_stanza_get_child_by_name(parent, child_name);
-        if (!ch)
-            return std::nullopt;
-        xmpp_stanza_t *txt = xmpp_stanza_get_children(ch);
-        if (txt && xmpp_stanza_is_text(txt))
-            return get_text(txt);
-        return std::nullopt;
-    };
-
     SUBCASE("presence with show and status")
     {
         static constexpr const char *xml =
@@ -591,14 +579,15 @@ TEST_CASE("presence show/status extraction")
         xmpp_stanza_t *root = xmpp_stanza_new_from_string(env.ctx, xml);
         REQUIRE(root != nullptr);
 
-        auto show   = first_child_text(root, "show");
-        auto status = first_child_text(root, "status");
+        const auto pres = ::xmpp::parse_presence(::xmpp::StanzaView(root));
 
-        REQUIRE(show.has_value());
-        CHECK(*show == "away");
-
-        REQUIRE(status.has_value());
-        CHECK(*status == "Out for lunch");
+        REQUIRE(pres.from.has_value());
+        CHECK(pres.from->bare == "alice@example.org");
+        CHECK(pres.from->resource == "phone");
+        REQUIRE(pres.show.has_value());
+        CHECK(*pres.show == "away");
+        REQUIRE(pres.status.has_value());
+        CHECK(*pres.status == "Out for lunch");
 
         xmpp_stanza_release(root);
     }
@@ -611,8 +600,32 @@ TEST_CASE("presence show/status extraction")
         xmpp_stanza_t *root = xmpp_stanza_new_from_string(env.ctx, xml);
         REQUIRE(root != nullptr);
 
-        CHECK_FALSE(first_child_text(root, "show").has_value());
-        CHECK_FALSE(first_child_text(root, "status").has_value());
+        const auto pres = ::xmpp::parse_presence(::xmpp::StanzaView(root));
+        CHECK_FALSE(pres.show.has_value());
+        CHECK_FALSE(pres.status.has_value());
+
+        xmpp_stanza_release(root);
+    }
+
+    SUBCASE("MUC presence parses muc#user statuses and item real JID")
+    {
+        static constexpr const char *xml =
+            "<presence from='room@conf.example/nick' to='me@example.org/weechat'>"
+            "<x xmlns='http://jabber.org/protocol/muc#user'>"
+            "<item affiliation='member' role='participant' jid='real@example.org'/>"
+            "<status code='110'/>"
+            "</x>"
+            "</presence>";
+
+        xmpp_stanza_t *root = xmpp_stanza_new_from_string(env.ctx, xml);
+        REQUIRE(root != nullptr);
+
+        const auto pres = ::xmpp::parse_presence(::xmpp::StanzaView(root));
+        REQUIRE(pres.muc_user.has_value());
+        CHECK(pres.muc_user->statuses == std::vector<int>{110});
+        REQUIRE(pres.muc_user->items.size() == 1);
+        CHECK(pres.muc_user->items[0].real_jid == "real@example.org");
+        CHECK(pres.muc_user->items[0].role == "participant");
 
         xmpp_stanza_release(root);
     }

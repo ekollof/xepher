@@ -353,13 +353,14 @@ namespace weechat
         // No-op for non-MUC channels.
         void update_modes();
 
-        std::optional<member*> add_member(const char *id, const char *client,
+        std::optional<member*> add_member(std::string_view id,
+                                           std::string_view client = {},
                                            std::optional<std::string_view> real_jid = std::nullopt,
                                            weechat::user *known_user = nullptr,
                                            add_member_opts opts = {});
-        std::optional<member*> member_search(const char *id);
-        std::optional<member*> remove_member(const char *id, const char *reason);
-        void set_member_offline(const char *id, weechat::user *known_user = nullptr);
+        std::optional<member*> member_search(std::string_view id);
+        std::optional<member*> remove_member(std::string_view id, std::string_view reason = {});
+        void set_member_offline(std::string_view id, weechat::user *known_user = nullptr);
         void set_show_unavailable_members(bool show);
         void count_nicklist_presence(int &online, int &offline) const;
         std::string find_member_by_nick(std::string_view nick) const;

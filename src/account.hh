@@ -32,6 +32,7 @@
 #include "channel.hh"
 #include "xmpp/message_bob.hh"
 #include "connection.hh"
+#include "weechat/connection_port.hh"
 #include "user.hh"
 #include "ui/picker.hh"
 #include "xmpp/embed.hh"
@@ -681,42 +682,15 @@ namespace weechat
         void sync_roster_nicklist();
         void count_roster_nicklist_presence(int &online, int &offline) const;
 
-        std::string jid() {
-            if (!jid_bare_cache_.empty())
-                return jid_bare_cache_;
-            if (connection && xmpp_conn_is_connected(connection)) {
-                // Strip resource from full bound JID (part before '/').
-                // libstrophe may return nullptr before bind completes — never
-                // construct std::string from a null pointer (issue #14 crash).
-                const char *bound = xmpp_conn_get_bound_jid(connection);
-                if (bound && bound[0] != '\0')
-                {
-                    const std::string_view full {bound};
-                    const auto slash = full.find('/');
-                    return slash == std::string_view::npos
-                        ? std::string(full)
-                        : std::string(full.substr(0, slash));
-                }
-            }
-            return std::string(this->option_jid.string());
+        [[nodiscard]] LibstropheConnectionPort connection_port()
+        {
+            return {static_cast<xmpp_conn_t *>(connection), jid_bare_cache_,
+                    option_jid.string()};
         }
+
+        std::string jid() { return connection_port().bound_jid_bare(); }
         void jid(std::string jid) { this->option_jid = jid; }
-        std::string jid_device() {
-            if (connection && xmpp_conn_is_connected(connection))
-            {
-                const char *bound = xmpp_conn_get_bound_jid(connection);
-                if (bound && bound[0] != '\0')
-                    return std::string(bound);
-            }
-            // Build user@domain/weechat from the configured JID
-            std::string opt = std::string(this->option_jid.string());
-            auto at = opt.find('@');
-            std::string node = at == std::string::npos ? opt : opt.substr(0, at);
-            std::string domain = at == std::string::npos ? opt : opt.substr(at + 1);
-            auto slash = domain.find('/');
-            if (slash != std::string::npos) domain = domain.substr(0, slash);
-            return fmt::format("{}@{}/{}", node, domain, "weechat");
-        }
+        std::string jid_device() { return connection_port().bound_jid_full(); }
         std::string_view password() { return this->option_password.string(); }
         void password(std::string password) { this->option_password = password; }
         tls_policy tls() { return static_cast<tls_policy>(this->option_tls.integer()); }

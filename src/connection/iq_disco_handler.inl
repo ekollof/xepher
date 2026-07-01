@@ -100,7 +100,7 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                             const std::string full_id = item_jid.contains('/')
                                 ? item_jid
                                 : fmt::format("{}/{}", from_bare, nick);
-                            ch.add_member(full_id.c_str(), nullptr, std::nullopt, nullptr,
+                            ch.add_member(full_id, {}, std::nullopt, nullptr,
                                             {.announce_join = false, .online = true});
                         }
                     }
@@ -178,7 +178,7 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                                 }
 
                                 ch.add_member(
-                                    full_id.c_str(), nullptr,
+                                    full_id, {},
                                     std::optional<std::string_view>(real_jid),
                                     occupant,
                                     {.announce_join = false,
