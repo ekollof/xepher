@@ -26,6 +26,18 @@ endif
 ifneq ($(origin CXX),command line)
 CXX := $(DEFAULT_CXX)
 endif
+
+# ccache via CMAKE_*_COMPILER_LAUNCHER (CMake-native). CXX="ccache clang++" is
+# normalized to launcher + real compiler. Set CCACHE=0 to disable.
+ifneq ($(CCACHE),0)
+ifneq ($(findstring ccache,$(CXX))$(findstring ccache,$(CC)),)
+CXX := $(patsubst ccache ,,$(CXX))
+CC := $(patsubst ccache ,,$(CC))
+endif
+ifneq ($(shell command -v ccache 2>/dev/null),)
+CCACHE_LAUNCHER := ccache
+endif
+endif
 export CC
 export CXX
 
@@ -37,7 +49,14 @@ CMAKE_GENERATOR := -G "Unix Makefiles"
 endif
 
 CMAKE_ARGS := -S . -B $(BUILD_DIR) $(CMAKE_GENERATOR)
-CMAKE_ARGS += -DCMAKE_C_COMPILER=$(CC) -DCMAKE_CXX_COMPILER=$(CXX)
+CMAKE_ARGS += -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"
+ifneq ($(CCACHE_LAUNCHER),)
+CMAKE_ARGS += -DCMAKE_C_COMPILER_LAUNCHER="$(CCACHE_LAUNCHER)"
+CMAKE_ARGS += -DCMAKE_CXX_COMPILER_LAUNCHER="$(CCACHE_LAUNCHER)"
+else ifeq ($(CCACHE),0)
+CMAKE_ARGS += -DCMAKE_C_COMPILER_LAUNCHER=
+CMAKE_ARGS += -DCMAKE_CXX_COMPILER_LAUNCHER=
+endif
 CMAKE_ARGS += -DCMAKE_BUILD_TYPE=$(if $(DEBUG),Debug,Release)
 CMAKE_ARGS += -DXEPHER_PACKAGE_BUILD=$(if $(PACKAGE_BUILD),ON,OFF)
 CMAKE_ARGS += -DXEPHER_ENABLE_ASAN=$(if $(ASAN),ON,OFF)

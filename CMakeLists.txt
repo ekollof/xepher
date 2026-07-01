@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.22)
 
+# Compiler launcher must be set before project() (ccache iterative dev workflow).
+if(NOT CMAKE_CXX_COMPILER_LAUNCHER AND NOT CMAKE_C_COMPILER_LAUNCHER)
+    find_program(XEPHER_CCACHE NAMES ccache)
+    if(XEPHER_CCACHE)
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${XEPHER_CCACHE}")
+        set(CMAKE_C_COMPILER_LAUNCHER "${XEPHER_CCACHE}")
+    endif()
+endif()
+
 project(xepher
     VERSION 0.10.0
     LANGUAGES C CXX
@@ -30,6 +39,10 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${XEPHER_DWARF_FLAG}")
 
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(WARNING "Xepher expects Clang; CXX=${CMAKE_CXX_COMPILER_ID}")
+endif()
+
+if(CMAKE_CXX_COMPILER_LAUNCHER)
+    message(STATUS "Using compiler launcher: ${CMAKE_CXX_COMPILER_LAUNCHER}")
 endif()
 
 include("${CMAKE_SOURCE_DIR}/cmake/XepherFlags.cmake")
