@@ -1,7 +1,7 @@
 #!/usr/bin/env -S gmake all
 # vim: set noexpandtab:
-# Thin GNU make wrapper around CMake + Ninja (Phase 1–2 migration).
-# Legacy rules preserved in legacy/makefile.full for reference.
+# Thin GNU make wrapper around CMake + Ninja.
+# Legacy pre-CMake rules: legacy/makefile.full (reference only).
 
 UNAME_S := $(shell uname -s)
 BUILD_DIR := build

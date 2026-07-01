@@ -1,0 +1,99 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 22,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "dev",
+            "displayName": "Debug (dev)",
+            "description": "Unoptimized build with assertions and doctests",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "XEPHER_PACKAGE_BUILD": "OFF",
+                "XEPHER_BUILD_TOOLS": "ON",
+                "XEPHER_ENABLE_ASAN": "OFF"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release (optimized)",
+            "description": "Optimized plugin build (no doctests)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "XEPHER_PACKAGE_BUILD": "OFF",
+                "XEPHER_BUILD_TOOLS": "ON",
+                "XEPHER_ENABLE_ASAN": "OFF"
+            }
+        },
+        {
+            "name": "asan",
+            "displayName": "Debug + ASan",
+            "inherits": "dev",
+            "cacheVariables": {
+                "XEPHER_ENABLE_ASAN": "ON"
+            }
+        },
+        {
+            "name": "package",
+            "displayName": "Release (packaging)",
+            "description": "Distribution build — no .source embed or dev tools",
+            "inherits": "release",
+            "cacheVariables": {
+                "XEPHER_PACKAGE_BUILD": "ON",
+                "XEPHER_BUILD_TOOLS": "OFF"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "dev",
+            "configurePreset": "dev",
+            "targets": ["weechat-xmpp", "xepher_test"]
+        },
+        {
+            "name": "release",
+            "configurePreset": "release",
+            "targets": ["weechat-xmpp"]
+        },
+        {
+            "name": "asan",
+            "configurePreset": "asan",
+            "targets": ["weechat-xmpp", "xepher_test"]
+        },
+        {
+            "name": "package",
+            "configurePreset": "package",
+            "targets": ["weechat-xmpp"]
+        },
+        {
+            "name": "tools",
+            "configurePreset": "dev",
+            "targets": ["tools"]
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "dev",
+            "configurePreset": "dev",
+            "output": {
+                "outputOnFailure": true
+            },
+            "filter": {
+                "include": {
+                    "name": "doctest"
+                }
+            }
+        }
+    ]
+}

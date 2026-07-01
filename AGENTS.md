@@ -45,31 +45,50 @@ Canonical XEP specs for all implemented XEPs are stored in `docs/specs/xep-NNNN.
 
 ## Build System
 
-### Local development
+**Canonical backend:** CMake 3.22+ with Ninja (`build/`). The root `makefile` is a thin
+**GNU make wrapper** that maps `DEBUG` / `ASAN` / `PACKAGE_BUILD` to CMake cache vars and
+runs `cmake --build`. On BSD use **`gmake`** instead of `make`. Legacy pre-CMake rules live
+under `legacy/` for reference only.
 
-- **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Default toolchain is **Clang** (`CC=clang`, `CXX=clang++`; Homebrew LLVM on macOS). The makefile assigns these explicitly (GNU make predefines `CXX=g++`, so `?=` does not work). On BSD use `gmake` instead of `make`.
+### Local development (wrapper — preferred)
+
+- **Build command**: `make` — **parallel by default** (`-j$(nproc)`); use `make -j1` only when debugging ordering issues. Default toolchain is **Clang** (`CC=clang`, `CXX=clang++`; Homebrew LLVM on macOS). The makefile assigns these explicitly (GNU make predefines `CXX=g++`, so `?=` does not work).
 - Don't redirect make stdout, this just obfuscates issues.
-- **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick)
-- **Output**: `xmpp.so` (WeeChat plugin)
-- **Dependencies**: Managed via git submodules in `deps/`
+- **Clean command**: `make clean` (avoid unless necessary; ccache makes rebuilds quick); `make distclean` removes `build/` and forces reconfigure.
+- **Output**: `xmpp.so` in repo root (WeeChat plugin MODULE target)
+- **Dependencies**: Managed via git submodules in `deps/`; system libs via pkg-config (see `cmake/Dependencies.cmake`)
 - Always build after code changes; **doctests run automatically only with `DEBUG=1`** (vendored in `deps/doctest/`). Plain `make` skips them — use `make test` to run tests without a full debug rebuild.
 - **Includes**: use `-Isrc` paths (`plugin.hh`, `xmpp/stanza_view.hh`) — never `../` relative includes in `src/`
+- **ccache**: auto-enabled when `ccache` is on `PATH` (`CMAKE_*_COMPILER_LAUNCHER`). `CXX="ccache clang++"` still works; set `CCACHE=0` to disable.
+- **Developer tools**: `make tools` builds `tools/dump_mam_db` and `tools/dump_omemo_db` (skipped when `PACKAGE_BUILD=1`).
 
 **Build profiles** (agents: use **`DEBUG=1`** for iterative development):
 
-| Profile | Command | Flags | When |
+| Profile | Command | CMake | When |
 |---------|---------|-------|------|
-| Dev (default for agents) | `make DEBUG=1` | `-O0 -DDEBUG -g` | Day-to-day coding, fast rebuilds, assertions on; **runs 147 doctests** |
-| Optimized | `make` | `-O2 -DNDEBUG -g` | Pre-release smoke test, performance checks; skips doctests |
-| ASan | `make DEBUG=1 ASAN=1` | dev + `-fsanitize=address` | Memory debugging (Linux: links `libasan`) |
+| Dev (default for agents) | `make DEBUG=1` | `Debug` | Day-to-day coding, assertions on; **runs 147 doctests** |
+| Optimized | `make` | `Release` | Pre-release smoke test; skips doctests |
+| ASan | `make DEBUG=1 ASAN=1` | `Debug` + sanitizer | Memory debugging (Linux: links `libasan`) |
 
 Combine with ccache: `CXX="ccache clang++" make DEBUG=1`. Switching between `DEBUG=1` and a plain `make` rebuilds objects — that is expected.
 
+### Direct CMake (IDE / advanced)
+
+```sh
+cmake --preset dev                    # or: release, asan, package
+cmake --build --preset dev            # plugin + doctests
+ctest --preset dev                    # doctests only (after build)
+cmake --build build --target tools    # LMDB inspector binaries
+```
+
+`CMakePresets.json` mirrors the wrapper profiles. `compile_commands.json` is symlinked to the repo root after configure (clangd).
+
 ### Distribution / CI builds
 
-- **`PACKAGE_BUILD=1`**: all packaging scripts and specs pass this to `make`. It skips the dev-only `.source` ELF section (`objcopy --add-section`). Without it, tarball builds lacking `.git` can archive the entire build tree and produce gigabyte RPM/APK packages.
+- **`PACKAGE_BUILD=1`**: all packaging scripts and specs pass this to `make`. Skips the dev-only `.source` ELF section (`objcopy --add-section`) and developer tools (`XEPHER_BUILD_TOOLS=OFF`). Without it, tarball builds lacking `.git` can archive the entire build tree and produce gigabyte RPM/APK packages.
 - **`.source` embed** (Linux dev builds only): after link, tracked sources are tarred into `xmpp.so` for the `make release` workflow. Runs only when `PACKAGE_BUILD` is unset, `git ls-files` succeeds, and the file list is non-empty.
-- **`make clean`** removes `xmpp.so` and `obj/` (`clean.mk`) so container builds never reuse a host-built plugin.
+- **`make clean`** removes `xmpp.so`, `build/` artifacts, and test/tool outputs so container builds never reuse a host-built plugin.
+- **`make seed-libdiff`**: seeds `deps/diff/libdiff.a` via autotools (packaging tarballs without `.git`).
 
 ### Packaging infrastructure
 
@@ -89,7 +108,7 @@ bash packaging/github-build.sh X.Y.Z --fedora   # single distro
 - Alpine and Void invoke `docker run` directly inside the script.
 
 **Shared helpers** (`packaging/scripts/`):
-- `prepare-source-tree.sh` — copy `/project` to a writable dir, `make clean`, seed `deps/diff/libdiff.a` while `.git` exists, set `safe.directory` for submodule steps.
+- `prepare-source-tree.sh` — copy `/project` to a writable dir, `make clean`, `make seed-libdiff` while `.git` exists, set `safe.directory` for submodule steps.
 - `build-{deb,rpm,arch,alpine,void}-inside.sh` — per-distro logic; all pass `PACKAGE_BUILD=1`.
 - `docker-arch-wrapper.sh` — Arch `makepkg` runs as non-root `builder`; chowns `/output` for artifact copy.
 
@@ -558,7 +577,7 @@ Skip autojoin for IRC gateway rooms (causes connection issues):
 - **XMPP plugin logs**: `~/.local/share/weechat/logs/xmpp.account.<account>.weechatlog`
 - **Raw XML log**: `~/.local/share/weechat/xmpp/raw_xml_<account>.log` (only written when `xmpp.look.raw_xml_log on`)
 - **OMEMO correlation helper**: `tools/correlate_omemo_xml.sh`
-- **MAM LMDB cache inspector**: `tools/dump_mam_db` — dumps all 6 tables in the MAM cache with pretty-printed values. Build via `make -C tools`. Run with `XMPP_ACCOUNT=<account> tools/dump_mam_db` (or `--db <path>`). Tables: `messages` (key: `<channel>:<ts>:<msg_id>`, val: `<from>|<ts>|<body>`), `timestamps` (key: `<channel>`, val: time_t), `retractions`, `cursors` (RSM cursors), `omemo_plaintext`, `capabilities`. Use `--filter <prefix>` to narrow to a specific channel, `--limit N` to cap output, `--table <name>` to dump one table.
+- **MAM LMDB cache inspector**: `tools/dump_mam_db` — dumps all 6 tables in the MAM cache with pretty-printed values. Build via `make tools`. Run with `XMPP_ACCOUNT=<account> tools/dump_mam_db` (or `--db <path>`). Tables: `messages` (key: `<channel>:<ts>:<msg_id>`, val: `<from>|<ts>|<body>`), `timestamps` (key: `<channel>`, val: time_t), `retractions`, `cursors` (RSM cursors), `omemo_plaintext`, `capabilities`. Use `--filter <prefix>` to narrow to a specific channel, `--limit N` to cap output, `--table <name>` to dump one table.
 - For OMEMO log debugging, always run `tools/correlate_omemo_xml.sh --account <account>` first to correlate event logs with raw XML before proposing protocol-level fixes.
 - Example: `tail -n 300 ~/.local/share/weechat/logs/xmpp.account.andrath.weechatlog`
 - Filter logs: `grep "OMEMO\|bundle\|devicelist" ~/.local/share/weechat/logs/xmpp.account.*.weechatlog`
@@ -810,6 +829,13 @@ make clean && make DEBUG=1
 
 # Distribution build (no .source embed — matches packaging; optimized)
 make PACKAGE_BUILD=1 weechat-xmpp
+
+# Direct CMake (IDE presets — equivalent to wrapper profiles)
+cmake --preset dev && cmake --build --preset dev
+ctest --preset dev
+
+# Developer tools (LMDB inspectors)
+make tools
 
 # Package all distros via Docker (same script as CI)
 bash packaging/github-build.sh X.Y.Z

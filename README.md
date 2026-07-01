@@ -82,37 +82,43 @@ accordingly. See [macOS build instructions](#macos-homebrew) below.
 and scripts have been ported to POSIX sh and BSD-compatible make, but these
 platforms are **not routinely tested**. Known considerations:
 
-- Use `gmake` instead of `make` on BSD (BSD make has different syntax).
-- **Default toolchain: Clang/Clang++ (≥ 13).** The makefile sets `CC=clang`
-  and `CXX=clang++` on all platforms (Homebrew LLVM on macOS). This matches
-  OpenBSD/FreeBSD and catches Clang-only warnings under `-Werror`. NetBSD 9.x
-  ships Clang 7 and **cannot build** — use NetBSD 10.x+ or a newer Clang from
-  pkgsrc. Override with `CC=gcc CXX=g++ gmake` only for experiments.
+- Use **`gmake`** instead of `make` on BSD (BSD make has different syntax).
+- **Build backend:** CMake 3.22+ with Ninja (`build/`). The root `makefile` is a
+  thin wrapper; packaging and CI still call `gmake PACKAGE_BUILD=1 weechat-xmpp`.
+- **Build deps:** Clang/Clang++ (≥ 14), **cmake**, **ninja**, bison, flex, git.
+- **Default toolchain: Clang/Clang++.** The makefile sets `CC=clang` and
+  `CXX=clang++` on all platforms (Homebrew LLVM on macOS). NetBSD 9.x ships
+  Clang 7 and **cannot build** — use NetBSD 10.x+ or a newer Clang from pkgsrc.
 - `libsignal-protocol-c` and `libomemo-c` are packaged on FreeBSD and OpenBSD;
   on NetBSD they may still need to be built from pkgsrc source.
-- Default builds use `-O2 -DNDEBUG`. Use `DEBUG=1` for unoptimized dev builds
-  (`-O0 -DDEBUG`). Use `ASAN=1` for AddressSanitizer (`-fsanitize=address`;
-  `-lasan -lrt` on Linux only). Combine: `gmake DEBUG=1 ASAN=1`.
+- Default builds use Release (`-O2 -DNDEBUG`). Use `DEBUG=1` for dev builds
+  (`-O0 -DDEBUG` + 147 doctests). Use `ASAN=1` for AddressSanitizer
+  (`-fsanitize=address`; `-lasan -lrt` on Linux only). Combine: `gmake DEBUG=1 ASAN=1`.
 - The `.source` ELF section embedding step (`objcopy --add-section`) is
   Linux-only, skipped on BSD, and **skipped in distribution builds** (`PACKAGE_BUILD=1`).
 
 ### Build from source
 
+The canonical build uses **CMake + Ninja** under `build/`. Day-to-day commands go
+through the thin **`makefile` wrapper** (same interface as before the CMake migration).
+
 ```sh
 git clone --depth 1 git@github.com:ekollof/xepher.git
 cd xepher
+git submodule update --init --recursive
 make install-deps   # installs system packages (requires sudo)
 make                # optimized plugin (no doctests)
-make DEBUG=1        # dev build + 123 doctests
-make test           # doctests only (handler slices, StanzaView, IQ builders, …)
+make DEBUG=1        # dev build + 147 doctests
+make test           # doctests only (CTest)
+make tools          # optional: dump_mam_db / dump_omemo_db LMDB inspectors
 make install        # installs to ~/.local/share/weechat/plugins/ — do NOT run as root
 ```
 
-On BSD, replace `make` with `gmake` throughout.
+On BSD, replace `make` with **`gmake`** throughout.
 
 Doctest is vendored under `deps/doctest/` (v2.5.2). `make DEBUG=1` or `make test`
-runs the full 109 handler-slice tests on every supported platform without a system package.
-Plain `make` skips doctests.
+runs **147 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
+system package. Plain `make` skips doctests.
 
 To build a distribution-style plugin locally (no `.source` embed, same as packages):
 
@@ -120,9 +126,19 @@ To build a distribution-style plugin locally (no `.source` embed, same as packag
 make PACKAGE_BUILD=1 weechat-xmpp
 ```
 
+**Direct CMake** (IDEs, `clangd`, or when you prefer presets over the wrapper):
+
+```sh
+cmake --preset dev
+cmake --build --preset dev    # xmpp.so + doctests
+ctest --preset dev            # doctests only
+```
+
+See `CMakePresets.json` for `release`, `asan`, and `package` profiles.
+
 `make install-deps` automatically detects your distribution (Debian/Ubuntu,
 Fedora/RHEL, Arch, openSUSE, Void, Alpine, Gentoo, FreeBSD, OpenBSD, NetBSD,
-macOS) and installs the required packages.
+macOS) and installs the required packages (including cmake and ninja).
 
 ### macOS (Homebrew)
 
@@ -138,7 +154,7 @@ macOS) and installs the required packages.
 Or manually:
 
 ```sh
-brew install llvm make bison flex libstrophe libxml2 lmdb gpgme fmt curl openssl weechat
+brew install llvm cmake ninja make bison flex libstrophe libxml2 lmdb gpgme fmt curl openssl weechat
 ```
 
 **Step 2 — Build `libsignal-protocol-c` from source:**
@@ -1190,7 +1206,7 @@ Pull requests and issues are welcome. See the
   `stanza::spec` builders for outbound stanzas, and `weechat::UiPort` /
   `BufferPort` / `LineStorePort` for WeeChat output. Raw `xmpp_stanza_get_*`
   and `weechat_printf` belong only in hook/adapter glue.
-- **Tests** — run `make DEBUG=1` or `make test` (123 doctests) after changes; manual WeeChat testing
+- **Tests** — run `make DEBUG=1` or `make test` (147 doctests) after changes; manual WeeChat testing
   for integration behaviour.
 - **Releases** — see [Releasing wiki](https://github.com/ekollof/xepher/wiki/Releasing);
   pushing a `v*` tag triggers GitHub Actions to build and attach packages.

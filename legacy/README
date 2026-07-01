@@ -1,0 +1,5 @@
+Legacy GNU make build fragments (pre-CMake migration).
+
+The canonical build is CMake via the root makefile wrapper and cmake/*.cmake.
+These files are kept for reference and for install.mk / release.mk helpers
+still invoked by the wrapper.
