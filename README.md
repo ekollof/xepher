@@ -130,7 +130,7 @@ make PACKAGE_BUILD=1 weechat-xmpp
 
 ```sh
 cmake --preset dev
-cmake --build --preset dev    # xmpp.so + doctests
+cmake --build --preset dev    # xmpp.so, then doctests (xepher_dev)
 ctest --preset dev            # doctests only
 ```
 

@@ -59,7 +59,7 @@
         {
             "name": "dev",
             "configurePreset": "dev",
-            "targets": ["weechat-xmpp", "xepher_test"]
+            "targets": ["xepher_dev"]
         },
         {
             "name": "release",
@@ -69,7 +69,7 @@
         {
             "name": "asan",
             "configurePreset": "asan",
-            "targets": ["weechat-xmpp", "xepher_test"]
+            "targets": ["xepher_dev"]
         },
         {
             "name": "package",

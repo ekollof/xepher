@@ -77,6 +77,11 @@ include("${CMAKE_SOURCE_DIR}/cmake/Tests.cmake")
 xepher_add_tests(xepher_plugin)
 
 # CTest reserves the "test" target when enable_testing() is active; use xepher_test.
+if(TARGET xepher_test)
+    # Doctests use xmpp.cov.so, but finish the plugin first (matches make DEBUG=1 ordering).
+    add_dependencies(xepher_test weechat-xmpp)
+    add_custom_target(xepher_dev DEPENDS weechat-xmpp xepher_test)
+endif()
 
 if(TARGET xepher_coverage)
     add_custom_target(coverage DEPENDS xepher_coverage)

@@ -76,7 +76,7 @@ Combine with ccache: `CXX="ccache clang++" make DEBUG=1`. Switching between `DEB
 
 ```sh
 cmake --preset dev                    # or: release, asan, package
-cmake --build --preset dev            # plugin + doctests
+cmake --build --preset dev            # xepher_dev: plugin, then doctests
 ctest --preset dev                    # doctests only (after build)
 cmake --build build --target tools    # LMDB inspector binaries
 ```
