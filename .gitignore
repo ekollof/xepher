@@ -87,6 +87,7 @@ packaging/build/
 *.legacy
 
 # Tools build artifacts
+tools/dump_mam_db
 tools/dump_omemo_db
 
 # Stray source tarballs / extracted packages in repo root

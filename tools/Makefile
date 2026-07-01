@@ -1,24 +1,10 @@
-# tools/Makefile — builds standalone developer tools.
-# Does NOT affect the main xmpp.so build (root Makefile).
-
-ifneq ($(origin CXX),command line)
-CXX := clang++
-endif
-CXXFLAGS  = -std=c++23 -O2 -Wall -Wextra -Wpedantic
-LDFLAGS   =
-LDLIBS    = -llmdb
-
-BINDIR   ?= .
+#!/usr/bin/env -S gmake all
+# Thin delegator — canonical build is CMake (tools/CMakeLists.txt).
 
 .PHONY: all clean
 
-all: $(BINDIR)/dump_omemo_db $(BINDIR)/dump_mam_db
-
-$(BINDIR)/dump_omemo_db: dump_omemo_db.cpp
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $< -o $@ $(LDLIBS)
-
-$(BINDIR)/dump_mam_db: dump_mam_db.cpp
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $< -o $@ $(LDLIBS)
+all:
+	@$(MAKE) -C .. tools
 
 clean:
-	rm -f $(BINDIR)/dump_omemo_db $(BINDIR)/dump_mam_db
+	$(RM) -f dump_mam_db dump_omemo_db

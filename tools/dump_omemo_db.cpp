@@ -10,7 +10,7 @@
 //   where <account> is taken from the environment variable XMPP_ACCOUNT.
 //   Pass --db explicitly to override.
 //
-// Build via tools/Makefile (not the root Makefile).
+// Build via `make tools` or `make -C tools` (CMake).
 
 #include <array>
 #include <charconv>

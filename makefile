@@ -1,6 +1,6 @@
 #!/usr/bin/env -S gmake all
 # vim: set noexpandtab:
-# Thin GNU make wrapper around CMake + Ninja (Phase 1 migration).
+# Thin GNU make wrapper around CMake + Ninja (Phase 1–2 migration).
 # Legacy rules preserved in legacy/makefile.full for reference.
 
 UNAME_S := $(shell uname -s)
@@ -71,7 +71,7 @@ export OBJCOPY
 
 .DEFAULT_GOAL := all
 
-.PHONY: all configure weechat-xmpp xmpp.so test clean distclean install install-deps release coverage debug check diff
+.PHONY: all configure weechat-xmpp xmpp.so test clean distclean install install-deps release coverage debug check diff tools
 
 configure:
 	$(CMAKE) $(CMAKE_ARGS)
@@ -90,7 +90,7 @@ xmpp.so: weechat-xmpp
 
 test: configure
 ifneq ($(DEBUG),)
-	$(CMAKE) $(BUILD_ARGS) --target test
+	$(CMAKE) $(BUILD_ARGS) --target xepher_test
 else
 	@echo ">>> Doctests require DEBUG=1 (or reconfigure with -DCMAKE_BUILD_TYPE=Debug)."
 	@exit 1
@@ -99,6 +99,7 @@ endif
 clean:
 	@if [ -d "$(BUILD_DIR)" ]; then $(CMAKE) --build $(BUILD_DIR) --target clean; fi
 	$(RM) -f xmpp.so tests/xmpp.cov.so tests/run compile_commands.json
+	$(RM) -f tools/dump_mam_db tools/dump_omemo_db
 	$(RM) -rf obj
 	$(MAKE) -C deps/diff clean || true
 
@@ -114,8 +115,16 @@ install-deps:
 release: weechat-xmpp
 	@$(MAKE) -f legacy/install.mk release
 
-coverage: test
-	gcovr --txt -s --merge-mode-functions=separate
+coverage: configure
+ifneq ($(DEBUG),)
+	$(CMAKE) $(BUILD_ARGS) --target coverage
+else
+	@echo ">>> Coverage requires DEBUG=1 (coverage-instrumented objects)."
+	@exit 1
+endif
+
+tools: configure
+	$(CMAKE) $(BUILD_ARGS) --target tools
 
 debug: weechat-xmpp
 ifeq ($(UNAME_S),Darwin)

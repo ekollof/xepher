@@ -27,6 +27,7 @@ endif()
 
 option(XEPHER_PACKAGE_BUILD "Skip dev-only .source ELF embed (distribution builds)" OFF)
 option(XEPHER_ENABLE_ASAN "Enable AddressSanitizer" OFF)
+option(XEPHER_BUILD_TOOLS "Build developer tools (dump_mam_db, dump_omemo_db)" ON)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(XEPHER_DWARF_FLAG "-g")
@@ -75,8 +76,15 @@ add_custom_target(xmpp ALIAS xepher_plugin)
 include("${CMAKE_SOURCE_DIR}/cmake/Tests.cmake")
 xepher_add_tests(xepher_plugin)
 
-if(TARGET xepher_test)
-    add_custom_target(test DEPENDS xepher_test)
+# CTest reserves the "test" target when enable_testing() is active; use xepher_test.
+
+if(TARGET xepher_coverage)
+    add_custom_target(coverage DEPENDS xepher_coverage)
+endif()
+
+if(XEPHER_BUILD_TOOLS)
+    add_subdirectory(tools)
+    add_custom_target(tools DEPENDS xepher_tools)
 endif()
 
 if(EXISTS "${CMAKE_BINARY_DIR}/compile_commands.json")

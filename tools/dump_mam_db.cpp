@@ -29,7 +29,7 @@
 //   muc_titles      key: <room_bare_jid>
 //                   val: display name string
 //
-// Build via tools/Makefile (not the root Makefile).
+// Build via `make tools` or `make -C tools` (CMake).
 
 #include <array>
 #include <charconv>

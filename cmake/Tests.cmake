@@ -1,7 +1,5 @@
-function(xepher_add_tests plugin_target)
-    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-        return()
-    endif()
+macro(xepher_add_tests plugin_target)
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 
     file(GLOB_RECURSE XEPHER_TEST_PLUGIN_SOURCES CONFIGURE_DEPENDS
         "${CMAKE_SOURCE_DIR}/src/*.cpp"
@@ -58,23 +56,36 @@ function(xepher_add_tests plugin_target)
 
     add_dependencies(xepher_tests_run xepher_plugin_cov)
 
-    find_program(XEPHER_TIMEOUT NAMES timeout)
-    if(XEPHER_TIMEOUT)
-        add_custom_target(xepher_test
-            COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_SOURCE_DIR}/tests"
-                ${XEPHER_TIMEOUT} --kill-after=5 120
-                "${CMAKE_SOURCE_DIR}/tests/run" -sm
-            DEPENDS xepher_tests_run
-            COMMENT "Running doctests"
-            VERBATIM
-        )
-    else()
-        add_custom_target(xepher_test
-            COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_SOURCE_DIR}/tests"
-                "${CMAKE_SOURCE_DIR}/tests/run" -sm
-            DEPENDS xepher_tests_run
-            COMMENT "Running doctests"
+    enable_testing()
+
+    add_test(
+        NAME doctest
+        COMMAND "${CMAKE_SOURCE_DIR}/tests/run" -sm
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/tests"
+    )
+    set_tests_properties(doctest PROPERTIES
+        TIMEOUT 120
+        LABELS "doctest"
+    )
+
+    add_custom_target(xepher_test
+        COMMAND ${CMAKE_CTEST_COMMAND} --force-new-ctest-process --output-on-failure -R doctest
+        DEPENDS xepher_tests_run xepher_plugin_cov
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+        COMMENT "Running doctests (CTest)"
+        VERBATIM
+    )
+
+    find_program(XEPHER_GCOVR NAMES gcovr)
+    if(XEPHER_GCOVR)
+        add_custom_target(xepher_coverage
+            COMMAND ${XEPHER_GCOVR} --txt -s --merge-mode-functions=separate
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            DEPENDS xepher_tests_run xepher_plugin_cov
+            COMMENT "Generating gcovr coverage report"
             VERBATIM
         )
     endif()
-endfunction()
+
+    endif() # Debug build only
+endmacro()
