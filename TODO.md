@@ -5,7 +5,7 @@ refactor, XEP compliance emission migration, XEP-0045 MUC features, port abstrac
 Waves 0–4, Phases 1–6 AGENTS.md compliance) are removed from this file — see git history
 for archived phase-by-phase plans.
 
-**Verification baseline:** `CXX="ccache clang++" make DEBUG=1` — 132 doctests, all assertions
+**Verification baseline:** `CXX="ccache clang++" make DEBUG=1` — 147 doctests, all assertions
 green. Manual WeeChat retest after user-visible changes (full restart; no `/plugin reload`).
 
 ---

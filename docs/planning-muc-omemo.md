@@ -1,6 +1,6 @@
 # Planning: OMEMO Encrypted Multi-User Chats (MUCs)
 
-> Status: **Implementation complete (de78d33) + issue #6 prefetch hardening (b1532e6).** Live testing still limited — section 8 checklist not fully executed in production. 132/132 doctests green.
+> Status: **Implementation complete (de78d33) + issue #6 prefetch hardening (b1532e6).** Live testing still limited — section 8 checklist not fully executed in production. 147/147 doctests green.
 
 ---
 

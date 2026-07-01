@@ -114,6 +114,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         bool is_nick_change = false;
         bool is_new_room = false;
         bool is_server_nick = false;
+        bool presence_is_self = false;
+        std::string self_real_jid_storage;
         for (int& status : x.statuses)
         {
             switch (status)
@@ -162,6 +164,7 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     }
                     break;
                 case 110: // Self-Presence: [presence | Any room presence]: Inform user that presence refers to one of its own room occupants
+                    presence_is_self = true;
                     // Status 110 is sent last in the initial presence flood — clear joining flag.
                     // Status 110 is also delivered when any other resource joins the same room
                     // (the server re-sends the full occupant list to all members).  Guard against
@@ -473,9 +476,18 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                 }
                 else
                 {
+                    std::optional<std::string_view> real_jid_sv;
+                    if (item.target)
+                        real_jid_sv = std::string_view(item.target->full);
+                    else if (presence_is_self)
+                    {
+                        self_real_jid_storage = account.jid();
+                        if (!self_real_jid_storage.empty())
+                            real_jid_sv = self_real_jid_storage;
+                    }
+
                     channel->add_member(binding->from->full.data(), jid.data(),
-                                        item.target ? std::optional(std::string_view(item.target->full))
-                                                    : std::nullopt,
+                                        real_jid_sv,
                                         user,
                                         {.announce_join = true, .online = true});
 

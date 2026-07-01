@@ -778,6 +778,21 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(const char
     }
     member->present = opts.online;
 
+    // Drop stale nick-only member stubs once the full occupant id is known.
+    if (type == weechat::channel::chat_type::MUC)
+    {
+        const auto slash = member->id.rfind('/');
+        if (slash != std::string::npos && slash + 1 < member->id.size())
+        {
+            const std::string nick_only = member->id.substr(slash + 1);
+            if (auto dup = members.find(nick_only);
+                dup != members.end() && dup->first != member->id)
+            {
+                members.erase(dup);
+            }
+        }
+    }
+
     // MUC OMEMO: track bare JIDs for encode_muc; devicelist/bundle fetches happen
     // on demand when sending (or when decrypting inbound traffic).
     if (real_jid && type == weechat::channel::chat_type::MUC && muc_supports_omemo())
@@ -871,6 +886,17 @@ std::optional<weechat::channel::member*> weechat::channel::member_search(const c
     {
         if (weechat_strcasecmp(m.id.c_str(), id) == 0)
             return &m;
+    }
+
+    // Fallback: handlers often pass a bare nick while presence stores room@conf/nick.
+    const std::string full_id = find_member_by_nick(id);
+    if (!full_id.empty())
+    {
+        for (auto& [_, m] : members)
+        {
+            if (weechat_strcasecmp(m.id.c_str(), full_id.c_str()) == 0)
+                return &m;
+        }
     }
 
     return std::nullopt;
@@ -1035,10 +1061,16 @@ bool weechat::channel::all_occupants_have_real_jid() const
         return true;
 
     bool any_online = false;
-    for (const auto &[_, member] : members)
+    for (const auto &[member_id, member] : members)
     {
         if (!member.present)
             continue;
+        // disco#items used to register nick-only stubs; skip when a full occupant id exists.
+        if (!member_id.contains('/')
+            && !find_member_by_nick(member_id).empty())
+        {
+            continue;
+        }
         any_online = true;
         if (!member.real_jid || member.real_jid->empty())
             return false;
@@ -1052,14 +1084,25 @@ std::vector<std::string> weechat::channel::online_occupants_missing_real_jid() c
     if (type != weechat::channel::chat_type::MUC)
         return missing;
 
-    for (const auto &[nick, member] : members)
+    for (const auto &[member_id, member] : members)
     {
         if (!member.present)
             continue;
+        if (!member_id.contains('/')
+            && !find_member_by_nick(member_id).empty())
+        {
+            continue;
+        }
         if (!member.real_jid || member.real_jid->empty())
-            missing.push_back(nick);
+        {
+            const auto slash = member_id.rfind('/');
+            missing.push_back(slash != std::string::npos
+                ? member_id.substr(slash + 1)
+                : member_id);
+        }
     }
     std::ranges::sort(missing);
+    missing.erase(std::ranges::unique(missing).begin(), missing.end());
     return missing;
 }
 

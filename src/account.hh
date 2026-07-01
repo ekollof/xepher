@@ -685,17 +685,29 @@ namespace weechat
             if (!jid_bare_cache_.empty())
                 return jid_bare_cache_;
             if (connection && xmpp_conn_is_connected(connection)) {
-                // Strip resource from full bound JID (part before '/')
-                std::string full = xmpp_conn_get_bound_jid(connection);
-                auto slash = full.find('/');
-                return slash == std::string::npos ? full : full.substr(0, slash);
+                // Strip resource from full bound JID (part before '/').
+                // libstrophe may return nullptr before bind completes — never
+                // construct std::string from a null pointer (issue #14 crash).
+                const char *bound = xmpp_conn_get_bound_jid(connection);
+                if (bound && bound[0] != '\0')
+                {
+                    const std::string_view full {bound};
+                    const auto slash = full.find('/');
+                    return slash == std::string_view::npos
+                        ? std::string(full)
+                        : std::string(full.substr(0, slash));
+                }
             }
             return std::string(this->option_jid.string());
         }
         void jid(std::string jid) { this->option_jid = jid; }
         std::string jid_device() {
             if (connection && xmpp_conn_is_connected(connection))
-                return xmpp_conn_get_bound_jid(connection);
+            {
+                const char *bound = xmpp_conn_get_bound_jid(connection);
+                if (bound && bound[0] != '\0')
+                    return std::string(bound);
+            }
             // Build user@domain/weechat from the configured JID
             std::string opt = std::string(this->option_jid.string());
             auto at = opt.find('@');

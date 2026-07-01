@@ -1226,6 +1226,8 @@ TEST_CASE("message_omemo parses axolotl header and decode jid")
     CHECK(xmpp::resolve_omemo_decode_jid(
               true, "room@conf.example", std::string_view("alice@example.org"))
           == "alice@example.org");
+    CHECK(!xmpp::resolve_omemo_decode_jid(
+              true, "room@conf.example", std::string_view("room@conf.example")));
 
     xmpp_stanza_release(msg);
 }

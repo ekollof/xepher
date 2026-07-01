@@ -104,7 +104,7 @@ void weechat::xmpp::omemo::distrust_fp(struct t_gui_buffer *buffer,
                                         const char *jid,
                                         std::optional<std::uint32_t> device_id)
 {
-    if (!db_env || !jid)
+    if (!db_env || !jid || jid[0] == '\0')
     {
         print_error(buffer, "OMEMO is not initialized.");
         return;
@@ -121,7 +121,7 @@ void weechat::xmpp::omemo::distrust_fp(struct t_gui_buffer *buffer,
                 continue;
             if (device_id && *dev_id != *device_id)
                 continue;
-            store_tofu_trust(*this, jid, *dev_id, omemo_trust::UNTRUSTED);
+            store_tofu_trust(*this, std::string_view(jid), *dev_id, omemo_trust::UNTRUSTED);
             print_info(buffer, fmt::format("OMEMO: marked device {} for {} as UNTRUSTED.", *dev_id, jid));
             any_changed = true;
         }
@@ -142,7 +142,7 @@ void weechat::xmpp::omemo::trust_jid(struct t_gui_buffer *buffer,
                                       const char *jid,
                                       std::optional<std::uint32_t> device_id)
 {
-    if (!db_env || !jid)
+    if (!db_env || !jid || jid[0] == '\0')
     {
         print_error(buffer, "OMEMO is not initialized.");
         return;
@@ -159,7 +159,7 @@ void weechat::xmpp::omemo::trust_jid(struct t_gui_buffer *buffer,
                 continue;
             if (device_id && *dev_id != *device_id)
                 continue;
-            store_tofu_trust(*this, jid, *dev_id, omemo_trust::VERIFIED);
+            store_tofu_trust(*this, std::string_view(jid), *dev_id, omemo_trust::VERIFIED);
             print_info(buffer, fmt::format("OMEMO: marked device {} for {} as VERIFIED.", *dev_id, jid));
             any_changed = true;
         }

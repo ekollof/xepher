@@ -97,7 +97,11 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                         std::string nick = ::jid(nullptr, item_jid).resource;
                         if (!nick.empty())
                         {
-                            ch.add_member(nick.c_str(), nullptr, std::nullopt);
+                            const std::string full_id = item_jid.contains('/')
+                                ? item_jid
+                                : fmt::format("{}/{}", from_bare, nick);
+                            ch.add_member(full_id.c_str(), nullptr, std::nullopt, nullptr,
+                                            {.announce_join = false, .online = true});
                         }
                     }
                     item = item.next_sibling();
