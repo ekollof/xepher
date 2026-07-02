@@ -568,6 +568,18 @@ TEST_CASE("presence show/status extraction")
     unit_strophe_env env;
     REQUIRE(env.ctx != nullptr);
 
+    SUBCASE("presence_display_name falls back when PM resource is empty")
+    {
+        CHECK(::xmpp::presence_display_name(
+                  "naemon@deimos.hackerheaven.org", "", "naemon@deimos.hackerheaven.org",
+                  "naemon@deimos.hackerheaven.org")
+              == "naemon@deimos.hackerheaven.org");
+        CHECK(::xmpp::presence_display_name(
+                  "room@conference.example", "nick", "room@conference.example/nick",
+                  "room@conference.example")
+              == "nick");
+    }
+
     SUBCASE("presence with show and status")
     {
         static constexpr const char *xml =

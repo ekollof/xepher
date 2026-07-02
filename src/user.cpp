@@ -40,7 +40,8 @@ unsigned long nick_hash(std::string_view name)
         return "weechat.color.nicklist_offline";
     if (user.is_away)
         return "weechat.color.nicklist_away";
-    return palette_color.empty() ? nullptr : palette_color.c_str();
+    // WeeChat nicklist APIs take string_view; never pass nullptr.
+    return palette_color.empty() ? "weechat.color.chat_nick" : palette_color.c_str();
 }
 
 std::string compute_nick_color(std::string_view name)
@@ -82,8 +83,17 @@ std::string weechat::user::get_colour(std::string_view name)
 
 std::string weechat::user::get_colour_for_nicklist()
 {
-    if (cached_nick_color_name.empty() && !this->profile.display_name.empty())
-        cached_nick_color_name = compute_nick_color(this->profile.display_name);
+    if (cached_nick_color_name.empty())
+    {
+        std::string_view color_name = this->profile.display_name;
+        if (color_name.empty())
+        {
+            const std::string bare = jid(nullptr, this->id).bare;
+            color_name = bare.empty() ? std::string_view(this->id) : bare;
+        }
+        if (!color_name.empty())
+            cached_nick_color_name = compute_nick_color(color_name);
+    }
     return cached_nick_color_name;
 }
 
@@ -254,8 +264,19 @@ void weechat::user::nicklist_add(weechat::account *account,
     }
     else
     {
-        name = this->profile.display_name.c_str();
+        if (this->profile.display_name.empty())
+        {
+            nick_buf = jid(nullptr, this->id).bare;
+            if (nick_buf.empty())
+                nick_buf = this->id;
+            name = nick_buf.c_str();
+        }
+        else
+            name = this->profile.display_name.c_str();
     }
+
+    if (!name || !*name)
+        return;
 
     ptr_buffer = channel ? channel->buffer : account->buffer;
 

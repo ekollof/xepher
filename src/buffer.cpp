@@ -240,6 +240,9 @@ int buffer__close_cb(const void *pointer, void *data,
             ptr_account->disconnect(0);
         }
 
+        if (ptr_account->buffer)
+            weechat_buffer_set_pointer(ptr_account->buffer,
+                                       XMPP_BUFFER_ACCOUNT_PTR, nullptr);
         ptr_account->buffer = nullptr;
     }
     else if (ptr_account && ptr_channel)
@@ -282,6 +285,9 @@ int buffer__close_cb(const void *pointer, void *data,
             }
         }
 
+        if (ptr_channel->buffer)
+            weechat_buffer_set_pointer(ptr_channel->buffer,
+                                       XMPP_BUFFER_CHANNEL_PTR, nullptr);
         ptr_account->invalidate_channel_key_cache(ptr_channel->name);
         ptr_account->channels.erase(ptr_channel->name);
     }

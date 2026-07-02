@@ -57,6 +57,13 @@ struct ParsedPresence {
     std::optional<PresenceError> error;
 };
 
+// Nick shown in PM/channel buffers: resource when in-room, else full/bare JID.
+[[nodiscard]] XMPP_TEST_EXPORT std::string presence_display_name(
+    std::string_view bare,
+    std::string_view resource,
+    std::string_view full,
+    std::string_view channel_id = {});
+
 [[nodiscard]] XMPP_TEST_EXPORT ParsedJid parse_jid_parts(std::string_view full_jid);
 [[nodiscard]] XMPP_TEST_EXPORT std::string muc_presence_error_reason(StanzaView error_elem);
 [[nodiscard]] XMPP_TEST_EXPORT ParsedPresence parse_presence(StanzaView view);

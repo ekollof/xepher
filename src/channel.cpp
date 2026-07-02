@@ -531,11 +531,13 @@ weechat::channel::~channel()
         self_typing_hook_timer = nullptr;
     }
 
-    // Tell the native typing plugin to forget all typists for this buffer
     if (buffer)
+    {
+        weechat_buffer_set_pointer(buffer, XMPP_BUFFER_CHANNEL_PTR, nullptr);
         weechat_hook_signal_send("typing_reset_buffer",
                                  WEECHAT_HOOK_SIGNAL_POINTER,
                                  buffer);
+    }
     
     // Clear MAM cache for PM channels to prevent auto-recreation on reconnect
     if (type == chat_type::PM)

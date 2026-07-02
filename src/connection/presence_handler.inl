@@ -409,10 +409,9 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             if (!user)
             {
                 const std::string name = pres.from->full;
-                const std::string nick = channel
-                    && weechat_strcasecmp(pres.from->bare.c_str(), channel->id.c_str()) == 0
-                    ? pres.from->resource
-                    : pres.from->full;
+                const std::string nick = ::xmpp::presence_display_name(
+                    pres.from->bare, pres.from->resource, pres.from->full,
+                    channel ? std::string_view(channel->id) : std::string_view{});
                 auto [it_u, _ins_u] = account.users.emplace(std::piecewise_construct,
                                               std::forward_as_tuple(name),
                                               std::forward_as_tuple(&account, channel, name, nick));
@@ -570,10 +569,9 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         if (!user)
         {
             const std::string name = pres.from->full;
-            const std::string nick = channel
-                && weechat_strcasecmp(pres.from->bare.c_str(), channel->id.c_str()) == 0
-                ? pres.from->resource
-                : pres.from->full;
+            const std::string nick = ::xmpp::presence_display_name(
+                pres.from->bare, pres.from->resource, pres.from->full,
+                channel ? std::string_view(channel->id) : std::string_view{});
             auto [it_u, _ins_u] = account.users.emplace(std::piecewise_construct,
                                           std::forward_as_tuple(name),
                                           std::forward_as_tuple(&account, channel, name, nick));

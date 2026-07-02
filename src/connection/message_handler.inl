@@ -162,24 +162,27 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 if (!chat_state)
                     return 1;
 
-                const std::string cs_from_bare_s = ::jid(nullptr, chat_state->from.c_str()).bare;
-                const std::string cs_nick_s = ::jid(nullptr, chat_state->from.c_str()).resource;
+                const std::string cs_from_bare_s =
+                    ::jid(nullptr, chat_state->from).bare;
+                const std::string cs_nick_s =
+                    ::jid(nullptr, chat_state->from).resource;
+                const std::string from_full_s = chat_state->from;
                 from_bare = cs_from_bare_s.c_str();
                 nick = cs_nick_s.c_str();
                 channel = partner_channel_from_message(inbound);
                 if (!channel)
                     return 1;
 
-                const char *from_full = chat_state->from.c_str();
-                auto user = user::search(&account, from_full);
+                auto user = user::search(&account, from_full_s);
                 if (!user)
                 {
+                    const std::string display_name = ::xmpp::presence_display_name(
+                        cs_from_bare_s, cs_nick_s, from_full_s, channel->id);
                     auto [it_usr, _ins_usr] = account.users.emplace(
                         std::piecewise_construct,
-                        std::forward_as_tuple(from_full),
+                        std::forward_as_tuple(from_full_s),
                         std::forward_as_tuple(
-                            &account, channel, from_full,
-                            weechat_strcasecmp(from_bare, channel->id.data()) == 0 ? nick : from_full));
+                            &account, channel, from_full_s, display_name));
                     auto& [_, u] = *it_usr;
                     user = &u;
                 }

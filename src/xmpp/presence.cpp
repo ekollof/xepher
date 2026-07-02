@@ -95,6 +95,21 @@ inline constexpr std::string_view k_stanzas_ns = "urn:ietf:params:xml:ns:xmpp-st
 
 }  // namespace
 
+std::string presence_display_name(
+    const std::string_view bare,
+    const std::string_view resource,
+    const std::string_view full,
+    const std::string_view channel_id)
+{
+    if (!channel_id.empty()
+        && bare == channel_id
+        && !resource.empty())
+        return std::string(resource);
+    if (!full.empty())
+        return std::string(full);
+    return std::string(bare);
+}
+
 ParsedJid parse_jid_parts(std::string_view full_jid)
 {
     const jid j(nullptr, std::string(full_jid));
