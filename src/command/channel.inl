@@ -1,15 +1,3 @@
-// Send a MUC join presence stanza to `to_jid` (room@domain/nick) from the account.
-// Pass an empty `room_password` for non-protected rooms; otherwise include a
-// <password> child in the <x xmlns='http://jabber.org/protocol/muc'/> payload
-// per XEP-0045 §7.1.4.
-static void send_muc_join_presence(weechat::account *account, const char *to_jid,
-                                  std::string_view room_password = {})
-{
-    auto join_pres = stanza::presence().to(to_jid).from(account->jid());
-    static_cast<stanza::xep0045::presence&>(join_pres).muc_join(room_password);
-    account->connection.send(join_pres.build(account->context).get());
-}
-
 int command__enter([[maybe_unused]] const void *pointer,
                    [[maybe_unused]] void *data,
                    struct t_gui_buffer *buffer, int argc,
@@ -106,7 +94,7 @@ int command__enter([[maybe_unused]] const void *pointer,
                     return WEECHAT_RC_ERROR;
                 }
 
-                send_muc_join_presence(ptr_account, pres_jid, room_password);
+                xmpp::send_muc_join_presence(*ptr_account, pres_jid, room_password);
             }
             else
             {
@@ -125,7 +113,7 @@ int command__enter([[maybe_unused]] const void *pointer,
                     return WEECHAT_RC_ERROR;
                 }
 
-                send_muc_join_presence(ptr_account, pres_jid, room_password);
+                xmpp::send_muc_join_presence(*ptr_account, pres_jid, room_password);
             }
 
             // The optional trailing positional arg is the first message to
@@ -164,7 +152,7 @@ int command__enter([[maybe_unused]] const void *pointer,
             ptr_channel = &ch;
         }
 
-        send_muc_join_presence(ptr_account, pres_jid, room_password);
+        xmpp::send_muc_join_presence(*ptr_account, pres_jid, room_password);
     }
 
     return WEECHAT_RC_OK;

@@ -82,14 +82,9 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
             ui->printf_error(fmt::format(
                 "MUC self-ping FAILED: no longer in {} — rejoining", room_jid));
             {
-                const std::string rejoin_jid = fmt::format("{}/{}",
-                                                           room_jid,
-                                                           account.nickname());
-                auto join_pres = stanza::presence()
-                    .to(rejoin_jid.c_str())
-                    .from(account.jid());
-                static_cast<stanza::xep0045::presence&>(join_pres).muc_join();
-                account.connection.send(join_pres.build(account.context).get());
+                const std::string rejoin_jid = ::xmpp::muc_presence_jid(
+                    room_jid, {}, account.nickname(), account.jid());
+                ::xmpp::send_muc_join_presence(account, rejoin_jid);
             }
             break;
         }

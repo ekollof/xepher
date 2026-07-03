@@ -32,6 +32,8 @@
 #include "avatar.hh"
 #include "debug.hh"
 #include "connection/internal.hh"
+#include "xmpp/iq_bookmarks.hh"
+#include "xmpp/muc_join.hh"
 #include "weechat/ui_port.hh"
 
 #include "connection/stream_management.inl"

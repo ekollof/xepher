@@ -17,7 +17,7 @@
 #include "xmpp/stanza_view.hh"
 #include "xmpp/iq_handlers.hh"
 #include "xmpp/iq_ping.hh"
-#include "xmpp/xep-0045.inl"
+#include "xmpp/muc_join.hh"
 #include "weechat/ui_port.hh"
 
 #pragma GCC diagnostic push

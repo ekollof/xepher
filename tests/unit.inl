@@ -39,6 +39,7 @@
 #include "xmpp/iq_caps.hh"
 #include "xmpp/iq_vcard.hh"
 #include "xmpp/iq_bookmarks.hh"
+#include "xmpp/muc_join.hh"
 #include "weechat/render_event.hh"
 #include "xmpp/chat_state.hh"
 #include "xmpp/message_forward.hh"
@@ -1748,6 +1749,13 @@ TEST_CASE("iq_vcard and iq_bookmarks helpers")
         == "/enter room@conf/nick --no-switch");
     CHECK(xmpp::bookmark_enter_command("room@conf", "")
         == "/enter room@conf --no-switch");
+
+    CHECK(xmpp::muc_presence_jid("room@conf.example", "Puck", "alice", "alice@example")
+        == "room@conf.example/Puck");
+    CHECK(xmpp::muc_presence_jid("room@conf.example", "", "alice", "alice@example")
+        == "room@conf.example/alice");
+    CHECK(xmpp::muc_presence_jid("room@conf.example", "", "", "bob@example.org")
+        == "room@conf.example/bob");
 
     unit_strophe_env env;
     REQUIRE(env.ctx != nullptr);
