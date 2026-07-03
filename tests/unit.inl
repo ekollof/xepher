@@ -3438,3 +3438,42 @@ TEST_CASE("handle_bob_iq_get returns item-not-found when unhosted")
     xmpp_stanza_release(iq);
 }
 
+TEST_CASE("libstrophe_server_advertises_sm")
+{
+    libstrophe_layout::conn_through_sm_state conn{};
+    libstrophe_layout::sm_state_layout sm{};
+    conn.sm_state = reinterpret_cast<xmpp_sm_state_t *>(&sm);
+
+    sm.sm_support = 1;
+    CHECK(libstrophe_server_advertises_sm(reinterpret_cast<xmpp_conn_t *>(&conn)));
+
+    sm.sm_support = 0;
+    CHECK_FALSE(libstrophe_server_advertises_sm(reinterpret_cast<xmpp_conn_t *>(&conn)));
+
+    conn.sm_state = nullptr;
+    CHECK_FALSE(libstrophe_server_advertises_sm(reinterpret_cast<xmpp_conn_t *>(&conn)));
+    CHECK_FALSE(libstrophe_server_advertises_sm(nullptr));
+}
+
+TEST_CASE("should_negotiate_sm")
+{
+    const auto negotiate = [](bool sm_available, bool server_advertises_sm) {
+        return sm_available && server_advertises_sm;
+    };
+    CHECK(negotiate(true, true));
+    CHECK_FALSE(negotiate(true, false));
+    CHECK_FALSE(negotiate(false, true));
+    CHECK_FALSE(negotiate(false, false));
+}
+
+TEST_CASE("sm_stream_error_disables_sm")
+{
+    const auto disables = [](xmpp_error_type_t error_type, bool sm_negotiation_active) {
+        return sm_negotiation_active
+            && error_type == XMPP_SE_UNSUPPORTED_STANZA_TYPE;
+    };
+    CHECK(disables(XMPP_SE_UNSUPPORTED_STANZA_TYPE, true));
+    CHECK_FALSE(disables(XMPP_SE_UNSUPPORTED_STANZA_TYPE, false));
+    CHECK_FALSE(disables(XMPP_SE_CONFLICT, true));
+}
+

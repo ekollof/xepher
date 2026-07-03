@@ -17,11 +17,12 @@
 #include <list>
 #include <thread>
 #include <vector>
-#include <stdint.h>
 #include <unistd.h>
 
 #include <weechat/weechat-plugin.h>
 #include <strophe.h>
+
+#include "connection/strophe_sm_support.hh"
 
 // Forward declaration
 namespace weechat { class account; }
@@ -46,6 +47,34 @@ inline void sm_increment_handled_count(std::uint32_t &h) noexcept
         h = 0;
     else
         ++h;
+}
+
+// Drop all SM session state (used when the server rejects or does not advertise SM).
+inline void clear_sm_session_state(weechat::account &account) noexcept
+{
+    account.sm_enabled = false;
+    account.sm_id.clear();
+    account.sm_h_inbound = 0;
+    account.sm_h_outbound = 0;
+    account.sm_last_ack = 0;
+    account.sm_outqueue.clear();
+    account.sm_pending_replay.clear();
+}
+
+// True when xepher should send <enable/> or <resume/> on this connect.
+[[nodiscard]] inline constexpr bool should_negotiate_sm(bool sm_available,
+                                                          bool server_advertises_sm) noexcept
+{
+    return sm_available && server_advertises_sm;
+}
+
+// True when a stream error during SM negotiation means SM must be disabled.
+[[nodiscard]] inline constexpr bool sm_stream_error_disables_sm(
+    xmpp_error_type_t error_type,
+    bool sm_negotiation_active) noexcept
+{
+    return sm_negotiation_active
+        && error_type == XMPP_SE_UNSUPPORTED_STANZA_TYPE;
 }
 
 void sm_start_ack_timer(weechat::account &account);

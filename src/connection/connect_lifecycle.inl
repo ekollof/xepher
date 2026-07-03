@@ -107,8 +107,18 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         account.sm_awaiting_negotiation = false;
         account.sm_resume_attempted = false;
 
+        const bool server_advertises_sm = libstrophe_server_advertises_sm(*this);
+
+        if (account.sm_available && !server_advertises_sm)
+        {
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                "Stream Management not advertised by server — skipping");
+            account.sm_available = false;
+            clear_sm_session_state(account);
+        }
+
         // XEP-0198 §3.1: negotiate SM before any application stanzas.
-        if (account.sm_available)
+        if (should_negotiate_sm(account.sm_available, server_advertises_sm))
         {
             account.sm_awaiting_negotiation = true;
             if (!account.sm_id.empty())
@@ -135,6 +145,8 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
     }
     else
     {
+        const bool sm_negotiation_active = account.sm_awaiting_negotiation
+            || account.sm_resume_attempted;
         account.sm_awaiting_negotiation = false;
         account.sm_resume_attempted = false;
 
@@ -204,16 +216,24 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 err_text ? err_text : ""));
         }
         
+        // Server rejected <enable/>/<resume/> with unsupported-stanza-type
+        // (common on Prosody backends without mod_sm behind xmpp-proxy).
+        // Disable SM for this process and clear state so auto-reconnect works.
+        if (stream_error
+            && sm_stream_error_disables_sm(stream_error->type, sm_negotiation_active))
+        {
+            account.sm_available = false;
+            clear_sm_session_state(account);
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                "Server rejected Stream Management — continuing without SM "
+                "on next connect");
+        }
         // XEP-0198 §5: Preserve SM state on unexpected disconnect so the
         // reconnect timer can attempt <resume/>. Only clear on <conflict/>
         // (server kicked us) — the server has already torn down that session.
-        if (stream_error && stream_error->type == XMPP_SE_CONFLICT)
+        else if (stream_error && stream_error->type == XMPP_SE_CONFLICT)
         {
-            account.sm_id.clear();
-            account.sm_h_inbound = 0;
-            account.sm_h_outbound = 0;
-            account.sm_last_ack = 0;
-            account.sm_outqueue.clear();
+            clear_sm_session_state(account);
         }
         else if (status == event::disconnect && !account.sm_id.empty())
         {
