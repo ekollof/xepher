@@ -14,7 +14,7 @@ int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaini
     time_t idle_time = now - account->last_activity;
 
     // If idle for more than 5 minutes and currently active, send inactive
-    if (idle_time > 300 && account->csi_available && account->csi_active)
+    if (idle_time > k_csi_idle_seconds && account->csi_available && account->csi_active)
     {
         account->connection.send(stanza::xep0352::inactive()
                                 .build(account->context)
@@ -26,7 +26,7 @@ int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaini
     // XEP-0319: Last User Interaction in Presence
     // When going idle, broadcast presence with <idle since='...'/>.
     // Only do this once per idle transition (not on every timer tick).
-    if (idle_time > 300 && !account->xep0319_idle_sent)
+    if (idle_time > k_csi_idle_seconds && !account->xep0319_idle_sent)
     {
         // Format idle-since as ISO 8601 UTC
         std::string since_str = format_utc_timestamp(account->last_activity);

@@ -31,6 +31,8 @@ class account;
 class connection;
 }
 
+inline constexpr std::time_t k_csi_idle_seconds = 300;
+
 // Wake the WeeChat fd hook after a background worker finishes (best-effort).
 inline void signal_worker_pipe(int fd)
 {
@@ -53,6 +55,15 @@ inline void sm_increment_handled_count(std::uint32_t &h) noexcept
         ++h;
 }
 
+// Drop acknowledged entries from the outbound SM retransmit queue.
+inline void sm_trim_outqueue_through(weechat::account &account,
+                                     std::uint32_t ack_h) noexcept
+{
+    while (!account.sm_outqueue.empty()
+           && account.sm_outqueue.front().seq <= ack_h)
+        account.sm_outqueue.pop_front();
+}
+
 // Drop all SM session state (used when the server rejects or does not advertise SM).
 inline void clear_sm_session_state(weechat::account &account) noexcept
 {
@@ -61,6 +72,7 @@ inline void clear_sm_session_state(weechat::account &account) noexcept
     account.sm_h_inbound = 0;
     account.sm_h_outbound = 0;
     account.sm_last_ack = 0;
+    account.sm_server_max_seconds = 0;
     account.sm_outqueue.clear();
     account.sm_pending_replay.clear();
 }

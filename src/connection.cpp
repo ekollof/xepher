@@ -81,8 +81,11 @@ void weechat::connection::send(xmpp_stanza_t *stanza)
         if (account.sm_awaiting_negotiation && is_app_stanza)
         {
             xmpp_stanza_t *copy = xmpp_stanza_copy(stanza);
-            account.sm_pending_replay.push_back(
-                std::shared_ptr<xmpp_stanza_t>(copy, xmpp_stanza_release));
+            account.sm_pending_replay.push_back({
+                0,
+                time(nullptr),
+                std::shared_ptr<xmpp_stanza_t>(copy, xmpp_stanza_release),
+            });
             return;
         }
 
@@ -91,9 +94,11 @@ void weechat::connection::send(xmpp_stanza_t *stanza)
             sm_increment_handled_count(account.sm_h_outbound);
             // Keep a copy in the retransmit queue (XEP-0198 §5)
             xmpp_stanza_t *copy = xmpp_stanza_copy(stanza);
-            account.sm_outqueue.emplace_back(
+            account.sm_outqueue.push_back({
                 account.sm_h_outbound,
-                std::shared_ptr<xmpp_stanza_t>(copy, xmpp_stanza_release));
+                time(nullptr),
+                std::shared_ptr<xmpp_stanza_t>(copy, xmpp_stanza_release),
+            });
         }
     }
     m_conn.send(stanza);

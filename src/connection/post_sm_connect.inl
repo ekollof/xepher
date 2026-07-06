@@ -479,15 +479,35 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
         }
     }
 
-    // Initialize Client State Indication (XEP-0352) when the server advertises SM.
-    // Proxy/minimal Prosody backends typically lack mod_csi as well as mod_sm.
-    account.last_activity = time(nullptr);
+    // Initialize Client State Indication (XEP-0352).
+    // XEP-0352 §5.2: CSI resets to active on new/resumed streams — re-send
+    // <inactive/> when the user is still idle after SM resume.
+    if (!resumed_session)
+        account.last_activity = time(nullptr);
+
     if (account.csi_available)
     {
-        account.csi_active = true;
-        this->send(stanza::xep0352::active()
-                   .build(account.context)
-                   .get());
+        const time_t now = time(nullptr);
+        const bool user_still_idle = resumed_session
+            && (now - account.last_activity) > k_csi_idle_seconds;
+
+        if (user_still_idle)
+        {
+            account.csi_active = false;
+            this->send(stanza::xep0352::inactive()
+                       .build(account.context)
+                       .get());
+        }
+        else
+        {
+            account.csi_active = true;
+            if (!resumed_session)
+            {
+                this->send(stanza::xep0352::active()
+                           .build(account.context)
+                           .get());
+            }
+        }
 
         account.csi_activity_hooks[0] = (struct t_hook *)weechat_hook_signal(
             "input_text_changed", &account::activity_cb, &account, nullptr);

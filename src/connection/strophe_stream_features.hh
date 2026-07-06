@@ -166,7 +166,6 @@ stream_features_sniff_finish(weechat::connection &connection) noexcept;
         return *cached.csi;
     if (sniffed_csi)
         return *sniffed_csi;
-    if (!server_advertises_sm)
-        return false;
-    return true;
+    // Optimistic probe only when SM is also advertised (typical server bundle).
+    return server_advertises_sm;
 }

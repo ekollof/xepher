@@ -8,9 +8,11 @@
 #include <ctime>
 #include <expected>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <strophe.h>
 #include "test_export.hh"
 #include "xmpp/stanza_view.hh"
 
@@ -55,6 +57,12 @@ parse_int64(std::string_view value);
 
 // Format a UTC timestamp for MAM filters and XEP-0319 idle (YYYY-MM-DDTHH:MMZ).
 [[nodiscard]] XMPP_TEST_EXPORT std::string format_utc_timestamp(std::time_t t);
+
+// XEP-0203: add <delay stamp='…'/> when retransmitting stanzas after SM resume.
+[[nodiscard]] XMPP_TEST_EXPORT std::shared_ptr<xmpp_stanza_t>
+sm_stanza_for_replay(xmpp_ctx_t *ctx,
+                     std::time_t sent_at,
+                     const std::shared_ptr<xmpp_stanza_t> &stanza);
 
 // XEP-0393: Message Styling
 XMPP_TEST_EXPORT std::string apply_xep393_styling(std::string_view text);

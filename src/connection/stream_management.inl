@@ -23,8 +23,11 @@ void sm_replay_pending_stanzas(weechat::connection &connection, weechat::account
 
     auto pending = std::move(account.sm_pending_replay);
     account.sm_pending_replay.clear();
-    for (const auto &stanza_copy : pending)
-        connection.send(stanza_copy.get());
+    for (const auto &entry : pending)
+    {
+        auto replay = sm_stanza_for_replay(account.context, entry.sent_at, entry.stanza);
+        connection.send(replay.get());
+    }
 }
 
 void sm_close_stream_handled_count_too_high(weechat::connection &connection,
@@ -98,15 +101,27 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         account.sm_outqueue.clear();
 
         const std::string session_id = view.attr_string("id");
-        if (!session_id.empty())
+        const std::string resume_attr = view.attr_string("resume");
+        const bool resumable = resume_attr == "true" || resume_attr == "1";
+        if (resumable && !session_id.empty())
         {
             account.sm_id = session_id;
             XDEBUG("Stream Management enabled (resumable, id={})", session_id);
         }
         else
         {
-            XDEBUG("Stream Management enabled (not resumable)");
+            account.sm_id.clear();
+            if (!session_id.empty())
+                XDEBUG("Stream Management enabled (id={}, resume not granted)", session_id);
+            else
+                XDEBUG("Stream Management enabled (not resumable)");
         }
+
+        const std::string max_attr = view.attr_string("max");
+        account.sm_server_max_seconds = max_attr.empty()
+            ? 0U : parse_uint32(max_attr).value_or(0U);
+        if (account.sm_server_max_seconds > 0)
+            XDEBUG("SM server max resumption time: {}s", account.sm_server_max_seconds);
 
         const std::string location = view.attr_string("location");
         if (location.empty())
@@ -157,19 +172,19 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         account.sm_awaiting_negotiation = false;
         sm_start_ack_timer(account);
 
-        while (!account.sm_outqueue.empty()
-               && account.sm_outqueue.front().first <= ack_h)
-        {
-            account.sm_outqueue.pop_front();
-        }
+        sm_trim_outqueue_through(account, ack_h);
 
         if (!account.sm_outqueue.empty())
         {
             weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
                 "Retransmitting {} unacknowledged stanza(s)…",
                 account.sm_outqueue.size()));
-            for (auto &[_, stanza_copy] : account.sm_outqueue)
-                m_conn.send(stanza_copy.get());
+            for (const auto &entry : account.sm_outqueue)
+            {
+                auto replay = sm_stanza_for_replay(
+                    account.context, entry.sent_at, entry.stanza);
+                m_conn.send(replay.get());
+            }
         }
 
         sm_replay_pending_stanzas(*this, account);
@@ -194,6 +209,18 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
             ui->printf_error("Stream Management failed");
         }
 
+        const std::string failed_h = view.attr_string("h");
+        if (!failed_h.empty())
+        {
+            const uint32_t ack_h = parse_uint32(failed_h).value_or(0);
+            if (ack_h <= account.sm_h_outbound)
+            {
+                account.sm_last_ack = ack_h;
+                sm_trim_outqueue_through(account, ack_h);
+                XDEBUG("SM failed: server reported h={} before session expiry", ack_h);
+            }
+        }
+
         if (account.sm_resume_attempted && account.sm_available)
         {
             account.sm_resume_attempted = false;
@@ -204,7 +231,8 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
 
             while (!account.sm_outqueue.empty())
             {
-                account.sm_pending_replay.push_back(account.sm_outqueue.front().second);
+                account.sm_pending_replay.push_back(
+                    std::move(account.sm_outqueue.front()));
                 account.sm_outqueue.pop_front();
             }
             account.sm_h_outbound = 0;
@@ -252,12 +280,7 @@ bool weechat::connection::sm_handler(xmpp_stanza_t *stanza)
         }
 
         account.sm_last_ack = ack_count;
-
-        while (!account.sm_outqueue.empty()
-               && account.sm_outqueue.front().first <= ack_count)
-        {
-            account.sm_outqueue.pop_front();
-        }
+        sm_trim_outqueue_through(account, ack_count);
 
         const int32_t unacked = static_cast<int32_t>(account.sm_h_outbound)
             - static_cast<int32_t>(ack_count);

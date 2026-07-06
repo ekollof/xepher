@@ -45,6 +45,13 @@ namespace weechat
     class channel;
     class user;
 
+    // XEP-0198 outbound stanza queue entry (original send time for XEP-0203 replay delay).
+    struct sm_queued_stanza {
+        std::uint32_t seq = 0;
+        std::time_t sent_at = 0;
+        std::shared_ptr<xmpp_stanza_t> stanza;
+    };
+
     // Global flag to signal plugin is unloading (prevents crashes in timer callbacks)
     extern bool g_plugin_unloading;
 
@@ -195,13 +202,13 @@ namespace weechat
         uint32_t sm_h_inbound = 0;      // stanzas we've received and handled
         uint32_t sm_h_outbound = 0;     // stanzas we've sent
         uint32_t sm_last_ack = 0;       // last h value acknowledged by server
+        uint32_t sm_server_max_seconds = 0; // server <enabled max='…'/> (0 = unspecified)
         time_t sm_last_ack_log = 0;     // throttle ack debug logging
         struct t_hook *sm_ack_timer_hook = nullptr;
-        // Unacknowledged outbound stanzas: (outbound_seq, stanza_copy)
-        // seq is 1-based (matches sm_h_outbound at time of send)
-        std::deque<std::pair<uint32_t, std::shared_ptr<xmpp_stanza_t>>> sm_outqueue;
+        // Unacknowledged outbound stanzas (seq is 1-based, matches sm_h_outbound at send).
+        std::deque<sm_queued_stanza> sm_outqueue;
         // Stanzas to re-send after resume failure → fresh <enable/> (new h values).
-        std::deque<std::shared_ptr<xmpp_stanza_t>> sm_pending_replay;
+        std::deque<sm_queued_stanza> sm_pending_replay;
 
         std::string name;
         weechat::xmpp::pgp pgp;

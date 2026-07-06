@@ -108,6 +108,37 @@ XMPP_TEST_EXPORT std::string format_utc_timestamp(std::time_t t)
     return fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", fmt::gmtime(t));
 }
 
+XMPP_TEST_EXPORT std::shared_ptr<xmpp_stanza_t>
+sm_stanza_for_replay(xmpp_ctx_t *ctx,
+                     std::time_t sent_at,
+                     const std::shared_ptr<xmpp_stanza_t> &stanza)
+{
+    if (!ctx || !stanza)
+        return stanza;
+
+    for (xmpp_stanza_t *child = xmpp_stanza_get_children(stanza.get());
+         child != nullptr;
+         child = xmpp_stanza_get_next(child))
+    {
+        const char *ns = xmpp_stanza_get_ns(child);
+        if (ns && std::string_view(ns) == "urn:xmpp:delay")
+            return stanza;
+    }
+
+    xmpp_stanza_t *copy = xmpp_stanza_copy(stanza.get());
+    if (!copy)
+        return stanza;
+
+    xmpp_stanza_t *delay = xmpp_stanza_new(ctx);
+    xmpp_stanza_set_name(delay, "delay");
+    xmpp_stanza_set_ns(delay, "urn:xmpp:delay");
+    const std::string stamp = format_utc_timestamp(sent_at);
+    xmpp_stanza_set_attribute(delay, "stamp", stamp.c_str());
+    xmpp_stanza_add_child(copy, delay);
+    xmpp_stanza_release(delay);
+    return {copy, xmpp_stanza_release};
+}
+
 XMPP_TEST_EXPORT std::string unescape(std::string_view str)
 {
     std::string result;

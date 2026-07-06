@@ -139,6 +139,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         }
 
         // XEP-0198 §3.1: negotiate SM before any application stanzas.
+        account.sm_enabled = false;
         if (should_negotiate_sm(account.sm_available, server_advertises_sm))
         {
             account.sm_awaiting_negotiation = true;

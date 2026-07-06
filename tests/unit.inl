@@ -3556,6 +3556,7 @@ TEST_CASE("resolve_csi_available")
     CHECK_FALSE(resolve_csi_available(true, false, empty));
     CHECK(resolve_csi_available(true, std::nullopt, empty));
     CHECK_FALSE(resolve_csi_available(false, std::nullopt, empty));
+    CHECK(resolve_csi_available(false, true, empty));
 
     const stream_ext_cache_caps cached_no_csi { .csi = false };
     CHECK_FALSE(resolve_csi_available(true, true, cached_no_csi));
@@ -3579,5 +3580,31 @@ TEST_CASE("recoverable_unsupported_stanza_downgrade")
                           last_top_level_ext::none).has_value());
     CHECK_FALSE(classify(XMPP_SE_UNSUPPORTED_STANZA_TYPE, false, true, false,
                           last_top_level_ext::csi).has_value());
+}
+
+TEST_CASE("sm_stanza_for_replay")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+
+    xmpp_stanza_t *msg = xmpp_stanza_new_from_string(
+        env.ctx,
+        "<message xmlns='jabber:client' to='peer@example.com'>"
+        "<body>hello</body>"
+        "</message>");
+    REQUIRE(msg != nullptr);
+
+    const auto stanza = std::shared_ptr<xmpp_stanza_t>(msg, xmpp_stanza_release);
+    constexpr std::time_t sent_at = 1'700'000'000;
+
+    const auto replay = sm_stanza_for_replay(env.ctx, sent_at, stanza);
+    REQUIRE(replay);
+    const xmpp::StanzaView view(replay.get());
+    const auto delay = view.child("delay", "urn:xmpp:delay");
+    REQUIRE(delay.valid());
+    CHECK(delay.attr_string("stamp") == "2023-11-14T22:13:20Z");
+
+    const auto again = sm_stanza_for_replay(env.ctx, sent_at, replay);
+    CHECK(again.get() == replay.get());
 }
 
