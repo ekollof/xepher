@@ -17,7 +17,7 @@ Archive Management, HTTP file upload, microblogging via PubSub, and more.
 
 ### Pre-built packages
 
-Binary packages for **v0.8.1** and later are published on
+Binary packages for **v0.8.1** and later (current: **v0.11.0**) are published on
 [GitHub Releases](https://github.com/ekollof/xepher/releases). Pick the file for
 your distribution:
 
@@ -36,13 +36,13 @@ Install examples:
 
 ```sh
 # Debian/Ubuntu
-sudo dpkg -i xepher_0.8.1-1_amd64.deb
+sudo dpkg -i xepher_0.11.0-1_amd64.deb
 
 # Fedora
-sudo dnf install ./xepher-0.8.1-1.fc44.x86_64.rpm
+sudo dnf install ./xepher-0.11.0-1.fc*.x86_64.rpm
 
 # Arch (as root or with sudo)
-sudo pacman -U xepher-0.8.1-1-x86_64.pkg.tar.zst
+sudo pacman -U xepher-0.11.0-1-x86_64.pkg.tar.zst
 ```
 
 After installing, restart WeeChat (or run `/plugin load xmpp.so` on first install).
@@ -882,6 +882,28 @@ Only `BLIND` and `VERIFIED` devices receive encrypted key material. `UNTRUSTED` 
 | `/pgp [keyid\|status\|reset]` | Manage PGP encryption |
 | `/plain` | Disable encryption (use plaintext) |
 
+**MUC OMEMO troubleshooting:** MUC encryption is experimental. Common issues:
+
+- **`no key for our device <id>`** — the sender's client did not include a `<key
+  rid='…'>` for your device in the `<keys jid='your@jid'>` wrapper. Ask the sender
+  to refresh their devicelist (or re-send after you run `/omemo republish`). This
+  is separate from session-bootstrap problems on your side.
+- **`OMEMO (pending)` never clears** — occupant bundles are still fetching; wait
+  or run `/omemo fetch <occupant-jid>` for stuck contacts. Sending is blocked until
+  the counter reaches zero.
+- **Garbled `No session for:` in logs** — was a libsignal logging bug with stale
+  peer addresses during MUC decrypt recovery (fixed in `6aa24fd`). Upgrade and
+  restart WeeChat; enable `/set xmpp.look.debug on` and
+  `tools/correlate_omemo_xml.sh --account <name>` when filing bugs.
+- **Spurious FEED buffers from OMEMO PEP** — legacy axolotl nodes are filtered;
+  disable all feed buffers with `/set xmpp.look.feeds off` if you do not use
+  microblogging.
+- **Room must be non-anonymous** — `/modes` should include `N`; OMEMO is refused
+  in semi-anonymous or fully anonymous rooms.
+
+See `docs/planning-muc-omemo.md` and [GitHub issue #6](https://github.com/ekollof/xepher/issues/6)
+for architecture notes and ongoing MUC testing.
+
 ### File sharing
 
 ```
@@ -993,8 +1015,6 @@ Also requires Python `PIL`/`Pillow` (`pip install Pillow` or `python-pillow` pac
 | `/disco [jid]` | Discover services and features (XEP-0030) |
 | `/disco summary` | Cached server discovery: domain features, components, derived capabilities |
 | `/disco summary refresh` | Re-query domain `disco#info` + `disco#items`, then print summary |
-
-After connect, the summary is also printed automatically to the account buffer (about 6 seconds later, once component discovery has had time to finish) so support logs include server capabilities.
 | `/adhoc <jid> [node] [id] [field=value ...]` | Execute ad-hoc commands (XEP-0050) |
 | `/roster` | Display contact list |
 | `/roster add <jid> [name]` | Add a contact |
@@ -1030,6 +1050,11 @@ After connect, the summary is also printed automatically to the account buffer (
 | `/bookmark add [jid] [name]` | Add a bookmark |
 | `/bookmark del <jid>` | Remove a bookmark |
 | `/bookmark autojoin <jid> <on\|off>` | Toggle autojoin |
+
+After connect, `/disco summary` output is also printed automatically to the
+account buffer (~6 seconds later, once component `disco#info` has finished) and
+written to `~/.local/share/weechat/logs/xmpp.account.<name>.weechatlog` — useful
+when collecting support logs.
 
 Rooms with autojoin enabled are joined in the background on connect (no buffer
 switch). Use `/enter` or `/join` manually to join and switch to the room buffer.
@@ -1131,6 +1156,14 @@ enabled. On by default.
 ```
 
 See [Microblogging — `/feed`](#microblogging--feed-xep-0277--xep-0472) for details.
+
+### Connect disco summary (support logs)
+
+On each fresh connect, the plugin prints a cached server capability matrix to the
+account buffer after component discovery completes (~6 seconds). The same text is
+available on demand with `/disco summary` or `/disco summary refresh`. Include
+the account log (`xmpp.account.<name>.weechatlog`) when reporting server-specific
+issues.
 
 ### OMEMO log correlation helper
 
@@ -1241,7 +1274,7 @@ the JID above.
 
 ### Core IM
 
-- ✅ XEP-0030: Service Discovery
+- ✅ XEP-0030: Service Discovery — `/disco summary` prints a cached capability matrix (domain features, components, upload/pubsub/MUC detection); auto-printed to the account log after connect
 - ✅ XEP-0045: Multi-User Chat — `/create`, IRC-style admin (`/kick`, `/ban`, `/voice`, `/devoice`, `/op`, `/deop`), owner config (`/setmodes`, `/affiliation`, `/destroy`), registration (`/mucregister`), direct and mediated invites (`/invite`, `/decline`); no full interactive roomconfig UI
 - ✅ XEP-0054: vcard-temp (retrieval via `/whois`, publishing via `/setvcard`)
 - ✅ XEP-0077: In-Band Registration (`/account register`, `unregister`, `password`)

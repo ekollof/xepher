@@ -1,6 +1,6 @@
 # Planning: OMEMO Encrypted Multi-User Chats (MUCs)
 
-> Status: **Implementation complete (de78d33) + issue #6 prefetch hardening (b1532e6).** Live testing still limited — section 8 checklist not fully executed in production. 147/147 doctests green.
+> Status: **Implementation complete (de78d33) + issue #6 hardening (b1532e6, 3fc6327, 1f7e3cb, 6aa24fd).** Live testing still limited — section 8 checklist not fully executed in production. 147/147 doctests green.
 
 ---
 
@@ -211,6 +211,19 @@ The `<keys jid='...'>` selection inside decode already supports multiple wrapper
 **Summary after static + build verification**: All *code* for the 8 items is present, guarded, and 27/27 green. The remaining work is **live manual testing in a real WeeChat session with a non-anonymous MUC containing ≥2 other OMEMO users** (plus raw XML log inspection and MAM replay). No further code changes expected for v1 unless live testing reveals issues.
 
 **Recommendation**: User performs the live checklist (with `/set xmpp.look.raw_xml_log on`, `/set xmpp.look.debug on`, and `tools/correlate_omemo_xml.sh` if needed). Report back any wire-format, decrypt, or edge-case surprises.
+
+### Issue #6 follow-up (Jul 2026)
+
+Reported symptoms from [GitHub issue #6](https://github.com/ekollof/xepher/issues/6):
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| Spurious FEED buffers on MUC join | Legacy OMEMO PEP nodes filtered in `classify_generic_pubsub_feed`; use `/set xmpp.look.feeds off` to disable feeds entirely (b1532e6). |
+| Room bare JID stored as occupant `real_jid` | Fixed in `3fc6327` — do not treat `room@service` as a member real JID. |
+| Duplicate/wrong member entries (disco#items vs presence) | `1f7e3cb` — MUC real-JID lookup uses nick-keyed `members` map; null-safe account JID. |
+| Garbled `omemo: No session for: ?…?` in logs | Stale `signal_protocol_address` during `inner_first_fallback` inner SignalMessage attempt; fixed in `6aa24fd` (sanitized libsignal logs + PreKey-first decrypt order). |
+| `no key for our device <id>` on receive | **Sender-side**: remote client omitted `<key rid='…'>` for your device in their encrypted groupchat stanza — not a Xepher-only bug. Verify with raw XML; sender may need to refresh devicelist or you `/omemo republish`. |
+| Send works, receive fails | Often combination of missing sender key + session bootstrap; try `/omemo fetch <sender-jid>`, `/omemo kex <sender-jid>`, and confirm room is non-anonymous (`N` in `/modes`). |
 
 **Committed as**: `de78d33` ("feat: add OMEMO support for non-anonymous MUCs (XEP-0384 legacy axolotl)").  
 **Feature status**: Implementation + compliance complete and committed. **Live testing pending** (this document now explicitly marks the feature "complete-but-untested").

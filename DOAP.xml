@@ -72,7 +72,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0030.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>2.5.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Service Discovery - server disco#items queried at connect time to find all components; disco#info sent to each component to detect upload services (XEP-0363), pubsub gateways (XEP-0060), and conference services (XEP-0045); pubsub components with identity category='pubsub' are stored in known_pubsub_services for /feed discover auto-enumeration</xmpp:note>
+        <xmpp:note xml:lang='en'>Service Discovery - server disco#items queried at connect time to find all components; disco#info sent to each component to detect upload services (XEP-0363), pubsub gateways (XEP-0060), and conference services (XEP-0045); pubsub components with identity category='pubsub' are stored in known_pubsub_services for /feed discover auto-enumeration; /disco summary prints cached domain/component capability matrix; summary auto-printed to account log ~6s after connect</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -340,7 +340,7 @@
         <xmpp:version>0.9.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >OMEMO Encryption using the legacy axolotl namespace (`eu.siacs.conversations.axolotl`) only (per AGENTS.md; see root TODO.md OMEMO section for full BTBV refactor status). OMEMO:2 (`urn:xmpp:omemo:2`) is not published or supported. BTBV (Blind Trust Before Verification) TOFU trust model (UNTRUSTED=0/VERIFIED=1/UNDECIDED=2/BLIND=3 in LMDB `trust:{jid}:{dev}`); only VERIFIED+BLIND receive keys at encode time. Includes auto-detection, per-device bundle/bootstrap, key-transport, MUC support (encode_muc + real-JID readiness checks), MAM plaintext cache for self-decrypt, etc. XEP-0450 ATM removed.</xmpp:note>
+                >OMEMO Encryption using the legacy axolotl namespace (`eu.siacs.conversations.axolotl`) only. OMEMO:2 (`urn:xmpp:omemo:2`) is not published or supported. BTBV (Blind Trust Before Verification) TOFU trust model (UNTRUSTED=0/VERIFIED=1/UNDECIDED=2/BLIND=3 in LMDB `trust:{jid}:{dev}`); only VERIFIED+BLIND receive keys at encode time. PM OMEMO is production-ready; non-anonymous MUC multi-recipient encryption (encode_muc, real-JID occupant mapping, passive bundle prefetch without key-transport spam) is experimental — see docs/planning-muc-omemo.md. Includes auto-detection, per-device bundle/bootstrap, key-transport, MAM plaintext cache for self-decrypt. XEP-0450 ATM removed.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -858,6 +858,16 @@
         <xmpp:note xml:lang='en'>In-Band Registration — §3.1 /account register &lt;name&gt; &lt;jid&gt; &lt;password&gt;: new account registration before authentication; supports username/password flat fields, already-registered detection, OOB-redirect, and x:data form detection with helpful abort message. §3.2 /account unregister &lt;account&gt;: cancels the account on the server while authenticated. §3.3 /account password &lt;account&gt; &lt;new-password&gt;: in-band password change while authenticated (TLS required). §10: advertises jabber:iq:register in disco#info.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
+
+    <release>
+      <Version>
+        <revision>0.11.0</revision>
+        <created>2026-07-06</created>
+        <xmpp:note
+                    xml:lang='en'
+                >/disco summary server capability matrix (manual + auto-print to account log after connect); connect probes gated on server disco#info (SM, CSI, MAM, bookmarks, MDS only when advertised); MUC OMEMO experimental status documented. Post-tag fixes on master: FreeBSD build (libdiff jobserver, strophe includes), /disco summary output on BSD, OMEMO libsignal session log sanitization for MUC decrypt.</xmpp:note>
+      </Version>
+    </release>
 
     <release>
       <Version>
