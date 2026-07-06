@@ -7,7 +7,10 @@
 #include <span>
 #include <unordered_map>
 
+#include <fmt/format.h>
+
 #include "account.hh"
+#include "weechat/ui_port.hh"
 #include "xmpp/iq_disco.hh"
 #include "xmpp/server_capability_map.hh"
 #include "xmpp/stanza.hh"
@@ -89,6 +92,34 @@ weechat::account::gather_server_capabilities() const
     std::ranges::sort(caps.pubsub_mam_services);
 
     return caps;
+}
+
+void weechat::account::print_disco_summary_to_buffer(std::string_view title)
+{
+    if (!buffer)
+        return;
+
+    auto ui = weechat::UiPort::for_buffer(buffer);
+    if (!title.empty())
+        ui->printf_network(std::string(title));
+
+    const auto caps = gather_server_capabilities();
+    for (const std::string &line : ::xmpp::format_disco_summary(caps))
+        ui->printf(line);
+}
+
+void weechat::account::schedule_connect_disco_summary()
+{
+    if (connect_disco_summary_timer_hook_)
+    {
+        weechat_unhook(connect_disco_summary_timer_hook_);
+        connect_disco_summary_timer_hook_ = nullptr;
+    }
+
+    // One-shot delay so disco#items fan-out (upload, pubsub, …) can populate
+    // server_components_ before we snapshot capabilities for support logs.
+    connect_disco_summary_timer_hook_ = static_cast<struct t_hook *>(weechat_hook_timer(
+        6 * 1000, 0, 1, &account::connect_disco_summary_timer_cb, this, nullptr));
 }
 
 void weechat::account::send_server_disco_summary_refresh()

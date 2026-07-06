@@ -121,6 +121,25 @@ int weechat::account::activity_cb(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+int weechat::account::connect_disco_summary_timer_cb(const void *pointer, void *data,
+                                                      int remaining_calls)
+{
+    (void)data;
+    (void)remaining_calls;
+
+    if (weechat::g_plugin_unloading || !weechat::plugin::instance)
+        return WEECHAT_RC_OK;
+
+    account *acct = static_cast<account *>(const_cast<void *>(pointer));
+    if (!acct || !acct->connection || !xmpp_conn_is_connected(acct->connection))
+        return WEECHAT_RC_OK;
+
+    acct->connect_disco_summary_timer_hook_ = nullptr;
+    acct->print_disco_summary_to_buffer(
+        "Server discovery summary (auto after connect):");
+    return WEECHAT_RC_OK;
+}
+
 // Stream Management (XEP-0198) - Ack timer callback
 int weechat::account::sm_ack_timer_cb(const void *pointer, void *data, int remaining_calls)
 {

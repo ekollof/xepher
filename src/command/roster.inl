@@ -203,9 +203,7 @@ int command__disco(const void *pointer, void *data,
             ui->printf_network("Refreshing server discovery (domain disco#info + disco#items)...");
         }
 
-        const auto caps = ptr_account->gather_server_capabilities();
-        for (const std::string &line : ::xmpp::format_disco_summary(caps))
-            ui->printf(line);
+        ptr_account->print_disco_summary_to_buffer();
         return WEECHAT_RC_OK;
     }
 

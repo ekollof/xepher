@@ -596,6 +596,12 @@ void weechat::account::disconnect_impl(int reconnect, bool immediate_reconnect)
         sm_ack_timer_hook = nullptr;
     }
 
+    if (connect_disco_summary_timer_hook_)
+    {
+        weechat_unhook(connect_disco_summary_timer_hook_);
+        connect_disco_summary_timer_hook_ = nullptr;
+    }
+
     sm_awaiting_negotiation = false;
     sm_resume_attempted = false;
     sm_pending_replay.clear();

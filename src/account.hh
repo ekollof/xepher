@@ -177,6 +177,7 @@ namespace weechat
         bool csi_active = true;
         time_t last_activity = 0;
         struct t_hook *idle_timer_hook = nullptr;
+        struct t_hook *connect_disco_summary_timer_hook_ = nullptr;
         struct t_hook *csi_activity_hooks[3] = {nullptr, nullptr, nullptr};  // Store activity signal hooks
         // XEP-0319: Last User Interaction in Presence — track whether idle <presence> was sent
         bool xep0319_idle_sent = false;
@@ -500,6 +501,8 @@ namespace weechat
         static int timer_cb(const void *pointer, void *data, int remaining_calls);
         static int idle_timer_cb(const void *pointer, void *data, int remaining_calls);
         static int sm_ack_timer_cb(const void *pointer, void *data, int remaining_calls);
+        static int connect_disco_summary_timer_cb(const void *pointer, void *data,
+                                                 int remaining_calls);
         static int upload_fd_cb(const void *pointer, void *data, int fd);
         static int activity_cb(const void *pointer, void *data,
                               const char *signal, const char *type_data,
@@ -689,6 +692,8 @@ namespace weechat
         void record_domain_disco(const ::xmpp::StanzaView query);
         void record_component_disco(std::string_view jid, const ::xmpp::StanzaView query);
         [[nodiscard]] ::xmpp::server_capabilities gather_server_capabilities() const;
+        void print_disco_summary_to_buffer(std::string_view title = {});
+        void schedule_connect_disco_summary();
         void send_server_disco_summary_refresh();
 
         // Resolve partner bare JID to the canonical channels map key (case-insensitive).

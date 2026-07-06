@@ -504,6 +504,9 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
     account.idle_timer_hook = (struct t_hook *)weechat_hook_timer(
         60 * 1000, 0, 0, &account::idle_timer_cb, &account, nullptr);
 
+    if (!resumed_session)
+        account.schedule_connect_disco_summary();
+
     (void) weechat_hook_signal_send("xmpp_account_connected",
                                     WEECHAT_HOOK_SIGNAL_STRING, account.name.data());
 }

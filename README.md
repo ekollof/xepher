@@ -993,6 +993,8 @@ Also requires Python `PIL`/`Pillow` (`pip install Pillow` or `python-pillow` pac
 | `/disco [jid]` | Discover services and features (XEP-0030) |
 | `/disco summary` | Cached server discovery: domain features, components, derived capabilities |
 | `/disco summary refresh` | Re-query domain `disco#info` + `disco#items`, then print summary |
+
+After connect, the summary is also printed automatically to the account buffer (about 6 seconds later, once component discovery has had time to finish) so support logs include server capabilities.
 | `/adhoc <jid> [node] [id] [field=value ...]` | Execute ad-hoc commands (XEP-0050) |
 | `/roster` | Display contact list |
 | `/roster add <jid> [name]` | Add a contact |
