@@ -1,72 +1,20 @@
-void weechat::connection::request_server_disco_probes(bool resumed_session)
+void weechat::connection::run_account_connect_probes(bool resumed_session)
 {
-    if (resumed_session || account.optional_server_probes_done)
+    if (resumed_session)
         return;
 
-    ::jid parsed(nullptr, std::string(account.option_jid.string()));
-    if (parsed.domain.empty())
-    {
-        run_optional_server_probes(resumed_session, {});
-        return;
-    }
-
-    const std::string disco_id = stanza::uuid(account.context);
-    account.pending_server_disco_id = disco_id;
-
+    // Legacy XEP-0048 private XML storage (ejabberd and older servers).
     this->send(stanza::iq()
                    .from(account.jid())
-                   .to(parsed.domain)
+                   .to(account.jid())
                    .type("get")
-                   .id(disco_id)
-                   .xep0030()
-                   .query()
+                   .id(stanza::uuid(account.context))
+                   .xep0049()
+                   .query(stanza::xep0049::query().bookmarks())
                    .build(account.context)
                    .get());
-}
 
-void weechat::connection::run_optional_server_probes(
-    bool resumed_session,
-    std::span<const std::string> server_features)
-{
-    if (resumed_session || account.optional_server_probes_done)
-        return;
-
-    account.optional_server_probes_done = true;
-    account.pending_server_disco_id.reset();
-
-    if (server_features.empty())
-    {
-        XDEBUG("Skipping optional server probes — server disco returned no features");
-        return;
-    }
-
-    account.peer_features_update(
-        ::jid(nullptr, std::string(account.option_jid.string())).domain,
-        std::vector<std::string>(server_features.begin(), server_features.end()));
-
-    const auto has = [&](std::string_view feature) {
-        return disco_features_contain(server_features, feature);
-    };
-
-    if (has("urn:xmpp:carbons:2"))
-    {
-        const std::string carbons_enable_id = stanza::uuid(account.context);
-        account.pending_carbons_enable_iq_ = carbons_enable_id;
-        this->send(stanza::iq()
-                       .from(account.jid())
-                       .type("set")
-                       .id(carbons_enable_id)
-                       .xep0280()
-                       .enable()
-                       .build(account.context)
-                       .get());
-    }
-    else
-    {
-        XDEBUG("Message carbons not advertised by server — skipping enable");
-    }
-
-    if (has("urn:xmpp:bookmarks:1"))
+    // XEP-0402 §5: native PEP bookmarks on the account (Prosody, Snikket, etc.).
     {
         stanza::xep0060::items bm_items("urn:xmpp:bookmarks:1");
         stanza::xep0060::pubsub bm_ps;
@@ -81,24 +29,8 @@ void weechat::connection::run_optional_server_probes(
                        .build(account.context)
                        .get());
     }
-    else if (has("storage:bookmarks"))
-    {
-        this->send(stanza::iq()
-                       .from(account.jid())
-                       .to(account.jid())
-                       .type("get")
-                       .id(stanza::uuid(account.context))
-                       .xep0049()
-                       .query(stanza::xep0049::query().bookmarks())
-                       .build(account.context)
-                       .get());
-    }
-    else
-    {
-        XDEBUG("Bookmarks not advertised by server — skipping fetch");
-    }
 
-    if (has("urn:xmpp:mds:displayed:0"))
+    // XEP-0490 §4: own MDS node — PEP on the account, not the domain component.
     {
         const std::string mds_fetch_id = stanza::uuid(account.context);
         account.pending_mds_fetch_iq_ = mds_fetch_id;
@@ -115,12 +47,10 @@ void weechat::connection::run_optional_server_probes(
                        .build(account.context)
                        .get());
     }
-    else
-    {
-        XDEBUG("Message Display Status not advertised by server — skipping fetch");
-    }
 
-    if (has("urn:xmpp:mam:2"))
+    // Global MAM catchup — account archive feature; Prosody does not advertise
+    // urn:xmpp:mam:2 on domain disco#info but still honours the IQ.  IQ errors
+    // on minimal backends are harmless (unlike top-level SM/CSI stanzas).
     {
         time_t now = time(nullptr);
         time_t fetch_days = weechat::config::instance
@@ -160,8 +90,73 @@ void weechat::connection::run_optional_server_probes(
                        .build(account.context)
                        .get());
     }
+}
+
+void weechat::connection::request_server_disco_probes(bool resumed_session)
+{
+    if (resumed_session || account.optional_server_probes_done)
+        return;
+
+    ::jid parsed(nullptr, std::string(account.option_jid.string()));
+    if (parsed.domain.empty())
+    {
+        run_optional_server_probes(resumed_session, {});
+        return;
+    }
+
+    const std::string disco_id = stanza::uuid(account.context);
+    account.pending_server_disco_id = disco_id;
+
+    this->send(stanza::iq()
+                   .from(account.jid())
+                   .to(parsed.domain)
+                   .type("get")
+                   .id(disco_id)
+                   .xep0030()
+                   .query()
+                   .build(account.context)
+                   .get());
+}
+
+void weechat::connection::run_optional_server_probes(
+    bool resumed_session,
+    std::span<const std::string> server_features)
+{
+    if (resumed_session || account.optional_server_probes_done)
+        return;
+
+    account.optional_server_probes_done = true;
+    account.pending_server_disco_id.reset();
+
+    // Only carbons is a true server-domain feature in domain disco#info.
+    if (!server_features.empty())
+    {
+        account.peer_features_update(
+            ::jid(nullptr, std::string(account.option_jid.string())).domain,
+            std::vector<std::string>(server_features.begin(), server_features.end()));
+
+        if (disco_features_contain(server_features, "urn:xmpp:carbons:2"))
+        {
+            const std::string carbons_enable_id = stanza::uuid(account.context);
+            account.pending_carbons_enable_iq_ = carbons_enable_id;
+            this->send(stanza::iq()
+                           .from(account.jid())
+                           .type("set")
+                           .id(carbons_enable_id)
+                           .xep0280()
+                           .enable()
+                           .build(account.context)
+                           .get());
+        }
+        else
+        {
+            XDEBUG("Message carbons not advertised by server — skipping enable");
+        }
+    }
     else
     {
-        XDEBUG("MAM not advertised by server — skipping global catchup");
+        XDEBUG("Server disco returned no features — skipping carbons enable");
     }
+
+    run_account_connect_probes(resumed_session);
 }

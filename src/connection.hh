@@ -97,6 +97,7 @@ namespace weechat {
 
         bool conn_handler(event status, int error, xmpp_stream_error_t *stream_error);
         void run_post_connect_setup(bool resumed_session);
+        void run_account_connect_probes(bool resumed_session);
         void request_server_disco_probes(bool resumed_session);
         void run_optional_server_probes(bool resumed_session,
                                         std::span<const std::string> server_features);

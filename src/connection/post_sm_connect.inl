@@ -159,8 +159,8 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
                     .build(account.context)
                     .get());
 
-        // Gate carbons, bookmarks, MDS, and global MAM on server disco#info so
-        // minimal backends (e.g. Prosody behind xmpp-proxy) are not probed blindly.
+        // Gate carbons enable on server disco#info; MAM/bookmarks/MDS always run
+        // (account-level PEP/archive — not listed on domain disco on Prosody).
         request_server_disco_probes(resumed_session);
     }
 
