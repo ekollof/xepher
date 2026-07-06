@@ -62,6 +62,17 @@ void weechat::connection::send(xmpp_stanza_t *stanza)
     if (name)
     {
         const std::string_view stanza_name(name);
+        if (stanza_name == "enable" || stanza_name == "resume"
+            || stanza_name == "a" || stanza_name == "r")
+        {
+            account.last_top_level_ext_sent = last_top_level_ext::sm;
+        }
+        else if (stanza_name == "active" || stanza_name == "inactive")
+        {
+            const char *ns = xmpp_stanza_get_ns(stanza);
+            if (ns && std::string_view(ns) == "urn:xmpp:csi:0")
+                account.last_top_level_ext_sent = last_top_level_ext::csi;
+        }
         const bool is_app_stanza = stanza_name == "message"
             || stanza_name == "presence"
             || stanza_name == "iq";

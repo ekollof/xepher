@@ -1348,6 +1348,112 @@ bool weechat::account::caps_cache_get(std::string_view verification_hash,
     return false;
 }
 
+namespace {
+
+[[nodiscard]] auto parse_stream_ext_cache_value(std::string_view value) -> stream_ext_cache_caps
+{
+    stream_ext_cache_caps caps;
+    for (auto part : value | std::views::split(','))
+    {
+        const std::string token(part.begin(), part.end());
+        if (token.starts_with("sm="))
+        {
+            if (token == "sm=1")
+                caps.sm = true;
+            else if (token == "sm=0")
+                caps.sm = false;
+        }
+        else if (token.starts_with("csi="))
+        {
+            if (token == "csi=1")
+                caps.csi = true;
+            else if (token == "csi=0")
+                caps.csi = false;
+        }
+    }
+    return caps;
+}
+
+[[nodiscard]] auto format_stream_ext_cache_value(const stream_ext_cache_caps &caps) -> std::string
+{
+    std::string out;
+    if (caps.sm)
+        out += *caps.sm ? "sm=1" : "sm=0";
+    if (caps.csi)
+    {
+        if (!out.empty())
+            out += ',';
+        out += *caps.csi ? "csi=1" : "csi=0";
+    }
+    return out;
+}
+
+}  // namespace
+
+stream_ext_cache_caps
+weechat::account::stream_ext_cache_get(std::string_view domain) const
+{
+    if (domain.empty() || !mam_db_env)
+        return {};
+
+    const std::string key = fmt::format("stream_ext:{}", domain);
+    try
+    {
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, MDB_RDONLY);
+        MDB_val mdb_key {
+            .mv_size = key.size(),
+            .mv_data = const_cast<void *>(static_cast<const void *>(key.data())),
+        };
+        MDB_val mdb_value {};
+        if (mdb_get(txn.handle(), mam_dbi.capabilities.handle(), &mdb_key, &mdb_value) != 0)
+            return {};
+
+        const std::string_view value(static_cast<const char *>(mdb_value.mv_data),
+                                     mdb_value.mv_size);
+        return parse_stream_ext_cache_value(value);
+    }
+    catch (const lmdb::error &)
+    {
+        return {};
+    }
+}
+
+void weechat::account::stream_ext_cache_set(std::string_view domain,
+                                            stream_ext ext,
+                                            bool available)
+{
+    if (domain.empty() || !mam_db_env)
+        return;
+
+    auto caps = stream_ext_cache_get(domain);
+    switch (ext)
+    {
+    case stream_ext::sm:
+        caps.sm = available;
+        break;
+    case stream_ext::csi:
+        caps.csi = available;
+        break;
+    }
+
+    const std::string value = format_stream_ext_cache_value(caps);
+    if (value.empty())
+        return;
+
+    const std::string key = fmt::format("stream_ext:{}", domain);
+    try
+    {
+        lmdb::txn parent_transaction{nullptr};
+        lmdb::txn txn = lmdb::txn::begin(mam_db_env, parent_transaction, 0);
+        mam_cache_put_in_txn(txn.handle(), mam_dbi.capabilities.handle(), key, value);
+        txn.commit();
+    }
+    catch (const lmdb::error &)
+    {
+    }
+}
+
 void weechat::account::muc_title_cache_put(
     const std::string_view room_jid,
     const std::string_view title)

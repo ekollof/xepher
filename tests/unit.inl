@@ -3492,3 +3492,44 @@ TEST_CASE("stream_error_disables_csi")
     CHECK_FALSE(disables(XMPP_SE_CONFLICT, false, true));
 }
 
+TEST_CASE("stream_features_xml_advertises_csi")
+{
+    CHECK(stream_features_xml_advertises_csi(
+        "<stream:features><csi xmlns='urn:xmpp:csi:0'/></stream:features>"));
+    CHECK_FALSE(stream_features_xml_advertises_csi(
+        "<stream:features><sm xmlns='urn:xmpp:sm:3'/></stream:features>"));
+    CHECK_FALSE(stream_features_xml_advertises_csi(""));
+}
+
+TEST_CASE("resolve_csi_available")
+{
+    const stream_ext_cache_caps empty{};
+    CHECK(resolve_csi_available(true, true, empty));
+    CHECK_FALSE(resolve_csi_available(true, false, empty));
+    CHECK(resolve_csi_available(true, std::nullopt, empty));
+    CHECK_FALSE(resolve_csi_available(false, std::nullopt, empty));
+
+    const stream_ext_cache_caps cached_no_csi { .csi = false };
+    CHECK_FALSE(resolve_csi_available(true, true, cached_no_csi));
+
+    const stream_ext_cache_caps cached_yes_csi { .csi = true };
+    CHECK(resolve_csi_available(false, std::nullopt, cached_yes_csi));
+}
+
+TEST_CASE("recoverable_unsupported_stanza_downgrade")
+{
+    const auto classify = recoverable_unsupported_stanza_downgrade;
+    CHECK(classify(XMPP_SE_UNSUPPORTED_STANZA_TYPE, true, true, true,
+                   last_top_level_ext::none) == stream_ext::sm);
+    CHECK(classify(XMPP_SE_UNSUPPORTED_STANZA_TYPE, false, true, true,
+                   last_top_level_ext::csi) == stream_ext::csi);
+    CHECK(classify(XMPP_SE_UNSUPPORTED_STANZA_TYPE, false, true, true,
+                   last_top_level_ext::none) == stream_ext::csi);
+    CHECK(classify(XMPP_SE_UNSUPPORTED_STANZA_TYPE, false, true, true,
+                   last_top_level_ext::sm) == stream_ext::sm);
+    CHECK_FALSE(classify(XMPP_SE_CONFLICT, true, true, true,
+                          last_top_level_ext::none).has_value());
+    CHECK_FALSE(classify(XMPP_SE_UNSUPPORTED_STANZA_TYPE, false, true, false,
+                          last_top_level_ext::csi).has_value());
+}
+

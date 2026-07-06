@@ -33,6 +33,7 @@
 #include "omemo.hh"
 #include "account.hh"
 #include "connection.hh"
+#include "connection/internal.hh"
 #include "user.hh"
 #include "nicklist.hh"
 #include "channel.hh"
@@ -517,9 +518,21 @@ weechat::account::~account()
 
 void weechat::account::disconnect(int reconnect)
 {
+    disconnect_impl(reconnect, false);
+}
+
+void weechat::account::disconnect_reconnect_immediate()
+{
+    disconnect_impl(true, true);
+}
+
+void weechat::account::disconnect_impl(int reconnect, bool immediate_reconnect)
+{
     // Safety check: if plugin is destroyed, don't call weechat functions
     if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
         return;
+
+    stream_features_sniff_restore(connection);
 
     // Clean up any in-flight XEP-0363 upload threads BEFORE unhooking fd hooks.
     // std::thread::~thread() calls std::terminate() if the thread is still joinable,
@@ -674,16 +687,26 @@ void weechat::account::disconnect(int reconnect)
 
     if (reconnect)
     {
-        // Exponential backoff: 5 → 10 → 20 → 40 → 80 → 120s (capped)
-        if (reconnect_delay == 0)
-            reconnect_delay = 5;
+        if (immediate_reconnect)
+        {
+            reconnect_delay = 0;
+            reconnect_start = time(nullptr) - 1;
+            weechat::UiPort::for_buffer(buffer)->printf_network(
+                "xmpp: reconnecting immediately…");
+        }
         else
-            reconnect_delay = std::min(reconnect_delay * 2, 120);
-        current_retry++;
-        reconnect_start = time(nullptr) + reconnect_delay;
-        weechat::UiPort::for_buffer(buffer)->printf_network(
-            fmt::format("xmpp: reconnecting in {}s (attempt {})…",
-                        reconnect_delay, current_retry));
+        {
+            // Exponential backoff: 5 → 10 → 20 → 40 → 80 → 120s (capped)
+            if (reconnect_delay == 0)
+                reconnect_delay = 5;
+            else
+                reconnect_delay = std::min(reconnect_delay * 2, 120);
+            current_retry++;
+            reconnect_start = time(nullptr) + reconnect_delay;
+            weechat::UiPort::for_buffer(buffer)->printf_network(
+                fmt::format("xmpp: reconnecting in {}s (attempt {})…",
+                            reconnect_delay, current_retry));
+        }
     }
     else
     {
@@ -897,11 +920,24 @@ int weechat::account::connect([[maybe_unused]] bool manual)
     }
 
     reset();
-    
-    // Reset SM availability on any connect attempt.
-    // We no longer permanently poison sm_available on <failed> (see
-    // stream_management.inl), so it is safe to re-try SM on auto-reconnect.
+
+    last_top_level_ext_sent = last_top_level_ext::none;
+
+    // Reset SM availability on any connect attempt, but honour per-server LMDB
+    // caps learned from prior unsupported-stanza-type downgrades.
     sm_available = true;
+    csi_available = true;
+    {
+        ::jid parsed(nullptr, std::string(option_jid.string()));
+        if (!parsed.domain.empty())
+        {
+            const auto cached = stream_ext_cache_get(parsed.domain);
+            if (cached.sm && !*cached.sm)
+                sm_available = false;
+            if (cached.csi && !*cached.csi)
+                csi_available = false;
+        }
+    }
 
     is_connected = connection.connect(std::string(jid()), std::string(password()), tls());
 

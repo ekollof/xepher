@@ -6,6 +6,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
 
 #include <strophe.h>
 
@@ -76,6 +78,10 @@ struct sm_state_layout {
 
 }  // namespace libstrophe_layout
 
+enum class stream_ext { sm, csi };
+
+enum class last_top_level_ext { none, sm, csi };
+
 // libstrophe records post-auth <sm/> in sm_state->sm_support during
 // _handle_features_sasl. xmpp_conn_get_sm_state() only works while disconnected
 // (returns nullptr when CONNECT fires), so read conn->sm_state in place.
@@ -89,4 +95,78 @@ struct sm_state_layout {
         return false;
     const auto &sm_layout = *reinterpret_cast<const libstrophe_layout::sm_state_layout *>(sm);
     return sm_layout.sm_support != 0;
+}
+
+// True when a post-auth <stream:features> chunk advertises XEP-0352 CSI.
+[[nodiscard]] inline bool stream_features_xml_advertises_csi(std::string_view xml) noexcept
+{
+    return xml.contains("urn:xmpp:csi:0")
+        && (xml.contains("<csi") || xml.contains(":csi"));
+}
+
+struct stream_ext_cache_caps {
+    std::optional<bool> sm;
+    std::optional<bool> csi;
+};
+
+namespace weechat {
+class connection;
+}
+
+void stream_features_sniff_install(weechat::connection &connection) noexcept;
+void stream_features_sniff_restore(weechat::connection &connection) noexcept;
+[[nodiscard]] std::optional<bool>
+stream_features_sniff_finish(weechat::connection &connection) noexcept;
+
+// Classify unsupported-stanza-type as a recoverable SM/CSI downgrade.
+[[nodiscard]] inline std::optional<stream_ext> recoverable_unsupported_stanza_downgrade(
+    xmpp_error_type_t error_type,
+    bool sm_negotiation_active,
+    bool sm_available,
+    bool csi_available,
+    last_top_level_ext last_sent) noexcept
+{
+    if (error_type != XMPP_SE_UNSUPPORTED_STANZA_TYPE)
+        return std::nullopt;
+
+    if (sm_negotiation_active && sm_available)
+        return stream_ext::sm;
+
+    if (!sm_negotiation_active && csi_available)
+    {
+        if (last_sent == last_top_level_ext::csi)
+            return stream_ext::csi;
+        if (last_sent == last_top_level_ext::sm)
+            return stream_ext::sm;
+        return stream_ext::csi;
+    }
+
+    return std::nullopt;
+}
+
+[[nodiscard]] inline std::string_view stream_ext_downgrade_label(stream_ext ext) noexcept
+{
+    switch (ext)
+    {
+    case stream_ext::sm:
+        return "Stream Management";
+    case stream_ext::csi:
+        return "Client State Indication";
+    }
+    return {};
+}
+
+// Merge sniffed features, LMDB cache, and SM heuristic for proactive CSI gating.
+[[nodiscard]] inline bool resolve_csi_available(
+    bool server_advertises_sm,
+    std::optional<bool> sniffed_csi,
+    const stream_ext_cache_caps &cached) noexcept
+{
+    if (cached.csi)
+        return *cached.csi;
+    if (sniffed_csi)
+        return *sniffed_csi;
+    if (!server_advertises_sm)
+        return false;
+    return true;
 }

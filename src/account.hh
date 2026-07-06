@@ -32,6 +32,7 @@
 #include "channel.hh"
 #include "xmpp/message_bob.hh"
 #include "connection.hh"
+#include "connection/strophe_stream_features.hh"
 #include "weechat/connection_port.hh"
 #include "user.hh"
 #include "ui/picker.hh"
@@ -163,7 +164,12 @@ namespace weechat
         friend void log_emit(void *const userdata, const xmpp_log_level_t level,
                              const char *const area, const char *const msg);
 
+        void disconnect_impl(int reconnect, bool immediate_reconnect);
+
     public:
+        // Last top-level XEP-0198 / XEP-0352 stanza sent (for stream-error attribution).
+        last_top_level_ext last_top_level_ext_sent = last_top_level_ext::none;
+
         // Client State Indication (XEP-0352)
         bool csi_available = true;    // Server accepts top-level <active/>/<inactive/>
         bool csi_active = true;
@@ -527,10 +533,14 @@ namespace weechat
         static int process_deferred_mam_page_cb(const void *pointer, void *data, int remaining_calls);
 
         void disconnect(int reconnect);
+        void disconnect_reconnect_immediate();
         void reset();
         int connect();
         int connect(bool manual);  // manual=true means user-initiated /connect
         
+        [[nodiscard]] stream_ext_cache_caps stream_ext_cache_get(std::string_view domain) const;
+        void stream_ext_cache_set(std::string_view domain, stream_ext ext, bool available);
+
         void mam_cache_init();
         void mam_cache_cleanup();
         void mam_cache_message(std::string_view channel_jid, std::string_view message_id,

@@ -22,10 +22,13 @@
 #include <weechat/weechat-plugin.h>
 #include <strophe.h>
 
-#include "connection/strophe_sm_support.hh"
+#include "connection/strophe_stream_features.hh"
 
-// Forward declaration
-namespace weechat { class account; }
+// Forward declarations
+namespace weechat {
+class account;
+class connection;
+}
 
 // Wake the WeeChat fd hook after a background worker finishes (best-effort).
 inline void signal_worker_pipe(int fd)

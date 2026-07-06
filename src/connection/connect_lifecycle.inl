@@ -108,6 +108,11 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         account.sm_resume_attempted = false;
 
         const bool server_advertises_sm = libstrophe_server_advertises_sm(*this);
+        const auto sniffed_csi = stream_features_sniff_finish(*this);
+
+        ::jid parsed(nullptr, std::string(account.option_jid.string()));
+        const std::string_view server_domain = parsed.domain;
+        const auto cached_caps = account.stream_ext_cache_get(server_domain);
 
         if (account.sm_available && !server_advertises_sm)
         {
@@ -117,9 +122,13 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             clear_sm_session_state(account);
         }
 
-        // Minimal backends (e.g. Prosody c2s behind xmpp-proxy) often lack both
-        // mod_sm and mod_csi. Top-level <active/> triggers unsupported-stanza-type.
-        account.csi_available = server_advertises_sm;
+        account.csi_available = resolve_csi_available(
+            server_advertises_sm, sniffed_csi, cached_caps);
+        if (!account.csi_available)
+        {
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                "Client State Indication not advertised by server — skipping");
+        }
 
         // XEP-0198 §3.1: negotiate SM before any application stanzas.
         if (should_negotiate_sm(account.sm_available, server_advertises_sm))
@@ -184,6 +193,15 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                 ui->printf_network(conn_msg);
         }
 
+        const auto recoverable_downgrade = stream_error
+            ? recoverable_unsupported_stanza_downgrade(
+                  stream_error->type,
+                  sm_negotiation_active,
+                  account.sm_available,
+                  account.csi_available,
+                  account.last_top_level_ext_sent)
+            : std::optional<stream_ext> {};
+
         if (stream_error)
         {
             const char *err_text = stream_error->text;
@@ -212,36 +230,40 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
                                    stream_error->type == XMPP_SE_UNSUPPORTED_VERSION ? "unsupported-version" :
                                    stream_error->type == XMPP_SE_XML_NOT_WELL_FORMED ? "xml-not-well-formed" :
                                    "unknown";
-            
-            weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
-                "Stream error: {}{}{}",
-                err_type,
-                err_text ? " - " : "",
-                err_text ? err_text : ""));
+
+            if (!recoverable_downgrade)
+            {
+                weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+                    "Stream error: {}{}{}",
+                    err_type,
+                    err_text ? " - " : "",
+                    err_text ? err_text : ""));
+            }
         }
-        
-        // Server rejected <enable/>/<resume/> with unsupported-stanza-type
-        // (common on Prosody backends without mod_sm behind xmpp-proxy).
-        // Disable SM for this process and clear state so auto-reconnect works.
-        if (stream_error
-            && sm_stream_error_disables_sm(stream_error->type, sm_negotiation_active))
+
+        if (recoverable_downgrade)
         {
-            account.sm_available = false;
-            clear_sm_session_state(account);
-            weechat::UiPort::for_buffer(account.buffer)->printf_network(
-                "Server rejected Stream Management — continuing without SM "
-                "on next connect");
-        }
-        // Top-level CSI <active/>/<inactive/> triggers the same stream error on
-        // servers without mod_csi (including SM-capable hosts missing the module).
-        else if (stream_error
-                 && stream_error_disables_csi(stream_error->type,
-                                              sm_negotiation_active,
-                                              account.csi_available))
-        {
-            account.csi_available = false;
-            weechat::UiPort::for_buffer(account.buffer)->printf_network(
-                "Client State Indication not supported by server — disabling");
+            switch (*recoverable_downgrade)
+            {
+            case stream_ext::sm:
+                account.sm_available = false;
+                clear_sm_session_state(account);
+                break;
+            case stream_ext::csi:
+                account.csi_available = false;
+                break;
+            }
+
+            ::jid parsed(nullptr, std::string(account.option_jid.string()));
+            if (!parsed.domain.empty())
+                account.stream_ext_cache_set(parsed.domain, *recoverable_downgrade, false);
+
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                "Falling back without {} — reconnecting immediately",
+                stream_ext_downgrade_label(*recoverable_downgrade)));
+
+            account.disconnect_reconnect_immediate();
+            return true;
         }
         // XEP-0198 §5: Preserve SM state on unexpected disconnect so the
         // reconnect timer can attempt <resume/>. Only clear on <conflict/>
@@ -383,6 +405,8 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
                account.sm_reconnect_host, altport);
     }
 
+    stream_features_sniff_install(*this);
+
     if (!connect_client(
             altdomain, altport, [](xmpp_conn_t *conn, xmpp_conn_event_t status,
                            int error, xmpp_stream_error_t *stream_error,
@@ -392,6 +416,7 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
                 connection.conn_handler(static_cast<event>(status), error, stream_error);
             }))
     {
+        stream_features_sniff_restore(*this);
         weechat::UiPort::for_buffer(nullptr)->printf_error(fmt::format(
             "{}: error connecting to {}",
             WEECHAT_XMPP_PLUGIN_NAME, jid));
