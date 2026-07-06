@@ -165,6 +165,7 @@ namespace weechat
 
     public:
         // Client State Indication (XEP-0352)
+        bool csi_available = true;    // Server accepts top-level <active/>/<inactive/>
         bool csi_active = true;
         time_t last_activity = 0;
         struct t_hook *idle_timer_hook = nullptr;

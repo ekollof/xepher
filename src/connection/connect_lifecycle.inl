@@ -117,6 +117,10 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             clear_sm_session_state(account);
         }
 
+        // Minimal backends (e.g. Prosody c2s behind xmpp-proxy) often lack both
+        // mod_sm and mod_csi. Top-level <active/> triggers unsupported-stanza-type.
+        account.csi_available = server_advertises_sm;
+
         // XEP-0198 §3.1: negotiate SM before any application stanzas.
         if (should_negotiate_sm(account.sm_available, server_advertises_sm))
         {
@@ -227,6 +231,17 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
             weechat::UiPort::for_buffer(account.buffer)->printf_network(
                 "Server rejected Stream Management — continuing without SM "
                 "on next connect");
+        }
+        // Top-level CSI <active/>/<inactive/> triggers the same stream error on
+        // servers without mod_csi (including SM-capable hosts missing the module).
+        else if (stream_error
+                 && stream_error_disables_csi(stream_error->type,
+                                              sm_negotiation_active,
+                                              account.csi_available))
+        {
+            account.csi_available = false;
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                "Client State Indication not supported by server — disabling");
         }
         // XEP-0198 §5: Preserve SM state on unexpected disconnect so the
         // reconnect timer can attempt <resume/>. Only clear on <conflict/>

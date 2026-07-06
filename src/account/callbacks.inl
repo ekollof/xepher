@@ -14,7 +14,7 @@ int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaini
     time_t idle_time = now - account->last_activity;
 
     // If idle for more than 5 minutes and currently active, send inactive
-    if (idle_time > 300 && account->csi_active)
+    if (idle_time > 300 && account->csi_available && account->csi_active)
     {
         account->connection.send(stanza::xep0352::inactive()
                                 .build(account->context)
@@ -95,7 +95,7 @@ int weechat::account::activity_cb(const void *pointer, void *data,
         return WEECHAT_RC_OK;
 
     // If currently inactive, send active
-    if (!account->csi_active)
+    if (account->csi_available && !account->csi_active)
     {
         account->connection.send(stanza::xep0352::active()
                                 .build(account->context)

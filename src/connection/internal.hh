@@ -77,6 +77,17 @@ inline void clear_sm_session_state(weechat::account &account) noexcept
         && error_type == XMPP_SE_UNSUPPORTED_STANZA_TYPE;
 }
 
+// True when unsupported-stanza-type likely means CSI must be disabled.
+[[nodiscard]] inline constexpr bool stream_error_disables_csi(
+    xmpp_error_type_t error_type,
+    bool sm_negotiation_active,
+    bool csi_available) noexcept
+{
+    return csi_available
+        && !sm_negotiation_active
+        && error_type == XMPP_SE_UNSUPPORTED_STANZA_TYPE;
+}
+
 void sm_start_ack_timer(weechat::account &account);
 
 // ── raw XML trace helpers ─────────────────────────────────────────────────────

@@ -583,20 +583,27 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
         }
     }
 
-    // Initialize Client State Indication (XEP-0352)
+    // Initialize Client State Indication (XEP-0352) when the server advertises SM.
+    // Proxy/minimal Prosody backends typically lack mod_csi as well as mod_sm.
     account.last_activity = time(nullptr);
-    account.csi_active = true;
+    if (account.csi_available)
+    {
+        account.csi_active = true;
+        this->send(stanza::xep0352::active()
+                   .build(account.context)
+                   .get());
 
-    this->send(stanza::xep0352::active()
-               .build(account.context)
-               .get());
-
-    account.csi_activity_hooks[0] = (struct t_hook *)weechat_hook_signal(
-        "input_text_changed", &account::activity_cb, &account, nullptr);
-    account.csi_activity_hooks[1] = (struct t_hook *)weechat_hook_signal(
-        "buffer_switch", &account::activity_cb, &account, nullptr);
-    account.csi_activity_hooks[2] = (struct t_hook *)weechat_hook_signal(
-        "key_pressed", &account::activity_cb, &account, nullptr);
+        account.csi_activity_hooks[0] = (struct t_hook *)weechat_hook_signal(
+            "input_text_changed", &account::activity_cb, &account, nullptr);
+        account.csi_activity_hooks[1] = (struct t_hook *)weechat_hook_signal(
+            "buffer_switch", &account::activity_cb, &account, nullptr);
+        account.csi_activity_hooks[2] = (struct t_hook *)weechat_hook_signal(
+            "key_pressed", &account::activity_cb, &account, nullptr);
+    }
+    else
+    {
+        account.csi_active = false;
+    }
 
     account.idle_timer_hook = (struct t_hook *)weechat_hook_timer(
         60 * 1000, 0, 0, &account::idle_timer_cb, &account, nullptr);

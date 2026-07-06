@@ -3477,3 +3477,18 @@ TEST_CASE("sm_stream_error_disables_sm")
     CHECK_FALSE(disables(XMPP_SE_CONFLICT, true));
 }
 
+TEST_CASE("stream_error_disables_csi")
+{
+    const auto disables = [](xmpp_error_type_t error_type,
+                             bool sm_negotiation_active,
+                             bool csi_available) {
+        return csi_available
+            && !sm_negotiation_active
+            && error_type == XMPP_SE_UNSUPPORTED_STANZA_TYPE;
+    };
+    CHECK(disables(XMPP_SE_UNSUPPORTED_STANZA_TYPE, false, true));
+    CHECK_FALSE(disables(XMPP_SE_UNSUPPORTED_STANZA_TYPE, true, true));
+    CHECK_FALSE(disables(XMPP_SE_UNSUPPORTED_STANZA_TYPE, false, false));
+    CHECK_FALSE(disables(XMPP_SE_CONFLICT, false, true));
+}
+
