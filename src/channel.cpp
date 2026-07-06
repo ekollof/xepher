@@ -745,8 +745,8 @@ std::optional<weechat::channel::member*> weechat::channel::add_member(std::strin
 
     if (this->id == id && type == weechat::channel::chat_type::MUC)
     {
-        weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "log2",
-            fmt::format("{}MUC: {}", weechat::RuntimePort::default_runtime().prefix("network"), id));
+        weechat::UiPort::for_buffer(buffer)->printf_date_tags_network(0, "log2",
+            fmt::format("MUC: {}", id));
         return std::nullopt;
     }
 
@@ -1118,11 +1118,9 @@ void weechat::channel::notify_omemo_missing_real_jids(weechat::UiPort &ui) const
 
     XDEBUG("omemo: online occupants missing real_jid in {}: {}", name, missing_list);
 
-    ui.printf_date_tags(0, "notify_none",
-        fmt::format("{}{}",
-                    weechat::RuntimePort::default_runtime().prefix("error"),
-                    fmt::format("OMEMO requires real JIDs visible for all online occupants (missing: {})",
-                                missing_list)));
+    ui.printf_date_tags_error(0, "notify_none",
+        fmt::format("OMEMO requires real JIDs visible for all online occupants (missing: {})",
+                    missing_list));
 }
 
 bool weechat::channel::muc_supports_omemo() const
@@ -1218,10 +1216,8 @@ void weechat::channel::maybe_disable_muc_omemo()
             ? "fully anonymous"
             : "not non-anonymous";
 
-    weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-        fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("network"),
-                    fmt::format("OMEMO disabled: room is {} (XEP-0384 requires non-anonymous)",
-                                reason)));
+    weechat::UiPort::for_buffer(buffer)->printf_date_tags_network(0, "notify_none",
+        fmt::format("OMEMO disabled: room is {} (XEP-0384 requires non-anonymous)", reason));
 }
 
 std::string weechat::channel::omemo_status() const
@@ -1463,17 +1459,15 @@ int weechat::channel::send_bob_image(std::string_view to,
 
     if (!::xmpp::bob_payload_size_ok(data.size()))
     {
-        weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-            fmt::format("{}: image too large for XEP-0231 BoB (max {} bytes)",
-                        weechat::RuntimePort::default_runtime().prefix("error"), ::xmpp::k_bob_max_payload_bytes));
+        weechat::UiPort::for_buffer(buffer)->printf_date_tags_error(0, "notify_none",
+            fmt::format("image too large for XEP-0231 BoB (max {} bytes)", ::xmpp::k_bob_max_payload_bytes));
         return WEECHAT_RC_ERROR;
     }
 
     if (account.omemo && omemo.enabled)
     {
-        weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-            fmt::format("{}: BoB send requires plaintext; disable OMEMO or use /upload",
-                        weechat::RuntimePort::default_runtime().prefix("error")));
+        weechat::UiPort::for_buffer(buffer)->printf_date_tags_error(0, "notify_none",
+            "BoB send requires plaintext; disable OMEMO or use /upload");
         return WEECHAT_RC_ERROR;
     }
 
@@ -1557,16 +1551,14 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
     {
         if (!muc_supports_omemo())
         {
-            weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}: OMEMO group chat requires a non-anonymous room (XEP-0384 §5.8)",
-                            weechat::RuntimePort::default_runtime().prefix("error")));
+            weechat::UiPort::for_buffer(buffer)->printf_date_tags_error(0, "notify_none",
+                "OMEMO group chat requires a non-anonymous room (XEP-0384 §5.8)");
             return WEECHAT_RC_ERROR;
         }
         if (omemo_recipient_jids.empty())
         {
-            weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}: OMEMO not ready yet (waiting for member/admin/owner lists)",
-                            weechat::RuntimePort::default_runtime().prefix("error")));
+            weechat::UiPort::for_buffer(buffer)->printf_date_tags_error(0, "notify_none",
+                "OMEMO not ready yet (waiting for member/admin/owner lists)");
             return WEECHAT_RC_ERROR;
         }
         if (!all_occupants_have_real_jid())
@@ -1615,17 +1607,15 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
 
                 queue_pending_omemo_message(body_str);
                 account.omemo.request_axolotl_devicelist(account, peer_bare);
-                weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                    fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("network"),
-                                "OMEMO not ready yet; queued message and requested device/bundle updates"));
+                weechat::UiPort::for_buffer(buffer)->printf_date_tags_network(0, "notify_none",
+                    "OMEMO not ready yet; queued message and requested device/bundle updates");
                 return WEECHAT_RC_OK;
             }
 
-            weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("error"), "OMEMO Encryption Error"));
-            weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("error"),
-                            "Message not sent; OMEMO stays enabled for this channel"));
+            weechat::UiPort::for_buffer(buffer)->printf_date_tags_error(0, "notify_none",
+                "OMEMO Encryption Error");
+            weechat::UiPort::for_buffer(buffer)->printf_date_tags_error(0, "notify_none",
+                "Message not sent; OMEMO stays enabled for this channel");
             return WEECHAT_RC_ERROR;
         }
         msg.child(encrypted);
@@ -1647,8 +1637,7 @@ int weechat::channel::send_message(std::string_view to, std::string_view body, b
         }
         else
         {
-            weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "notify_none",
-                fmt::format("{}{}", weechat::RuntimePort::default_runtime().prefix("error"), "PGP Error"));
+            weechat::UiPort::for_buffer(buffer)->printf_date_tags_error(0, "notify_none", "PGP Error");
             set_transport(weechat::channel::transport::PLAIN, 1);
             return WEECHAT_RC_ERROR;
         }
@@ -2301,9 +2290,8 @@ void weechat::channel::fetch_mam(const char *id, time_t *start, time_t *end, con
             ? format_local_timestamp(*start) : "the beginning";
         const std::string end_str = end
             ? format_local_timestamp(*end) : "now";
-        weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, "xmpp_mam_fetch,notify_none,no_log",
-            fmt::format("{}Fetching history: {} → {}",
-                        weechat::RuntimePort::default_runtime().prefix("network"), start_str, end_str));
+        weechat::UiPort::for_buffer(buffer)->printf_date_tags_network(0, "xmpp_mam_fetch,notify_none,no_log",
+            fmt::format("Fetching history: {} → {}", start_str, end_str));
     }
 
     // XEP-0313: MUC MAM is addressed to the room JID.

@@ -356,8 +356,8 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         // All uploads done — build and publish the Atom entry
         xepher::pending_feed_post finished_post = std::move(post);
         ptr_account->pending_feed_posts.erase(post_it);
-        weechat::UiPort::for_buffer(finished_post.buffer)->printf_date_tags(0, "no_trigger,notify_none",
-            fmt::format("{}All embeds uploaded, publishing post…", weechat::RuntimePort::default_runtime().prefix("network")));
+        weechat::UiPort::for_buffer(finished_post.buffer)->printf_date_tags_network(0, "no_trigger,notify_none",
+            "All embeds uploaded, publishing post…");
         ptr_account->build_and_publish_post(finished_post);
         return WEECHAT_RC_OK;
     }
@@ -480,8 +480,8 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
         emit_upload_local_icat_preview(req, *ptr_account, ctx->local_path);
     }
 
-    weechat::UiPort::for_buffer(status_buf)->printf_date_tags(0, "no_trigger,notify_none",
-        fmt::format("{}File uploaded! Sharing link… {}", weechat::RuntimePort::default_runtime().prefix("network"), visible_link));
+    weechat::UiPort::for_buffer(status_buf)->printf_date_tags_network(0, "no_trigger,notify_none",
+        fmt::format("File uploaded! Sharing link… {}", visible_link));
 
     return WEECHAT_RC_OK;
 }

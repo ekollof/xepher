@@ -1994,7 +1994,6 @@ int command__names(const void *pointer, void *data,
         return weechat_strcasecmp(a.sort_nick.c_str(), b.sort_nick.c_str()) < 0;
     });
 
-    const char *net_prefix = weechat::RuntimePort::default_runtime().prefix("network");
     const char *key_clr = weechat::RuntimePort::default_runtime().color("chat_nick");
     const char *val_clr = weechat::RuntimePort::default_runtime().color("chat_value");
     const char *rst = weechat::RuntimePort::default_runtime().color("reset");
@@ -2005,21 +2004,21 @@ int command__names(const void *pointer, void *data,
         ui->printf("");
     if (entries.empty())
     {
-        ui->printf(fmt::format("{}{}No occupants known in {}{}{} yet "
+        ui->printf_network(fmt::format("{}No occupants known in {}{}{} yet "
                        "(join presence or disco#items may still be in flight).{}",
-                       net_prefix, key_clr, val_clr, room_label.c_str(), key_clr, rst));
-        ui->printf(fmt::format("{}End of /NAMES list.{}", net_prefix, rst));
+                       key_clr, val_clr, room_label.c_str(), key_clr, rst));
+        ui->printf_network(fmt::format("End of /NAMES list.{}", rst));
         return WEECHAT_RC_OK;
     }
 
-        ui->printf(fmt::format("{}{}Names in {}{}{} ({}):{}", net_prefix, key_clr, val_clr, room_label.c_str(), key_clr, entries.size(), rst));
+        ui->printf_network(fmt::format("{}Names in {}{}{} ({}):{}", key_clr, val_clr, room_label.c_str(), key_clr, entries.size(), rst));
 
     std::string line = fmt::format("= {} :", room_label);
     constexpr std::size_t wrap_at = 76;
 
     auto flush_line = [&]() {
         if (line.size() > 2)
-        ui->printf(fmt::format("{}{}{}", net_prefix, line.c_str(), rst));
+        ui->printf_network(fmt::format("{}{}", line.c_str(), rst));
         line = fmt::format("= {} :", room_label);
     };
 
@@ -2037,7 +2036,7 @@ int command__names(const void *pointer, void *data,
     }
     flush_line();
 
-        ui->printf(fmt::format("{}End of /NAMES list.{}", net_prefix, rst));
+        ui->printf_network(fmt::format("End of /NAMES list.{}", rst));
     return WEECHAT_RC_OK;
 }
 
@@ -2090,14 +2089,13 @@ int command__modes(const void *pointer, void *data,
     }
 
     const auto &info = ptr_channel->get_muc_info();
-    const char *prefix = weechat::RuntimePort::default_runtime().prefix("network");
     const char *key_clr = weechat::RuntimePort::default_runtime().color("chat_nick");
     const char *val_clr = weechat::RuntimePort::default_runtime().color("chat_value");
     const char *sep     = weechat::RuntimePort::default_runtime().color("chat_delimiters");
     const char *rst     = weechat::RuntimePort::default_runtime().color("reset");
 
         ui->printf("");
-        ui->printf(fmt::format("{}{}Room modes for {}{}{}:", prefix, key_clr, val_clr, ptr_channel->id.data(), rst));
+        ui->printf_network(fmt::format("{}Room modes for {}{}{}:", key_clr, val_clr, ptr_channel->id.data(), rst));
 
     auto row = [&](const char *label, std::string value) {
         ui->printf(fmt::format("  {}{:<20}{} {}{}{}", key_clr, label, rst, val_clr, value.c_str(), rst));

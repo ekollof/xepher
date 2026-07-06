@@ -139,13 +139,12 @@ int command__links(COMMAND_ARGS)
 
     // ── Print the list ────────────────────────────────────────────────────────
 
-    const char *pfx  = weechat::RuntimePort::default_runtime().prefix("network");
     const char *bold = weechat::RuntimePort::default_runtime().color("bold");
     const char *rst  = weechat::RuntimePort::default_runtime().color("reset");
     const char *dim  = weechat::RuntimePort::default_runtime().color("darkgray");
     const char *cyan = weechat::RuntimePort::default_runtime().color("cyan");
 
-        ui->printf(fmt::format("{}xmpp/links: {} URL{} in this buffer:", pfx, urls.size(), urls.size() == 1 ? "" : "s"));
+        ui->printf_network(fmt::format("xmpp/links: {} URL{} in this buffer:", urls.size(), urls.size() == 1 ? "" : "s"));
 
     for (auto &e : urls)
     {
@@ -163,11 +162,11 @@ int command__links(COMMAND_ARGS)
 
         if (cached && !cached->title.empty())
         {
-        ui->printf(fmt::format("{}  {}{}{}  {}{}{}  {}{}{}", pfx, dim, time_str.c_str(), rst, cyan, e.url.c_str(), rst, bold, cached->title.c_str(), rst));
+        ui->printf_network(fmt::format("  {}{}{}  {}{}{}  {}{}{}", dim, time_str.c_str(), rst, cyan, e.url.c_str(), rst, bold, cached->title.c_str(), rst));
         }
         else
         {
-        ui->printf(fmt::format("{}  {}{}{}  {}{}{}", pfx, dim, time_str.c_str(), rst, cyan, e.url.c_str(), rst));
+        ui->printf_network(fmt::format("  {}{}{}  {}{}{}", dim, time_str.c_str(), rst, cyan, e.url.c_str(), rst));
         }
     }
 
@@ -202,13 +201,12 @@ int command__links(COMMAND_ARGS)
     if (queued > 0 || inflight > 0)
     {
         std::string footer = fmt::format(
-            "{}xmpp/links: {} fetch{} queued in background",
-            pfx,
+            "xmpp/links: {} fetch{} queued in background",
             queued, queued == 1 ? "" : "es");
         if (inflight > 0)
             footer += fmt::format(", {} already in-flight", inflight);
         footer += " \xe2\x80\x94 re-run /links to see updated titles";
-        ui->printf(footer.c_str());
+        ui->printf_network(footer);
     }
 
     return WEECHAT_RC_OK;

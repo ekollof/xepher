@@ -61,11 +61,10 @@ void weechat::log_emit(void *const userdata, const xmpp_log_level_t level,
 
     const char *tags = level > XMPP_LEVEL_DEBUG ? "no_log" : nullptr;
 
-    weechat::UiPort::for_buffer(account ? account->buffer : nullptr)->printf_date_tags(
+    weechat::UiPort::for_buffer(account ? account->buffer : nullptr)->printf_date_tags_network(
         0, tags ? tags : "",
-        fmt::format(fmt::runtime(_("%s%s (%s): %s")),
-                    weechat::RuntimePort::default_runtime().prefix("network"), area,
-                    log_level_name[level], msg));
+        fmt::format(fmt::runtime(_("%s (%s): %s")),
+                    area, log_level_name[level], msg));
 }
 
 bool weechat::account::search(weechat::account* &out,

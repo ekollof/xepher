@@ -280,9 +280,8 @@ void weechat::avatar::load_for_user(account& acc, user& user)
         );
         user.cached_prefix_raw.clear();
         
-        weechat::UiPort::for_buffer(acc.buffer)->printf_date_tags(0, "xmpp_avatar",
-            fmt::format("{}Loaded cached avatar for {} (hash: {:.8}...)",
-                        weechat::RuntimePort::default_runtime().prefix("network"), user.id, hash));
+        weechat::UiPort::for_buffer(acc.buffer)->printf_date_tags_network(0, "xmpp_avatar",
+            fmt::format("Loaded cached avatar for {} (hash: {:.8}...)", user.id, hash));
     }
 }
 

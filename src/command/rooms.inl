@@ -338,9 +338,8 @@ int command__upload(const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
-        ui->printf_date_tags(0, "no_trigger,notify_none",
-            fmt::format("{}Sending image via XEP-0231 BoB ({} bytes)...",
-                        weechat::RuntimePort::default_runtime().prefix("network"), filesize));
+        ui->printf_date_tags_network(0, "no_trigger,notify_none",
+            fmt::format("Sending image via XEP-0231 BoB ({} bytes)...", filesize));
         ptr_channel->send_bob_image(
             ptr_channel->id, image_bytes, content_type, sanitized_basename);
         return WEECHAT_RC_OK;

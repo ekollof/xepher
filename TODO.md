@@ -31,10 +31,10 @@ Post-migration audit. Surgical/minimal changes only; update this section when it
 
 ### Gaps (prioritized)
 
-| Priority | Gap | Location(s) | Remediation |
-|----------|-----|-------------|-------------|
-| Low | `debug.hh` bypasses ports | `XDEBUG` → raw `weechat_printf` | Optional: route through `UiPort` when refactoring debug path |
-| Low | Manual prefix outside handlers | `channel.cpp`, `command/*.inl`, `account.cpp`, etc. | Use typed `UiPort` methods when those paths are next edited |
+None tracked — last sweep routed `XDEBUG` through `UiPort` and replaced embedded
+`prefix("network")` / `prefix("error")` notification bodies with
+`printf_*` / `printf_date_tags_*` typed methods (join/quit/action dated chat
+columns remain intentional exceptions).
 
 ### Acceptable exceptions (no action unless touched)
 

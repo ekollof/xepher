@@ -7,6 +7,7 @@
 #include <string>
 #include <weechat/weechat-plugin.h>
 #include "fmt/core.h"
+#include "weechat/ui_port.hh"
 
 // Debug buffer singleton — created lazily on first XDEBUG() call.
 // All XDEBUG() calls write here when debug mode is on.
@@ -59,11 +60,14 @@ namespace weechat::debug
         for (const char *p = file; *p; ++p)
             if (*p == '/')
                 base = p + 1;
-        weechat_printf(buf, "%s[%s:%d]%s %s",
-                       weechat_color("darkgray"),
-                       base, line,
-                       weechat_color("reset"),
-                       msg.c_str());
+        if (auto ui = weechat::UiPort::for_buffer(buf))
+        {
+            ui->printf(fmt::format("{}[{}:{}]{} {}",
+                                   weechat_color("darkgray"),
+                                   base, line,
+                                   weechat_color("reset"),
+                                   msg));
+        }
     }
 } // namespace weechat::debug
 
