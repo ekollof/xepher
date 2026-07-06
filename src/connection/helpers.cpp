@@ -60,6 +60,56 @@
     return parsed;
 }
 
+// ── stanza size helpers ───────────────────────────────────────────────────────
+
+[[nodiscard]] std::optional<std::size_t> stanza_xml_byte_size(xmpp_conn_t *conn,
+                                                               xmpp_stanza_t *stanza)
+{
+    if (!conn || !stanza)
+        return std::nullopt;
+
+    char *xml = nullptr;
+    size_t xml_len = 0;
+    if (xmpp_stanza_to_text(stanza, &xml, &xml_len) != XMPP_EOK || !xml)
+        return std::nullopt;
+
+    struct xmpp_string_cleanup {
+        xmpp_conn_t *conn_;
+        char *ptr_;
+        ~xmpp_string_cleanup()
+        {
+            if (ptr_)
+                xmpp_free(xmpp_conn_get_context(conn_), ptr_);
+        }
+    } guard{conn, xml};
+
+    return xml_len;
+}
+
+[[nodiscard]] bool send_within_stanza_byte_limit(weechat::connection &connection,
+                                                  xmpp_stanza_t *stanza,
+                                                  std::size_t max_bytes,
+                                                  std::string_view label)
+{
+    if (!stanza)
+        return false;
+
+    const auto size = stanza_xml_byte_size(static_cast<xmpp_conn_t *>(connection), stanza);
+    if (!size)
+        return false;
+
+    if (*size > max_bytes)
+    {
+        weechat::UiPort::for_buffer(connection.account.buffer)->printf_network(fmt::format(
+            "Skipping {} stanza ({} bytes > {} byte proxy-safe limit)",
+            label, *size, max_bytes));
+        return false;
+    }
+
+    connection.send(stanza);
+    return true;
+}
+
 // ── raw XML trace helpers ─────────────────────────────────────────────────────
 
 [[nodiscard]] std::string raw_xml_trace_path(weechat::account &account)

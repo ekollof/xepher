@@ -149,23 +149,6 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
 
     if (!resumed_session)
     {
-        {
-            const std::string carbons_enable_id = stanza::uuid(account.context);
-            account.pending_carbons_enable_iq_ = carbons_enable_id;
-            this->send(stanza::iq()
-                        .from(account.jid())
-                        .type("set")
-                        .id(carbons_enable_id)
-                        .xep0280()
-                        .enable()
-                        .build(account.context)
-                        .get());
-        }
-    }
-
-
-    if (!resumed_session)
-    {
         this->send(stanza::iq()
                     .from(account.jid())
                     .to(account.jid())
@@ -176,51 +159,9 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
                     .build(account.context)
                     .get());
 
-        this->send(stanza::iq()
-                    .from(account.jid())
-                    .to(account.jid())
-                    .type("get")
-                    .id(stanza::uuid(account.context))
-                    .xep0049()
-                    .query(stanza::xep0049::query().bookmarks())
-                    .build(account.context)
-                    .get());
-
-        // XEP-0402 §5: fetch PEP Native Bookmarks node on connect so we have
-        // the full bookmark list, not just push events from the current session.
-        {
-            stanza::xep0060::items bm_items("urn:xmpp:bookmarks:1");
-            stanza::xep0060::pubsub bm_ps;
-            bm_ps.items(bm_items);
-            this->send(stanza::iq()
-                        .from(account.jid())
-                        .to(account.jid())
-                        .type("get")
-                        .id(stanza::uuid(account.context))
-                         .xep0060()
-                         .pubsub(bm_ps)
-                         .build(account.context)
-                         .get());
-        }
-
-        // XEP-0490 §4: fetch own MDS node on connect to synchronize displayed
-        // state across devices (not just push notifications from this session).
-        {
-            const std::string mds_fetch_id = stanza::uuid(account.context);
-            account.pending_mds_fetch_iq_ = mds_fetch_id;
-            stanza::xep0060::items mds_items("urn:xmpp:mds:displayed:0");
-            stanza::xep0060::pubsub mds_ps;
-            mds_ps.items(mds_items);
-            this->send(stanza::iq()
-                        .from(account.jid())
-                        .to(account.jid())
-                        .type("get")
-                        .id(mds_fetch_id)
-                        .xep0060()
-                        .pubsub(mds_ps)
-                        .build(account.context)
-                        .get());
-        }
+        // Gate carbons, bookmarks, MDS, and global MAM on server disco#info so
+        // minimal backends (e.g. Prosody behind xmpp-proxy) are not probed blindly.
+        request_server_disco_probes(resumed_session);
     }
 
     account.omemo.init(account.buffer, account.name.data());
@@ -262,7 +203,9 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
                 if (std::shared_ptr<xmpp_stanza_t> legacy_bundle_stanza {
                         account.omemo.get_axolotl_bundle(account.context, jid_str.data(), nullptr),
                         xmpp_stanza_release})
-                    this->send(legacy_bundle_stanza.get());
+                    (void)send_within_stanza_byte_limit(
+                        *this, legacy_bundle_stanza.get(),
+                        k_proxy_safe_stanza_bytes, "OMEMO bundle publish");
             }
 
             // Do NOT publish our devicelist here.  We first fetch the server's
@@ -319,53 +262,6 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
                         .get());
         }
 
-        // Query MAM globally to discover recent conversations.
-        // If we have a persisted RSM cursor from a previous session, use it as
-        // an <after> token so we only fetch messages we haven't seen yet.
-        // Otherwise fall back to the last 7 days.
-        time_t now = time(nullptr);
-        time_t fetch_days = weechat::config::instance
-            ? static_cast<time_t>(weechat::config::instance->look.mam_fetch_days.integer())
-            : 3;
-        time_t start = now - (fetch_days * 86400);  // configurable fallback
-        std::string global_mam_cursor = account.mam_cursor_get("global");
-        const bool has_cursor = !global_mam_cursor.empty();
-
-        {
-            std::string global_mam_id = stanza::uuid(account.context);
-            account.add_mam_query(global_mam_id.c_str(), "",  // Empty 'with' means global query
-                                 has_cursor ? std::optional<time_t>{} : std::optional<time_t>(start),
-                                 std::optional<time_t>(now));
-            // Defer OMEMO key-transport sends until all archived messages are
-            // replayed (Conversations-style postponed session completion).
-            account.omemo.global_mam_catchup = true;
-
-            stanza::xep0059::set rsm_set;
-            rsm_set.max(50);
-
-            stanza::xep0313::query mam_query;
-            if (!has_cursor)
-            {
-                // No cursor: use a data form with a start-time filter
-                stanza::xep0313::x_filter xf;
-                xf.start(format_utc_timestamp(start));
-                mam_query.filter(xf).rsm(rsm_set);
-            }
-            else
-            {
-                // Have cursor: RSM <after> — no time filter, resume from last seen message
-                rsm_set.after(global_mam_cursor);
-                mam_query.rsm(rsm_set);
-            }
-
-            this->send(stanza::iq()
-                        .type("set")
-                        .id(global_mam_id)
-                        .xep0313()
-                        .query(mam_query)
-                        .build(account.context)
-                        .get());
-        }
     }
 
     // Helper: send a XEP-0442 MAM query against a pubsub node.

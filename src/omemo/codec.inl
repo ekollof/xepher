@@ -361,7 +361,9 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
                         "OMEMO: replaced consumed pre-key {} — republishing bundle",
                         *used_prekey_id));
                     if (std::shared_ptr<xmpp_stanza_t> lbs { get_axolotl_bundle(*account->context, nullptr, nullptr), xmpp_stanza_release })
-                        account->connection.send(lbs.get());
+                        (void)send_within_stanza_byte_limit(
+                            account->connection, lbs.get(),
+                            k_proxy_safe_stanza_bytes, "OMEMO bundle republish");
                 }
             }
     }

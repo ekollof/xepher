@@ -39,6 +39,7 @@
 
 #include "account.hh"
 #include "config.hh"
+#include "connection/internal.hh"
 #include "debug.hh"
 #include "util.hh"
 #include "gcrypt.hh"

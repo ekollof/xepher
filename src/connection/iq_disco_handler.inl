@@ -786,6 +786,27 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
     (void)to;
     xmpp_stanza_t *reply = nullptr;
 
+    // Connect-time server disco#info (gates optional carbons/bookmarks/MDS/MAM).
+    if (id && account.pending_server_disco_id
+        && *account.pending_server_disco_id == id && type)
+    {
+        if (weechat_strcasecmp(type, "result") == 0)
+        {
+            const ::xmpp::StanzaView probe_query =
+                view.child("query", "http://jabber.org/protocol/disco#info");
+            const std::vector<std::string> features = probe_query.valid()
+                ? ::xmpp::disco_feature_vars(::xmpp::StanzaView(probe_query))
+                : std::vector<std::string>{};
+            run_optional_server_probes(false, features);
+        }
+        else if (weechat_strcasecmp(type, "error") == 0)
+        {
+            XDEBUG("Server disco#info failed — skipping optional probes");
+            run_optional_server_probes(false, {});
+        }
+        return true;
+    }
+
     const ::xmpp::StanzaView query = view.child("query", "http://jabber.org/protocol/disco#info");
     if (!query.valid() || !type)
         return false;

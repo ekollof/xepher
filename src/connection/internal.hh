@@ -12,6 +12,7 @@
 
 #include <expected>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <list>
@@ -92,6 +93,27 @@ inline void clear_sm_session_state(weechat::account &account) noexcept
 }
 
 void sm_start_ack_timer(weechat::account &account);
+
+// Default xmpp-proxy max_stanza_size_bytes is 262144; stay below that.
+inline constexpr std::size_t k_proxy_safe_stanza_bytes = 250'000;
+
+[[nodiscard]] inline bool disco_features_contain(
+    std::span<const std::string> features,
+    std::string_view var) noexcept
+{
+    return std::ranges::any_of(features, [&](const std::string &f) {
+        return f == var;
+    });
+}
+
+[[nodiscard]] std::optional<std::size_t> stanza_xml_byte_size(xmpp_conn_t *conn,
+                                                               xmpp_stanza_t *stanza);
+
+// Send only when the serialized stanza fits within max_bytes (proxy safety).
+[[nodiscard]] bool send_within_stanza_byte_limit(weechat::connection &connection,
+                                                  xmpp_stanza_t *stanza,
+                                                  std::size_t max_bytes,
+                                                  std::string_view label);
 
 // ── raw XML trace helpers ─────────────────────────────────────────────────────
 // Compute the log-file path for the given account.

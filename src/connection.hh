@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <strophe.h>
 #include "xmpp/ns.hh"
@@ -96,6 +97,9 @@ namespace weechat {
 
         bool conn_handler(event status, int error, xmpp_stream_error_t *stream_error);
         void run_post_connect_setup(bool resumed_session);
+        void request_server_disco_probes(bool resumed_session);
+        void run_optional_server_probes(bool resumed_session,
+                                        std::span<const std::string> server_features);
 
         void send_sm_graceful_ack();
 

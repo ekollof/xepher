@@ -741,7 +741,9 @@ void weechat::xmpp::omemo::process_postponed_bundle_republish(weechat::account &
     if (std::shared_ptr<xmpp_stanza_t> lbs {
             get_axolotl_bundle(*account.context, nullptr, nullptr), xmpp_stanza_release })
     {
-        account.connection.send(lbs.get());
-        print_info(buf, "OMEMO: republished bundle after MAM catchup (deferred consumed pre-key replacement)");
+        if (send_within_stanza_byte_limit(
+                account.connection, lbs.get(),
+                k_proxy_safe_stanza_bytes, "OMEMO bundle republish"))
+            print_info(buf, "OMEMO: republished bundle after MAM catchup (deferred consumed pre-key replacement)");
     }
 }

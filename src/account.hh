@@ -218,6 +218,10 @@ namespace weechat
         std::unordered_map<std::string, std::string> caps_disco_queries;  // disco_id -> verification_hash
         std::unordered_map<std::string, std::string> upload_disco_queries;  // disco_id -> service_jid
 
+        // Server disco#info issued on connect to gate optional IQ probes (MAM, MDS, …).
+        std::optional<std::string> pending_server_disco_id;
+        bool optional_server_probes_done = false;
+
         // XEP-0050: Ad-Hoc Commands query tracking
         struct adhoc_query_info {
             std::string target_jid;   // JID we queried

@@ -194,7 +194,9 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                         account.omemo.get_axolotl_bundle(account.context, jid_str.data(), nullptr);
                     if (bundle_stanza)
                     {
-                        account.connection.send(bundle_stanza);
+                        (void)send_within_stanza_byte_limit(
+                            account.connection, bundle_stanza,
+                            k_proxy_safe_stanza_bytes, "OMEMO bundle republish");
                         xmpp_stanza_release(bundle_stanza);
                     }
                 }
@@ -378,7 +380,9 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                             std::string jid_str(account.jid());
                             if (auto bundle_sp = account.omemo.build_axolotl_bundle(
                                     account.context, jid_str.data(), nullptr))
-                                account.connection.send(bundle_sp.get());
+                                (void)send_within_stanza_byte_limit(
+                                    account.connection, bundle_sp.get(),
+                                    k_proxy_safe_stanza_bytes, "OMEMO bundle republish");
                         }
                         else
                         {

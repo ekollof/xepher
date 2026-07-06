@@ -182,6 +182,25 @@ TEST_CASE("parse_uint32")
     }
 }
 
+TEST_CASE("disco_features_contain")
+{
+    const auto contain = [](const std::vector<std::string> &features, std::string_view var) {
+        return std::ranges::any_of(features, [&](const std::string &f) { return f == var; });
+    };
+
+    const std::vector<std::string> features{
+        "urn:xmpp:carbons:2",
+        "urn:xmpp:mam:2",
+        "storage:bookmarks",
+    };
+
+    CHECK(contain(features, "urn:xmpp:mam:2"));
+    CHECK(contain(features, "urn:xmpp:carbons:2"));
+    CHECK_FALSE(contain(features, "urn:xmpp:mds:displayed:0"));
+    CHECK_FALSE(contain(features, "urn:xmpp:bookmarks:1"));
+    CHECK_FALSE(contain(std::vector<std::string>{}, "urn:xmpp:mam:2"));
+}
+
 TEST_CASE("parse_sm_location")
 {
     SUBCASE("hostname with port")

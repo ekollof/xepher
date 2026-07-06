@@ -37,5 +37,6 @@
 #include "weechat/ui_port.hh"
 
 #include "connection/stream_management.inl"
+#include "connection/optional_server_probes.inl"
 #include "connection/post_sm_connect.inl"
 #include "connection/connect_lifecycle.inl"
