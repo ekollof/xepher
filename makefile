@@ -149,6 +149,6 @@ seed-libdiff:
 		echo ">>> Seeding deps/diff/libdiff.a"; \
 		cd deps/diff && \
 		echo "HAVE___PROGNAME=1" > configure.local && \
-		env -u MAKEFLAGS CC="$(CC)" sh ./configure && \
-		env -u MAKEFLAGS $(MAKE) CC="$(CC)" CFLAGS="-fPIC"; \
+		env -u MAKEFLAGS -u MFLAGS CC="$(CC)" sh ./configure && \
+		env -u MAKEFLAGS -u MFLAGS $(MAKE) -j1 CC="$(CC)" CFLAGS="-fPIC"; \
 	fi

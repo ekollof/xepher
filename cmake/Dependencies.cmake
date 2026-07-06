@@ -4,6 +4,10 @@ find_package(LibXml2 REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 pkg_check_modules(STROPH REQUIRED IMPORTED_TARGET libstrophe)
+# sexp/driver.hh includes <strophe.h>; pkg-config -I is required on BSD where
+# headers live under /usr/local/include (not a default compiler search path).
+target_link_libraries(xepher_sexp PRIVATE PkgConfig::STROPH)
+
 pkg_check_modules(GPGME REQUIRED IMPORTED_TARGET gpgme)
 pkg_check_modules(OMEMO REQUIRED IMPORTED_TARGET libomemo-c)
 pkg_check_modules(SIGNAL REQUIRED IMPORTED_TARGET libsignal-protocol-c)
