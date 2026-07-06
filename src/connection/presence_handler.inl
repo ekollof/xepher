@@ -426,6 +426,16 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             user->profile.role = role.empty() ? std::nullopt : std::optional<std::string>(role);
             user->profile.affiliation = (!affiliation.empty() && affiliation != "none")
                 ? std::optional<std::string>(affiliation) : std::nullopt;
+
+            // XEP-0384 §5.8.1: drop banned / de-affiliated users from encrypt targets.
+            if (channel
+                && channel->type == weechat::channel::chat_type::MUC
+                && item.real_jid
+                && (affiliation == "none" || affiliation == "outcast"))
+            {
+                channel->unregister_omemo_recipient(*item.real_jid);
+            }
+
             if (channel)
             {
                 if (pres.signature && channel->type != weechat::channel::chat_type::MUC)

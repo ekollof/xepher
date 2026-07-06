@@ -600,7 +600,8 @@ void request_axolotl_bundle(weechat::account &account, std::string_view jid, std
     const std::string own_bare_jid = normalize_bare_jid(account.context, account.jid());
     const bool is_own_jid = weechat_strcasecmp(target_jid.c_str(), own_bare_jid.c_str()) == 0;
     if (!is_own_jid
-        && !account.omemo.has_peer_traffic(account.context, target_jid))
+        && !account.omemo.has_peer_traffic(account.context, target_jid)
+        && !account.omemo_muc_occupant_in_eligible_room(target_jid))
     {
         XDEBUG("omemo: deferring legacy bundle request for {}/{} until PM/MAM traffic is observed",
                target_jid, device_id);
@@ -621,6 +622,18 @@ void request_axolotl_bundle(weechat::account &account, std::string_view jid, std
     if (!uuid.empty())
         account.omemo.pending_iq_jid[uuid] = target_jid;
     account.omemo.pending_bundle_fetch.insert(key);
+
+    if (account.omemo_muc_occupant_in_eligible_room(target_jid))
+    {
+        for (auto &[_, ch] : account.channels)
+        {
+            if (ch.type == weechat::channel::chat_type::MUC
+                && ch.omemo_recipient_jids.contains(target_jid))
+            {
+                ch.mark_omemo_bundle_pending(target_jid, device_id);
+            }
+        }
+    }
 
     XDEBUG("omemo: requesting legacy bundle for {}/{} (node={})", target_jid, device_id, bundle_node);
 

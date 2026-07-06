@@ -143,10 +143,16 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
                         const std::string nick = item.attr_string("nick");
                         const std::string real_jid = item.attr_string("jid");
                         const std::string affiliation = item.attr_string("affiliation");
-                        if (!real_jid.empty() )
+                        if (!real_jid.empty())
                         {
-                            ch.register_omemo_recipient(real_jid.c_str());
-                            if (!nick.empty() )
+                            if (affiliation == "none" || affiliation == "outcast")
+                                ch.unregister_omemo_recipient(real_jid);
+                            else if (affiliation.empty()
+                                     || weechat::channel::is_omemo_recipient_affiliation(
+                                            affiliation))
+                                ch.register_omemo_recipient(real_jid);
+
+                            if (!nick.empty())
                             {
                                 const std::string full_id =
                                     fmt::format("{}/{}", from_bare, nick);

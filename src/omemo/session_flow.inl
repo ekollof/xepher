@@ -281,6 +281,28 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
     if (!account)
         return;
 
+    // XEP-0384 §5.8.2: prefetch bundles for MUC OMEMO recipients.
+    if (account->omemo_muc_occupant_in_eligible_room(bare_jid))
+    {
+        note_peer_traffic(account->context, bare_jid);
+        for (const auto &dev : devices)
+        {
+            const auto remote_device_id = parse_uint32(dev);
+            if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
+                continue;
+
+            for (auto &[_, ch] : account->channels)
+            {
+                if (ch.type == weechat::channel::chat_type::MUC
+                    && ch.omemo_recipient_jids.contains(bare_jid))
+                {
+                    ch.mark_omemo_bundle_pending(bare_jid, *remote_device_id);
+                }
+            }
+            request_axolotl_bundle(*account, bare_jid, *remote_device_id);
+        }
+    }
+
     if (auto ch_it = account->channels.find(bare_jid);
         ch_it != account->channels.end())
     {

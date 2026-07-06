@@ -382,7 +382,11 @@ namespace weechat
         [[nodiscard]] bool muc_omemo_ready() const;
 
         void register_omemo_recipient(std::string_view bare_jid);
+        void unregister_omemo_recipient(std::string_view bare_jid);
         [[nodiscard]] std::vector<std::string> omemo_recipient_list() const;
+
+        // XEP-0384 §5.8.1: only member/admin/owner affiliations are encrypt targets.
+        [[nodiscard]] static bool is_omemo_recipient_affiliation(std::string_view affiliation);
 
         void mark_omemo_bundle_pending(std::string_view bare_jid, std::uint32_t device_id);
         void clear_omemo_bundle_pending(std::string_view bare_jid, std::uint32_t device_id);

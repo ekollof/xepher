@@ -386,6 +386,13 @@ int command__omemo(const void *pointer, void *data,
     // docs/planning-muc-omemo.md §6: Surface the blind-trust concern for MUCs.
     if (ptr_channel->type == weechat::channel::chat_type::MUC)
     {
+        if (!ptr_channel->get_muc_info().members_only)
+        {
+            ui->printf_network(fmt::format(
+                "{}: Note: XEP-0384 §5.8 recommends members-only rooms for OMEMO group chat; "
+                "this room is open.",
+                WEECHAT_XMPP_PLUGIN_NAME));
+        }
         ui->printf_network(fmt::format(
             "{}: Note: OMEMO in this MUC uses blind trust (BTBV) for all occupants by default. "
             "Manually verify important devices with /omemo trust if desired.",
