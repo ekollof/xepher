@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <algorithm>
+#include <cctype>
 #include <ranges>
 #include <span>
 #include <unordered_map>
@@ -23,6 +24,8 @@ void weechat::account::clear_server_capability_snapshot()
     server_components_.clear();
     pending_disco_summary_info_id_.reset();
     pending_disco_summary_items_id_.reset();
+    disco_summary_refresh_pending_print_ = false;
+    disco_summary_output_buffer_ = nullptr;
 }
 
 void weechat::account::record_domain_disco(const ::xmpp::StanzaView query)
@@ -94,18 +97,33 @@ weechat::account::gather_server_capabilities() const
     return caps;
 }
 
-void weechat::account::print_disco_summary_to_buffer(std::string_view title)
+void weechat::account::print_disco_summary_to_buffer(std::string_view title,
+                                                     struct t_gui_buffer *output_buffer)
 {
-    if (!buffer)
+    struct t_gui_buffer *out = output_buffer ? output_buffer : buffer;
+    if (!out)
         return;
 
-    auto ui = weechat::UiPort::for_buffer(buffer);
+    auto ui = weechat::UiPort::for_buffer(out);
     if (!title.empty())
         ui->printf_network(std::string(title));
 
     const auto caps = gather_server_capabilities();
     for (const std::string &line : ::xmpp::format_disco_summary(caps))
         ui->printf(line);
+}
+
+void weechat::account::finish_disco_summary_refresh_if_ready()
+{
+    if (!disco_summary_refresh_pending_print_)
+        return;
+    if (pending_disco_summary_info_id_ || pending_disco_summary_items_id_)
+        return;
+
+    disco_summary_refresh_pending_print_ = false;
+    struct t_gui_buffer *out = disco_summary_output_buffer_;
+    disco_summary_output_buffer_ = nullptr;
+    print_disco_summary_to_buffer("Server discovery refresh complete:", out);
 }
 
 void weechat::account::schedule_connect_disco_summary()

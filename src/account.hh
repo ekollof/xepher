@@ -231,6 +231,8 @@ namespace weechat
         std::unordered_map<std::string, ::xmpp::discovered_component> server_components_;
         std::optional<std::string> pending_disco_summary_info_id_;
         std::optional<std::string> pending_disco_summary_items_id_;
+        bool disco_summary_refresh_pending_print_ = false;
+        struct t_gui_buffer *disco_summary_output_buffer_ = nullptr;
 
         // XEP-0050: Ad-Hoc Commands query tracking
         struct adhoc_query_info {
@@ -692,7 +694,9 @@ namespace weechat
         void record_domain_disco(const ::xmpp::StanzaView query);
         void record_component_disco(std::string_view jid, const ::xmpp::StanzaView query);
         [[nodiscard]] ::xmpp::server_capabilities gather_server_capabilities() const;
-        void print_disco_summary_to_buffer(std::string_view title = {});
+        void print_disco_summary_to_buffer(std::string_view title = {},
+                                           struct t_gui_buffer *output_buffer = nullptr);
+        void finish_disco_summary_refresh_if_ready();
         void schedule_connect_disco_summary();
         void send_server_disco_summary_refresh();
 

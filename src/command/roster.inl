@@ -170,6 +170,66 @@ int command__blocklist(const void *pointer, void *data,
     return WEECHAT_RC_OK;
 }
 
+namespace {
+
+[[nodiscard]] bool disco_arg_ieq(const char *arg, std::string_view lit)
+{
+    if (!arg || !arg[0])
+        return false;
+    const std::string_view a(arg);
+    if (a.size() != lit.size())
+        return false;
+    return std::ranges::equal(a, lit, [](unsigned char x, unsigned char y) {
+        return std::tolower(x) == std::tolower(y);
+    });
+}
+
+[[nodiscard]] std::string_view disco_args_tail(char **argv_eol)
+{
+    if (!argv_eol || !argv_eol[0])
+        return {};
+    std::string_view rest(argv_eol[0]);
+    if (rest.starts_with("disco "))
+        rest.remove_prefix(6);
+    else if (rest.starts_with("disco"))
+        rest.remove_prefix(5);
+    while (!rest.empty() && rest.front() == ' ')
+        rest.remove_prefix(1);
+    return rest;
+}
+
+[[nodiscard]] bool disco_wants_summary(int argc, char **argv, char **argv_eol)
+{
+    if (argc > 1 && disco_arg_ieq(argv[1], "summary"))
+        return true;
+    const std::string_view tail = disco_args_tail(argv_eol);
+    return tail.starts_with("summary");
+}
+
+[[nodiscard]] bool disco_wants_items(int argc, char **argv, char **argv_eol)
+{
+    if (argc > 1 && disco_arg_ieq(argv[1], "items"))
+        return true;
+    const std::string_view tail = disco_args_tail(argv_eol);
+    return tail.starts_with("items");
+}
+
+[[nodiscard]] bool disco_wants_summary_refresh(int argc, char **argv, char **argv_eol)
+{
+    if (argc > 2 && disco_arg_ieq(argv[2], "refresh"))
+        return true;
+    if (argv_eol && argv_eol[1])
+    {
+        std::string_view rest(argv_eol[1]);
+        if (rest.starts_with("refresh") || rest.contains(" refresh"))
+            return true;
+    }
+    const std::string_view tail = disco_args_tail(argv_eol);
+    return tail.starts_with("summary refresh") || tail.contains(" summary refresh");
+}
+
+}  // namespace
+
 int command__disco(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
@@ -179,7 +239,6 @@ int command__disco(const void *pointer, void *data,
 
     (void) pointer;
     (void) data;
-    (void) argv_eol;
 
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
 
@@ -194,21 +253,25 @@ int command__disco(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    if (argc > 1 && weechat_strcasecmp(argv[1], "summary") == 0)
+    if (disco_wants_summary(argc, argv, argv_eol))
     {
-        const bool refresh = argc > 2 && weechat_strcasecmp(argv[2], "refresh") == 0;
+        const bool refresh = disco_wants_summary_refresh(argc, argv, argv_eol);
         if (refresh)
         {
+            ptr_account->disco_summary_output_buffer_ = buffer;
+            ptr_account->disco_summary_refresh_pending_print_ = true;
             ptr_account->send_server_disco_summary_refresh();
-            ui->printf_network("Refreshing server discovery (domain disco#info + disco#items)...");
+            ui->printf_network(
+                "Refreshing server discovery (domain disco#info + disco#items)...");
+            return WEECHAT_RC_OK;
         }
 
-        ptr_account->print_disco_summary_to_buffer();
+        ptr_account->print_disco_summary_to_buffer({}, buffer);
         return WEECHAT_RC_OK;
     }
 
     // Subcommand: /disco items [jid]
-    bool do_items = argc > 1 && weechat_strcasecmp(argv[1], "items") == 0;
+    bool do_items = disco_wants_items(argc, argv, argv_eol);
     int jid_arg = do_items ? 2 : 1;  // argv index of optional jid
 
     std::string target_domain;
@@ -219,6 +282,13 @@ int command__disco(const void *pointer, void *data,
     {
         target_domain = jid(nullptr, ptr_account->jid()).domain;
         target = target_domain.c_str();
+    }
+
+    if (!do_items && target && (disco_arg_ieq(target, "summary") || disco_arg_ieq(target, "items")))
+    {
+        ui->printf_error(
+            "Use '/disco summary' or '/disco items' — those are subcommands, not JIDs");
+        return WEECHAT_RC_OK;
     }
 
     std::string id = stanza::uuid(ptr_account->context);

@@ -70,14 +70,19 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
     const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
     (void)to;
 
+    if (id && account.pending_disco_summary_items_id_
+        && *account.pending_disco_summary_items_id_ == id && type)
+    {
+        account.pending_disco_summary_items_id_.reset();
+        account.finish_disco_summary_refresh_if_ready();
+        if (weechat_strcasecmp(type, "error") == 0)
+            return true;
+    }
+
     const ::xmpp::StanzaView items_query = view.child("query", "http://jabber.org/protocol/disco#items");
 
     if (!(items_query.valid() && type && weechat_strcasecmp(type, "result") == 0))
         return false;
-
-    if (id && account.pending_disco_summary_items_id_
-        && *account.pending_disco_summary_items_id_ == id)
-        account.pending_disco_summary_items_id_.reset();
 
     // docs/planning-muc-omemo.md §2.2: disco#items result for a joined MUC?
     // If so, populate the channel's members map with every nick from the
@@ -825,6 +830,7 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                 account.record_domain_disco(summary_query);
         }
         account.pending_disco_summary_info_id_.reset();
+        account.finish_disco_summary_refresh_if_ready();
         return true;
     }
 

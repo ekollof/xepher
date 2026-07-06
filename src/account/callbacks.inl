@@ -135,8 +135,10 @@ int weechat::account::connect_disco_summary_timer_cb(const void *pointer, void *
         return WEECHAT_RC_OK;
 
     acct->connect_disco_summary_timer_hook_ = nullptr;
+    XDEBUG("Printing auto connect disco summary (buffer={})",
+           acct->buffer ? "set" : "null");
     acct->print_disco_summary_to_buffer(
-        "Server discovery summary (auto after connect):");
+        "Server discovery summary (auto after connect):", acct->buffer);
     return WEECHAT_RC_OK;
 }
 
