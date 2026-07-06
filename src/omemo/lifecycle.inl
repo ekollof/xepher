@@ -262,7 +262,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, co
             store_string(*this, kDeviceIdKey, fmt::format("{}", device_id));
         }
 
-        context.create(nullptr);
+        context.create(this);
         context.set_log_function(signal_log_emit);
         store_context.create(context);
 

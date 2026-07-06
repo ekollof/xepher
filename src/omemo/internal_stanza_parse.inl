@@ -1,8 +1,25 @@
 void signal_log_emit(int level, const char *message, std::size_t length, void *user_data)
 {
-    (void) user_data;
-
+    auto *self = static_cast<omemo *>(user_data);
     std::string text {message, length};
+
+    // libsignal logs "No session for: <name>:<device>" using signal_protocol_address
+    // fields that can be stale or dangling during inner SignalMessage attempts.
+    // Rewrite with the peer pinned by signal_store_peer_scope when available.
+    if (text.starts_with("No session for: ") && self
+        && self->signal_store_peer_depth_ > 0
+        && is_plausible_signal_jid(self->signal_store_peer_jid_)
+        && is_valid_omemo_device_id(self->signal_store_peer_device_id_))
+    {
+        text = fmt::format("No session for: {}/{}",
+                           self->signal_store_peer_jid_, self->signal_store_peer_device_id_);
+        if (level <= SG_LOG_WARNING)
+            XDEBUG("omemo: {} (expected while establishing session)", text);
+        else
+            XDEBUG("omemo: {}", text);
+        return;
+    }
+
     if (level <= SG_LOG_WARNING)
         print_error(nullptr, fmt::format("omemo: {}", text));
     else

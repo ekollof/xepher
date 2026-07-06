@@ -508,6 +508,13 @@ enum class prekey_decrypt_strategy {
     OMEMO_ASSERT(remote_device_id != 0, "peer device id required");
     OMEMO_ASSERT(!serialized.empty(), "serialized message required");
 
+    if (jid.empty() || !jid.contains('@') || !is_valid_omemo_device_id(remote_device_id))
+    {
+        XDEBUG("omemo: skipping transport-key decrypt for invalid peer {}/{}", jid,
+               remote_device_id);
+        return std::nullopt;
+    }
+
     if (out_is_duplicate)
         *out_is_duplicate = false;
 
@@ -587,21 +594,21 @@ enum class prekey_decrypt_strategy {
                    jid, remote_device_id, result);
             break;
         case prekey_decrypt_strategy::inner_first_fallback:
-            if (inner)
+            // Ephemeral comparison inconclusive — prefer full PreKey exchange first.
+            // An inner SignalMessage attempt without a matching ratchet state makes
+            // libsignal log "No session for: <garbage>:0" (stale address fields).
+            XDEBUG("omemo: (legacy) decrypting PreKeySignalMessage (inner_first_fallback) for {}/{}",
+                   jid, remote_device_id);
+            result = session_cipher_decrypt_pre_key_signal_message(cipher, message.get(), nullptr,
+                                                                   &plaintext_raw);
+            if ((result != 0 || plaintext_raw == nullptr) && inner && session_exists)
             {
-                XDEBUG("omemo: (legacy) trying inner SignalMessage first for {}/{} (ephemeral unknown)",
+                XDEBUG("omemo: (legacy) PreKey fallback failed — trying inner SignalMessage for {}/{}",
                        jid, remote_device_id);
                 result = session_cipher_decrypt_signal_message(cipher, inner, nullptr, &plaintext_raw);
             }
-            if (result != 0 && plaintext_raw == nullptr)
-            {
-                XDEBUG("omemo: (legacy) decrypting PreKeySignalMessage fallback for {}/{}",
-                       jid, remote_device_id);
-                result = session_cipher_decrypt_pre_key_signal_message(cipher, message.get(), nullptr,
-                                                                       &plaintext_raw);
-                XDEBUG("omemo: (legacy) PreKeySignalMessage decrypt done for {}/{} rc={}",
-                       jid, remote_device_id, result);
-            }
+            XDEBUG("omemo: (legacy) inner_first_fallback decrypt done for {}/{} rc={}",
+                   jid, remote_device_id, result);
             break;
         }
     }
