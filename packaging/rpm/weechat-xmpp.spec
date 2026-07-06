@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        0.10.3
+Version:        0.11.0
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -73,6 +73,12 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Mon Jul 06 2026 Emiel Kollof <emiel@kollof.nl> - 0.11.0-1
+- Update to v0.11.0
+- Feat: /disco summary and auto-print server capabilities after connect
+- Feat: graceful SM/CSI downgrade with immediate reconnect
+- Fix: MAM/bookmarks/MDS on connect; MUC re-join after SM resume
+
 * Wed Jul 01 2026 Emiel Kollof <emiel@kollof.nl> - 0.10.3-1
 - Update to v0.10.3
 - Fix(build): ignore Clang unused-command-line-argument for RPM %optflags

@@ -1,3 +1,12 @@
+xepher (0.11.0-1) unstable; urgency=medium
+
+  * Update to v0.11.0
+  * Feat: /disco summary and auto-print server capabilities after connect
+  * Feat: graceful SM/CSI downgrade with immediate reconnect
+  * Fix: MAM/bookmarks/MDS on connect; MUC re-join after SM resume
+
+ -- Emiel Kollof <emiel@kollof.nl>  Mon, 06 Jul 2026 08:00:00 +0000
+
 xepher (0.10.3-1) unstable; urgency=medium
 
   * Update to v0.10.3
