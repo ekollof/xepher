@@ -261,6 +261,7 @@
     <a class="btn btn-secondary" href="xmpp:xepher@conference.hackerheaven.org?join">Join MUC</a>
     <a class="btn btn-secondary" href="https://github.com/ekollof/xepher/wiki">Documentation</a>
     <a class="btn btn-secondary" href="https://github.com/ekollof/xepher/wiki/Installation">Installation</a>
+    <a class="btn btn-secondary" href="https://github.com/ekollof/xepher/wiki/Troubleshooting">Troubleshooting</a>
     <a class="btn btn-kofi" href="https://ko-fi.com/andrath"><img src="https://storage.ko-fi.com/cdn/cup-border.png" alt="">Support on Ko-fi</a>
   </div>
 
@@ -271,7 +272,7 @@
   <div class="features">
     <div class="feature">
       <h3>OMEMO Encryption</h3>
-      <p>End-to-end encryption via XEP-0384 using the <strong>legacy axolotl namespace only</strong> (`eu.siacs.conversations.axolotl`). OMEMO:2 (`urn:xmpp:omemo:2`) is not supported. Works for direct messages and <strong>non-anonymous MUCs</strong> (multi-recipient). <strong>MUC OMEMO is experimental and untested</strong> (see docs/planning-muc-omemo.md).</p>
+      <p>End-to-end encryption via XEP-0384 using the <strong>legacy axolotl namespace only</strong> (<code>eu.siacs.conversations.axolotl</code>). OMEMO:2 is not supported. PM OMEMO is production-ready; <strong>non-anonymous MUC multi-recipient encryption is experimental</strong> — see <a href="https://github.com/ekollof/xepher/wiki/Troubleshooting#omemo-muc-encryption-experimental">Troubleshooting</a> and <a href="https://github.com/ekollof/xepher/issues/6">issue&nbsp;#6</a>.</p>
     </div>
     <div class="feature">
       <h3>Message Archive (MAM)</h3>
@@ -279,7 +280,7 @@
     </div>
     <div class="feature">
       <h3>Microblogging</h3>
-      <p>XEP-0277 / XEP-0472 PubSub social feed — post, reply, boost, retract, comments. Compatible with Movim.</p>
+      <p>XEP-0277 / XEP-0472 PubSub social feed — post, reply, boost, retract, comments. Compatible with Movim. Disable entirely with <code>xmpp.look.feeds off</code>.</p>
     </div>
     <div class="feature">
       <h3>File Upload</h3>
@@ -321,24 +322,28 @@
       <h3>Inline Images &amp; Stickers</h3>
       <p>Kitty terminal graphics via vendored <code>icat.py</code> — SFS/SIMS/OOB uploads, XEP-0449 stickers, XEP-0514 custom emoji, and XEP-0231 BoB (<code>cid:…@bob.xmpp.org</code>) for Movim stickers and small plaintext <code>/upload</code> images (≤8&nbsp;KiB).</p>
     </div>
+    <div class="feature">
+      <h3>Service Discovery</h3>
+      <p><code>/disco summary</code> prints a cached server capability matrix (domain features, components, upload/pubsub/MUC detection). Auto-printed to the account log ~6&nbsp;s after connect — handy for support logs.</p>
+    </div>
   </div>
 
   <div class="install">
     <h2>Installation</h2>
-    <p style="margin-bottom:1rem;font-size:0.9rem;color:var(--muted)">Pre-built packages for Debian, Fedora, Arch, Void, and Alpine are on <a href="https://github.com/ekollof/xepher/releases/latest">GitHub Releases</a> (latest: v0.9.0). Use v0.8.1+ — v0.8.0 RPM/APK had a packaging bug.</p>
+    <p style="margin-bottom:1rem;font-size:0.9rem;color:var(--muted)">Pre-built packages for Debian, Fedora, Arch, Void, and Alpine are on <a href="https://github.com/ekollof/xepher/releases/latest">GitHub Releases</a> (latest: <strong>v0.11.0</strong>). Use v0.8.1+ — v0.8.0 RPM/APK had a packaging bug. v0.11.0 adds <code>/disco summary</code>, connect probes gated on server <code>disco#info</code>, and MUC OMEMO troubleshooting docs.</p>
     <pre># Debian/Ubuntu
-sudo dpkg -i xepher_0.9.0-1_amd64.deb
+sudo dpkg -i xepher_0.11.0-1_amd64.deb
 
 # Fedora
-sudo dnf install ./xepher-0.9.0-1.fc*.x86_64.rpm
+sudo dnf install ./xepher-0.11.0-1.fc*.x86_64.rpm
 
 # Arch
-sudo pacman -U xepher-0.9.0-1-x86_64.pkg.tar.zst</pre>
-    <p>Or build from source:</p>
+sudo pacman -U xepher-0.11.0-1-x86_64.pkg.tar.zst</pre>
+    <p>Or build from source (on BSD use <code>gmake</code> instead of <code>make</code>):</p>
     <pre>git clone --depth 1 git@github.com:ekollof/xepher.git
 cd xepher
 make install-deps   # detects distro, installs packages
-make DEBUG=1        # 123 doctests (plain make skips them)
+make DEBUG=1        # 147 doctests (plain make skips them)
 make install        # installs to ~/.local/share/weechat/plugins/</pre>
     <p>Requires WeeChat &ge; 3.0, libstrophe, libxml2, lmdb, libomemo-c, gpgme, libfmt, and GCC &ge; 12 / Clang &ge; 15.</p>
     <p>See the <a href="https://github.com/ekollof/xepher/wiki/Installation">Installation wiki page</a> for all platforms, BSD notes, and package details.</p>
@@ -352,7 +357,7 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
         <tr><th>XEP</th><th>Name</th><th>Notes</th></tr>
       </thead>
       <tbody>
-        <tr><td>XEP-0030</td><td>Service Discovery</td><td></td></tr>
+        <tr><td>XEP-0030</td><td>Service Discovery</td><td><code>/disco summary</code> capability matrix; auto-print to account log after connect</td></tr>
         <tr><td>XEP-0045</td><td>Multi-User Chat</td><td><code>/create</code> (instant + reserved), IRC-style admin (<code>/voice</code>, <code>/op</code>, …), owner config (<code>/setmodes</code>, <code>/affiliation</code>, <code>/destroy</code>), <code>/mucregister</code>, invites (<code>/invite</code>, <code>/decline</code>); partial — no full roomconfig UI</td></tr>
         <tr><td>XEP-0048</td><td>Bookmarks</td><td></td></tr>
         <tr><td>XEP-0050</td><td>Ad-Hoc Commands</td><td></td></tr>
@@ -370,7 +375,7 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
         <tr><td>XEP-0153</td><td>vCard-Based Avatars</td><td></td></tr>
         <tr><td>XEP-0184</td><td>Message Delivery Receipts</td><td></td></tr>
         <tr><td>XEP-0191</td><td>Blocking Command</td><td></td></tr>
-        <tr><td>XEP-0198</td><td>Stream Management</td><td></td></tr>
+        <tr><td>XEP-0198</td><td>Stream Management</td><td>Resume + retransmit; connect probes (SM, CSI, MAM, bookmarks) gated on server <code>disco#info</code></td></tr>
         <tr><td>XEP-0199</td><td>XMPP Ping</td><td></td></tr>
         <tr><td>XEP-0224</td><td>Attention</td><td></td></tr>
         <tr><td>XEP-0245</td><td>/me Command</td><td></td></tr>
@@ -383,7 +388,7 @@ make install        # installs to ~/.local/share/weechat/plugins/</pre>
         <tr><td>XEP-0363</td><td>HTTP File Upload</td><td></td></tr>
         <tr><td>XEP-0372</td><td>References</td><td></td></tr>
         <tr><td>XEP-0382</td><td>Spoiler Messages</td><td></td></tr>
-        <tr><td>XEP-0384</td><td>OMEMO Encryption</td><td>legacy axolotl only (no OMEMO:2)</td></tr>
+        <tr><td>XEP-0384</td><td>OMEMO Encryption</td><td>legacy axolotl only (no OMEMO:2); PM ready; non-anonymous MUC experimental</td></tr>
         <tr><td>XEP-0393</td><td>Message Styling</td><td></td></tr>
         <tr><td>XEP-0402</td><td>PEP Native Bookmarks</td><td></td></tr>
         <tr><td>XEP-0410</td><td>MUC Self-Ping</td><td></td></tr>
