@@ -75,6 +75,10 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
     if (!(items_query.valid() && type && weechat_strcasecmp(type, "result") == 0))
         return false;
 
+    if (id && account.pending_disco_summary_items_id_
+        && *account.pending_disco_summary_items_id_ == id)
+        account.pending_disco_summary_items_id_.reset();
+
     // docs/planning-muc-omemo.md §2.2: disco#items result for a joined MUC?
     // If so, populate the channel's members map with every nick from the
     // room's item list. Real JIDs (if visible) were already recorded from
@@ -794,6 +798,8 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
         {
             const ::xmpp::StanzaView probe_query =
                 view.child("query", "http://jabber.org/protocol/disco#info");
+            if (probe_query.valid())
+                account.record_domain_disco(probe_query);
             const std::vector<std::string> features = probe_query.valid()
                 ? ::xmpp::disco_feature_vars(::xmpp::StanzaView(probe_query))
                 : std::vector<std::string>{};
@@ -804,6 +810,21 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
             XDEBUG("Server disco#info failed — skipping optional probes");
             run_optional_server_probes(false, {});
         }
+        return true;
+    }
+
+    // /disco summary refresh — domain disco#info (no carbons reprobe).
+    if (id && account.pending_disco_summary_info_id_
+        && *account.pending_disco_summary_info_id_ == id && type)
+    {
+        if (weechat_strcasecmp(type, "result") == 0)
+        {
+            const ::xmpp::StanzaView summary_query =
+                view.child("query", "http://jabber.org/protocol/disco#info");
+            if (summary_query.valid())
+                account.record_domain_disco(summary_query);
+        }
+        account.pending_disco_summary_info_id_.reset();
         return true;
     }
 
@@ -1153,6 +1174,8 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                         XDEBUG("Discovered upload service: {}", service_jid);
                     }
                 }
+
+                account.record_component_disco(service_jid, query);
             }
 
             // XEP-0442: handle MAM-support discovery response for a pubsub service.
@@ -1162,6 +1185,8 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
             {
                 std::string svc_jid = account.pubsub_mam_disco_queries[stanza_id];
                 account.pubsub_mam_disco_queries.erase(stanza_id);
+
+                account.record_component_disco(svc_jid, query);
 
                 // Check whether this service advertises urn:xmpp:mam:2
                 bool has_mam = std::ranges::any_of(features, [](const auto &feat) {

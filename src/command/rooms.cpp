@@ -41,6 +41,7 @@
 #include "weechat/ui_port.hh"
 #include "xmpp/message_bob.hh"
 #include "xmpp/iq_upload.hh"
+#include "xmpp/server_capability_map.hh"
 
 #define MAM_DEFAULT_DAYS 2
 #define STR(X) #X

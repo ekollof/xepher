@@ -31,6 +31,8 @@
 #include "config.hh"
 #include "channel.hh"
 #include "xmpp/message_bob.hh"
+#include "xmpp/server_capabilities.hh"
+#include "xmpp/stanza_view.hh"
 #include "connection.hh"
 #include "connection/strophe_stream_features.hh"
 #include "weechat/connection_port.hh"
@@ -221,6 +223,13 @@ namespace weechat
         // Server disco#info issued on connect to gate optional IQ probes (MAM, MDS, …).
         std::optional<std::string> pending_server_disco_id;
         bool optional_server_probes_done = false;
+
+        // Cached server discovery snapshot for /disco summary (session-scoped).
+        std::vector<::xmpp::disco_identity> server_domain_identities_;
+        std::vector<std::string> server_domain_features_;
+        std::unordered_map<std::string, ::xmpp::discovered_component> server_components_;
+        std::optional<std::string> pending_disco_summary_info_id_;
+        std::optional<std::string> pending_disco_summary_items_id_;
 
         // XEP-0050: Ad-Hoc Commands query tracking
         struct adhoc_query_info {
@@ -675,6 +684,12 @@ namespace weechat
         void peer_features_update(std::string_view jid, const std::vector<std::string>& features);
         bool peer_supports_feature(std::string_view jid, std::string_view feature) const;
         bool peer_has_legacy_axolotl_only(std::string_view jid) const;
+
+        void clear_server_capability_snapshot();
+        void record_domain_disco(const ::xmpp::StanzaView query);
+        void record_component_disco(std::string_view jid, const ::xmpp::StanzaView query);
+        [[nodiscard]] ::xmpp::server_capabilities gather_server_capabilities() const;
+        void send_server_disco_summary_refresh();
 
         // Resolve partner bare JID to the canonical channels map key (case-insensitive).
         [[nodiscard]] std::string resolve_channel_key(std::string_view partner_bare) const;

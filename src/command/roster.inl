@@ -194,6 +194,21 @@ int command__disco(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
+    if (argc > 1 && weechat_strcasecmp(argv[1], "summary") == 0)
+    {
+        const bool refresh = argc > 2 && weechat_strcasecmp(argv[2], "refresh") == 0;
+        if (refresh)
+        {
+            ptr_account->send_server_disco_summary_refresh();
+            ui->printf_network("Refreshing server discovery (domain disco#info + disco#items)...");
+        }
+
+        const auto caps = ptr_account->gather_server_capabilities();
+        for (const std::string &line : ::xmpp::format_disco_summary(caps))
+            ui->printf(line);
+        return WEECHAT_RC_OK;
+    }
+
     // Subcommand: /disco items [jid]
     bool do_items = argc > 1 && weechat_strcasecmp(argv[1], "items") == 0;
     int jid_arg = do_items ? 2 : 1;  // argv index of optional jid

@@ -36,6 +36,7 @@
 #include "xmpp/iq_upload.hh"
 #include "xmpp/iq_mam.hh"
 #include "xmpp/iq_disco.hh"
+#include "xmpp/server_capability_map.hh"
 #include "xmpp/iq_caps.hh"
 #include "xmpp/iq_vcard.hh"
 #include "xmpp/iq_bookmarks.hh"
@@ -1803,6 +1804,34 @@ TEST_CASE("iq_vcard and iq_bookmarks helpers")
     CHECK(xmpp::format_vcard_temp_adr(adr) == "1 Main, SE");
 
     xmpp_stanza_release(vcard);
+}
+
+TEST_CASE("server_capability_map")
+{
+    xmpp::server_capabilities caps;
+    caps.domain = "example.org";
+    caps.domain_features = {"urn:xmpp:carbons:2"};
+    caps.carbons_advertised = true;
+    caps.upload_discovered = true;
+    caps.upload_jid = "upload.example.org";
+    caps.upload_max_bytes = 10 * 1024 * 1024;
+
+    CHECK(xmpp::features_contain(caps.domain_features, "urn:xmpp:carbons:2"));
+    CHECK_FALSE(xmpp::features_contain(caps.domain_features, "urn:xmpp:mam:2"));
+
+    CHECK(xmpp::capability_enabled(caps, xmpp::capability_id::message_carbons));
+    CHECK(xmpp::capability_enabled(caps, xmpp::capability_id::global_mam));
+    CHECK(xmpp::capability_enabled(caps, xmpp::capability_id::http_upload));
+    CHECK_FALSE(xmpp::capability_enabled(caps, xmpp::capability_id::pubsub_feeds));
+
+    caps.carbons_advertised = false;
+    CHECK_FALSE(xmpp::capability_enabled(caps, xmpp::capability_id::message_carbons));
+
+    const auto lines = xmpp::format_disco_summary(caps);
+    CHECK_FALSE(lines.empty());
+    CHECK(std::ranges::any_of(lines, [](const std::string &l) {
+        return l.contains("example.org");
+    }));
 }
 
 TEST_CASE("iq_disco and iq_caps helpers")

@@ -135,7 +135,8 @@ void weechat::connection::run_optional_server_probes(
             ::jid(nullptr, std::string(account.option_jid.string())).domain,
             std::vector<std::string>(server_features.begin(), server_features.end()));
 
-        if (disco_features_contain(server_features, "urn:xmpp:carbons:2"))
+        if (::xmpp::capability_enabled(account.gather_server_capabilities(),
+                                       ::xmpp::capability_id::message_carbons))
         {
             const std::string carbons_enable_id = stanza::uuid(account.context);
             account.pending_carbons_enable_iq_ = carbons_enable_id;

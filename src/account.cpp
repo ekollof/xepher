@@ -618,6 +618,8 @@ void weechat::account::disconnect_impl(int reconnect, bool immediate_reconnect)
     // XEP-0045 §10: drop in-flight muc#owner / muc#admin IQ tracking.
     muc_owner_queries.clear();
 
+    clear_server_capability_snapshot();
+
     // XEP-0045 §10.1: clear any pending reserved-room create intents so a
     // fresh /create on reconnect starts clean.
     muc_reserved_pending.clear();

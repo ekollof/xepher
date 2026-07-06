@@ -106,6 +106,7 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         account.sm_post_connect_done = false;
         account.optional_server_probes_done = false;
         account.pending_server_disco_id.reset();
+        account.clear_server_capability_snapshot();
         account.sm_awaiting_negotiation = false;
         account.sm_resume_attempted = false;
 

@@ -501,16 +501,20 @@ void command__init()
     hook = weechat_hook_command(
         "disco",
         N_("discover services and features (XEP-0030)"),
-        N_("[items] [jid]"),
-        N_("items: list child items (nodes/services) instead of features\n"
+        N_("[summary|items] [jid]"),
+        N_("summary: show cached server discovery and derived capabilities\n"
+           "summary refresh: re-query domain disco#info and disco#items\n"
+           "items: list child items (nodes/services) instead of features\n"
            "  jid: optional target JID (defaults to server domain)\n"
            "\n"
            "Examples:\n"
+           "  /disco summary                - cached server/features/components view\n"
+           "  /disco summary refresh        - refresh discovery then print summary\n"
            "  /disco                        - query server for identities and features\n"
            "  /disco conference.example.org - query a specific service\n"
            "  /disco items                  - list items/nodes on server\n"
            "  /disco items pubsub.example.org - list PubSub nodes on a service"),
-        "items", &command__disco, nullptr, nullptr);
+        "summary|items", &command__disco, nullptr, nullptr);
     if (!hook)
         weechat::UiPort::for_buffer(nullptr)->printf_error( "Failed to setup command /disco");
 

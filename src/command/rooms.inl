@@ -346,10 +346,11 @@ int command__upload(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
     
-    // Check if we have discovered upload service
-    if (ptr_account->upload_service.empty())
+    if (!::xmpp::capability_enabled(ptr_account->gather_server_capabilities(),
+                                    ::xmpp::capability_id::http_upload))
     {
-        ui->printf_error(fmt::format("{}: upload service not discovered yet (try reconnecting)", WEECHAT_XMPP_PLUGIN_NAME));
+        ui->printf_error(fmt::format("{}: upload service not discovered yet (try '/disco summary refresh')",
+                                     WEECHAT_XMPP_PLUGIN_NAME));
         return WEECHAT_RC_OK;
     }
     
