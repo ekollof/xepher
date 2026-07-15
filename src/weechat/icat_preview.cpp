@@ -20,6 +20,7 @@
 #include "config.hh"
 #include "plugin.hh"
 #include "util.hh"
+#include "weechat/ui_port.hh"
 
 namespace weechat {
 
@@ -74,12 +75,54 @@ size_t curl_write_vec(char *ptr, size_t size, size_t nmemb, void *userdata)
     return size * nmemb;
 }
 
-void run_icat_command(struct t_gui_buffer *buffer,
+[[nodiscard]] bool icat_command_registered()
+{
+    struct t_infolist *infolist = weechat_infolist_get("hook", nullptr, "command,icat");
+    if (!infolist)
+        return false;
+    const bool found = weechat_infolist_next(infolist) != 0;
+    weechat_infolist_free(infolist);
+    return found;
+}
+
+// Returns true when /icat is registered. Caches a positive result; re-probes until
+// first success so a mid-session /script load icat.py is picked up.
+[[nodiscard]] bool icat_command_available(account &acct)
+{
+    static bool confirmed = false;
+    static bool warned = false;
+
+    if (confirmed)
+        return true;
+    if (!icat_command_registered())
+    {
+        if (!warned && acct.buffer)
+        {
+            warned = true;
+            if (auto ui = UiPort::for_buffer(acct.buffer))
+            {
+                ui->printf_error(fmt::format(
+                    "{}: xmpp.look.icat is enabled but /icat is not available — "
+                    "load the weechat-icat script (e.g. /script load icat.py)",
+                    WEECHAT_XMPP_PLUGIN_NAME));
+            }
+        }
+        return false;
+    }
+
+    confirmed = true;
+    return true;
+}
+
+void run_icat_command(account &acct,
+                      struct t_gui_buffer *buffer,
                       std::string_view local_path,
                       size_t width,
                       size_t height)
 {
     if (!buffer || local_path.empty())
+        return;
+    if (!icat_command_available(acct))
         return;
 
     size_t w = width;
@@ -88,7 +131,7 @@ void run_icat_command(struct t_gui_buffer *buffer,
         std::tie(w, h) = read_image_dimensions(local_path.data());
 
     const std::string dim_args = icat_dimension_args(w, h);
-    const std::string icat_cmd = fmt::format("/icat -print_immediately{} {}",
+    const std::string icat_cmd = fmt::format("/icat -print_immediately -quiet{} {}",
                                              dim_args, local_path);
     weechat_command(buffer, icat_cmd.c_str());
 }
@@ -286,14 +329,14 @@ void invoke_icat_preview(const icat_preview_request &req, account &acct)
     if (req.mam_replay)
     {
         if (auto local = resolve_local_icat_path(req, acct))
-            run_icat_command(req.buffer, *local, req.width, req.height);
+            run_icat_command(acct, req.buffer, *local, req.width, req.height);
         return;
     }
 
     const std::string_view src = req.source;
     if (src.starts_with("http://") || src.starts_with("https://"))
     {
-        run_icat_command(req.buffer, src, req.width, req.height);
+        run_icat_command(acct, req.buffer, src, req.width, req.height);
         if (!req.channel_jid.empty() && !req.stable_id.empty())
             cache_image_path_background(&acct, req.channel_jid, req.stable_id, std::string(src));
         return;
@@ -301,7 +344,7 @@ void invoke_icat_preview(const icat_preview_request &req, account &acct)
 
     if (std::filesystem::is_regular_file(src))
     {
-        run_icat_command(req.buffer, src, req.width, req.height);
+        run_icat_command(acct, req.buffer, src, req.width, req.height);
         if (!req.channel_jid.empty() && !req.stable_id.empty())
             acct.mam_cache_store_image_preview(req.channel_jid, req.stable_id, std::string(src));
     }
