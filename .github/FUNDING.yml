@@ -1,3 +1,10 @@
 # These are supported funding model platforms
 
-custom: (Donatr.ee link (has all donation options)[https://donatr.ee/andrath]
+# Your existing Ko-fi
+ko_fi: andrath
+
+# Custom links (up to 4) – add your donatr.ee here
+custom:
+  - "https://donatr.ee/andrath"   # This is the main one for all options (Ko-fi + crypto)
+  # You can add more if needed (up to 4 total):
+  # - "https://another-link.com"
