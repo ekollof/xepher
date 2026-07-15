@@ -2155,8 +2155,28 @@ message_handler_after_omemo:
         }
     }
 
+    // Outbound uploads already invoke icat on the local file in send_message;
+    // skip the server echo so the image is not shown a second time from the URL.
+    bool skip_self_icat = skip_live_self_render;
+    if (!skip_self_icat && !date && is_from_self && stable_id && channel_id)
+    {
+        if (auto cached = account.mam_cache_lookup_image_preview(channel_id, stable_id))
+            skip_self_icat = !cached->empty();
+    }
+
+    // Outgoing link previews are rendered locally in send_link_preview; skip server
+    // echo and carbons so the OG card is not shown again.
+    bool skip_self_og_preview = skip_live_self_render;
+    if (!skip_self_og_preview && !date && is_from_self && !is_mam_replay
+        && weechat::config::instance
+        && weechat::config::instance->look.outgoing_link_preview.boolean())
+    {
+        skip_self_og_preview = true;
+    }
+
     // weechat-icat: display inline image after the message line (local path during
     // MAM replay; live delivery may pass HTTP URLs to icat.py directly).
+    if (!skip_self_icat)
     {
         const std::string channel_jid_str = channel_id ? std::string(channel_id) : std::string();
         const std::string stable_id_str = stable_id ? std::string(stable_id) : std::string();
@@ -2271,7 +2291,8 @@ message_handler_after_omemo:
     // XEP-0511: print each collected OG preview as a separate buffer line.
     // Using notify_none,no_log,xmpp_og_preview so these lines are never logged
     // or highlighted, and can be identified/skipped by the reply-excerpt scanner.
-    if (!og_previews_to_show.empty()
+    if (!skip_self_og_preview
+        && !og_previews_to_show.empty()
         && weechat::config::instance
         && weechat::config::instance->look.incoming_link_preview.boolean())
     {
@@ -2296,7 +2317,7 @@ message_handler_after_omemo:
     // cache lookup (in the is_mam_replay branch above) already handles URLs
     // that were fetched during a previous live session.  First-time-seen URLs
     // in MAM will be fetched when the same URL appears in a live message later.
-    if (text && !is_mam_replay
+    if (text && !is_mam_replay && !skip_self_og_preview
         && weechat::config::instance
         && weechat::config::instance->look.incoming_link_preview.boolean())
     {
@@ -2326,13 +2347,9 @@ message_handler_after_omemo:
             pos = end;
 
             if (already_shown.contains(url)) continue;
-            // For self-sent messages, use silent mode — the XEP-0511 metadata
-            // from the <rdf:Description> carbon copy already displayed the
-            // preview, and we sent the OG metadata ourselves.
-            const bool is_self = from_bare
-                && weechat_strcasecmp(from_bare, account.jid().data()) == 0;
+            // Self-sent: silent fetch only (preview already shown locally).
             og_start_fetch(url, channel->buffer, &account,
-                           std::string(display_prefix), date, is_self);
+                           std::string(display_prefix), date, is_from_self);
         }
     }
 

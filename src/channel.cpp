@@ -41,6 +41,7 @@
 #include "weechat/icat_preview.hh"
 #include "weechat/ui_port.hh"
 #include "weechat/line_store.hh"
+#include "connection/internal.hh"
 
 namespace {
 std::string channel_short_name(weechat::channel::chat_type type, std::string_view name)
@@ -1992,6 +1993,45 @@ void weechat::channel::send_link_preview(std::string_view to, std::string_view u
             // Only send a preview stanza if we got at least a title or url
             if (og_title.empty() && og_url.empty()) {
                 return WEECHAT_RC_OK;
+            }
+
+            const std::string display_url = og_url.empty() ? task->url : og_url;
+            std::string og_image_http;
+            if (std::string_view(og_image).starts_with("http"))
+                og_image_http = og_image;
+
+            weechat::account::og_preview cached;
+            cached.title = og_title;
+            cached.description = og_description;
+            cached.url = display_url;
+            cached.image = og_image_http;
+            task->channel.account.og_cache_store(task->url, cached);
+
+            if (weechat::config::instance
+                && weechat::config::instance->look.incoming_link_preview.boolean())
+            {
+                std::string prefix;
+                if (task->channel.type == weechat::channel::chat_type::MUC)
+                {
+                    const std::string_view our_nick = task->channel.account.nickname();
+                    prefix = our_nick.empty()
+                        ? std::string(task->channel.account.jid())
+                        : user::as_prefix_raw(our_nick);
+                }
+                else
+                {
+                    auto *self_user = user::search(
+                        &task->channel.account, task->channel.account.jid().data());
+                    prefix = self_user
+                        ? std::string(self_user->as_prefix_raw())
+                        : std::string(task->channel.account.jid());
+                }
+
+                const std::string line = format_og_preview_card(
+                    og_title, og_description, og_url, og_image_http, task->url);
+                weechat::UiPort::for_buffer(task->channel.buffer)->printf_date_tags(
+                    0, "notify_none,no_log,xmpp_og_preview,self_msg",
+                    fmt::format("{}\t{}", prefix, line));
             }
 
             // Build follow-up <message> stanza with <rdf:Description> (XEP-0511)
