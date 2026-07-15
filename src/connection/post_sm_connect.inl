@@ -529,4 +529,6 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
 
     (void) weechat_hook_signal_send("xmpp_account_connected",
                                     WEECHAT_HOOK_SIGNAL_STRING, account.name.data());
+
+    weechat::schedule_focus_core_buffer();
 }

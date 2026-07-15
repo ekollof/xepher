@@ -35,3 +35,16 @@ int buffer__close_cb(const void *pointer, void *data,
 bool buffer__update_line_by_id(struct t_gui_buffer *buffer,
                                 const char *id_tag,
                                 const char *new_message);
+
+namespace weechat {
+
+// Switch the current window to WeeChat's core buffer (core.weechat).
+void focus_core_buffer();
+
+// Debounced focus on core — used after plugin load and account connect so
+// restored XMPP buffers do not steal focus from the core buffer.
+void schedule_focus_core_buffer();
+
+void cancel_focus_core_buffer_timer();
+
+}  // namespace weechat

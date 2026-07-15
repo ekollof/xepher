@@ -260,13 +260,19 @@ void weechat::plugin::init(int argc, char *argv[])
     // or remove it with /filter del xmpp_smart_filter_default
     weechat_command(nullptr,
                     "/filter add xmpp_smart_filter_default * xmpp_smart_filter *");
+
+    // Autoconnect restores PM/feed/MUC buffers during init; debounce focus back
+    // to the core buffer once startup settles (layout restore may switch away).
+    weechat::schedule_focus_core_buffer();
 }
 
 void weechat::plugin::end() {
     // CRITICAL: Set flag FIRST to stop any in-flight callbacks
     // If we unhook first, a callback could start before we set the flag
     weechat::g_plugin_unloading = true;
-    
+
+    weechat::cancel_focus_core_buffer_timer();
+
     // Unhook timer to stop new callbacks from being scheduled
     if (m_process_timer) {
         weechat_unhook(m_process_timer);

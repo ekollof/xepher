@@ -36,6 +36,7 @@
 #include "xmpp/iq_bookmarks.hh"
 #include "xmpp/muc_join.hh"
 #include "weechat/ui_port.hh"
+#include "buffer.hh"
 
 #include "connection/stream_management.inl"
 #include "connection/optional_server_probes.inl"

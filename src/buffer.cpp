@@ -340,3 +340,51 @@ bool buffer__update_line_by_id(struct t_gui_buffer *buffer,
     }
     return false;
 }
+
+namespace weechat {
+
+namespace {
+
+constexpr double k_weechat_timer_interval_sec = 0.01;
+constexpr int k_focus_core_debounce_ticks = 50;  // 0.5s after last schedule
+
+struct t_hook *g_focus_core_timer = nullptr;
+
+int focus_core_timer_cb(const void * /*pointer*/, void * /*data*/,
+                        int /*remaining_calls*/)
+{
+    g_focus_core_timer = nullptr;
+    if (!g_plugin_unloading)
+        focus_core_buffer();
+    return WEECHAT_RC_OK;
+}
+
+}  // namespace
+
+void focus_core_buffer()
+{
+    if (struct t_gui_buffer *core = weechat_buffer_search_main())
+        weechat_buffer_set(core, "display", "1");
+}
+
+void schedule_focus_core_buffer()
+{
+    if (g_plugin_unloading)
+        return;
+    if (g_focus_core_timer)
+        weechat_unhook(g_focus_core_timer);
+    g_focus_core_timer = weechat_hook_timer(
+        k_weechat_timer_interval_sec * k_focus_core_debounce_ticks,
+        0, 1, focus_core_timer_cb, nullptr, nullptr);
+}
+
+void cancel_focus_core_buffer_timer()
+{
+    if (g_focus_core_timer)
+    {
+        weechat_unhook(g_focus_core_timer);
+        g_focus_core_timer = nullptr;
+    }
+}
+
+}  // namespace weechat

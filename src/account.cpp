@@ -922,8 +922,6 @@ int weechat::account::connect([[maybe_unused]] bool manual)
     {
         if (!create_buffer())
             return 0;
-        // Don't auto-switch to account buffer on connect
-        weechat_buffer_set(buffer, "display", "1");
     }
 
     reset();
