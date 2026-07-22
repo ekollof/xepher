@@ -14,14 +14,6 @@ _None._
 
 ---
 
-## Not on `master`
-
-| Item | Reason |
-|------|--------|
-| XEP-0353 Jingle (voice/video) | Requires a full Jingle stack |
-
----
-
 ## When you touch…
 
 **OMEMO** — `docs/specs/xep-0384.txt`, `docs/planning-muc-omemo.md`, `tools/correlate_omemo_xml.sh`.
