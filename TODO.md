@@ -19,7 +19,6 @@ _None._
 | Item | Reason |
 |------|--------|
 | XEP-0353 Jingle (voice/video) | Requires a full Jingle stack |
-| OMEMO SCE (Stable Consensus Encryption) | Separate branch; `master` stays axolotl-only |
 
 ---
 
