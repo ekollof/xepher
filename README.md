@@ -111,7 +111,8 @@ make                # optimized plugin (no doctests)
 make DEBUG=1        # dev build + 147 doctests
 make test           # doctests only (CTest)
 make tools          # optional: dump_mam_db / dump_omemo_db LMDB inspectors
-make install        # installs to ~/.local/share/weechat/plugins/ — do NOT run as root
+make install        # atomic install to ~/.local/share/weechat/plugins/ — do NOT run as root
+                    # safe while WeeChat is running; then /plugin reload xmpp
 ```
 
 On BSD, replace `make` with **`gmake`** throughout.
@@ -1365,8 +1366,9 @@ the JID above.
 ---
 
 > **Plugin reload:** `/plugin reload xmpp` is supported. It disconnects accounts,
-> closes XMPP buffers, and re-inits from config (reconnect afterward). Prefer
-> unload/reload over overwriting `xmpp.so` while it is still mapped.
+> closes XMPP buffers, and re-inits from config (reconnect afterward).
+> `make install` replaces `xmpp.so` via temp+rename so a running WeeChat is safe
+> until you reload; do not overwrite the plugin with a plain `cp` while loaded.
 
 ---
 

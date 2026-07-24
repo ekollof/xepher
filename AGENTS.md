@@ -204,8 +204,10 @@ Output lands in `packaging/build/` (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`, `.xb
   `weechat_prefix()` belongs in port adapters (`ui_port.cpp`) only.
 - Buffer display values: `"1"` (don't auto-switch), `"auto"` (auto-switch)
 - Plugin reload is supported (`/plugin reload xmpp`): unload drains workers,
-  disconnects, clears accounts, then shuts down libstrophe. Do **not** overwrite
-  `xmpp.so` while it is mapped without unloading first (install → reload is fine).
+  disconnects, clears accounts, then shuts down libstrophe. `make install` uses
+  temp+rename so a running WeeChat keeps the old mapped inode until reload
+  (in-place overwrite of `xmpp.so` still causes SIGBUS — avoid raw `cp` onto
+  the live plugin path).
 
 ### Stanza Construction & Inbound Parsing
 
@@ -701,10 +703,10 @@ socket is absent, load it via the FIFO (see below):
 echo "*/python load weechat_debug_socket.py" > /run/user/1000/weechat/weechat_fifo_<pid>
 ```
 
-After installing a new `xmpp.so` to `~/.local/share/weechat/plugins/`, you may
-`/plugin reload xmpp` (or unload then load). Reload tears down connections and
-buffers; reconnect accounts afterward. Prefer install then reload over overwriting
-the mapped file without unload.
+After `make install` (atomic replace into `~/.local/share/weechat/plugins/`),
+run `/plugin reload xmpp` (or unload then load). Reload tears down connections
+and buffers; reconnect accounts afterward. Do not `cp` over the installed
+`xmpp.so` while WeeChat is running — that truncates the mapped file and SIGBUS.
 
 #### 2. FIFO pipe (one-way, no output)
 
