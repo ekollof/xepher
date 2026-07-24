@@ -344,7 +344,10 @@ sudo pacman -U xepher-0.11.0-1-x86_64.pkg.tar.zst</pre>
 cd xepher
 make install-deps   # detects distro, installs packages
 make DEBUG=1        # 147 doctests (plain make skips them)
-make install        # installs to ~/.local/share/weechat/plugins/</pre>
+make install        # atomic install to ~/.local/share/weechat/plugins/
+# in WeeChat (safe while running):
+/plugin reload xmpp</pre>
+    <p><code>/plugin reload xmpp</code> is supported (disconnects and re-inits; reconnect accounts afterward). <code>make install</code> uses temp+rename so a running WeeChat is safe until reload — do not overwrite the live <code>xmpp.so</code> with a plain <code>cp</code>.</p>
     <p>Requires WeeChat &ge; 3.0, libstrophe, libxml2, lmdb, libomemo-c, gpgme, libfmt, and GCC &ge; 12 / Clang &ge; 15.</p>
     <p>See the <a href="https://github.com/ekollof/xepher/wiki/Installation">Installation wiki page</a> for all platforms, BSD notes, and package details.</p>
   </div>
