@@ -245,6 +245,31 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
         }
     }
 
+    // Multi-client PEP is often incomplete: one client (e.g. Converse) republishes
+    // a list that omits another (e.g. Psi+). A full replace would drop devices we
+    // already have a Signal session with (learned from inbound sid), so outbound
+    // encrypt would no longer include a key for that client — Psi→Xepher works,
+    // Xepher→Psi fails. Union PEP devices with any previous device that still has
+    // a live session.
+    if (auto prev = load_axolotl_devicelist(*this, bare_jid))
+    {
+        for (const auto &dev : split(*prev, ';'))
+        {
+            const auto id = parse_uint32(dev);
+            if (!id || !is_valid_omemo_device_id(*id))
+                continue;
+            const std::string id_str = fmt::format("{}", *id);
+            if (std::ranges::find(devices, id_str) != devices.end())
+                continue;
+            if (has_session(bare_jid.c_str(), *id))
+            {
+                devices.push_back(id_str);
+                XDEBUG("omemo: keeping {}/{} (live session) missing from PEP list",
+                       bare_jid, *id);
+            }
+        }
+    }
+
     const auto devicelist_str = join(devices, ";");
     missing_axolotl_devicelist.erase(bare_jid);
     store_axolotl_devicelist(*this, bare_jid, devicelist_str);
