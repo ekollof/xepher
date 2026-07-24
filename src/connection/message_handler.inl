@@ -2369,9 +2369,10 @@ message_handler_after_omemo:
     if (::xmpp::should_schedule_ephemeral_tombstone(
             ephemeral_timer, stable_id ? std::string_view(stable_id) : std::string_view{}))
     {
-        g_ephemeral_pending.push_back({ channel->buffer, std::string(stable_id) });
-        weechat_hook_timer(ephemeral_timer * 1000, 0, 1,
-                           ephemeral_tombstone_cb, &g_ephemeral_pending.back(), nullptr);
+        g_ephemeral_pending.push_back({ channel->buffer, std::string(stable_id), nullptr });
+        g_ephemeral_pending.back().timer_hook = static_cast<struct t_hook *>(
+            weechat_hook_timer(ephemeral_timer * 1000, 0, 1,
+                               ephemeral_tombstone_cb, &g_ephemeral_pending.back(), nullptr));
     }
 
     weechat_string_dyn_free(dyn_tags, 1);

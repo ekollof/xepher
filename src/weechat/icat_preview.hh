@@ -40,4 +40,7 @@ void emit_upload_local_icat_preview(const icat_preview_request &req,
 [[nodiscard]] std::expected<std::string, std::string>
 download_image_to_cache_sync(account &acct, std::string_view url);
 
+// Join all background image-cache download threads (plugin unload).
+void shutdown_icat_background_workers();
+
 }  // namespace weechat

@@ -1,8 +1,7 @@
 bool weechat::connection::conn_handler(event status, int error, xmpp_stream_error_t *stream_error)
 {
-    // Guard against libstrophe callbacks firing after plugin shutdown has begun.
-    // accounts.clear() in plugin::end() destroys account/omemo/connection objects;
-    // any callback firing after that point would dereference freed memory.
+    // Guard against libstrophe callbacks after plugin::end() has begun teardown
+    // (async drain → disconnect → accounts.clear → xmpp_shutdown).
     if (weechat::g_plugin_unloading)
         return false;
 

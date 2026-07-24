@@ -36,6 +36,7 @@
 #include "account.hh"
 #include "config.hh"
 #include "debug.hh"
+#include "plugin.hh"
 #include "util.hh"
 #include "weechat/icat_preview.hh"
 #include "weechat/ui_port.hh"
@@ -185,7 +186,11 @@ int ephemeral_tombstone_cb(const void *pointer, void *data, int remaining_calls)
     if (!pointer)
         return WEECHAT_RC_OK;
 
-    const auto *ctx = static_cast<const ephemeral_tombstone_ctx *>(pointer);
+    if (weechat::g_plugin_unloading || !weechat::plugin::instance)
+        return WEECHAT_RC_OK;
+
+    auto *ctx = static_cast<ephemeral_tombstone_ctx *>(const_cast<void *>(pointer));
+    ctx->timer_hook = nullptr;  // one-shot timer; WeeChat has unhooked us
     struct t_gui_buffer *buf = ctx->buffer;
     const std::string &msg_id = ctx->msg_id;
 
@@ -1045,4 +1050,87 @@ static void og_launch_one(og_pending_entry entry)
         ctx.success = !ctx.preview.title.empty() || !ctx.preview.description.empty();
         signal_worker_pipe(ctx.pipe_write_fd);
     });
+}
+
+// ── Plugin unload: drain joinable background workers ──────────────────────────
+
+namespace {
+
+void drain_pipe_worker_list_esfs()
+{
+    while (!g_esfs_downloads.empty())
+    {
+        esfs_download_ctx &ctx = g_esfs_downloads.front();
+        if (ctx.pipe_write_fd >= 0)
+        {
+            close(ctx.pipe_write_fd);
+            ctx.pipe_write_fd = -1;
+        }
+        if (ctx.worker.joinable())
+            ctx.worker.join();
+        if (ctx.hook)
+        {
+            weechat_unhook(ctx.hook);
+            ctx.hook = nullptr;
+        }
+        if (ctx.pipe_read_fd >= 0)
+        {
+            char sig[1];
+            (void)::read(ctx.pipe_read_fd, sig, sizeof(sig));
+            close(ctx.pipe_read_fd);
+            ctx.pipe_read_fd = -1;
+        }
+        g_esfs_downloads.pop_front();
+    }
+}
+
+void drain_pipe_worker_list_og()
+{
+    g_og_pending.clear();
+    while (!g_og_fetches.empty())
+    {
+        og_fetch_ctx &ctx = g_og_fetches.front();
+        if (ctx.pipe_write_fd >= 0)
+        {
+            close(ctx.pipe_write_fd);
+            ctx.pipe_write_fd = -1;
+        }
+        if (ctx.worker.joinable())
+            ctx.worker.join();
+        if (ctx.hook)
+        {
+            weechat_unhook(ctx.hook);
+            ctx.hook = nullptr;
+        }
+        if (ctx.pipe_read_fd >= 0)
+        {
+            char sig[1];
+            (void)::read(ctx.pipe_read_fd, sig, sizeof(sig));
+            close(ctx.pipe_read_fd);
+            ctx.pipe_read_fd = -1;
+        }
+        g_og_fetches.pop_front();
+    }
+}
+
+void drain_ephemeral_tombstones()
+{
+    for (auto &ctx : g_ephemeral_pending)
+    {
+        if (ctx.timer_hook)
+        {
+            weechat_unhook(ctx.timer_hook);
+            ctx.timer_hook = nullptr;
+        }
+    }
+    g_ephemeral_pending.clear();
+}
+
+}  // namespace
+
+void shutdown_async_workers()
+{
+    drain_pipe_worker_list_esfs();
+    drain_pipe_worker_list_og();
+    drain_ephemeral_tombstones();
 }

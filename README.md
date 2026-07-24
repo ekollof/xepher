@@ -1364,9 +1364,9 @@ the JID above.
 
 ---
 
-> **Known limitation:** Plugin reload while WeeChat is running is not
-> supported due to fundamental race conditions with timer hooks. Always
-> restart WeeChat instead of reloading the plugin.
+> **Plugin reload:** `/plugin reload xmpp` is supported. It disconnects accounts,
+> closes XMPP buffers, and re-inits from config (reconnect afterward). Prefer
+> unload/reload over overwriting `xmpp.so` while it is still mapped.
 
 ---
 

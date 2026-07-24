@@ -23,11 +23,13 @@
 #include "channel.hh"
 #include "user.hh"
 #include "connection.hh"
+#include "connection/internal.hh"
 #include "command.hh"
 #include "input.hh"
 #include "buffer.hh"
 #include "completion.hh"
 #include "debug.hh"
+#include "weechat/icat_preview.hh"
 #include <fmt/core.h>
 
 #define WEECHAT_TIMER_INTERVAL_SEC 0.01
@@ -254,10 +256,8 @@ void weechat::plugin::init(int argc, char *argv[])
                                                   &nick_color_config_cb,
                                                   nullptr, nullptr);
 
-    // Smart filter: auto-register a WeeChat filter to hide join/leave/nick-change
-    // lines tagged with xmpp_smart_filter.  Users can toggle it with
-    //   /filter enable|disable xmpp_smart_filter_default
-    // or remove it with /filter del xmpp_smart_filter_default
+    // Smart filter: hide join/leave/nick-change lines tagged xmpp_smart_filter.
+    // Idempotent across /plugin reload (re-add fails harmlessly if present).
     weechat_command(nullptr,
                     "/filter add xmpp_smart_filter_default * xmpp_smart_filter *");
 
@@ -267,8 +267,8 @@ void weechat::plugin::init(int argc, char *argv[])
 }
 
 void weechat::plugin::end() {
-    // CRITICAL: Set flag FIRST to stop any in-flight callbacks
-    // If we unhook first, a callback could start before we set the flag
+    // CRITICAL: Set flag FIRST so in-flight callbacks and worker threads
+    // stop touching plugin state before we tear it down.
     weechat::g_plugin_unloading = true;
 
     weechat::cancel_focus_core_buffer_timer();
@@ -278,13 +278,13 @@ void weechat::plugin::end() {
         weechat_unhook(m_process_timer);
         m_process_timer = nullptr;
     }
-    
+
     // Unhook signals to prevent callbacks during shutdown
     if (m_buffer_switch_hook) {
         weechat_unhook(m_buffer_switch_hook);
         m_buffer_switch_hook = nullptr;
     }
-    
+
     if (m_input_text_changed_hook) {
         weechat_unhook(m_input_text_changed_hook);
         m_input_text_changed_hook = nullptr;
@@ -301,21 +301,30 @@ void weechat::plugin::end() {
     }
 
     if (m_encryption_bar_item)
+    {
         weechat_bar_item_remove(m_encryption_bar_item);
+        m_encryption_bar_item = nullptr;
+    }
 
+    // Join OG / ESFS / ephemeral / icat workers before destroying accounts
+    // (they hold raw account* and buffer pointers).
+    shutdown_async_workers();
+    weechat::shutdown_icat_background_workers();
+
+    // Disconnect closes buffers and joins per-account upload threads.
     weechat::account::disconnect_all();
 
-    // Write config before clearing accounts
+    // Persist config while account objects still exist.
     weechat::config::write();
 
     weechat::debug::fini();
-    
-    // Do not clear accounts during shutdown.
-    // account/omemo teardown can still race libsignal/libstrophe object lifetime
-    // during process exit and has historically caused ref-count assertions.
-    // The global account map is intentionally never freed and the OS reclaims
-    // memory at process end.
 
+    // Destroy accounts (OMEMO, LMDB, libstrophe contexts) while the plugin
+    // API and libstrophe are still usable. The map container itself stays
+    // heap-leaked so process-exit static destruction never re-runs dtors.
+    weechat::accounts.clear();
+
+    // Free config options while plugin::instance is still valid.
     weechat::config::instance.reset();
 
     libstrophe::shutdown();

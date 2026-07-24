@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <list>
+#include <mutex>
 #include <optional>
 #include <thread>
 #include <unistd.h>
@@ -25,6 +27,24 @@
 namespace weechat {
 
 namespace {
+
+// Joinable background image-cache downloads — drained on plugin unload.
+std::mutex g_icat_bg_mutex;
+std::list<std::thread> g_icat_bg_workers;
+
+void join_icat_background_workers()
+{
+    std::list<std::thread> pending;
+    {
+        std::lock_guard lock(g_icat_bg_mutex);
+        pending.swap(g_icat_bg_workers);
+    }
+    for (auto &t : pending)
+    {
+        if (t.joinable())
+            t.join();
+    }
+}
 
 [[nodiscard]] bool path_is_image(std::string_view path)
 {
@@ -141,18 +161,24 @@ void cache_image_path_background(account *acct,
                                  std::string stable_id,
                                  std::string url)
 {
-    if (!acct || url.empty())
+    if (!acct || url.empty() || weechat::g_plugin_unloading)
         return;
-    std::thread([acct, channel_jid = std::move(channel_jid),
-                 stable_id = std::move(stable_id), url = std::move(url)]() {
+
+    std::thread worker([acct, channel_jid = std::move(channel_jid),
+                        stable_id = std::move(stable_id), url = std::move(url)]() {
         if (weechat::g_plugin_unloading)
             return;
         if (auto path = download_image_to_cache_sync(*acct, url))
         {
+            if (weechat::g_plugin_unloading)
+                return;
             if (!channel_jid.empty() && !stable_id.empty())
                 acct->mam_cache_store_image_preview(channel_jid, stable_id, *path);
         }
-    }).detach();
+    });
+
+    std::lock_guard lock(g_icat_bg_mutex);
+    g_icat_bg_workers.push_back(std::move(worker));
 }
 
 [[nodiscard]] std::string extension_from_path(std::string_view path)
@@ -238,6 +264,11 @@ resolve_local_icat_path(const icat_preview_request &req, account &acct)
 }
 
 }  // namespace
+
+void shutdown_icat_background_workers()
+{
+    join_icat_background_workers();
+}
 
 void emit_upload_local_icat_preview(const icat_preview_request &req,
                                     account &acct,

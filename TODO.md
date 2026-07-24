@@ -3,8 +3,8 @@
 Living task list for remaining implementation debt. Completed initiatives are in git
 history (OMEMO BTBV refactor, port abstraction, XEP-0045 MUC, CMake migration, etc.).
 
-**Verify changes:** `make DEBUG=1` (147 doctests). Restart WeeChat after rebuilding the
-plugin — do not `/plugin reload xmpp`.
+**Verify changes:** `make DEBUG=1` (147 doctests). After rebuild, install `xmpp.so`
+and `/plugin reload xmpp` (or restart WeeChat); reconnect accounts after reload.
 
 ---
 

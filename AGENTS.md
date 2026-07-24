@@ -203,7 +203,9 @@ Output lands in `packaging/build/` (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`, `.xb
   `prefix("action")` only for dated chat message columns (`/me`, MAM mentions). Raw
   `weechat_prefix()` belongs in port adapters (`ui_port.cpp`) only.
 - Buffer display values: `"1"` (don't auto-switch), `"auto"` (auto-switch)
-- Never reload plugin - always restart WeeChat (race condition with timer hooks)
+- Plugin reload is supported (`/plugin reload xmpp`): unload drains workers,
+  disconnects, clears accounts, then shuts down libstrophe. Do **not** overwrite
+  `xmpp.so` while it is mapped without unloading first (install → reload is fine).
 
 ### Stanza Construction & Inbound Parsing
 
@@ -555,7 +557,7 @@ docs: add comprehensive command documentation to README.md
 
 - Buffer display `"auto"` causes unwanted buffer switching on plugin load
 - Use `"1"` to keep user in current buffer
-- Can't safely reload plugin - must restart WeeChat
+- `/plugin reload xmpp` is supported (cold re-init; reconnect accounts after)
 
 ### Biboumi/IRC Gateway Detection
 
@@ -581,7 +583,7 @@ Skip autojoin for IRC gateway rooms (causes connection issues):
 - For OMEMO log debugging, always run `tools/correlate_omemo_xml.sh --account <account>` first to correlate event logs with raw XML before proposing protocol-level fixes.
 - Example: `tail -n 300 ~/.local/share/weechat/logs/xmpp.account.andrath.weechatlog`
 - Filter logs: `grep "OMEMO\|bundle\|devicelist" ~/.local/share/weechat/logs/xmpp.account.*.weechatlog`
-- **Note**: Plugin must be restarted (WeeChat closed/reopened) after code changes to test - cannot safely reload in-place
+- **Note**: After rebuilding, install `xmpp.so` then `/plugin reload xmpp` (or restart WeeChat). Reload disconnects and closes XMPP buffers; reconnect accounts afterward.
 
 ### Debug Options (agents must know these)
 
@@ -699,9 +701,10 @@ socket is absent, load it via the FIFO (see below):
 echo "*/python load weechat_debug_socket.py" > /run/user/1000/weechat/weechat_fifo_<pid>
 ```
 
-**Do NOT use the debug socket to run `/plugin reload xmpp`** — unloading the
-compiled plugin mid-session crashes WeeChat. Install a new `xmpp.so` to
-`~/.local/share/weechat/plugins/` and restart WeeChat instead.
+After installing a new `xmpp.so` to `~/.local/share/weechat/plugins/`, you may
+`/plugin reload xmpp` (or unload then load). Reload tears down connections and
+buffers; reconnect accounts afterward. Prefer install then reload over overwriting
+the mapped file without unload.
 
 #### 2. FIFO pipe (one-way, no output)
 

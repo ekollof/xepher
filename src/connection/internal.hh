@@ -138,8 +138,9 @@ void append_raw_xml_trace(weechat::account &account,
 
 // ── Ephemeral-message tombstone timer ─────────────────────────────────────────
 struct ephemeral_tombstone_ctx {
-    struct t_gui_buffer *buffer;
+    struct t_gui_buffer *buffer = nullptr;
     std::string msg_id;
+    struct t_hook *timer_hook = nullptr;
 };
 
 // RAII list that owns all pending ephemeral-tombstone contexts.
@@ -147,6 +148,12 @@ extern std::list<ephemeral_tombstone_ctx> g_ephemeral_pending;
 
 // weechat_hook_timer callback — replaces the message text with a tombstone.
 int ephemeral_tombstone_cb(const void *pointer, void *data, int remaining_calls);
+
+// Join background workers and unhook fd/timer hooks for OG, ESFS, and
+// ephemeral tombstones. Safe to call during plugin unload (after
+// g_plugin_unloading is set). Does not touch per-account upload threads
+// (those are joined in account::disconnect).
+void shutdown_async_workers();
 
 // ── XEP-0448 Encrypted File Sharing download context ─────────────────────────
 struct esfs_download_ctx {
