@@ -10,19 +10,14 @@
 #include "strophe.hh"
 #include "test_export.hh"
 
-#define STR(X) #X
-#define XSTR(X) STR(X)
-
 #define weechat_plugin (&*weechat::plugin::instance->ptr())
 #define WEECHAT_XMPP_PLUGIN_NAME "xmpp"
 
-#ifdef GIT_COMMIT
-#define XMPP_PLUGIN_COMMIT XSTR(GIT_COMMIT)
-#define WEECHAT_XMPP_PLUGIN_VERSION "0.5.0@" XMPP_PLUGIN_COMMIT
-#else//GIT_COMMIT
-#define XMPP_PLUGIN_COMMIT "unknown"
+// Base product version for WeeChat plugin registration (string literal required).
+// Full display version with commit: weechat::plugin_version() (see version.hh).
 #define WEECHAT_XMPP_PLUGIN_VERSION "0.5.0"
-#endif//GIT_COMMIT
+
+#include "version.hh"
 
 namespace weechat {
     class plugin {

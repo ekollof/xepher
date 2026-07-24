@@ -61,6 +61,8 @@ CMAKE_ARGS += -DCMAKE_BUILD_TYPE=$(if $(DEBUG),Debug,Release)
 CMAKE_ARGS += -DXEPHER_PACKAGE_BUILD=$(if $(PACKAGE_BUILD),ON,OFF)
 CMAKE_ARGS += -DXEPHER_BUILD_TOOLS=$(if $(PACKAGE_BUILD),OFF,ON)
 CMAKE_ARGS += -DXEPHER_ENABLE_ASAN=$(if $(ASAN),ON,OFF)
+# .source ELF embed is opt-in (slow post-link tar). make release sets EMBED_SOURCE=1.
+CMAKE_ARGS += -DXEPHER_EMBED_SOURCE=$(if $(filter 1,$(EMBED_SOURCE)),ON,OFF)
 
 BUILD_ARGS := --build $(BUILD_DIR) -j$(NPROC)
 
@@ -99,7 +101,7 @@ endif
 
 clean:
 	@if [ -d "$(BUILD_DIR)" ]; then $(CMAKE) --build $(BUILD_DIR) --target clean; fi
-	$(RM) -f xmpp.so tests/xmpp.cov.so tests/run compile_commands.json
+	$(RM) -f xmpp.so tests/xmpp.cov.so tests/run tests/run.cov compile_commands.json
 	$(RM) -f tools/dump_mam_db tools/dump_omemo_db
 	$(RM) -rf obj
 	$(MAKE) -C deps/diff clean || true
@@ -113,7 +115,9 @@ install: weechat-xmpp
 install-deps:
 	./install-deps.sh
 
-release: weechat-xmpp
+# Rebuild with .source embed so install.mk release can dump the section.
+release:
+	$(MAKE) EMBED_SOURCE=1 weechat-xmpp
 	@$(MAKE) -f legacy/install.mk release
 
 coverage: configure

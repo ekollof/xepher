@@ -25,9 +25,11 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-option(XEPHER_PACKAGE_BUILD "Skip dev-only .source ELF embed (distribution builds)" OFF)
+option(XEPHER_PACKAGE_BUILD "Distribution build (no .source embed, no tools)" OFF)
+option(XEPHER_EMBED_SOURCE "Embed tracked sources as .source ELF section (Linux; for make release)" OFF)
 option(XEPHER_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(XEPHER_BUILD_TOOLS "Build developer tools (dump_mam_db, dump_omemo_db)" ON)
+option(XEPHER_USE_LLD "Use lld when the toolchain supports -fuse-ld=lld" ON)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(XEPHER_DWARF_FLAG "-g")
@@ -47,6 +49,9 @@ if(CMAKE_CXX_COMPILER_LAUNCHER)
 endif()
 
 include("${CMAKE_SOURCE_DIR}/cmake/XepherFlags.cmake")
+if(XEPHER_USE_LLD)
+    xepher_try_use_lld()
+endif()
 include("${CMAKE_SOURCE_DIR}/cmake/LibDiff.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/Sexp.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake")
@@ -78,7 +83,7 @@ xepher_add_tests(xepher_plugin)
 
 # CTest reserves the "test" target when enable_testing() is active; use xepher_test.
 if(TARGET xepher_test)
-    # Doctests use xmpp.cov.so, but finish the plugin first (matches make DEBUG=1 ordering).
+    # Doctests link the normal plugin (xmpp.so); coverage is a separate target.
     add_dependencies(xepher_test weechat-xmpp)
     add_custom_target(xepher_dev DEPENDS weechat-xmpp xepher_test)
 endif()

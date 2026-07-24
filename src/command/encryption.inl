@@ -618,7 +618,9 @@ int command__xmpp(const void *pointer, void *data,
     (void) argv;
     (void) argv_eol;
 
-        weechat::UiPort::for_buffer(nullptr)->printf_info(fmt::format(fmt::runtime(_(" {} [{}]")), WEECHAT_XMPP_PLUGIN_NAME, WEECHAT_XMPP_PLUGIN_VERSION, XMPP_PLUGIN_COMMIT));
+        weechat::UiPort::for_buffer(nullptr)->printf_info(fmt::format(
+            fmt::runtime(_(" {} [{}]")),
+            WEECHAT_XMPP_PLUGIN_NAME, weechat::plugin_version()));
 
     return WEECHAT_RC_OK;
 }

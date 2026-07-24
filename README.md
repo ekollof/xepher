@@ -95,7 +95,10 @@ platforms are **not routinely tested**. Known considerations:
   (`-O0 -DDEBUG` + 147 doctests). Use `ASAN=1` for AddressSanitizer
   (`-fsanitize=address`; `-lasan -lrt` on Linux only). Combine: `gmake DEBUG=1 ASAN=1`.
 - The `.source` ELF section embedding step (`objcopy --add-section`) is
-  Linux-only, skipped on BSD, and **skipped in distribution builds** (`PACKAGE_BUILD=1`).
+  Linux-only, **off by default** (use `make release` or `EMBED_SOURCE=1`),
+  skipped on BSD, and skipped in distribution builds (`PACKAGE_BUILD=1`).
+- Debug doctests link the normal `xmpp.so` (no double full compile). Coverage
+  instrumentation is only built for `make coverage`.
 
 ### Build from source
 
@@ -121,10 +124,17 @@ Doctest is vendored under `deps/doctest/` (v2.5.2). `make DEBUG=1` or `make test
 runs **147 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
 system package. Plain `make` skips doctests.
 
-To build a distribution-style plugin locally (no `.source` embed, same as packages):
+To build a distribution-style plugin locally (same as packages):
 
 ```sh
 make PACKAGE_BUILD=1 weechat-xmpp
+```
+
+To embed sources into the plugin (for the `make release` dump workflow):
+
+```sh
+make EMBED_SOURCE=1 weechat-xmpp
+# or: make release
 ```
 
 **Direct CMake** (IDEs, `clangd`, or when you prefer presets over the wrapper):

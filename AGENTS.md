@@ -60,6 +60,9 @@ under `legacy/` for reference only.
 - Always build after code changes; **doctests run automatically only with `DEBUG=1`** (vendored in `deps/doctest/`). Plain `make` skips them — use `make test` to run tests without a full debug rebuild.
 - **Includes**: use `-Isrc` paths (`plugin.hh`, `xmpp/stanza_view.hh`) — never `../` relative includes in `src/`
 - **ccache**: auto-enabled when `ccache` is on `PATH` (`CMAKE_*_COMPILER_LAUNCHER`). `CXX="ccache clang++"` still works; set `CCACHE=0` to disable.
+- **lld**: used automatically when `-fuse-ld=lld` works (`XEPHER_USE_LLD=ON` by default). Faster links of large plugin objects.
+- **Doctests**: link the normal `xmpp.so` (no second coverage-instrumented full compile). `make coverage` builds `xmpp.cov.so` + `tests/run.cov` only when needed.
+- **`GIT_COMMIT`**: compiled only into `src/version.cpp` so commits do not bust ccache for every TU. Use `weechat::plugin_version()` for display strings.
 - **Developer tools**: `make tools` builds `tools/dump_mam_db` and `tools/dump_omemo_db` (skipped when `PACKAGE_BUILD=1`).
 
 **Build profiles** (agents: use **`DEBUG=1`** for iterative development):
@@ -85,8 +88,8 @@ cmake --build build --target tools    # LMDB inspector binaries
 
 ### Distribution / CI builds
 
-- **`PACKAGE_BUILD=1`**: all packaging scripts and specs pass this to `make`. Skips the dev-only `.source` ELF section (`objcopy --add-section`) and developer tools (`XEPHER_BUILD_TOOLS=OFF`). Without it, tarball builds lacking `.git` can archive the entire build tree and produce gigabyte RPM/APK packages.
-- **`.source` embed** (Linux dev builds only): after link, tracked sources are tarred into `xmpp.so` for the `make release` workflow. Runs only when `PACKAGE_BUILD` is unset, `git ls-files` succeeds, and the file list is non-empty.
+- **`PACKAGE_BUILD=1`**: all packaging scripts and specs pass this to `make`. Skips the `.source` ELF section and developer tools (`XEPHER_BUILD_TOOLS=OFF`). Without it, tarball builds lacking `.git` can archive the entire build tree and produce gigabyte RPM/APK packages.
+- **`.source` embed** (Linux only, **opt-in**): set `EMBED_SOURCE=1` or `-DXEPHER_EMBED_SOURCE=ON` (also used by `make release`). Default off so iterative links skip the full-tree tar/`objcopy`. Skipped when `PACKAGE_BUILD=1`.
 - **`make clean`** removes `xmpp.so`, `build/` artifacts, and test/tool outputs so container builds never reuse a host-built plugin.
 - **`make seed-libdiff`**: seeds `deps/diff/libdiff.a` via autotools (packaging tarballs without `.git`).
 

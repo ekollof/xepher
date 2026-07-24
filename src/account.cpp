@@ -1230,7 +1230,7 @@ void weechat::account::build_and_publish_post(const xepher::pending_feed_post &p
     }
 
     entry_spec.generator("Xepher", "https://github.com/ekollof/xepher",
-                         WEECHAT_XMPP_PLUGIN_VERSION);
+                         weechat::plugin_version());
 
     auto pubsub_el = stanza::xep0060::pubsub()
         .publish(stanza::xep0060::publish(target_node)

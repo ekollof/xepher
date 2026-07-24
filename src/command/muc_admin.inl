@@ -1043,7 +1043,7 @@ int command__feed(const void *pointer, void *data,
             entry_spec.content_text(rep_comment);
 
         entry_spec.generator("Xepher", "https://github.com/ekollof/xepher",
-                             WEECHAT_XMPP_PLUGIN_VERSION);
+                             weechat::plugin_version());
 
         std::string uid_r = stanza::uuid(ptr_account->context);
         ptr_account->pubsub_publish_ids[uid_r] = {rep_service, rep_node, item_uuid, buffer};
