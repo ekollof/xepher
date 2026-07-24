@@ -6,6 +6,10 @@
 # Usage:
 #   ./packaging/github-build.sh <version> [--debian] [--fedora] [--arch] [--alpine] [--void]
 #
+# Omit distro flags to build all five. Pass one or more flags to rebuild only those
+# (useful after a CI failure, e.g. --alpine). GitHub Actions workflow_dispatch
+# maps its "distros" input to these flags.
+#
 # Each distro runs in a fresh container via the existing build-*-inside.sh scripts.
 # Builds are sequential (no parallelism) to limit CI memory/CPU pressure.
 #

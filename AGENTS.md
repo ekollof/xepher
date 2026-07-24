@@ -97,13 +97,19 @@ cmake --build build --target tools    # LMDB inspector binaries
 
 **Primary path — GitHub Actions** (`.github/workflows/packages.yml`):
 - On `v*` tag push: builds all five distros **sequentially** in fresh Docker containers, uploads artifacts, and attaches them to the GitHub Release.
-- `workflow_dispatch` with a version builds packages without creating a release.
-- CI entry point: `packaging/github-build.sh <version>` (same script for local Docker verification).
+- `workflow_dispatch`: pick **version**, optional **distros** (`all` or e.g. `alpine` / `debian alpine`), and **attach_to_release** (default on) so a failed distro can be rebuilt without redoing the other four.
+- CI entry point: `packaging/github-build.sh <version> [--debian|--fedora|--arch|--alpine|--void]` (same script for local Docker verification).
 
 **Local package verification** (requires Docker):
 ```sh
 bash packaging/github-build.sh X.Y.Z              # all distros
 bash packaging/github-build.sh X.Y.Z --fedora   # single distro
+```
+
+**CI single-distro retry** (after a partial Packages failure):
+```sh
+gh workflow run packages.yml -f version=X.Y.Z -f distros=alpine -f attach_to_release=true
+# or UI: Actions → Packages → Run workflow
 ```
 
 **Optional — persistent distrobox containers** (`packaging/distrobox-build.sh`):
@@ -469,6 +475,12 @@ Xepher follows **semantic versioning** (MAJOR.MINOR.PATCH):
 ### Building packages
 
 **CI (default for releases):** push `vX.Y.Z` tag → Actions runs `packaging/github-build.sh X.Y.Z` → artifacts attached to the release. Monitor with `gh run watch`.
+
+**CI retry one distro** (does not re-run the other distros):
+```sh
+gh workflow run packages.yml -f version=X.Y.Z -f distros=alpine -f attach_to_release=true
+gh run watch --repo ekollof/xepher
+```
 
 **Local verification before tagging** (requires Docker):
 ```sh

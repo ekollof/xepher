@@ -7,12 +7,28 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Package version (e.g. 0.8.0)'
+        description: 'Package version without v prefix (e.g. 0.12.0)'
         required: true
         type: string
+      distros:
+        description: >-
+          Distros to build: "all" or a comma/space-separated list of
+          debian, fedora, arch, alpine, void (e.g. "alpine" or "debian alpine")
+        required: false
+        default: 'all'
+        type: string
+      attach_to_release:
+        description: >-
+          Upload built packages to the GitHub release v{version}
+          (use after a partial CI failure to attach only the rebuilt distro)
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
-  group: packages-${{ github.workflow }}-${{ github.ref }}
+  # Allow parallel single-distro retries without cancelling an in-flight full build
+  # on the same ref when the dispatch inputs differ.
+  group: packages-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.distros || 'all' }}
   cancel-in-progress: false
 
 permissions:
@@ -20,7 +36,7 @@ permissions:
 
 jobs:
   build:
-    name: Build distribution packages (sequential)
+    name: Build packages (${{ github.event_name == 'workflow_dispatch' && inputs.distros || 'all' }})
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -31,28 +47,72 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Resolve package version
-        id: version
+      - name: Resolve package version and distro flags
+        id: plan
         run: |
+          set -euo pipefail
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ver="${{ inputs.version }}"
+            distros_raw="${{ inputs.distros }}"
           else
             ver="${GITHUB_REF_NAME#v}"
+            distros_raw="all"
           fi
+
           if [ -z "${ver}" ]; then
             echo "Could not determine package version" >&2
             exit 1
           fi
-          echo "version=${ver}" >> "${GITHUB_OUTPUT}"
-          echo "Package version: ${ver}"
 
-      - name: Build all distro packages (sequential)
-        run: bash packaging/github-build.sh "${{ steps.version.outputs.version }}"
+          # Strip optional leading v from dispatch input.
+          ver="${ver#v}"
+
+          # Normalize: commas → spaces, lowercase, collapse whitespace.
+          distros_raw="$(printf '%s' "${distros_raw:-all}" | tr 'A-Z,' 'a-z ' | xargs)"
+          if [ -z "${distros_raw}" ]; then
+            distros_raw="all"
+          fi
+
+          flags=""
+          if [ "${distros_raw}" != "all" ]; then
+            for d in ${distros_raw}; do
+              case "${d}" in
+                debian|fedora|arch|alpine|void)
+                  flags="${flags} --${d}"
+                  ;;
+                *)
+                  echo "Unknown distro '${d}' (want: all|debian|fedora|arch|alpine|void)" >&2
+                  exit 1
+                  ;;
+              esac
+            done
+          fi
+
+          {
+            echo "version=${ver}"
+            echo "flags=${flags}"
+            echo "distros_label=${distros_raw}"
+            echo "tag_name=v${ver}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Package version: ${ver}"
+          if [ -z "${flags}" ]; then
+            echo "Distros: all"
+          else
+            echo "Distros flags:${flags}"
+          fi
+
+      - name: Build distro packages (sequential Docker)
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          bash packaging/github-build.sh "${{ steps.plan.outputs.version }}" ${{ steps.plan.outputs.flags }}
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: xepher-packages-${{ steps.version.outputs.version }}
+          name: xepher-packages-${{ steps.plan.outputs.version }}-${{ steps.plan.outputs.distros_label }}-${{ github.run_id }}
           if-no-files-found: error
           path: |
             packaging/build/*.deb
@@ -62,15 +122,21 @@ jobs:
             packaging/build/*.xbps
 
       - name: Attach packages to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        # Tag push always attaches. Dispatch attaches when attach_to_release is true
+        # so a single-distro retry can fill in a failed asset on an existing release.
+        if: >-
+          startsWith(github.ref, 'refs/tags/v')
+          || (github.event_name == 'workflow_dispatch' && inputs.attach_to_release)
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.plan.outputs.tag_name }}
+          # Partial rebuilds only produce a subset of globs; do not fail the job.
+          fail_on_unmatched_files: false
           files: |
             packaging/build/*.deb
             packaging/build/*.rpm
             packaging/build/*.pkg.tar.zst
             packaging/build/*.apk
             packaging/build/*.xbps
-          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
