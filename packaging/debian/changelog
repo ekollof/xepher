@@ -1,3 +1,13 @@
+xepher (0.12.0-1) unstable; urgency=medium
+
+  * Update to v0.12.0
+  * Fix: safe plugin unload/reload; atomic install avoids SIGBUS
+  * Fix(omemo): Psi+/multi-client PEP merge; lazy MUC bootstrap; /omemo prune
+  * Fix: /upload spaces and ~user; picker scroll; icat/preview polish
+  * Build: faster Debug (no double compile, lld, isolated GIT_COMMIT)
+
+ -- Emiel Kollof <emiel@kollof.nl>  Fri, 24 Jul 2026 12:00:00 +0000
+
 xepher (0.11.0-1) unstable; urgency=medium
 
   * Update to v0.11.0

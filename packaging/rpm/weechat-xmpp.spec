@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        0.11.0
+Version:        0.12.0
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -73,6 +73,13 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Fri Jul 24 2026 Emiel Kollof <emiel@kollof.nl> - 0.12.0-1
+- Update to v0.12.0
+- Fix: safe plugin unload/reload; atomic install avoids SIGBUS
+- Fix(omemo): Psi+/multi-client PEP merge; lazy MUC bootstrap; /omemo prune
+- Fix: /upload spaces and ~user; picker scroll; icat/preview polish
+- Build: faster Debug (no double compile, lld, isolated GIT_COMMIT)
+
 * Mon Jul 06 2026 Emiel Kollof <emiel@kollof.nl> - 0.11.0-1
 - Update to v0.11.0
 - Feat: /disco summary and auto-print server capabilities after connect
