@@ -192,7 +192,11 @@ public:
             return;
         }
 
-        for (int row = 0; row < static_cast<int>(visible_.size()); ++row) {
+        ensure_selection_visible();
+        const int page = page_size();
+        const int n = static_cast<int>(visible_.size());
+        int y = 1;
+        for (int row = scroll_top_; row < n && (row - scroll_top_) < page; ++row) {
             const auto &e = entries_[visible_[row]];
             bool is_sel = (row == selected_vis_) && e.selectable;
 
@@ -227,8 +231,11 @@ public:
                     line += weechat::RuntimePort::default_runtime().color("reset");
             }
 
-            weechat::UiPort::for_buffer(buf_)->printf_y(row + 1, line);
+            weechat::UiPort::for_buffer(buf_)->printf_y(y++, line);
         }
+        // Blank leftover rows after a shorter page (shrink / filter).
+        while (y <= page)
+            weechat::UiPort::for_buffer(buf_)->printf_y(y++, "");
     }
 
     // ---------------------------------------------------------------------------
@@ -246,6 +253,7 @@ public:
                 break;
         }
         selected_vis_ = next;
+        ensure_selection_visible();
         redraw();
     }
 
@@ -277,8 +285,41 @@ private:
     std::string           title_;
     std::string           filter_;
     int                   selected_vis_ = -1;  // index into visible_
+    int                   scroll_top_ = 0;     // first visible_ index shown (viewport)
     action_cb             on_select_;
     close_cb              on_close_;
+
+    // Chat area rows available for list entries (header uses row 0).
+    [[nodiscard]] int page_size() const
+    {
+        int h = 20;
+        if (auto *win = static_cast<struct t_gui_window *>(weechat_current_window()))
+        {
+            const int chat_h = weechat_window_get_integer(win, "win_chat_height");
+            if (chat_h > 0)
+                h = chat_h;
+        }
+        // One row reserved for the title/instructions line.
+        return std::max(1, h - 1);
+    }
+
+    // Keep selected_vis_ inside the on-screen window [scroll_top_, scroll_top_+page).
+    void ensure_selection_visible()
+    {
+        if (selected_vis_ < 0 || visible_.empty())
+        {
+            scroll_top_ = 0;
+            return;
+        }
+        const int page = page_size();
+        if (selected_vis_ < scroll_top_)
+            scroll_top_ = selected_vis_;
+        else if (selected_vis_ >= scroll_top_ + page)
+            scroll_top_ = selected_vis_ - page + 1;
+
+        const int max_top = std::max(0, static_cast<int>(visible_.size()) - page);
+        scroll_top_ = std::clamp(scroll_top_, 0, max_top);
+    }
 
     // Rebuild visible_ from entries_ using the current filter_.
     // Tries to keep the currently selected entry selected; otherwise resets
@@ -323,6 +364,7 @@ private:
         if (selected_vis_ < 0)
             selected_vis_ = first_selectable_vis(0);
 
+        ensure_selection_visible();
         redraw();
     }
 
