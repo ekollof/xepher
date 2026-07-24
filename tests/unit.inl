@@ -1904,7 +1904,17 @@ TEST_CASE("iq_disco and iq_caps helpers")
     const std::string s = xmpp::build_caps_verification_string(
         xmpp::StanzaView(query), features);
     CHECK(s == "client/pc//<feature1<feature2<");
-    CHECK_FALSE(xmpp::caps_sha1_base64(s).empty());
+    const std::string ver = xmpp::caps_sha1_base64(s);
+    CHECK_FALSE(ver.empty());
+
+    const std::string report = xmpp::format_caps_debug_summary(
+        "user@example.org/phone", xmpp::StanzaView(query), features, ver, ver);
+    CHECK(report.contains("entity user@example.org/phone"));
+    CHECK(report.contains("identity: client/pc"));
+    CHECK(report.contains("feature1"));
+    CHECK(report.contains("feature2"));
+    CHECK(report.contains("(OK)"));
+    CHECK_FALSE(report.contains("feature1<feature2"));
 
     xmpp_stanza_release(query);
 }

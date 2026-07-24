@@ -1113,17 +1113,17 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
                 const std::string ver_hash = account.caps_disco_queries[stanza_id];
                 account.caps_disco_queries.erase(stanza_id);
 
+                const ::xmpp::StanzaView query_view(query);
                 const std::string s = ::xmpp::build_caps_verification_string(
-                    ::xmpp::StanzaView(query), features);
-                XDEBUG("caps: S string for {} (len={}): '{}'",
-                       from ? from : "?", s.size(), s);
-
+                    query_view, features);
                 const std::string computed = ::xmpp::caps_sha1_base64(s);
+                // Prefer a readable multi-line report over the raw XEP-0115 S
+                // string (identity/feature soup joined by '<').
+                XDEBUG("{}", ::xmpp::format_caps_debug_summary(
+                    from ? from : "?", query_view, features, ver_hash, computed));
+
                 if (computed == ver_hash)
                     account.caps_cache_save(ver_hash, features);
-                else
-                    XDEBUG("caps: hash mismatch for {}: got '{}' expected '{}'; discarding",
-                           from ? from : "?", computed, ver_hash);
             }
             
             // Check if this is a response to upload service discovery

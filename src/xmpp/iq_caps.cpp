@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <ranges>
 #include <span>
+#include <string>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/evp.h>
@@ -153,6 +154,74 @@ std::string caps_sha1_base64(const std::string_view verification_string)
     const auto *data = reinterpret_cast<const unsigned char *>(verification_string.data());
     EVP_Digest(data, verification_string.size(), digest, &digest_len, EVP_sha1(), nullptr);
     return base64_no_nl(std::span<const std::uint8_t>(digest, digest_len));
+}
+
+std::string format_caps_debug_summary(
+    const std::string_view jid,
+    const StanzaView query,
+    const std::vector<std::string> &features,
+    const std::string_view advertised_ver,
+    const std::string_view computed_ver)
+{
+    std::vector<std::string> identities;
+    if (query.valid())
+    {
+        for (const StanzaView id_elem : query)
+        {
+            if (id_elem.name() != "identity")
+                continue;
+            const auto category = id_elem.attr_string("category");
+            const auto type = id_elem.attr_string("type");
+            const auto lang = id_elem.attr_string("lang");
+            const auto name = id_elem.attr_string("name");
+            // category/type is the disco identity; name is the client product.
+            std::string line = fmt::format("{}/{}", category, type);
+            if (!lang.empty())
+                line += fmt::format(" lang={}", lang);
+            if (!name.empty())
+                line += fmt::format(" name=\"{}\"", name);
+            identities.push_back(std::move(line));
+        }
+        std::ranges::sort(identities);
+    }
+
+    std::vector<std::string> sorted_features = features;
+    std::ranges::sort(sorted_features);
+
+    const bool match = !advertised_ver.empty()
+        && advertised_ver == computed_ver;
+    const char *match_label = advertised_ver.empty()
+        ? "no advertised ver"
+        : (match ? "OK" : "MISMATCH — cache discard");
+
+    std::string out;
+    out += fmt::format("caps: entity {}\n", jid.empty() ? "?" : jid);
+    out += fmt::format("caps: ver advertised={} computed={} ({})\n",
+                       advertised_ver.empty() ? "(none)" : advertised_ver,
+                       computed_ver.empty() ? "(none)" : computed_ver,
+                       match_label);
+
+    if (identities.empty())
+        out += "caps: identity: (none)\n";
+    else
+    {
+        for (const auto &id : identities)
+            out += fmt::format("caps: identity: {}\n", id);
+    }
+
+    out += fmt::format("caps: {} feature(s):\n", sorted_features.size());
+    if (sorted_features.empty())
+        out += "caps:   (none)";
+    else
+    {
+        for (std::size_t i = 0; i < sorted_features.size(); ++i)
+        {
+            out += fmt::format("caps:   {}", sorted_features[i]);
+            if (i + 1 < sorted_features.size())
+                out += '\n';
+        }
+    }
+    return out;
 }
 
 bool caps_requested_node_ok(
