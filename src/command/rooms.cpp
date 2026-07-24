@@ -42,6 +42,7 @@
 #include "xmpp/message_bob.hh"
 #include "xmpp/iq_upload.hh"
 #include "xmpp/server_capability_map.hh"
+#include "util.hh"
 
 #define MAM_DEFAULT_DAYS 2
 #define STR(X) #X

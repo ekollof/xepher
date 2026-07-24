@@ -575,7 +575,7 @@ void command__init()
         "upload",
         N_("upload a file via HTTP File Upload (XEP-0363)"),
         N_("[<filename>]"),
-        N_("filename: path to file to upload (optional)\n\n"
+        N_("filename: path to file to upload (optional; spaces allowed)\n\n"
            "If no filename is provided, an interactive file picker will be used.\n"
            "The picker tries GUI dialogs (zenity/kdialog) when X11/Wayland is detected,\n"
            "falls back to fzf in terminal, or prompts for manual entry.\n\n"

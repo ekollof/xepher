@@ -55,6 +55,12 @@ parse_int64(std::string_view value);
 // Format a local-time timestamp for MAM banners (YYYY-MM-DD HH:MM).
 [[nodiscard]] XMPP_TEST_EXPORT std::string format_local_timestamp(std::time_t t);
 
+// Unix-style tilde expansion for local paths.
+//   ~ or ~/…   → $HOME (or getpwuid home if HOME unset)
+//   ~user or ~user/… → getpwnam home; unknown user left unchanged
+// Paths that do not start with '~' are returned unchanged.
+[[nodiscard]] XMPP_TEST_EXPORT std::string expand_tilde_path(std::string_view path);
+
 // Format a UTC timestamp for MAM filters and XEP-0319 idle (YYYY-MM-DDTHH:MMZ).
 [[nodiscard]] XMPP_TEST_EXPORT std::string format_utc_timestamp(std::time_t t);
 

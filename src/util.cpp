@@ -14,9 +14,11 @@
 #include <cstdint>
 #include <ctime>
 #include <fmt/chrono.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>
 
@@ -93,6 +95,40 @@ parse_int64(std::string_view value)
     if (error != std::errc {} || ptr != end)
         return std::unexpected("invalid int64");
     return parsed;
+}
+
+XMPP_TEST_EXPORT std::string expand_tilde_path(std::string_view path)
+{
+    if (path.empty() || path.front() != '~')
+        return std::string(path);
+
+    // ~ or ~/rest  → current home;  ~user or ~user/rest → that user's home
+    const auto slash = path.find('/');
+    const std::string_view user_part =
+        path.substr(1, slash == std::string_view::npos ? path.size() - 1 : slash - 1);
+    const std::string_view suffix =
+        slash == std::string_view::npos ? std::string_view{} : path.substr(slash);
+
+    std::string home;
+    if (user_part.empty())
+    {
+        if (const char *env = std::getenv("HOME"); env && *env)
+            home = env;
+        else if (const passwd *pw = getpwuid(getuid()); pw && pw->pw_dir && *pw->pw_dir)
+            home = pw->pw_dir;
+        else
+            return std::string(path);
+    }
+    else
+    {
+        const std::string user(user_part);
+        if (const passwd *pw = getpwnam(user.c_str()); pw && pw->pw_dir && *pw->pw_dir)
+            home = pw->pw_dir;
+        else
+            return std::string(path);
+    }
+
+    return home + std::string(suffix);
 }
 
 XMPP_TEST_EXPORT std::string format_local_timestamp(std::time_t t)

@@ -204,7 +204,7 @@ int command__upload(const void *pointer, void *data,
 {
     (void) pointer;
     (void) data;
-    (void) argv_eol;
+    (void) argv;
 
     weechat::account *ptr_account = nullptr;
     weechat::channel *ptr_channel = nullptr;
@@ -248,14 +248,16 @@ int command__upload(const void *pointer, void *data,
     }
     else
     {
-        filename = argv[1];
-        // Expand leading '~' to the user's home directory.
-        if (!filename.empty() && filename[0] == '~')
+        // argv_eol[1] keeps spaces in the path (/upload ~/my photo.png).
+        // Optional surrounding quotes from tab-completion or shell habit.
+        filename = argv_eol[1] ? argv_eol[1] : "";
+        if (filename.size() >= 2
+            && ((filename.front() == '"' && filename.back() == '"')
+                || (filename.front() == '\'' && filename.back() == '\'')))
         {
-            const char *home = getenv("HOME");
-            if (home)
-                filename = std::string(home) + filename.substr(1);
+            filename = filename.substr(1, filename.size() - 2);
         }
+        filename = expand_tilde_path(filename);
     }
     
     // Check if file exists and is readable

@@ -8,7 +8,7 @@
 // so that gcovr reports non-zero coverage for the exercised source files.
 //
 // Functions under test:
-//   • char_cmp, unescape, parse_uint32, parse_int64,
+//   • char_cmp, unescape, parse_uint32, parse_int64, expand_tilde_path,
 //     format_local_timestamp, format_utc_timestamp  → src/util.cpp
 //   • message__htmldecode                  → src/message.cpp
 //   • get_name, get_attribute, get_text    → src/xmpp/node.cpp
@@ -17,6 +17,9 @@
 //   • weechat::angle_to_weechat_color      → src/color.cpp
 
 #include <doctest/doctest.h>
+#include <cstdlib>
+#include <pwd.h>
+#include <unistd.h>
 
 // ── plugin headers (real symbols declared here) ───────────────────────────────
 #include "util.hh"
@@ -180,6 +183,33 @@ TEST_CASE("parse_uint32")
     SUBCASE("negative is invalid")
     {
         CHECK_FALSE(parse_uint32("-1"));
+    }
+}
+
+TEST_CASE("expand_tilde_path")
+{
+    CHECK(expand_tilde_path("") == "");
+    CHECK(expand_tilde_path("/abs/path") == "/abs/path");
+    CHECK(expand_tilde_path("relative/file") == "relative/file");
+    CHECK(expand_tilde_path("~nosuchuser999999xyz/file")
+          == "~nosuchuser999999xyz/file");
+
+    const char *saved_home = std::getenv("HOME");
+    REQUIRE(setenv("HOME", "/tmp/xepher-home-test", 1) == 0);
+    CHECK(expand_tilde_path("~") == "/tmp/xepher-home-test");
+    CHECK(expand_tilde_path("~/file") == "/tmp/xepher-home-test/file");
+    CHECK(expand_tilde_path("~/a b.png") == "/tmp/xepher-home-test/a b.png");
+    if (saved_home)
+        setenv("HOME", saved_home, 1);
+    else
+        unsetenv("HOME");
+
+    if (const passwd *pw = getpwuid(getuid()); pw && pw->pw_name && pw->pw_dir)
+    {
+        const std::string name = pw->pw_name;
+        const std::string dir = pw->pw_dir;
+        CHECK(expand_tilde_path("~" + name) == dir);
+        CHECK(expand_tilde_path("~" + name + "/file") == dir + "/file");
     }
 }
 

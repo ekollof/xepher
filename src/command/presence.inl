@@ -638,7 +638,14 @@ int command__setavatar(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    std::string filepath(argv_eol[1]);
+    std::string filepath = argv_eol[1] ? argv_eol[1] : "";
+    if (filepath.size() >= 2
+        && ((filepath.front() == '"' && filepath.back() == '"')
+            || (filepath.front() == '\'' && filepath.back() == '\'')))
+    {
+        filepath = filepath.substr(1, filepath.size() - 2);
+    }
+    filepath = expand_tilde_path(filepath);
     weechat::avatar::publish(*ptr_account, filepath);
 
     return WEECHAT_RC_OK;
