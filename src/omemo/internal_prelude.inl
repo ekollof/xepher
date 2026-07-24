@@ -631,11 +631,15 @@ void request_axolotl_bundle(weechat::account &account, std::string_view jid, std
     const std::string target_jid = normalize_bare_jid(account.context, jid);
     const std::string own_bare_jid = normalize_bare_jid(account.context, account.jid());
     const bool is_own_jid = weechat_strcasecmp(target_jid.c_str(), own_bare_jid.c_str()) == 0;
+    // Allow: own multi-device, active PM OMEMO peers (observed encrypted traffic),
+    // or occupants of a MUC where *this* account has OMEMO enabled (encode path).
+    // Do not fetch for random roster PEP subscribers or plain MUC cohabitants.
     if (!is_own_jid
         && !account.omemo.has_peer_traffic(account.context, target_jid)
         && !account.omemo_muc_occupant_in_eligible_room(target_jid))
     {
-        XDEBUG("omemo: deferring legacy bundle request for {}/{} until PM/MAM traffic is observed",
+        XDEBUG("omemo: deferring legacy bundle request for {}/{} "
+               "(no PM OMEMO traffic and not in an OMEMO-enabled MUC)",
                target_jid, device_id);
         return;
     }

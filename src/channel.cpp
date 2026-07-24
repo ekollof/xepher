@@ -1149,30 +1149,17 @@ void weechat::channel::register_omemo_recipient(std::string_view bare_jid)
     if (normalized.empty())
         return;
 
-    const auto [_, inserted] = omemo_recipient_jids.insert(normalized);
-    if (!inserted)
-    {
-        // Already tracked — still refresh if this MUC just gained OMEMO.
-        if (muc_supports_omemo() && omemo.enabled && account.omemo)
-            account.omemo.request_axolotl_devicelist(account, normalized);
-        return;
-    }
-
-    // XEP-0384 §5.8.2: prefetch only when this room is non-anonymous *and*
-    // OMEMO is enabled here. Do not mark occupants as PM OMEMO peers
-    // (note_peer_traffic) merely for sharing a MUC.
-    if (muc_supports_omemo() && omemo.enabled && account.omemo)
-        account.omemo.request_axolotl_devicelist(account, normalized);
+    // Track eligible real JIDs only. Device lists / bundles are fetched lazily
+    // when encrypting (encode_muc) or via /omemo fetch — not on every presence.
+    omemo_recipient_jids.insert(normalized);
 }
 
 void weechat::channel::prefetch_omemo_for_enabled_muc()
 {
-    if (type != chat_type::MUC || !muc_supports_omemo() || !omemo.enabled
-        || !account.omemo)
-        return;
-
-    for (const auto &jid : omemo_recipient_jids)
-        account.omemo.request_axolotl_devicelist(account, jid);
+    // Intentionally a no-op for proactive PEP. First outbound OMEMO message
+    // (or /omemo fetch) pulls device lists and missing bundles. Prevents
+    // connect-time storms across large non-anonymous rooms.
+    (void)this;
 }
 
 void weechat::channel::unregister_omemo_recipient(std::string_view bare_jid)

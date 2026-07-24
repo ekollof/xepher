@@ -304,6 +304,13 @@ namespace weechat {
             // message from that JID triggers TOFU re-store.
             void distrust_jid(struct t_gui_buffer *buffer, const char *jid);
 
+            // Remove cached peer OMEMO data (sessions, bundles, device lists,
+            // trust) while keeping this account's own identity/prekeys/device_id.
+            // Clears in-memory caches that mirror those keys. Use after bulk
+            // MUC prefetch pollution; sessions re-form on next OMEMO traffic.
+            void prune_peer_cache(struct t_gui_buffer *buffer,
+                                  std::string_view own_bare_jid);
+
             // Show all known device IDs for jid (from the stored devicelist).
             void show_devices(struct t_gui_buffer *buffer, const char *jid);
 

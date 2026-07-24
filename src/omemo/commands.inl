@@ -180,10 +180,122 @@ void weechat::xmpp::omemo::distrust_jid(struct t_gui_buffer *buffer, const char 
     if (!db_env || !jid)
         return;
 
-    remove_prefixed_keys(*this, fmt::format("identity_key:{}", jid));
-    remove_prefixed_keys(*this, fmt::format("bundle:{}:", jid));
-    remove_prefixed_keys(*this, fmt::format("session:{}:", jid));
-    print_info(buffer, fmt::format("Removed stored OMEMO data for {}.", jid));
+    const std::string bare = normalize_bare_jid(nullptr, jid);
+    const std::string peer = bare.empty() ? std::string(jid) : bare;
+
+    remove_prefixed_keys(*this, fmt::format("session:{}:", peer));
+    remove_prefixed_keys(*this, fmt::format("identity:{}:", peer));
+    remove_prefixed_keys(*this, fmt::format("bundle:{}:", peer));
+    remove_prefixed_keys(*this, fmt::format("axolotl_bundle:{}:", peer));
+    remove_prefixed_keys(*this, fmt::format("legacy_bundle:{}:", peer));
+    remove_prefixed_keys(*this, fmt::format("trust:{}:", peer));
+    remove_prefixed_keys(*this, fmt::format("device_mode:{}:", peer));
+    remove_prefixed_keys(*this, fmt::format("atm_trust:{}:", peer));
+    remove_prefixed_keys(*this, fmt::format("axolotl_devicelist:{}", peer));
+    remove_prefixed_keys(*this, fmt::format("legacy_devicelist:{}", peer));
+    remove_prefixed_keys(*this, fmt::format("devicelist:{}", peer));
+    axolotl_devicelist_cache_.erase(peer);
+    peers_with_observed_traffic.erase(peer);
+    print_info(buffer, fmt::format("Removed stored OMEMO data for {}.", peer));
+}
+
+void weechat::xmpp::omemo::prune_peer_cache(struct t_gui_buffer *buffer,
+                                            std::string_view own_bare_jid)
+{
+    if (!db_env)
+    {
+        print_error(buffer, "OMEMO: no database open.");
+        return;
+    }
+
+    const std::string own = own_bare_jid.empty()
+        ? std::string{}
+        : normalize_bare_jid(nullptr, own_bare_jid);
+    if (own.empty())
+    {
+        print_error(buffer, "OMEMO: prune requires own bare JID.");
+        return;
+    }
+
+    // Keep local key material and any keys scoped to our own bare JID.
+    auto keep_key = [&](std::string_view key) -> bool {
+        if (key == "device_id" || key == "registration_id" || key == "prekeys"
+            || key == "identity:public" || key == "identity:private"
+            || key == "signed_pre_key:id" || key == "signed_pre_key:record"
+            || key == "signed_pre_key:public" || key == "signed_pre_key:signature")
+            return true;
+        if (key.starts_with("prekey:") || key.starts_with("signed-prekey:"))
+            return true;
+
+        // session:jid:dev  identity:jid:dev  trust:jid:dev  bundle:jid:dev
+        // axolotl_bundle:jid:dev  device_mode:jid:dev  axolotl_devicelist:jid
+        auto jid_from_key = [&](std::string_view prefix) -> std::optional<std::string_view> {
+            if (!key.starts_with(prefix))
+                return std::nullopt;
+            auto rest = key.substr(prefix.size());
+            if (rest.empty())
+                return std::nullopt;
+            // Optional trailing :device_id
+            const auto colon = rest.find(':');
+            return colon == std::string_view::npos ? rest : rest.substr(0, colon);
+        };
+
+        for (const auto pfx : {
+                 "session:", "identity:", "trust:", "bundle:", "axolotl_bundle:",
+                 "legacy_bundle:", "device_mode:", "atm_trust:", "senderkey:",
+                 "axolotl_devicelist:", "legacy_devicelist:", "devicelist:"})
+        {
+            if (auto j = jid_from_key(pfx); j && *j == own)
+                return true;
+        }
+        // identity:public / private already handled; identity:ownjid:N covered above
+        return false;
+    };
+
+    std::size_t deleted = 0;
+    try
+    {
+        auto transaction = lmdb::txn::begin(db_env);
+        auto cursor = lmdb::cursor::open(transaction, dbi.omemo);
+        std::string_view key;
+        std::string_view value;
+
+        for (bool found = cursor.get(key, value, MDB_FIRST); found;
+             found = cursor.get(key, value, MDB_NEXT))
+        {
+            if (keep_key(key))
+                continue;
+            cursor.del();
+            ++deleted;
+        }
+        transaction.commit();
+    }
+    catch (const lmdb::error &ex)
+    {
+        print_error(buffer, fmt::format("OMEMO: prune failed: {}", ex.what()));
+        return;
+    }
+
+    // Drop peer-related RAM caches; keep local identity/device state.
+    axolotl_devicelist_cache_.clear();
+    tofu_trust_cache_.clear();
+    peers_with_observed_traffic.clear();
+    pending_bundle_fetch.clear();
+    pending_key_transport.clear();
+    key_transport_bootstrap_attempted.clear();
+    failed_session_bootstrap.clear();
+    postponed_key_transports.clear();
+    deferred_live_key_transports.clear();
+    heartbeat_sent.clear();
+    prekey_reply_sent.clear();
+    missing_axolotl_devicelist.clear();
+    pending_iq_jid.clear();
+    pending_configure_retry.clear();
+
+    print_info(buffer, fmt::format(
+        "OMEMO: pruned peer cache ({} keys removed). Own identity/prekeys kept. "
+        "Sessions will re-form on next OMEMO traffic.",
+        deleted));
 }
 
 void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char *jid)

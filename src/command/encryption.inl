@@ -143,6 +143,17 @@ int command__omemo(const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
+        if (weechat_strcasecmp(argv[1], "prune") == 0)
+        {
+            if (!require_omemo()) return WEECHAT_RC_OK;
+
+            const std::string own = ::jid(nullptr, ptr_account->jid().data()).bare;
+            ptr_account->omemo.prune_peer_cache(buffer, own.empty()
+                ? std::string_view(ptr_account->jid())
+                : std::string_view(own));
+            return WEECHAT_RC_OK;
+        }
+
         if (weechat_strcasecmp(argv[1], "status") == 0)
         {
             if (!require_omemo()) return WEECHAT_RC_OK;
