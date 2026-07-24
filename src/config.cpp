@@ -122,8 +122,12 @@ bool account_write_cb(weechat::config_section& section, const char *section_name
 
 bool config_reload(weechat::config_file &file)
 {
-  //weechat_config_section_free_options(file.configuration.section_account_default);
-  //weechat_config_section_free_options(file.configuration.section_account);
+    // Drop live accounts safely before re-reading config. begin_teardown stops
+    // libstrophe disconnect callbacks from re-entering disconnect() while
+    // account members are being destroyed (see account::~account).
+    for (auto &[_, acc] : weechat::accounts)
+        acc.begin_teardown();
+    weechat::account::disconnect_all();
     weechat::accounts.clear();
 
     return weechat_config_reload(file);

@@ -160,6 +160,11 @@ namespace weechat
 
     private:
         bool is_connected = false;
+        // Set before destroying this account (or its connection). When true,
+        // conn_handler must not re-enter disconnect() — libstrophe fires
+        // disconnect during xmpp_conn_release while members may already be
+        // half-destroyed (UAF).
+        bool tearing_down_ = false;
 
         int current_retry = 0;
         int reconnect_delay = 0;
@@ -519,6 +524,10 @@ namespace weechat
         static void disconnect_all();
 
         bool connected() { return is_connected; }
+
+        // Suppress libstrophe conn_handler side-effects during account destruction.
+        void begin_teardown() { tearing_down_ = true; }
+        [[nodiscard]] bool is_tearing_down() const { return tearing_down_; }
 
         // XEP-0045 §7.8.2: pending mediated invites for /decline.
         void track_pending_mediated_invite(std::string_view room_jid,

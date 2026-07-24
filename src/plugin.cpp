@@ -320,8 +320,12 @@ void weechat::plugin::end() {
     weechat::debug::fini();
 
     // Destroy accounts (OMEMO, LMDB, libstrophe contexts) while the plugin
-    // API and libstrophe are still usable. The map container itself stays
-    // heap-leaked so process-exit static destruction never re-runs dtors.
+    // API and libstrophe are still usable. begin_teardown() so xmpp_conn_release
+    // disconnect callbacks do not re-enter disconnect() mid-destruction.
+    // The map container itself stays heap-leaked so process-exit static
+    // destruction never re-runs dtors.
+    for (auto &[_, acc] : weechat::accounts)
+        acc.begin_teardown();
     weechat::accounts.clear();
 
     // Free config options while plugin::instance is still valid.

@@ -1,8 +1,9 @@
 bool weechat::connection::conn_handler(event status, int error, xmpp_stream_error_t *stream_error)
 {
-    // Guard against libstrophe callbacks after plugin::end() has begun teardown
-    // (async drain → disconnect → accounts.clear → xmpp_shutdown).
-    if (weechat::g_plugin_unloading)
+    // Guard against libstrophe callbacks during plugin unload or account
+    // destruction. xmpp_conn_release fires disconnect while ~account is mid-way
+    // and later members may already be destroyed — never re-enter disconnect().
+    if (weechat::g_plugin_unloading || account.is_tearing_down())
         return false;
 
     if (status == event::connect)

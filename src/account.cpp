@@ -492,9 +492,12 @@ weechat::account::account(config_file& config_file, const std::string name)
 
 weechat::account::~account()
 {
-    // Safety check: if plugin is destroyed, skip all cleanup
-    // Global destructors will run after plugin is destroyed
-    // Let the OS reclaim resources instead of trying to clean up
+    // Block conn_handler re-entry before any member teardown. ~connection
+    // (later) releases xmpp_conn_t and libstrophe invokes disconnect while
+    // later-declared fields (e.g. muc_modes_fetched) are already destroyed.
+    tearing_down_ = true;
+
+    // Safety check: if plugin is destroyed, skip WeeChat/plugin cleanup
     if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
         return;
 
