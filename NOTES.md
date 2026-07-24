@@ -152,7 +152,9 @@
 icat, uploads), disconnects accounts, clears account objects, then shuts down
 libstrophe. Reconnect accounts after reload.
 
-Do not overwrite a mapped `xmpp.so` without unloading first; install then reload.
+`make install` replaces the plugin via temp+rename (safe while WeeChat is
+running); then `/plugin reload xmpp`. Do not truncate a live `xmpp.so` with a
+plain `cp` while mapped — that causes SIGBUS.
 
 ### Clean Exit
 The plugin should exit cleanly with `/quit`. If you experience crashes on exit, this is a bug that should be reported.
