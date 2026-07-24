@@ -465,6 +465,38 @@ void store_tofu_trust(omemo &self,
     return scan_trust_keys(cursor);
 }
 
+// Ensure a device id is present on the peer's cached axolotl list (e.g. learned
+// from an inbound <header sid='…'>). Multi-client PEP lists (Converse + Psi+)
+// often lag; without this, encode never includes a device that only appeared as sid.
+// Returns true if the list was modified.
+[[nodiscard]] bool ensure_axolotl_device_on_list(omemo &self,
+                                                  std::string_view bare_jid,
+                                                  std::uint32_t device_id)
+{
+    if (bare_jid.empty() || !is_valid_omemo_device_id(device_id))
+        return false;
+
+    const std::string id_str = fmt::format("{}", device_id);
+    auto list = load_axolotl_devicelist(self, bare_jid).value_or(std::string{});
+    for (const auto &dev : split(list, ';'))
+    {
+        if (dev == id_str)
+            return false;
+    }
+
+    if (!list.empty())
+        list += ';';
+    list += id_str;
+    store_axolotl_devicelist(self, bare_jid, list);
+
+    if (!load_tofu_trust(self, bare_jid, device_id))
+        store_tofu_trust(self, bare_jid, device_id, get_default_trust(self, bare_jid));
+
+    XDEBUG("omemo: learned device {}/{} from traffic (merged into devicelist)",
+           bare_jid, device_id);
+    return true;
+}
+
 [[nodiscard]] auto key_for_session(std::string_view jid, std::uint32_t device_id) -> std::string
 {
     return fmt::format("session:{}:{}", jid, device_id);

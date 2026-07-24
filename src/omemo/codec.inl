@@ -59,6 +59,22 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     }
 
     const std::string own_bare_jid = ::jid(nullptr, account->jid().data()).bare;
+    const std::string peer_bare = normalize_bare_jid(*account->context, jid);
+
+    // Learn sender device for future encode (Psi+/multi-client often appears as
+    // sid before PEP devicelist is refreshed). Skip own-device self-echo.
+    if (!peer_bare.empty() && *sender_device_id != device_id
+        && peer_bare != own_bare_jid)
+    {
+        if (ensure_axolotl_device_on_list(*this, peer_bare, *sender_device_id)
+            && !suppress_peer_traffic)
+        {
+            // New device: pull full list (merge with Converse/etc.) and bundle.
+            request_axolotl_devicelist(*account, peer_bare);
+            if (!has_session(peer_bare.c_str(), *sender_device_id))
+                request_axolotl_bundle(*account, peer_bare, *sender_device_id);
+        }
+    }
 
     const auto enc_ns = enc_view.xmlns();
     if (enc_ns)
@@ -552,8 +568,23 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
     int incomplete_recipient_count = 0;
     added_any_key = add_axolotl_keys(target_jid, *devicelist, &incomplete_recipient_count);
 
-    if (incomplete_recipient_count > 0)
+    // Do not block the whole send when some peer devices lack sessions (stale
+    // multi-client lists). Encrypt for every device we can; refresh the rest.
+    if (incomplete_recipient_count > 0 && !added_any_key)
+    {
+        request_axolotl_devicelist(*account, target_jid);
+        print_error(buffer, fmt::format(
+            "OMEMO: waiting for {} recipient device bundle(s) for {} — message not sent.",
+            incomplete_recipient_count, target_jid));
         return nullptr;
+    }
+    if (incomplete_recipient_count > 0)
+    {
+        print_info(buffer, fmt::format(
+            "OMEMO: encrypted for some devices of {}; {} still missing bundle/session "
+            "(requested). Other clients on that account may not decrypt this message.",
+            target_jid, incomplete_recipient_count));
+    }
 
     // Encrypt for own devices (carbon copy sync + self-message support).
     {

@@ -354,6 +354,66 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
             }
         }
 
+        // XEP-0384 legacy OMEMO PEP pushes (same namespace as Conversations/Psi+/Gajim).
+        // Previously these were only dropped as "not a feed", so multi-client
+        // device-list updates (e.g. Psi+ publishing after Converse) never applied
+        // until a manual IQ fetch. Apply them here before the generic-feed gate.
+        if (!items_node.empty()
+            && weechat_strcasecmp(items_node.c_str(),
+                                  "eu.siacs.conversations.axolotl.devicelist") == 0)
+        {
+            if (account.omemo)
+            {
+                std::string owner;
+                if (from)
+                    owner = ::jid(nullptr, from).bare;
+                if (owner.empty() && to)
+                    owner = ::jid(nullptr, to).bare;
+                if (owner.empty())
+                    owner = own_jid_str;
+                if (!owner.empty())
+                {
+                    XDEBUG("OMEMO PEP push: applying axolotl.devicelist from {}", owner);
+                    account.omemo.handle_axolotl_devicelist(
+                        &account, owner.c_str(), items.raw());
+                }
+            }
+            return;
+        }
+        if (!items_node.empty()
+            && std::string_view(items_node).starts_with(
+                "eu.siacs.conversations.axolotl.bundles:"))
+        {
+            if (account.omemo)
+            {
+                std::string owner;
+                if (from)
+                    owner = ::jid(nullptr, from).bare;
+                if (owner.empty() && to)
+                    owner = ::jid(nullptr, to).bare;
+                if (owner.empty())
+                    owner = own_jid_str;
+
+                const std::string_view node(items_node);
+                const auto pos = node.find_last_of(':');
+                std::uint32_t bundle_device_id = 0;
+                if (pos != std::string_view::npos && pos + 1 < node.size())
+                {
+                    if (auto parsed = parse_uint32(node.substr(pos + 1)))
+                        bundle_device_id = *parsed;
+                }
+                if (bundle_device_id != 0 && !owner.empty())
+                {
+                    XDEBUG("OMEMO PEP push: applying axolotl bundle {}/{}",
+                           owner, bundle_device_id);
+                    account.omemo.handle_axolotl_bundle(
+                        &account, account.buffer, owner.c_str(),
+                        bundle_device_id, items.raw());
+                }
+            }
+            return;
+        }
+
         // Fallback: unknown PubSub node — treat as a generic feed.
         // Handles both <item> (publish) and <retract> events from
         // pubsub services like news.movim.eu (XEP-0060 §7.1 / §7.2).
@@ -371,6 +431,7 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
             node_sv, feed_service_sv, own_jid_str);
         if (feed_gate.drop_legacy_omemo)
         {
+            // Should not hit for axolotl nodes (handled above); keep for safety.
             XDEBUG("Dropping PEP event for legacy OMEMO node (not a user feed): {} from {}",
                    node_sv, feed_service_sv);
         }

@@ -22,6 +22,7 @@
 #include "xmpp/stanza_view.hh"
 #include "xmpp/stanza.hh"
 #include "connection/internal.hh"
+#include "omemo.hh"
 #include "xmpp/atom.hh"
 #include "xmpp/message_pep.hh"
 #include "xmpp/message_pep_feed.hh"
