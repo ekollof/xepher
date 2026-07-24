@@ -47,10 +47,24 @@ xepher_install_alpine_deps() {
     if ! grep -q '^builder ALL=(ALL) NOPASSWD: ALL' /etc/sudoers 2>/dev/null; then
         echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
     fi
-    if [ ! -f /home/builder/.abuild/abuild.conf ]; then
+    # abuild < 3.18: ~/.abuild/  — abuild ≥ 3.18 (edge): ~/.config/abuild/
+    if [ ! -f /home/builder/.abuild/abuild.conf ] \
+        && [ ! -f /home/builder/.config/abuild/abuild.conf ]; then
         su builder -c 'abuild-keygen -a -n'
     fi
-    cp /home/builder/.abuild/*.pub /etc/apk/keys/
+    # Install any generated public keys into the apk trust store.
+    found_pub=0
+    for keydir in /home/builder/.abuild /home/builder/.config/abuild; do
+        for pub in "${keydir}"/*.pub; do
+            [ -f "${pub}" ] || continue
+            cp "${pub}" /etc/apk/keys/
+            found_pub=1
+        done
+    done
+    if [ "${found_pub}" -eq 0 ]; then
+        echo "ERROR: no abuild public key under ~/.abuild or ~/.config/abuild" >&2
+        exit 1
+    fi
 }
 
 xepher_install_build_deps_once xepher_install_alpine_deps
