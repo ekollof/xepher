@@ -386,6 +386,9 @@ int command__omemo(const void *pointer, void *data,
     // docs/planning-muc-omemo.md §6: Surface the blind-trust concern for MUCs.
     if (ptr_channel->type == weechat::channel::chat_type::MUC)
     {
+        // Recipients were tracked while OMEMO was off without PEP spam; fetch now.
+        ptr_channel->prefetch_omemo_for_enabled_muc();
+
         if (!ptr_channel->get_muc_info().members_only)
         {
             ui->printf_network(fmt::format(

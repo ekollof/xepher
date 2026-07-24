@@ -383,6 +383,8 @@ namespace weechat
 
         void register_omemo_recipient(std::string_view bare_jid);
         void unregister_omemo_recipient(std::string_view bare_jid);
+        // After /omemo on in a non-anonymous MUC: fetch occupant device lists.
+        void prefetch_omemo_for_enabled_muc();
         [[nodiscard]] std::vector<std::string> omemo_recipient_list() const;
 
         // XEP-0384 §5.8.1: only member/admin/owner affiliations are encrypt targets.
