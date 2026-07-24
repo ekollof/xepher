@@ -19,6 +19,32 @@ void weechat::xmpp::omemo::request_axolotl_devicelist(weechat::account &account,
     ::request_axolotl_devicelist(account, jid);
 }
 
+void weechat::xmpp::omemo::bootstrap_muc_peer(weechat::account &account, std::string_view jid)
+{
+    const std::string bare_jid = normalize_bare_jid(account.context, jid);
+    if (bare_jid.empty())
+        return;
+
+    request_axolotl_devicelist(account, bare_jid);
+
+    const auto dl = load_axolotl_devicelist(*this, bare_jid);
+    if (!dl || dl->empty())
+        return;
+
+    const std::string own_bare = normalize_bare_jid(account.context, account.jid());
+    for (const auto &dev : split(*dl, ';'))
+    {
+        const auto remote_device_id = parse_uint32(dev);
+        if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
+            continue;
+        if (bare_jid == own_bare && *remote_device_id == device_id)
+            continue;
+        if (has_session(bare_jid.c_str(), *remote_device_id))
+            continue;
+        request_axolotl_bundle(account, bare_jid, *remote_device_id);
+    }
+}
+
 void weechat::xmpp::omemo::force_fetch(weechat::account &account,
                                        struct t_gui_buffer *buffer,
                                        std::string_view jid,
@@ -306,11 +332,35 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
     if (!account)
         return;
 
-    // Do not prefetch every device bundle here. That path used to hammer PEP for
-    // every occupant of every OMEMO MUC (and anyone marked as a recipient),
-    // producing storms of "received bundle for …" / "returned error" for people
-    // the user is not actively encrypting with. Bundles are requested lazily
-    // from encode/encode_muc / force_fetch / session recovery when needed.
+    // Only when a MUC has OMEMO *enabled* (or this is our own multi-device list
+    // while such a room is active): pull missing device bundles. Never do this
+    // for plain cohabitants of non-OMEMO rooms — that caused issue #6 spam.
+    {
+        const std::string own_bare = normalize_bare_jid(account->context, account->jid());
+        const bool is_own = !own_bare.empty() && bare_jid == own_bare;
+        const bool muc_peer = account->omemo_muc_occupant_in_eligible_room(bare_jid);
+        const bool own_for_muc = is_own && std::ranges::any_of(account->channels, [](const auto &e) {
+            const auto &[_, ch] = e;
+            return ch.type == weechat::channel::chat_type::MUC
+                && ch.omemo.enabled
+                && ch.muc_supports_omemo();
+        });
+
+        if (muc_peer || own_for_muc)
+        {
+            for (const auto &dev : devices)
+            {
+                const auto remote_device_id = parse_uint32(dev);
+                if (!remote_device_id || !is_valid_omemo_device_id(*remote_device_id))
+                    continue;
+                if (is_own && *remote_device_id == device_id)
+                    continue;
+                if (has_session(bare_jid.c_str(), *remote_device_id))
+                    continue;
+                request_axolotl_bundle(*account, bare_jid, *remote_device_id);
+            }
+        }
+    }
 
     if (auto ch_it = account->channels.find(bare_jid);
         ch_it != account->channels.end())
@@ -693,12 +743,15 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_bundle(weechat::accou
     }
 
     // MUC OMEMO: bundle fetch completed (success, parse failure, or empty).
-    if (account && !bare_jid.empty() && !is_own_device)
+    if (account && !bare_jid.empty())
     {
+        const bool peer_is_own_account = !own_bare_jid.empty() && bare_jid == own_bare_jid;
         for (auto &[_, ch] : account->channels)
         {
-            if (ch.type == weechat::channel::chat_type::MUC
-                && ch.omemo_recipient_jids.contains(bare_jid))
+            if (ch.type != weechat::channel::chat_type::MUC || !ch.omemo.enabled)
+                continue;
+            if (ch.omemo_recipient_jids.contains(bare_jid)
+                || (peer_is_own_account && !is_own_device))
             {
                 ch.clear_omemo_bundle_pending(bare_jid, remote_device_id);
             }

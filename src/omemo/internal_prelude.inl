@@ -659,15 +659,16 @@ void request_axolotl_bundle(weechat::account &account, std::string_view jid, std
         account.omemo.pending_iq_jid[uuid] = target_jid;
     account.omemo.pending_bundle_fetch.insert(key);
 
-    if (account.omemo_muc_occupant_in_eligible_room(target_jid))
+    // Track pending on OMEMO-enabled MUCs that need this peer (or own multi-device).
+    if (account.omemo_muc_occupant_in_eligible_room(target_jid) || is_own_jid)
     {
         for (auto &[_, ch] : account.channels)
         {
-            if (ch.type == weechat::channel::chat_type::MUC
-                && ch.omemo_recipient_jids.contains(target_jid))
-            {
+            if (ch.type != weechat::channel::chat_type::MUC || !ch.omemo.enabled
+                || !ch.muc_supports_omemo())
+                continue;
+            if (is_own_jid || ch.omemo_recipient_jids.contains(target_jid))
                 ch.mark_omemo_bundle_pending(target_jid, device_id);
-            }
         }
     }
 

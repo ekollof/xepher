@@ -336,6 +336,11 @@ namespace weechat {
             // Request the legacy axolotl OMEMO devicelist for `jid` from the server.
             void request_axolotl_devicelist(weechat::account &account, std::string_view jid);
 
+            // Quiet MUC bootstrap for one bare JID: refresh devicelist and request
+            // bundles only for devices that still lack a Signal session. Used when
+            // the user enables OMEMO in a room (not on every presence).
+            void bootstrap_muc_peer(weechat::account &account, std::string_view jid);
+
             // Force a metadata refresh for a peer: requests the axolotl devicelist
             // and optionally requests bundle(s).
             void force_fetch(weechat::account &account,

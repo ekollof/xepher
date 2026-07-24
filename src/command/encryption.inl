@@ -397,8 +397,14 @@ int command__omemo(const void *pointer, void *data,
     // docs/planning-muc-omemo.md §6: Surface the blind-trust concern for MUCs.
     if (ptr_channel->type == weechat::channel::chat_type::MUC)
     {
-        // Recipients were tracked while OMEMO was off without PEP spam; fetch now.
+        // Recipients were tracked while OMEMO was off without PEP spam; one-shot
+        // bootstrap now (devicelists + missing bundles). Wait for pending bar.
+        const auto n = ptr_channel->omemo_recipient_jids.size();
         ptr_channel->prefetch_omemo_for_enabled_muc();
+        ui->printf_network(fmt::format(
+            "{}: OMEMO: bootstrapping {} recipient(s) (device lists / missing bundles). "
+            "Wait until the encryption bar leaves \"pending\" before sending.",
+            WEECHAT_XMPP_PLUGIN_NAME, n));
 
         if (!ptr_channel->get_muc_info().members_only)
         {

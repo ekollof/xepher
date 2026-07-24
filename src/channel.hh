@@ -383,7 +383,8 @@ namespace weechat
 
         void register_omemo_recipient(std::string_view bare_jid);
         void unregister_omemo_recipient(std::string_view bare_jid);
-        // After /omemo on in a non-anonymous MUC: fetch occupant device lists.
+        // After /omemo on in a non-anonymous MUC: one-shot bootstrap of occupant
+        // (and own multi-device) device lists + missing-session bundles.
         void prefetch_omemo_for_enabled_muc();
         [[nodiscard]] std::vector<std::string> omemo_recipient_list() const;
 

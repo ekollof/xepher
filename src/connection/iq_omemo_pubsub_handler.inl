@@ -392,13 +392,16 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                         }
                         if (bundle_device_id != 0 && !bundle_jid.empty())
                         {
+                            const std::string own_bare = ::jid(nullptr, account.jid()).bare;
+                            const bool peer_is_own = !own_bare.empty()
+                                && ::jid(nullptr, bundle_jid).bare == own_bare;
                             for (auto &[_, ch] : account.channels)
                             {
-                                if (ch.type == weechat::channel::chat_type::MUC
-                                    && ch.omemo_recipient_jids.contains(bundle_jid))
-                                {
+                                if (ch.type != weechat::channel::chat_type::MUC
+                                    || !ch.omemo.enabled)
+                                    continue;
+                                if (ch.omemo_recipient_jids.contains(bundle_jid) || peer_is_own)
                                     ch.clear_omemo_bundle_pending(bundle_jid, bundle_device_id);
-                                }
                             }
                         }
                     }

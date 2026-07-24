@@ -1149,17 +1149,30 @@ void weechat::channel::register_omemo_recipient(std::string_view bare_jid)
     if (normalized.empty())
         return;
 
-    // Track eligible real JIDs only. Device lists / bundles are fetched lazily
-    // when encrypting (encode_muc) or via /omemo fetch — not on every presence.
-    omemo_recipient_jids.insert(normalized);
+    // Track eligible real JIDs only. Do not PEP-fetch on every presence unless
+    // this room already has OMEMO enabled (new member after /omemo).
+    const auto [_, inserted] = omemo_recipient_jids.insert(normalized);
+    if (omemo.enabled && muc_supports_omemo() && account.omemo)
+        account.omemo.bootstrap_muc_peer(account, normalized);
+    (void)inserted;
 }
 
 void weechat::channel::prefetch_omemo_for_enabled_muc()
 {
-    // Intentionally a no-op for proactive PEP. First outbound OMEMO message
-    // (or /omemo fetch) pulls device lists and missing bundles. Prevents
-    // connect-time storms across large non-anonymous rooms.
-    (void)this;
+    // One-shot bootstrap when the user enables OMEMO in this room — not on join
+    // of every non-anonymous MUC. Pulls occupant (+ own multi-device) lists and
+    // only missing-session bundles; pending state blocks send until complete.
+    if (type != chat_type::MUC || !muc_supports_omemo() || !omemo.enabled || !account.omemo)
+        return;
+
+    for (const auto &jid : omemo_recipient_jids)
+        account.omemo.bootstrap_muc_peer(account, jid);
+
+    const std::string own_bare = ::jid(nullptr, account.jid()).bare;
+    if (!own_bare.empty())
+        account.omemo.bootstrap_muc_peer(account, own_bare);
+
+    weechat_bar_item_update("xmpp_encryption");
 }
 
 void weechat::channel::unregister_omemo_recipient(std::string_view bare_jid)
