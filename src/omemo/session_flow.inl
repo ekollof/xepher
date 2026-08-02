@@ -296,12 +296,14 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
         }
     }
 
-    const auto devicelist_str = join(devices, ";");
+    auto devicelist_str = join(devices, ";");
     missing_axolotl_devicelist.erase(bare_jid);
     store_axolotl_devicelist(*this, bare_jid, devicelist_str);
 
     // Sibling devices on our own account must be BLIND-trusted so encode includes
     // keys for carbon-copy delivery to other clients (BTBV UNDECIDED would skip them).
+    // Always keep our local device_id on the cached list so /omemo devices and
+    // multi-device encrypt see it even before the PEP re-publish is echoed.
     if (account)
     {
         std::string account_bare = ::jid(nullptr, account->jid().data()).bare;
@@ -309,7 +311,17 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
             account_bare = account->jid();
         if (bare_jid == account_bare)
         {
-            for (const auto &dev : devices)
+            if (is_valid_omemo_device_id(device_id)
+                && ensure_axolotl_device_on_list(*this, bare_jid, device_id))
+            {
+                // Cache was extended with self — refresh local join string for logging.
+                if (auto updated = load_axolotl_devicelist(*this, bare_jid))
+                    devicelist_str = *updated;
+            }
+            // Re-read after possible self-merge so sibling loop sees the full list.
+            const auto cached = load_axolotl_devicelist(*this, bare_jid)
+                .value_or(devicelist_str);
+            for (const auto &dev : split(cached, ';'))
             {
                 const auto sibling_id = parse_uint32(dev);
                 if (!sibling_id || !is_valid_omemo_device_id(*sibling_id)

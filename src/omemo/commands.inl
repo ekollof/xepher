@@ -290,6 +290,7 @@ void weechat::xmpp::omemo::prune_peer_cache(struct t_gui_buffer *buffer,
     prekey_reply_sent.clear();
     missing_axolotl_devicelist.clear();
     pending_iq_jid.clear();
+    pending_devicelist_iq.clear();
     pending_configure_retry.clear();
 
     print_info(buffer, fmt::format(
@@ -318,12 +319,16 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
             std::back_inserter(devices));
     }
 
+    // If the listed JID's cache already contains our device_id, treat matching
+    // entries as "this device" for labels/fingerprint. Never inject our
+    // device_id into a peer's list.
     std::ranges::sort(devices);
     devices.erase(std::ranges::unique(devices).begin(), devices.end());
 
     if (devices.empty())
     {
         print_info(buffer, fmt::format("No OMEMO devices known for {}.", jid));
+        print_info(buffer, "  tip: /omemo fetch <jid>  or  /omemo republish (own device)");
         return;
     }
 
@@ -345,7 +350,35 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
                 default: trust_str = "UNKNOWN"; break;
             }
         }
-        print_info(buffer, fmt::format("  {:10}  [{}]", device, trust_str));
+        const bool is_self = (device == device_id);
+        const auto ik = load_bytes(*this,
+            is_self
+                ? std::string(kIdentityPublicKey)
+                : key_for_identity(jid, static_cast<std::int32_t>(device)));
+        std::string fp_hint;
+        if (ik && !ik->empty())
+        {
+            // Short fingerprint prefix for verification (full via /omemo fingerprint).
+            std::string hex;
+            hex.reserve(std::min(ik->size(), std::size_t{8}) * 3);
+            bool first = true;
+            for (std::size_t i = 0; i < ik->size() && i < 8; ++i)
+            {
+                if (!first)
+                    hex += ':';
+                first = false;
+                constexpr const char *h = "0123456789ABCDEF";
+                hex += h[((*ik)[i] >> 4) & 0xF];
+                hex += h[(*ik)[i] & 0xF];
+            }
+            if (ik->size() > 8)
+                hex += "…";
+            fp_hint = fmt::format("  {}", hex);
+        }
+        print_info(buffer, fmt::format("  {:10}  [{}]{}{}",
+            device, trust_str,
+            is_self ? " (this device)" : "",
+            fp_hint));
     }
 }
 
@@ -372,9 +405,29 @@ void weechat::xmpp::omemo::show_status(struct t_gui_buffer *buffer,
     print_info(buffer, fmt::format("OMEMO status for account {}:", account_name ? account_name : "?"));
     print_info(buffer, fmt::format("  initialized: {}", *this ? "yes" : "no"));
     print_info(buffer, fmt::format("  device id: {}", device_id));
+    // Identity fingerprint for verification (same as /omemo fingerprint).
+    if (const auto pub = load_bytes(*this, kIdentityPublicKey); pub && !pub->empty())
+    {
+        std::string hex;
+        hex.reserve(pub->size() * 3);
+        bool first = true;
+        for (auto b : *pub)
+        {
+            if (!first)
+                hex += ':';
+            first = false;
+            constexpr const char *h = "0123456789ABCDEF";
+            hex += h[(b >> 4) & 0xF];
+            hex += h[b & 0xF];
+        }
+        print_info(buffer, fmt::format("  fingerprint: {}", hex));
+    }
+    else
+        print_info(buffer, "  fingerprint: (not generated yet)");
     print_info(buffer, fmt::format("  database: {}", db_path.empty() ? "(none)" : db_path));
     print_info(buffer, fmt::format("  channel: {} ({})",
         channel_name ? channel_name : "(none)",
         channel_omemo_enabled ? "enabled" : "disabled"));
     print_info(buffer, fmt::format("  pubsub node: {}", kLegacyDevicesNode));
+    print_info(buffer, "  tip: /omemo fingerprint  |  /omemo devices <jid>  |  /omemo republish");
 }

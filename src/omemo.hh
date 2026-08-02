@@ -161,6 +161,11 @@ namespace weechat {
             // recover the correct JID even when `from` is the server domain.
             std::unordered_map<std::string, std::string> pending_iq_jid;
 
+            // IQ ids that are axolotl *devicelist* fetches (not bundle probes).
+            // Distinguishes own-list item-not-found (must publish) from own
+            // bundle item-not-found (must republish bundle).
+            std::unordered_set<std::string> pending_devicelist_iq;
+
             // Peers for which the corresponding axolotl devicelist node returned
             // <item-not-found/>. Used to avoid request/error loops.
             std::unordered_set<std::string> missing_axolotl_devicelist;

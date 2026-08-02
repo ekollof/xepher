@@ -183,7 +183,10 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
                         .build(account.context)
                         .get());
             if (account.omemo)
+            {
                 account.omemo.pending_iq_jid[uid] = std::string(account.jid());
+                account.omemo.pending_devicelist_iq.insert(uid);
+            }
         };
 
         // Query our own axolotl devicelist on connect.

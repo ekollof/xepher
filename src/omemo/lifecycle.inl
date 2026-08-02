@@ -194,6 +194,7 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::init(struct t_gui_buffer *buffer, co
         pending_iq_jid.clear();
         pending_configure_retry.clear();
         missing_axolotl_devicelist.clear();
+        pending_devicelist_iq.clear();
         postponed_key_transports.clear();
         key_transport_bootstrap_attempted.clear();
         failed_session_bootstrap.clear();

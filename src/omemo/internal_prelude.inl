@@ -607,7 +607,10 @@ void request_axolotl_devicelist(weechat::account &account, std::string_view jid)
 
     const std::string uuid = stanza::uuid(account.context);
     if (!uuid.empty())
+    {
         account.omemo.pending_iq_jid[uuid] = target_jid;
+        account.omemo.pending_devicelist_iq.insert(uuid);
+    }
 
     XDEBUG("omemo: requesting legacy device list for {}", target_jid);
 

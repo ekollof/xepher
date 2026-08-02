@@ -229,8 +229,9 @@ int command__omemo(const void *pointer, void *data,
         if (weechat_strcasecmp(argv[1], "devices") == 0)
         {
             if (!require_omemo()) return WEECHAT_RC_OK;
-            // Optional argument: jid; default to channel JID or peer JID
+            // Optional argument: jid; default to PM peer, else own bare JID.
             const char *jid = nullptr;
+            std::string own_bare_storage;
             if (argc > 2)
                 jid = argv[2];
             else if (ptr_channel
@@ -244,9 +245,11 @@ int command__omemo(const void *pointer, void *data,
                     show_channel_omemo_devices(ptr_account, ptr_channel, buffer);
                     return WEECHAT_RC_OK;
                 }
-        ui->printf_error(fmt::format("{}: usage: /omemo devices <jid>  (or run in a channel buffer)",
-                    WEECHAT_XMPP_PLUGIN_NAME));
-                return WEECHAT_RC_OK;
+                // Account buffer (or no channel): list our own devices.
+                own_bare_storage = ::jid(nullptr, ptr_account->jid()).bare;
+                if (own_bare_storage.empty())
+                    own_bare_storage = std::string(ptr_account->jid());
+                jid = own_bare_storage.c_str();
             }
             ptr_account->omemo.show_devices(buffer, jid);
             return WEECHAT_RC_OK;

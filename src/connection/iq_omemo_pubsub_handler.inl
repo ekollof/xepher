@@ -78,7 +78,9 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
     }
 
     // OMEMO devicelist fetch error handling:
-        // - mark missing nodes to avoid request/error loops
+        // - mark missing peer nodes to avoid request/error loops
+        // - for our own list: item-not-found means the node was never created —
+        //   publish our device so peers can discover us (fresh install / wiped PEP)
         if (type && weechat_strcasecmp(type, "error") == 0 && id && account.omemo)
         {
             const ::xmpp::StanzaView dl_err_elem = view.child("error");
@@ -95,7 +97,13 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                         is_legacy_devicelist_err = true;
                 }
             }
-    
+            // Servers often omit the original <pubsub/> from error IQs; fall back
+            // to the pending-devicelist set filled at request time.
+            const bool pending_was_devicelist =
+                account.omemo.pending_devicelist_iq.contains(id);
+            if (pending_was_devicelist)
+                is_legacy_devicelist_err = true;
+
             if (is_item_not_found && is_legacy_devicelist_err)
             {
                 // Resolve which JID this looked up — use pending_iq_jid first,
@@ -113,13 +121,32 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                     if (!dl_from_bare.empty())
                         dl_target_jid = dl_from_bare;
                 }
-    
+                account.omemo.pending_devicelist_iq.erase(id);
+
             if (!dl_target_jid.empty())
             {
                 handled = true;
-                bool first_legacy_miss = account.omemo.missing_axolotl_devicelist.insert(dl_target_jid).second;
+                const std::string own_bare = ::jid(nullptr, account.jid()).bare;
+                const bool is_own = !own_bare.empty()
+                    && ::jid(nullptr, dl_target_jid).bare == own_bare;
 
-                if (auto dl_ch_it = account.channels.find(dl_target_jid); dl_ch_it != account.channels.end())
+                if (is_own)
+                {
+                    // Fresh PEP node: create it by publishing our device list.
+                    // get_devicelist() always includes local device_id; the PEP
+                    // echo updates the local cache via handle_axolotl_devicelist.
+                    account.omemo.missing_axolotl_devicelist.erase(dl_target_jid);
+                    weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                        "omemo: no server legacy devicelist yet — publishing device {}",
+                        account.omemo.device_id));
+                    if (auto dl_stanza = account.get_devicelist())
+                        account.connection.send(dl_stanza.get());
+                }
+                else
+                {
+                    bool first_legacy_miss = account.omemo.missing_axolotl_devicelist.insert(dl_target_jid).second;
+
+                    if (auto dl_ch_it = account.channels.find(dl_target_jid); dl_ch_it != account.channels.end())
                     {
                         auto& [_, dl_ch] = *dl_ch_it;
                         if (!dl_ch.pending_omemo_messages.empty() && first_legacy_miss)
@@ -130,6 +157,7 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                                 dl_target_jid, dl_ch.pending_omemo_messages.size()));
                         }
                     }
+                }
                 }
             }
             else if (!is_item_not_found && is_legacy_devicelist_err)
@@ -149,7 +177,8 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                     if (!dl_from_bare.empty())
                         dl_target_jid = dl_from_bare;
                 }
-    
+                account.omemo.pending_devicelist_iq.erase(id);
+
             if (!dl_target_jid.empty())
             {
                 handled = true;
@@ -164,6 +193,11 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                         dl_target_jid,
                         err_text.empty() ? "unknown error" : err_text));
                 }
+            }
+            else if (pending_was_devicelist)
+            {
+                // Non-item-not-found path already handled; drop the pending marker.
+                account.omemo.pending_devicelist_iq.erase(id);
             }
         }
     
@@ -216,6 +250,7 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                         auto& [_, j] = *it;
                         owner = j;
                         account.omemo.pending_iq_jid.erase(it);
+                        account.omemo.pending_devicelist_iq.erase(id);
                     }
                 }
                 if (owner.empty()) {
