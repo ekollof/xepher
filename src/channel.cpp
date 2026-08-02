@@ -908,6 +908,41 @@ std::optional<weechat::channel::member*> weechat::channel::member_search(std::st
     return std::nullopt;
 }
 
+void weechat::channel::finish_nick_change(std::string_view old_full_jid,
+                                          std::string_view new_nick)
+{
+    if (type != chat_type::MUC || old_full_jid.empty())
+        return;
+
+    const std::string old_id(old_full_jid);
+    const std::string old_resource = ::jid(nullptr, old_id).resource;
+    const char *old_nick = !old_resource.empty() ? old_resource.c_str() : old_id.c_str();
+
+    if (weechat::user *leaving = user::search(&account, old_id))
+    {
+        leaving->is_online = false;
+        leaving->nicklist_remove(&account, this);
+        account.users.erase(old_id);
+    }
+    else
+    {
+        // Fall back to resource/name removal if the user object is already gone.
+        nicklist::remove_nick(buffer, old_nick);
+    }
+
+    members.erase(old_id);
+    if (!old_resource.empty() && old_resource != old_id)
+        members.erase(old_resource);
+
+    if (!new_nick.empty())
+        member_speaking_rename(old_nick, std::string(new_nick).c_str());
+
+    int online = 0;
+    int offline = 0;
+    count_nicklist_presence(online, offline);
+    nicklist::refresh_separator(buffer, online > 0, offline > 0);
+}
+
 std::optional<weechat::channel::member*> weechat::channel::remove_member(std::string_view id,
                                                                          std::string_view reason)
 {

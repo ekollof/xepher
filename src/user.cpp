@@ -357,8 +357,8 @@ void weechat::user::nicklist_remove(weechat::account *account,
 
     ptr_buffer = channel ? channel->buffer : account->buffer;
 
-    auto try_remove = [&](const char *candidate) {
-        if (!candidate)
+    auto try_remove = [&](std::string_view candidate) {
+        if (candidate.empty())
             return;
         nicklist::remove_nick(ptr_buffer, candidate);
     };
@@ -367,17 +367,22 @@ void weechat::user::nicklist_remove(weechat::account *account,
     {
         // Remove the canonical nick and any legacy duplicate (empty label or
         // stale prefix group) left by the pre-role constructor nicklist_add.
-        try_remove(muc_nicklist_name(channel).c_str());
-        try_remove("");
-        if (!profile.display_name.empty())
-            try_remove(profile.display_name.c_str());
-        return;
+        // Keep temporaries alive for string_view (no dangling c_str()).
+        const std::string muc_name = muc_nicklist_name(channel);
+        try_remove(muc_name);
+        if (!profile.display_name.empty() && profile.display_name != muc_name)
+            try_remove(profile.display_name);
+        const std::string resource = jid(nullptr, id).resource;
+        if (!resource.empty() && resource != muc_name && resource != profile.display_name)
+            try_remove(resource);
     }
-
-    std::string nick_buf = jid(nullptr, this->id).bare;
-    if (nick_buf.empty())
-        nick_buf = this->id;
-    try_remove(nick_buf.c_str());
+    else
+    {
+        std::string nick_buf = jid(nullptr, this->id).bare;
+        if (nick_buf.empty())
+            nick_buf = this->id;
+        try_remove(nick_buf);
+    }
 
     if (channel && channel->type == weechat::channel::chat_type::MUC)
     {

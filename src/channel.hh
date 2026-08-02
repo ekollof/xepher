@@ -360,6 +360,8 @@ namespace weechat
                                            add_member_opts opts = {});
         std::optional<member*> member_search(std::string_view id);
         std::optional<member*> remove_member(std::string_view id, std::string_view reason = {});
+        // XEP-0045 status 303: drop old occupant from members/nicklist without a leave line.
+        void finish_nick_change(std::string_view old_full_jid, std::string_view new_nick);
         void set_member_offline(std::string_view id, weechat::user *known_user = nullptr);
         void set_show_unavailable_members(bool show);
         void count_nicklist_presence(int &online, int &offline) const;

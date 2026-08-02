@@ -447,25 +447,35 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
 
                 if (weechat_strcasecmp(role.c_str(), "none") == 0)
                 {
-                    if (is_nick_change && item.nick && channel)
+                    if (is_nick_change && channel)
                     {
-                        // Status 303: nick change — print rename notice instead of "left"
+                        // Status 303: nick change — print rename notice instead of "left".
+                        // Drop the old occupant from members + nicklist so the ghost
+                        // nick does not linger until the next full presence flood.
                         const char *old_nick = !pres.from->resource.empty()
                             ? pres.from->resource.c_str() : pres.from->full.c_str();
-                        const char *nick_tags = channel->smart_filter_nick(old_nick)
-                            ? "xmpp_presence,nick,log4,xmpp_smart_filter,no_trigger"
-                            : "xmpp_presence,nick,log4,no_trigger";
-                        weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
-                            0, nick_tags,
-                            fmt::format("{}{}{} is now known as {}{}",
-                                weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change"),
-                                old_nick,
-                                weechat::RuntimePort::default_runtime().xmpp_color("reset"),
-                                weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change"),
-                                *item.nick));
-                        weechat::user *leaving = weechat::user::search(&account, pres.from->full);
-                        if (leaving)
-                            leaving->nicklist_remove(&account, channel);
+                        const std::string new_nick = item.nick.value_or(std::string{});
+                        if (!new_nick.empty())
+                        {
+                            const char *nick_tags = channel->smart_filter_nick(old_nick)
+                                ? "xmpp_presence,nick,log4,xmpp_smart_filter,no_trigger"
+                                : "xmpp_presence,nick,log4,no_trigger";
+                            weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
+                                0, nick_tags,
+                                fmt::format("{}{}{} is now known as {}{}",
+                                    weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change"),
+                                    old_nick,
+                                    weechat::RuntimePort::default_runtime().xmpp_color("reset"),
+                                    weechat::RuntimePort::default_runtime().xmpp_color("irc.color.nick_change"),
+                                    new_nick));
+                        }
+                        channel->finish_nick_change(pres.from->full, new_nick);
+                        // Self nick change: keep account default nick in sync so
+                        // subsequent joins (and /nick with no args) show the new nick.
+                        if (presence_is_self && !new_nick.empty())
+                            account.nickname(new_nick);
+                        // user pointer may be invalidated by finish_nick_change
+                        user = nullptr;
                     }
                     else if (user->profile.affiliation.has_value())
                         channel->set_member_offline(pres.from->full, user);
