@@ -5,6 +5,7 @@
 
 #include "driver.hh"
 #include "xmpp/node.hh"
+#include "strophe_compat.hh"
 
 sexp::driver::~driver()
 {
@@ -76,13 +77,13 @@ void sexp::driver::end_tag()
     if (stack.empty())
         elements.push_back(stanza);
     else
-        xmpp_stanza_add_child_ex(stack.back(), stanza, false);
+        xepher::strophe::add_child_ex(stack.back(), stanza, false);
 }
 
 void sexp::driver::add_text(const std::string &text)
 {
     auto *stanza = stanza_new_text(context, text.substr(1,text.length()-2).data());
-    xmpp_stanza_add_child_ex(stack.back(), stanza, false);
+    xepher::strophe::add_child_ex(stack.back(), stanza, false);
 }
 
 void sexp::driver::add_attr(const std::string &name, const std::string &value)

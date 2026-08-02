@@ -20,6 +20,7 @@
 #include <vector>
 #include <strophe.h>
 
+#include "strophe_compat.hh"
 #include "test_export.hh"
 
 XMPP_TEST_EXPORT std::string get_name(xmpp_stanza_t *stanza);
@@ -601,7 +602,8 @@ inline std::shared_ptr<xmpp_stanza_t> stanza_from_string(xmpp_ctx_t *ctx, const 
 {
     if (!ctx || !xml || !*xml)
         return nullptr;
-    xmpp_stanza_t *s = xmpp_stanza_new_from_string(ctx, xml);
+    // Uses libstrophe 0.10+ API, or libxml2 fallback (strophe_compat.hh).
+    xmpp_stanza_t *s = xepher::strophe::new_from_string(ctx, xml);
     if (!s)
         return nullptr;
     return {s, xmpp_stanza_release};
