@@ -69,52 +69,33 @@ int command__enter([[maybe_unused]] const void *pointer,
             std::string pres_jid_s;
             if (jid_parsed.resource.empty())
             {
-                std::string_view nick = ptr_account->nickname();
-                std::string fallback_nick;
-                if (nick.empty())
-                    fallback_nick = ::jid(nullptr, ptr_account->jid()).local;
-                const std::string &effective_nick = nick.empty() ? fallback_nick
-                                                                  : std::string(nick);
-                pres_jid_s = fmt::format("{}@{}/{}", jid_parsed.local,
-                                         jid_parsed.domain, effective_nick);
+                // Prefer bookmark nick (XEP-0402) when joining without an explicit resource.
+                std::string_view bookmark_nick;
+                if (auto bm_it = ptr_account->bookmarks.find(jid_bare_s);
+                    bm_it != ptr_account->bookmarks.end())
+                    bookmark_nick = bm_it->second.nick;
+                pres_jid_s = xmpp::muc_presence_jid(
+                    jid_bare_s, bookmark_nick, ptr_account->nickname(),
+                    ptr_account->jid());
                 pres_jid = pres_jid_s.c_str();
-
-                if (!ptr_account->channels.contains(jid))
-                {
-                    auto [it_ch, _ins] = ptr_account->channels.emplace(
-                        std::make_pair(jid, weechat::channel {
-                                *ptr_account, weechat::channel::chat_type::MUC, jid, jid
-                            }));
-                    auto& [_, ch] = *it_ch;
-                    ptr_channel = &ch;
-                    ptr_account->load_pgp_keys();
-                }
-                if (!ptr_channel) {
-                    weechat_string_free_split(jids);
-                    return WEECHAT_RC_ERROR;
-                }
-
-                xmpp::send_muc_join_presence(*ptr_account, pres_jid, room_password);
             }
-            else
+
+            if (!ptr_account->channels.contains(jid))
             {
-                if (!ptr_account->channels.contains(jid))
-                {
-                    auto [it_ch, _ins] = ptr_account->channels.emplace(
-                        std::make_pair(jid, weechat::channel {
-                                *ptr_account, weechat::channel::chat_type::MUC, jid, jid
-                            }));
-                    auto& [_, ch] = *it_ch;
-                    ptr_channel = &ch;
-                    ptr_account->load_pgp_keys();
-                }
-                if (!ptr_channel) {
-                    weechat_string_free_split(jids);
-                    return WEECHAT_RC_ERROR;
-                }
-
-                xmpp::send_muc_join_presence(*ptr_account, pres_jid, room_password);
+                auto [it_ch, _ins] = ptr_account->channels.emplace(
+                    std::make_pair(jid, weechat::channel {
+                            *ptr_account, weechat::channel::chat_type::MUC, jid, jid
+                        }));
+                auto& [_, ch] = *it_ch;
+                ptr_channel = &ch;
+                ptr_account->load_pgp_keys();
             }
+            if (!ptr_channel) {
+                weechat_string_free_split(jids);
+                return WEECHAT_RC_ERROR;
+            }
+
+            xmpp::send_muc_join_presence(*ptr_account, pres_jid, room_password);
 
             // The optional trailing positional arg is the first message to
             // send upon entering the room.

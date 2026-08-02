@@ -1057,8 +1057,9 @@ Also requires Python `PIL`/`Pillow` (`pip install Pillow` or `python-pillow` pac
 | `/feed retract #N` | Short form retract using item alias |
 | `/feed comments <service> <node> <item-id\|#N>` | Fetch comments node for a post (XEP-0277) |
 | `/feed comments #N` | Short form fetch comments using item alias |
-| `/bookmark` | List bookmarks |
-| `/bookmark add [jid] [name]` | Add a bookmark |
+| `/bookmark` | List bookmarks (picker opens room with saved nick) |
+| `/bookmark add [jid] [name]` | Add a bookmark (preserves existing nick on re-add) |
+| `/bookmark nick <jid> <nick>` | Set preferred MUC nick for a bookmark |
 | `/bookmark del <jid>` | Remove a bookmark |
 | `/bookmark autojoin <jid> <on\|off>` | Toggle autojoin |
 

@@ -480,9 +480,21 @@ int command__bookmark(const void *pointer, void *data,
             "xmpp.picker.bookmark",
             "Open bookmark  (XEP-0048)",
             std::move(entries),
-            [buf = buffer](std::string_view selected) {
-                auto cmd = fmt::format("/enter {}", selected);
-                weechat_command(buf, cmd.c_str());
+            [buf = buffer, account = ptr_account](std::string_view selected) {
+                std::string_view nick;
+                if (auto it = account->bookmarks.find(std::string(selected));
+                    it != account->bookmarks.end())
+                    nick = it->second.nick;
+                // /enter already prefers bookmark nick when resource is omitted,
+                // but pass room/nick when set so the intent is explicit.
+                const auto cmd = ::xmpp::bookmark_enter_command(selected, nick);
+                // bookmark_enter_command always adds --no-switch (autojoin).
+                // Interactive picker should switch to the room buffer.
+                std::string interactive = cmd;
+                if (const auto pos = interactive.find(" --no-switch");
+                    pos != std::string::npos)
+                    interactive.erase(pos, std::strlen(" --no-switch"));
+                weechat_command(buf, interactive.c_str());
             },
             picker_t::close_cb{},
             buffer,
@@ -514,16 +526,53 @@ int command__bookmark(const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
-        // Add or update bookmark
-        ptr_account->bookmarks[jid].jid = jid;
-        ptr_account->bookmarks[jid].name = name ? name : "";
-        ptr_account->bookmarks[jid].nick = ptr_account->nickname().data();
-        ptr_account->bookmarks[jid].autojoin = false;
+        // Add or update bookmark. Preserve an existing bookmark nick (and
+        // autojoin) when re-adding so /bookmark add does not clobber them.
+        auto &bm = ptr_account->bookmarks[jid];
+        const bool existed = !bm.jid.empty();
+        bm.jid = jid;
+        bm.name = name ? name : "";
+        if (!existed || bm.nick.empty())
+        {
+            // Prefer the nick currently used in this room if we are in it.
+            if (ptr_channel && ptr_channel->type == weechat::channel::chat_type::MUC
+                && ptr_channel->id == jid)
+            {
+                // Account nickname is updated on self status-303 nick changes.
+                bm.nick = std::string(ptr_account->nickname());
+            }
+            else
+                bm.nick = std::string(ptr_account->nickname());
+        }
+        if (!existed)
+            bm.autojoin = false;
         
         ptr_account->send_bookmarks();
         
-        ui->printf_network(fmt::format("Bookmark added: {}", jid));
+        ui->printf_network(fmt::format("Bookmark added: {}{}", jid,
+            bm.nick.empty() ? "" : fmt::format(" (nick: {})", bm.nick)));
 
+        return WEECHAT_RC_OK;
+    }
+
+    // /bookmark nick <jid> <nick>
+    if (argc >= 4 && weechat_strcasecmp(argv[1], "nick") == 0)
+    {
+        const char *jid = argv[2];
+        const char *nick = argv_eol[3];
+
+        if (!ptr_account->bookmarks.contains(jid))
+        {
+            ui->printf_error(fmt::format("Bookmark not found: {}", jid));
+            return WEECHAT_RC_OK;
+        }
+
+        ptr_account->bookmarks[jid].nick = nick ? nick : "";
+        ptr_account->send_bookmarks();
+        ui->printf_network(fmt::format("Bookmark nick for {}: {}", jid,
+            ptr_account->bookmarks[jid].nick.empty()
+                ? "(cleared — account default)"
+                : ptr_account->bookmarks[jid].nick));
         return WEECHAT_RC_OK;
     }
 

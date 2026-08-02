@@ -536,21 +536,24 @@ void command__init()
     hook = weechat_hook_command(
         "bookmark",
         N_("manage XMPP bookmarks (XEP-0048)"),
-        N_("|| add [jid] [name] || del <jid> || autojoin <jid> <on|off>"),
+        N_("|| add [jid] [name] || del <jid> || nick <jid> <nick> || autojoin <jid> <on|off>"),
         N_("         : display bookmarks\n"
            "     add : bookmark current MUC or specified JID\n"
            "     del : remove bookmark (also: delete, remove)\n"
+           "    nick : set the preferred join nick for a bookmark\n"
            "autojoin : enable/disable autojoin for a bookmark\n"
            "     jid : Jabber ID of the MUC room\n"
            "    name : optional display name for the bookmark\n"
+           "    nick : preferred MUC nickname when joining this bookmark\n"
            "\n"
            "Examples:\n"
            "  /bookmark                              : list all bookmarks\n"
            "  /bookmark add                          : bookmark current MUC\n"
            "  /bookmark add room@conference.example.com My Room\n"
+           "  /bookmark nick room@conference.example.com FeatherBrain\n"
            "  /bookmark del room@conference.example.com\n"
            "  /bookmark autojoin room@conference.example.com on"),
-        "add|del|delete|remove|autojoin", &command__bookmark, nullptr, nullptr);
+        "add|del|delete|remove|nick|autojoin", &command__bookmark, nullptr, nullptr);
     if (!hook)
         weechat::UiPort::for_buffer(nullptr)->printf_error( "Failed to setup command /bookmark");
     
