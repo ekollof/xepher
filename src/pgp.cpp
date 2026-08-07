@@ -13,7 +13,9 @@
 #include <numeric>
 #include <stdexcept>
 #include <span>
+#include <vector>
 #include <fmt/core.h>
+#include <fmt/ranges.h>
 #include <gpgme.h>
 #include <weechat/weechat-plugin.h>
 
@@ -37,31 +39,22 @@ std::string format_key(weechat::xmpp::pgp &pgp, std::string_view keyid)
     if (err) {
         return fmt::format("{} (none)", keyid);
     }
-    std::string result(keyid);
-    result += '{';
+    std::vector<std::string> subkey_ids;
+    for (auto subkey = key->subkeys; subkey; subkey = subkey->next)
     {
-        std::string keyids;
-        for (auto subkey = key->subkeys; subkey; subkey = subkey->next)
-        {
-            if (!keyids.empty()) keyids += ", ";
-            std::string keyid(subkey->keyid);
-            if (keyid.length() > 8) keyid = keyid.substr(keyid.length()-8, 8);
-            keyids += keyid;
-        }
-        result += keyids;
+        std::string sid(subkey->keyid);
+        if (sid.size() > 8)
+            sid = sid.substr(sid.size() - 8);
+        subkey_ids.push_back(std::move(sid));
     }
-    result += "}[";
-    {
-        std::string userids;
-        for (auto uid = key->uids; uid; uid = uid->next)
-        {
-            if (!userids.empty()) userids += ", ";
-            userids += fmt::format("{} ({})", uid->name, uid->email);
-        }
-        result += userids;
-    }
-    result += ']';
-    return result;
+    std::vector<std::string> userids;
+    for (auto uid = key->uids; uid; uid = uid->next)
+        userids.push_back(fmt::format("{} ({})", uid->name, uid->email));
+
+    return fmt::format("{}{{{}}}[{}]",
+                       keyid,
+                       fmt::join(subkey_ids, ", "),
+                       fmt::join(userids, ", "));
 }
 
 #define PGP_MESSAGE_HEADER "-----BEGIN PGP MESSAGE-----\r\n"
@@ -203,11 +196,10 @@ std::optional<std::string> weechat::xmpp::pgp::decrypt(struct t_gui_buffer *buff
     err = gpgme_op_decrypt(this->gpgme, in_g.h, out_g.h);
     if (gpgme_decrypt_result_t dec_result = gpgme_op_decrypt_result(this->gpgme); dec_result)
     {
+        std::vector<std::string> recip_keys;
         for (auto recip = dec_result->recipients; recip; recip = recip->next)
-        {
-            if (!keyids.empty()) keyids += ", ";
-            keyids += format_key(*this, recip->keyid);
-        }
+            recip_keys.push_back(format_key(*this, recip->keyid));
+        keyids = fmt::format("{}", fmt::join(recip_keys, ", "));
         if (dec_result->unsupported_algorithm)
             goto decrypt_finish;
     }

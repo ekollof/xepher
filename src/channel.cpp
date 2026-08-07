@@ -1513,7 +1513,8 @@ int weechat::channel::send_message(std::string to, std::string body,
     {
         auto *self_user = user::search(&account, account.jid().data());
         auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
-        std::string tag = "xmpp_message,message,private,notify_none,self_msg,log1,id_" + saved_id;
+        const std::string tag = fmt::format(
+            "xmpp_message,message,private,notify_none,self_msg,log1,id_{}", saved_id);
         std::string display_body = weechat::config::instance
             && weechat::config::instance->look.emoticons.boolean()
             ? replace_emoticons(body)
@@ -1583,7 +1584,8 @@ int weechat::channel::send_bob_image(std::string_view to,
     {
         auto *self_user = user::search(&account, account.jid().data());
         auto prefix = self_user ? std::string(self_user->as_prefix_raw()) : std::string(account.jid());
-        const std::string tag = "xmpp_message,message,private,notify_none,self_msg,log1,id_" + saved_id;
+        const std::string tag = fmt::format(
+            "xmpp_message,message,private,notify_none,self_msg,log1,id_{}", saved_id);
         weechat::UiPort::for_buffer(buffer)->printf_date_tags(0, tag.c_str(),
             weechat::format_self_pm_line(prefix, alt.empty() ? "[image]" : std::string(alt)));
     }

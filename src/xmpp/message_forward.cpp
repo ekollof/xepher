@@ -204,9 +204,9 @@ MamDedupNeedles mam_dedup_needles(std::string_view archive_id, std::string_view 
 {
     MamDedupNeedles needles;
     if (!archive_id.empty())
-        needles.stanza_id_needle = std::string("stanza_id_") + std::string(archive_id);
+        needles.stanza_id_needle = fmt::format("stanza_id_{}", archive_id);
     if (!message_id.empty())
-        needles.message_id_needle = std::string("id_") + std::string(message_id);
+        needles.message_id_needle = fmt::format("id_{}", message_id);
     return needles;
 }
 

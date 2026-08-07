@@ -26,31 +26,26 @@ namespace xmpp { namespace xep0163 {
                                       xmpp_stanza_t *payload,
                                       const char *item_id = nullptr)
     {
-        // Build the skeleton with an empty <item>; attach payload and item_id
-        // after the tree is materialised (builder does not wrap raw stanzas).
+        // Non-owning view of the optional payload; builder child() clones on build.
+        std::shared_ptr<xmpp_stanza_t> payload_view;
+        if (payload)
+            payload_view = {payload, [](xmpp_stanza_t *) {}};
+
+        auto item_spec = stanza::xep0060::item();
+        if (item_id)
+            item_spec.id(item_id);
+        if (payload_view)
+            item_spec.payload(payload_view);
+
         auto sp = stanza::iq()
             .type("set")
             .id(stanza::uuid(context))
             .pubsub(
                 stanza::xep0060::pubsub().publish(
-                    stanza::xep0060::publish(node).item(
-                        stanza::xep0060::item()
-                    )
+                    stanza::xep0060::publish(node).item(std::move(item_spec))
                 )
             )
             .build(context);
-
-        // Walk the built tree to attach the optional item_id and payload.
-        xmpp_stanza_t *ps  = xmpp_stanza_get_child_by_name(sp.get(), "pubsub");
-        xmpp_stanza_t *pub = ps  ? xmpp_stanza_get_child_by_name(ps,  "publish") : nullptr;
-        xmpp_stanza_t *it  = pub ? xmpp_stanza_get_child_by_name(pub, "item")    : nullptr;
-        if (it)
-        {
-            if (item_id)
-                xmpp_stanza_set_attribute(it, "id", item_id);
-            if (payload)
-                xmpp_stanza_add_child(it, payload);
-        }
 
         xmpp_stanza_clone(sp.get());  // bump refcount; shared_ptr dtor drops its ref
         return sp.get();              // caller owns one reference

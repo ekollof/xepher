@@ -513,7 +513,7 @@ void weechat::account::mam_cache_load_messages(std::string_view channel_jid, str
                 ? "xmpp_cached,xmpp_retracted,no_highlight"
                 : "xmpp_cached,no_highlight";
             if (!row.message_id.empty())
-                tags += ",id_" + row.message_id;
+                tags += fmt::format(",id_{}", row.message_id);
 
             if (row.is_retracted)
             {

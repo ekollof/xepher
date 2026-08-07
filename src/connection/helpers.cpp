@@ -196,7 +196,7 @@ int ephemeral_tombstone_cb(const void *pointer, void *data, int remaining_calls)
 
     if (buf)
     {
-        std::string id_tag = "id_" + msg_id;
+        const std::string id_tag = fmt::format("id_{}", msg_id);
         void *lines = weechat_hdata_pointer(weechat_hdata_get("buffer"), buf, "lines");
         if (lines)
         {

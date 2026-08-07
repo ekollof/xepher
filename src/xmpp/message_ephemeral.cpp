@@ -27,9 +27,9 @@ std::optional<std::int64_t> parse_ephemeral_timer(StanzaView msg)
 
 std::string format_ephemeral_display_prefix(std::int64_t timer_secs)
 {
-    return std::string(weechat::RuntimePort::default_runtime().color("magenta"))
-        + "[⏱ " + std::to_string(timer_secs) + "s] "
-        + std::string(weechat::RuntimePort::default_runtime().color("resetcolor"));
+    auto &rt = weechat::RuntimePort::default_runtime();
+    return fmt::format("{}[⏱ {}s] {}",
+                       rt.color("magenta"), timer_secs, rt.color("resetcolor"));
 }
 
 bool should_schedule_ephemeral_tombstone(std::int64_t timer_secs, std::string_view stable_id)

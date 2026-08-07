@@ -213,46 +213,46 @@ std::string format_file_share_suffix(std::string_view name,
                                      std::string_view size_raw,
                                      std::string_view url)
 {
-    std::string suffix = std::string("\n") + weechat::RuntimePort::default_runtime().color("cyan") + "[File: ";
-    if (!name.empty())
-        suffix += name;
-    else
-        suffix += url;
+    auto &rt = weechat::RuntimePort::default_runtime();
+    const auto cyan = rt.color("cyan");
+    const auto reset = rt.color("resetcolor");
+    const std::string_view label = name.empty() ? url : name;
 
+    std::string meta;
     if (!mime.empty() || !size_raw.empty())
     {
-        suffix += " (";
-        if (!mime.empty())
-            suffix += mime;
         if (!mime.empty() && !size_raw.empty())
-            suffix += ", ";
-        if (!size_raw.empty())
-            suffix += format_byte_size(size_raw);
-        suffix += ")";
+            meta = fmt::format(" ({}, {})", mime, format_byte_size(size_raw));
+        else if (!mime.empty())
+            meta = fmt::format(" ({})", mime);
+        else
+            meta = fmt::format(" ({})", format_byte_size(size_raw));
     }
-    suffix += " " + std::string(url);
-    suffix += "]" + std::string(weechat::RuntimePort::default_runtime().color("resetcolor"));
-    return suffix;
+
+    return fmt::format("\n{}[File: {}{} {}]{}", cyan, label, meta, url, reset);
 }
 
 std::string format_encrypted_file_suffix(std::string_view name, std::string_view size_raw)
 {
-    std::string suffix = std::string("\n") + weechat::RuntimePort::default_runtime().color("cyan") + "[Encrypted file: ";
-    suffix += name.empty() ? "(unnamed)" : std::string(name);
+    auto &rt = weechat::RuntimePort::default_runtime();
+    const std::string_view label = name.empty() ? "(unnamed)" : name;
     if (!size_raw.empty())
-        suffix += " (" + format_byte_size(size_raw) + ")";
-    suffix += " — downloading…]" + std::string(weechat::RuntimePort::default_runtime().color("resetcolor"));
-    return suffix;
+    {
+        return fmt::format("\n{}[Encrypted file: {} ({}) — downloading…]{}",
+                           rt.color("cyan"), label, format_byte_size(size_raw),
+                           rt.color("resetcolor"));
+    }
+    return fmt::format("\n{}[Encrypted file: {} — downloading…]{}",
+                       rt.color("cyan"), label, rt.color("resetcolor"));
 }
 
 std::string format_encrypted_file_saved_suffix(std::string_view name,
                                                std::string_view saved_path)
 {
-    std::string suffix = std::string("\n") + weechat::RuntimePort::default_runtime().color("cyan") + "[Encrypted file: ";
-    suffix += name.empty() ? "(unnamed)" : std::string(name);
-    suffix += " — already saved: " + std::string(saved_path) + "]"
-        + std::string(weechat::RuntimePort::default_runtime().color("resetcolor"));
-    return suffix;
+    auto &rt = weechat::RuntimePort::default_runtime();
+    const std::string_view label = name.empty() ? "(unnamed)" : name;
+    return fmt::format("\n{}[Encrypted file: {} — already saved: {}]{}",
+                       rt.color("cyan"), label, saved_path, rt.color("resetcolor"));
 }
 
 }  // namespace xmpp
