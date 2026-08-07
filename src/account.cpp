@@ -891,30 +891,30 @@ void weechat::account::count_roster_nicklist_presence(int &online,
 
 struct t_gui_buffer *weechat::account::create_buffer()
 {
-    buffer = weechat_buffer_new(fmt::format("account.{}", name).data(),
-                                &input__data_cb, nullptr, nullptr,
-                                &buffer__close_cb, nullptr, nullptr);
+    auto &bp = BufferPort::default_port_ref();
+    buffer = bp.create(fmt::format("account.{}", name),
+                       &input__data_cb, nullptr, nullptr,
+                       &buffer__close_cb, nullptr, nullptr);
     if (!buffer)
         return nullptr;
     weechat::UiPort::for_buffer(buffer)->printf(fmt::format("xmpp: {}", name));
 
-    if (!weechat_buffer_get_integer(buffer, "short_name_is_set"))
-        weechat_buffer_set(buffer, "short_name", name.data());
-    weechat_buffer_set(buffer, "localvar_set_type", "server");
-    weechat_buffer_set(buffer, "localvar_set_account", name.data());
-    weechat_buffer_set(buffer, "localvar_set_server", name.data());
-    weechat_buffer_set(buffer, "localvar_set_charset_modifier",
-                       fmt::format("account.{}", name).data());
-    weechat_buffer_set(buffer, "title", name.data());
+    if (!bp.get_integer(buffer, "short_name_is_set"))
+        bp.set(buffer, "short_name", name);
+    bp.set(buffer, "localvar_set_type", "server");
+    bp.set(buffer, "localvar_set_account", name);
+    bp.set(buffer, "localvar_set_server", name);
+    bp.set(buffer, "localvar_set_charset_modifier",
+           fmt::format("account.{}", name));
+    bp.set(buffer, "title", name);
 
-    weechat_buffer_set(buffer, "nicklist", "1");
-    weechat_buffer_set(buffer, "nicklist_display_groups", "0");
+    bp.set(buffer, "nicklist", "1");
+    bp.set(buffer, "nicklist_display_groups", "0");
     nicklist::ensure_account_groups(buffer);
-    weechat_buffer_set_pointer(buffer, "nicklist_callback",
-                               (void*)&buffer__nickcmp_cb);
-    weechat_buffer_set_pointer(buffer, "nicklist_callback_pointer",
-                               this);
-    weechat_buffer_set_pointer(buffer, XMPP_BUFFER_ACCOUNT_PTR, this);
+    bp.set_pointer(buffer, "nicklist_callback",
+                   reinterpret_cast<void *>(&buffer__nickcmp_cb));
+    bp.set_pointer(buffer, "nicklist_callback_pointer", this);
+    bp.set_pointer(buffer, XMPP_BUFFER_ACCOUNT_PTR, this);
 
     return buffer;
 }

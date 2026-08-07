@@ -86,6 +86,34 @@ public:
         return searches.back().result;
     }
 
+    [[nodiscard]] struct t_gui_buffer *create(
+        std::string_view /*name*/,
+        input_callback_t /*input_cb*/,
+        const void * /*input_pointer*/,
+        void * /*input_data*/,
+        close_callback_t /*close_cb*/,
+        const void * /*close_pointer*/,
+        void * /*close_data*/) override
+    {
+        return nullptr;
+    }
+
+    void set(struct t_gui_buffer * /*buffer*/,
+             std::string_view /*property*/,
+             std::string_view /*value*/) override
+    {}
+
+    [[nodiscard]] int get_integer(struct t_gui_buffer * /*buffer*/,
+                                  std::string_view /*property*/) override
+    {
+        return 0;
+    }
+
+    void set_pointer(struct t_gui_buffer * /*buffer*/,
+                     std::string_view /*property*/,
+                     void * /*pointer*/) override
+    {}
+
     void nicklist_remove_all(struct t_gui_buffer * /*buffer*/) override
     {
         ++nicklist_remove_all_count;

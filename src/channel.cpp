@@ -104,22 +104,19 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
                                                      const char *name)
 {
     struct t_gui_buffer *ptr_buffer;
-    int buffer_created;
-    const char *short_name = nullptr;
+    int buffer_created = 0;
+    auto &bp = BufferPort::default_port_ref();
 
-    buffer_created = 0;
+    const std::string buffer_name = fmt::format("{}.{}", account.name, name);
 
-    std::string buffer_name = fmt::format("{}.{}", account.name, name);
-
-    static const std::unique_ptr<BufferPort> buffer_port = BufferPort::default_port();
     ptr_buffer = weechat::channel::search_buffer(type, name);
     if (ptr_buffer)
-        buffer_port->nicklist_remove_all(ptr_buffer);
+        bp.nicklist_remove_all(ptr_buffer);
     else
     {
-        ptr_buffer = weechat_buffer_new(buffer_name.data(),
-                                        &input__data_cb, nullptr, nullptr,
-                                        &buffer__close_cb, nullptr, nullptr);
+        ptr_buffer = bp.create(buffer_name,
+                               &input__data_cb, nullptr, nullptr,
+                               &buffer__close_cb, nullptr, nullptr);
         if (!ptr_buffer)
             return nullptr;
 
@@ -131,28 +128,28 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
         std::string_view name_sv(name);
         auto slash_pos = name_sv.rfind('/');
         const char *res = (slash_pos != std::string_view::npos) ? name + slash_pos + 1 : nullptr;
-        if (!weechat_buffer_get_integer(ptr_buffer, "short_name_is_set"))
+        if (!bp.get_integer(ptr_buffer, "short_name_is_set"))
         {
             // For FEED buffers pass the full feed_key so channel_short_name
             // can derive a readable name from both the JID and the node.
             auto short_name_value = (type == weechat::channel::chat_type::FEED)
                 ? channel_short_name(type, name)
                 : channel_short_name(type, res ? res : name);
-            weechat_buffer_set(ptr_buffer, "short_name", short_name_value.c_str());
+            bp.set(ptr_buffer, "short_name", short_name_value);
         }
     }
     else
     {
-        short_name = weechat_buffer_get_string(ptr_buffer, "short_name");
+        const std::string short_name = bp.get_string(ptr_buffer, "short_name");
 
-        if (!short_name)
+        if (short_name.empty())
         {
             const std::string node_s = ::jid(nullptr, name).local;
             const char *node_cstr = node_s.empty() ? name : node_s.c_str();
             auto short_name_value = (type == weechat::channel::chat_type::FEED)
                 ? channel_short_name(type, name)
                 : channel_short_name(type, node_cstr);
-            weechat_buffer_set(ptr_buffer, "short_name", short_name_value.c_str());
+            bp.set(ptr_buffer, "short_name", short_name_value);
         }
     }
     if(!(account.nickname().size()))
@@ -161,28 +158,27 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
         account.nickname(node_s.empty() ? account.jid() : node_s);
     }
 
-    weechat_buffer_set(ptr_buffer, "input_multiline", "1");
-    weechat_buffer_set(ptr_buffer, "localvar_set_type",
-                       (type == weechat::channel::chat_type::PM) ? "query"
-                     : (type == weechat::channel::chat_type::FEED) ? "feed"
-                     : "channel");
-    weechat_buffer_set(ptr_buffer, "localvar_set_server", account.name.data());
+    bp.set(ptr_buffer, "input_multiline", "1");
+    bp.set(ptr_buffer, "localvar_set_type",
+           (type == weechat::channel::chat_type::PM) ? "query"
+         : (type == weechat::channel::chat_type::FEED) ? "feed"
+         : "channel");
+    bp.set(ptr_buffer, "localvar_set_server", account.name);
 
     if (buffer_created)
     {
         (void) weechat_hook_signal_send("logger_backlog",
                                         WEECHAT_HOOK_SIGNAL_POINTER,
                                         ptr_buffer);
-        weechat_buffer_set(ptr_buffer, "input_get_unknown_commands", "1");
+        bp.set(ptr_buffer, "input_get_unknown_commands", "1");
         if (type != weechat::channel::chat_type::PM
             && type != weechat::channel::chat_type::FEED)
         {
-            weechat_buffer_set(ptr_buffer, "nicklist", "1");
-            weechat_buffer_set(ptr_buffer, "nicklist_display_groups", "0");
-            weechat_buffer_set_pointer(ptr_buffer, "nicklist_callback",
-                                       (void*)&buffer__nickcmp_cb);
-            weechat_buffer_set_pointer(ptr_buffer, "nicklist_callback_pointer",
-                                       &account);
+            bp.set(ptr_buffer, "nicklist", "1");
+            bp.set(ptr_buffer, "nicklist_display_groups", "0");
+            bp.set_pointer(ptr_buffer, "nicklist_callback",
+                           reinterpret_cast<void *>(&buffer__nickcmp_cb));
+            bp.set_pointer(ptr_buffer, "nicklist_callback_pointer", &account);
         }
 
         // Only add account nick as a highlight word for non-MUC buffers
@@ -191,10 +187,8 @@ struct t_gui_buffer *weechat::channel::create_buffer(weechat::channel::chat_type
         if (type != weechat::channel::chat_type::MUC
             && weechat::config::instance
             && weechat::config::instance->look.highlight_words.boolean())
-            weechat_buffer_set(ptr_buffer, "highlight_words_add",
-                               account.nickname().data());
-        weechat_buffer_set(ptr_buffer, "highlight_tags_restrict",
-                           "message");
+            bp.set(ptr_buffer, "highlight_words_add", account.nickname());
+        bp.set(ptr_buffer, "highlight_tags_restrict", "message");
     }
 
     return ptr_buffer;
@@ -230,8 +224,9 @@ weechat::channel::channel(weechat::account& account,
                                                                                std::string(id)).bare.data()); muc_channel != account.channels.end())
         {
             auto& [_, ch] = *muc_channel;
-            int muc_num = weechat_buffer_get_integer(ch.buffer, "number");
-            weechat_buffer_set(buffer, "number", fmt::format("{}", muc_num + 1).c_str());
+            auto &bp = BufferPort::default_port_ref();
+            const int muc_num = bp.get_integer(ch.buffer, "number");
+            bp.set(buffer, "number", fmt::format("{}", muc_num + 1));
         }
     }
 
@@ -243,7 +238,7 @@ weechat::channel::channel(weechat::account& account,
     omemo.bundle_requests = weechat_hashtable_new(64,
             WEECHAT_HASHTABLE_STRING, WEECHAT_HASHTABLE_POINTER, nullptr, nullptr);
 
-    weechat_buffer_set_pointer(buffer, XMPP_BUFFER_CHANNEL_PTR, this);
+    BufferPort::default_port_ref().set_pointer(buffer, XMPP_BUFFER_CHANNEL_PTR, this);
 
     add_nicklist_groups();
 
@@ -534,7 +529,7 @@ weechat::channel::~channel()
 
     if (buffer)
     {
-        weechat_buffer_set_pointer(buffer, XMPP_BUFFER_CHANNEL_PTR, nullptr);
+        BufferPort::default_port_ref().set_pointer(buffer, XMPP_BUFFER_CHANNEL_PTR, nullptr);
         weechat_hook_signal_send("typing_reset_buffer",
                                  WEECHAT_HOOK_SIGNAL_POINTER,
                                  buffer);
@@ -617,21 +612,20 @@ void weechat::channel::update_topic(const char* topic, const char* creator, int 
     this->topic.creator = creator ? std::optional<std::string>(creator) : std::nullopt;
     this->topic.last_set = last_set;
 
+    auto &bp = BufferPort::default_port_ref();
     if (this->topic.value.has_value())
-        weechat_buffer_set(buffer, "title", this->topic.value->c_str());
+        bp.set(buffer, "title", *this->topic.value);
     else
-        weechat_buffer_set(buffer, "title", "");
+        bp.set(buffer, "title", "");
 }
 
 void weechat::channel::update_name(const char* name)
 {
+    auto &bp = BufferPort::default_port_ref();
     if (name)
-    {
-        auto short_name_value = channel_short_name(type, name);
-        weechat_buffer_set(buffer, "short_name", short_name_value.c_str());
-    }
+        bp.set(buffer, "short_name", channel_short_name(type, name));
     else
-        weechat_buffer_set(buffer, "short_name", "");
+        bp.set(buffer, "short_name", "");
 }
 
 void weechat::channel::apply_muc_display_name(const std::string_view display_name)
@@ -707,7 +701,7 @@ void weechat::channel::update_modes()
     if (s == "+")
         s.clear();
 
-    weechat_buffer_set(buffer, "modes", s.c_str());
+    BufferPort::default_port_ref().set(buffer, "modes", s);
 }
 
 void weechat::channel::store_config_form(room_config_form form)

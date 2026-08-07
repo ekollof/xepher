@@ -17,10 +17,37 @@ namespace weechat {
 // WeeChat buffer + nicklist operations behind a testable port.
 class BufferPort {
 public:
+    // Match WeeChat buffer input/close callback signatures (C ABI).
+    using input_callback_t = int (*)(const void *pointer, void *data,
+                                     struct t_gui_buffer *buffer,
+                                     const char *input_data);
+    using close_callback_t = int (*)(const void *pointer, void *data,
+                                     struct t_gui_buffer *buffer);
+
     virtual ~BufferPort() = default;
 
     [[nodiscard]] virtual struct t_gui_buffer *search(std::string_view plugin,
                                                       std::string_view name) = 0;
+
+    // Create a new buffer (WeeChat plugin buffers use name "plugin.name").
+    [[nodiscard]] virtual struct t_gui_buffer *create(
+        std::string_view name,
+        input_callback_t input_cb,
+        const void *input_pointer,
+        void *input_data,
+        close_callback_t close_cb,
+        const void *close_pointer,
+        void *close_data) = 0;
+
+    virtual void set(struct t_gui_buffer *buffer,
+                     std::string_view property,
+                     std::string_view value) = 0;
+    [[nodiscard]] virtual int get_integer(struct t_gui_buffer *buffer,
+                                          std::string_view property) = 0;
+    virtual void set_pointer(struct t_gui_buffer *buffer,
+                             std::string_view property,
+                             void *pointer) = 0;
+
     virtual void nicklist_remove_all(struct t_gui_buffer *buffer) = 0;
     virtual void nicklist_remove_nick(struct t_gui_buffer *buffer,
                                       std::string_view nick) = 0;
@@ -62,6 +89,23 @@ class WeechatBufferPort final : public BufferPort {
 public:
     [[nodiscard]] struct t_gui_buffer *search(std::string_view plugin,
                                               std::string_view name) override;
+    [[nodiscard]] struct t_gui_buffer *create(
+        std::string_view name,
+        input_callback_t input_cb,
+        const void *input_pointer,
+        void *input_data,
+        close_callback_t close_cb,
+        const void *close_pointer,
+        void *close_data) override;
+    void set(struct t_gui_buffer *buffer,
+             std::string_view property,
+             std::string_view value) override;
+    [[nodiscard]] int get_integer(struct t_gui_buffer *buffer,
+                                  std::string_view property) override;
+    void set_pointer(struct t_gui_buffer *buffer,
+                     std::string_view property,
+                     void *pointer) override;
+
     void nicklist_remove_all(struct t_gui_buffer *buffer) override;
     void nicklist_remove_nick(struct t_gui_buffer *buffer,
                               std::string_view nick) override;

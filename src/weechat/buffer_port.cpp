@@ -24,6 +24,55 @@ struct t_gui_buffer *WeechatBufferPort::search(
     return buffer;
 }
 
+struct t_gui_buffer *WeechatBufferPort::create(
+    const std::string_view name,
+    const input_callback_t input_cb,
+    const void *const input_pointer,
+    void *const input_data,
+    const close_callback_t close_cb,
+    const void *const close_pointer,
+    void *const close_data)
+{
+    if (name.empty())
+        return nullptr;
+    return weechat_buffer_new(
+        std::string(name).c_str(),
+        input_cb, input_pointer, input_data,
+        close_cb, close_pointer, close_data);
+}
+
+void WeechatBufferPort::set(
+    struct t_gui_buffer *const buffer,
+    const std::string_view property,
+    const std::string_view value)
+{
+    if (!buffer || property.empty())
+        return;
+    weechat_buffer_set(
+        buffer,
+        std::string(property).c_str(),
+        std::string(value).c_str());
+}
+
+int WeechatBufferPort::get_integer(
+    struct t_gui_buffer *const buffer,
+    const std::string_view property)
+{
+    if (!buffer || property.empty())
+        return 0;
+    return weechat_buffer_get_integer(buffer, std::string(property).c_str());
+}
+
+void WeechatBufferPort::set_pointer(
+    struct t_gui_buffer *const buffer,
+    const std::string_view property,
+    void *const pointer)
+{
+    if (!buffer || property.empty())
+        return;
+    weechat_buffer_set_pointer(buffer, std::string(property).c_str(), pointer);
+}
+
 void WeechatBufferPort::nicklist_remove_all(struct t_gui_buffer *const buffer)
 {
     if (buffer)
