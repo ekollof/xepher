@@ -10,6 +10,7 @@
 #include <weechat/weechat-plugin.h>
 
 #include "plugin.hh"
+#include "weechat/buffer_port.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/node.hh"
 #include "account.hh"
@@ -28,11 +29,12 @@ void buffer__get_account_and_channel(struct t_gui_buffer *buffer,
     if (channel)
         *channel = nullptr;
 
-    if (weechat_buffer_get_pointer(buffer, "plugin") != weechat_plugin)
+    auto &bp = weechat::BufferPort::default_port_ref();
+    if (bp.get_pointer(buffer, "plugin") != weechat_plugin)
         return;
 
     if (auto *ch = static_cast<weechat::channel *>(
-            weechat_buffer_get_pointer(buffer, XMPP_BUFFER_CHANNEL_PTR)))
+            bp.get_pointer(buffer, XMPP_BUFFER_CHANNEL_PTR)))
     {
         if (account)
             *account = &ch->account;
@@ -42,7 +44,7 @@ void buffer__get_account_and_channel(struct t_gui_buffer *buffer,
     }
 
     if (auto *acc = static_cast<weechat::account *>(
-            weechat_buffer_get_pointer(buffer, XMPP_BUFFER_ACCOUNT_PTR)))
+            bp.get_pointer(buffer, XMPP_BUFFER_ACCOUNT_PTR)))
     {
         if (account)
             *account = acc;
@@ -228,7 +230,8 @@ int buffer__close_cb(const void *pointer, void *data,
     if (!weechat::plugin::instance || !weechat::plugin::instance->ptr())
         return WEECHAT_RC_OK;
 
-    buffer_plugin = (struct t_weechat_plugin*)weechat_buffer_get_pointer(buffer, "plugin");
+    buffer_plugin = static_cast<struct t_weechat_plugin *>(
+        weechat::BufferPort::default_port_ref().get_pointer(buffer, "plugin"));
     if (buffer_plugin != weechat_plugin)
         return WEECHAT_RC_OK;
     buffer__get_account_and_channel(buffer, &ptr_account, &ptr_channel);
@@ -241,8 +244,8 @@ int buffer__close_cb(const void *pointer, void *data,
         }
 
         if (ptr_account->buffer)
-            weechat_buffer_set_pointer(ptr_account->buffer,
-                                       XMPP_BUFFER_ACCOUNT_PTR, nullptr);
+            weechat::BufferPort::default_port_ref().set_pointer(
+                ptr_account->buffer, XMPP_BUFFER_ACCOUNT_PTR, nullptr);
         ptr_account->buffer = nullptr;
     }
     else if (ptr_account && ptr_channel)
@@ -286,8 +289,8 @@ int buffer__close_cb(const void *pointer, void *data,
         }
 
         if (ptr_channel->buffer)
-            weechat_buffer_set_pointer(ptr_channel->buffer,
-                                       XMPP_BUFFER_CHANNEL_PTR, nullptr);
+            weechat::BufferPort::default_port_ref().set_pointer(
+                ptr_channel->buffer, XMPP_BUFFER_CHANNEL_PTR, nullptr);
         ptr_account->invalidate_channel_key_cache(ptr_channel->name);
         ptr_account->channels.erase(ptr_channel->name);
     }
@@ -364,7 +367,7 @@ int focus_core_timer_cb(const void * /*pointer*/, void * /*data*/,
 void focus_core_buffer()
 {
     if (struct t_gui_buffer *core = weechat_buffer_search_main())
-        weechat_buffer_set(core, "display", "1");
+        weechat::BufferPort::default_port_ref().set(core, "display", "1");
 }
 
 void schedule_focus_core_buffer()

@@ -704,11 +704,12 @@ void weechat::account::disconnect_impl(int reconnect, bool immediate_reconnect)
         for (auto &[name, ch] : channels)
             if (ch.buffer)
                 to_close.push_back(ch.buffer);
+        auto &bp = BufferPort::default_port_ref();
         for (auto *buf : to_close)
-            weechat_buffer_close(buf);
+            bp.close(buf);
 
         if (buffer)
-            weechat_buffer_close(buffer);
+            bp.close(buffer);
     }
 
     if (reconnect)

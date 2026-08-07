@@ -34,14 +34,16 @@ unsigned long nick_hash(std::string_view name)
 }
 
 [[nodiscard]] const char *nicklist_color_name(const weechat::user &user,
-                                              const std::string &palette_color)
+                                              std::string_view palette_color)
 {
     if (!user.is_online)
         return "weechat.color.nicklist_offline";
     if (user.is_away)
         return "weechat.color.nicklist_away";
     // WeeChat nicklist APIs take string_view; never pass nullptr.
-    return palette_color.empty() ? "weechat.color.chat_nick" : palette_color.c_str();
+    // palette_color must outlive the returned pointer (member/owned storage).
+    return palette_color.empty() ? "weechat.color.chat_nick"
+                                 : palette_color.data();
 }
 
 std::string compute_nick_color(std::string_view name)

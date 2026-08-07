@@ -47,6 +47,11 @@ public:
     virtual void set_pointer(struct t_gui_buffer *buffer,
                              std::string_view property,
                              void *pointer) = 0;
+    [[nodiscard]] virtual void *get_pointer(struct t_gui_buffer *buffer,
+                                            std::string_view property) = 0;
+    virtual void close(struct t_gui_buffer *buffer) = 0;
+    // Free-form / free-content buffers (e.g. pickers).
+    virtual void clear(struct t_gui_buffer *buffer) = 0;
 
     virtual void nicklist_remove_all(struct t_gui_buffer *buffer) = 0;
     virtual void nicklist_remove_nick(struct t_gui_buffer *buffer,
@@ -105,6 +110,10 @@ public:
     void set_pointer(struct t_gui_buffer *buffer,
                      std::string_view property,
                      void *pointer) override;
+    [[nodiscard]] void *get_pointer(struct t_gui_buffer *buffer,
+                                    std::string_view property) override;
+    void close(struct t_gui_buffer *buffer) override;
+    void clear(struct t_gui_buffer *buffer) override;
 
     void nicklist_remove_all(struct t_gui_buffer *buffer) override;
     void nicklist_remove_nick(struct t_gui_buffer *buffer,

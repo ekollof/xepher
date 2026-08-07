@@ -13,6 +13,7 @@
 #include <functional>
 #include <memory>
 #include "plugin.hh"
+#include "weechat/buffer_port.hh"
 #include "weechat/runtime_port.hh"
 #include "weechat/ui_port.hh"
 #include <weechat/weechat-plugin.h>
@@ -106,8 +107,9 @@ public:
             });
         }
 
-        buf_ = weechat_buffer_new(
-            std::string(buf_name).c_str(),
+        auto &bp = BufferPort::default_port_ref();
+        buf_ = bp.create(
+            buf_name,
             &picker::s_input_cb, this, nullptr,
             &picker::s_close_cb, this, nullptr);
 
@@ -117,15 +119,14 @@ public:
             return;
         }
 
-        weechat_buffer_set(buf_, "type", "free");
-        weechat_buffer_set(buf_, "title",
-            std::string(title).c_str());
-        weechat_buffer_set(buf_, "key_bind_meta2-A",   "/xmpp-picker-nav up");
-        weechat_buffer_set(buf_, "key_bind_meta2-B",   "/xmpp-picker-nav down");
-        weechat_buffer_set(buf_, "key_bind_ctrl-M",    "/xmpp-picker-nav enter");
-        weechat_buffer_set(buf_, "key_bind_ctrl-J",    "/xmpp-picker-nav enter");
-        weechat_buffer_set(buf_, "key_bind_q",         "/xmpp-picker-nav quit");
-        weechat_buffer_set(buf_, "key_bind_ctrl-[",    "/xmpp-picker-nav quit");
+        bp.set(buf_, "type", "free");
+        bp.set(buf_, "title", title);
+        bp.set(buf_, "key_bind_meta2-A",   "/xmpp-picker-nav up");
+        bp.set(buf_, "key_bind_meta2-B",   "/xmpp-picker-nav down");
+        bp.set(buf_, "key_bind_ctrl-M",    "/xmpp-picker-nav enter");
+        bp.set(buf_, "key_bind_ctrl-J",    "/xmpp-picker-nav enter");
+        bp.set(buf_, "key_bind_q",         "/xmpp-picker-nav quit");
+        bp.set(buf_, "key_bind_ctrl-[",    "/xmpp-picker-nav quit");
 
         // Hook input_text_changed signal for live search filtering.
         signal_hook_ = weechat_hook_signal("input_text_changed",
@@ -137,7 +138,7 @@ public:
         // Build initial visible set (all entries) and set selection.
         refilter();
 
-        weechat_buffer_set(buf_, "display", "1");
+        bp.set(buf_, "display", "1");
     }
 
     ~picker() override
@@ -164,7 +165,7 @@ public:
     {
         if (!buf_) return;
 
-        weechat_buffer_clear(buf_);
+        BufferPort::default_port_ref().clear(buf_);
 
         // Row 0: header / instructions / current filter
         std::string header;
@@ -408,10 +409,11 @@ private:
 
     void close_picker()
     {
+        auto &bp = BufferPort::default_port_ref();
         // Restore focus to the originating buffer before closing this one,
         // to avoid a flash to whatever WeeChat would otherwise show.
         if (origin_buf_)
-            weechat_buffer_set(origin_buf_, "display", "1");
+            bp.set(origin_buf_, "display", "1");
 
         struct t_gui_buffer *b = buf_;
         buf_ = nullptr;
@@ -427,7 +429,7 @@ private:
 
         // Close the buffer — this triggers s_close_cb which will delete this.
         if (b)
-            weechat_buffer_close(b);
+            bp.close(b);
         // 'this' is now deleted by s_close_cb.
     }
 
@@ -454,8 +456,8 @@ private:
         // Only act when the picker buffer is the current buffer.
         if (weechat_current_buffer() != self->buf_) return WEECHAT_RC_OK;
 
-        const char *input = weechat_buffer_get_string(self->buf_, "input");
-        std::string new_filter = input ? input : "";
+        std::string new_filter =
+            BufferPort::default_port_ref().get_string(self->buf_, "input");
 
         if (new_filter != self->filter_) {
             self->filter_ = std::move(new_filter);

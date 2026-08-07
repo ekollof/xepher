@@ -135,7 +135,8 @@ int nick_color_config_cb(const void *, void *, const char *, const char *)
                     // Rebuild prefix: {new_color}{nick}\t
                     // (same as weechat::user::as_prefix(nick_name))
                     std::string new_color = weechat_info_get("nick_color", nick_name);
-                    std::string new_prefix = new_color + nick_name + "\t";
+                    std::string new_prefix =
+                        fmt::format("{}{}\t", new_color, nick_name);
 
                     // Only update if it actually changed (avoid unnecessary redraws).
                     if (!cur_prefix || new_prefix != cur_prefix)

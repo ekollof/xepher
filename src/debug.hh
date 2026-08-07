@@ -5,8 +5,11 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <weechat/weechat-plugin.h>
 #include "fmt/core.h"
+#include "weechat/buffer_port.hh"
+#include "weechat/runtime_port.hh"
 #include "weechat/ui_port.hh"
 
 // Debug buffer singleton — created lazily on first XDEBUG() call.
@@ -23,18 +26,19 @@ namespace weechat::debug
     {
         if (buffer)
             return buffer;
+        auto &bp = BufferPort::default_port_ref();
         // Reuse an existing buffer if WeeChat already has one (e.g. layout restore).
-        buffer = weechat_buffer_search("xmpp", "debug");
+        buffer = bp.search("xmpp", "debug");
         if (!buffer)
-            buffer = weechat_buffer_new("debug",
-                                        nullptr, nullptr, nullptr,
-                                        nullptr, nullptr, nullptr);
+            buffer = bp.create("debug",
+                               nullptr, nullptr, nullptr,
+                               nullptr, nullptr, nullptr);
         if (!buffer)
             return nullptr;
-        weechat_buffer_set(buffer, "short_name", "xmpp-debug");
-        weechat_buffer_set(buffer, "title", "xmpp debug log");
-        weechat_buffer_set(buffer, "localvar_set_type", "debug");
-        weechat_buffer_set(buffer, "notify", "0");  // no highlights/alerts
+        bp.set(buffer, "short_name", "xmpp-debug");
+        bp.set(buffer, "title", "xmpp debug log");
+        bp.set(buffer, "localvar_set_type", "debug");
+        bp.set(buffer, "notify", "0");  // no highlights/alerts
         return buffer;
     }
 
@@ -43,7 +47,7 @@ namespace weechat::debug
     {
         if (buffer)
         {
-            weechat_buffer_close(buffer);
+            BufferPort::default_port_ref().close(buffer);
             buffer = nullptr;
         }
     }
@@ -56,16 +60,17 @@ namespace weechat::debug
         if (!buf)
             return;
         // Strip leading path components for readability
-        const char *base = file;
-        for (const char *p = file; *p; ++p)
-            if (*p == '/')
-                base = p + 1;
+        std::string_view path{file ? file : ""};
+        std::string_view base = path;
+        if (auto pos = path.rfind('/'); pos != std::string_view::npos)
+            base = path.substr(pos + 1);
         if (auto ui = weechat::UiPort::for_buffer(buf))
         {
+            auto &rt = RuntimePort::default_runtime();
             ui->printf(fmt::format("{}[{}:{}]{} {}",
-                                   weechat_color("darkgray"),
+                                   rt.color("darkgray"),
                                    base, line,
-                                   weechat_color("reset"),
+                                   rt.color("reset"),
                                    msg));
         }
     }

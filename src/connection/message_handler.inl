@@ -608,8 +608,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
                     if (rai_ch && rai_ch->buffer)
                     {
-                        weechat_buffer_set(rai_ch->buffer, "hotlist",
-                                           WEECHAT_HOTLIST_MESSAGE);
+                        weechat::BufferPort::default_port_ref().set(
+                            rai_ch->buffer, "hotlist", WEECHAT_HOTLIST_MESSAGE);
                         weechat::UiPort::for_buffer(rai_ch->buffer)->printf_date_tags(
                             0, "xmpp_rai,notify_message",
                             _("Room activity detected"));

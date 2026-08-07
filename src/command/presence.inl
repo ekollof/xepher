@@ -406,9 +406,10 @@ int command__selfping(const void *pointer, void *data,
     }
 
     // Construct our full MUC JID (room@server/nickname)
-    std::string muc_jid = std::string(ptr_channel->id) + "/" + std::string(ptr_account->nickname());
+    std::string muc_jid =
+        fmt::format("{}/{}", ptr_channel->id, ptr_account->nickname());
 
-        ui->printf_network(fmt::format("Sending MUC self-ping to {}...", muc_jid.c_str()));
+    ui->printf_network(fmt::format("Sending MUC self-ping to {}...", muc_jid));
 
     // Send self-ping to our own MUC nickname
     auto iq = stanza::iq()

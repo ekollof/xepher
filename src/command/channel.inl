@@ -115,7 +115,8 @@ int command__enter([[maybe_unused]] const void *pointer,
 
             if (!no_switch)
             {
-                int num = weechat_buffer_get_integer(ptr_channel->buffer, "number");
+                int num = weechat::BufferPort::default_port_ref()
+                              .get_integer(ptr_channel->buffer, "number");
                 auto buf = fmt::format("/buffer {}", num);
                 weechat_command(ptr_account->buffer, buf.c_str());
             }
@@ -231,7 +232,8 @@ int command__open([[maybe_unused]] const void *pointer,
                 ch.send_message(jid, text);
             }
 
-            int num = weechat_buffer_get_integer(ch.buffer, "number");
+            int num = weechat::BufferPort::default_port_ref()
+                          .get_integer(ch.buffer, "number");
             auto buf = fmt::format("/buffer {}", num);
             weechat_command(ptr_account->buffer, buf.c_str());
         }

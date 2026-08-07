@@ -468,10 +468,12 @@ int command__bookmark(const void *pointer, void *data,
         std::vector<picker_t::entry> entries;
         for (const auto& [jid, bookmark] : ptr_account->bookmarks)
         {
-            std::string label = bookmark.name.empty() ? jid : bookmark.name + " <" + jid + ">";
+            std::string label = bookmark.name.empty()
+                                    ? jid
+                                    : fmt::format("{} <{}>", bookmark.name, jid);
             std::string sublabel;
             if (!bookmark.nick.empty())
-                sublabel += "nick: " + bookmark.nick;
+                sublabel += fmt::format("nick: {}", bookmark.nick);
             if (bookmark.autojoin)
                 sublabel += sublabel.empty() ? "autojoin" : "  autojoin";
             entries.push_back({jid, label, sublabel});

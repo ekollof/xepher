@@ -378,14 +378,14 @@ esfs_run_download_decrypt(esfs_download_ctx &ctx, std::string_view downloads_dir
     std::ranges::for_each(safe_name, [](char &c){ if (c == '/' || c == '\0') c = '_'; });
     if (safe_name.empty()) safe_name = "esfs_file";
 
-    std::string out_path = std::string(downloads_dir) + "/" + safe_name;
+    std::string out_path = fmt::format("{}/{}", downloads_dir, safe_name);
     {
         std::string candidate = out_path;
         int suffix = 1;
         struct stat st{};
         while (::stat(candidate.c_str(), &st) == 0)
-            candidate = out_path + "." + std::to_string(suffix++);
-        out_path = candidate;
+            candidate = fmt::format("{}.{}", out_path, suffix++);
+        out_path = std::move(candidate);
     }
 
     std::filesystem::create_directories(downloads_dir);
@@ -579,7 +579,7 @@ static size_t ifinds(std::string_view hay, std::string_view needle, size_t from 
 // e.g. attr_value("<meta property=\"og:title\" content=\"Hello\">", "content") → "Hello"
 static std::string attr_value(std::string_view tag, std::string_view attr)
 {
-    std::string needle = std::string(attr) + "=";
+    std::string needle = fmt::format("{}=", attr);
     size_t pos = ifinds(tag, needle);
     if (pos == std::string::npos) return {};
     pos += needle.size();

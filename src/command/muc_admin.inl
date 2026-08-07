@@ -858,8 +858,9 @@ int command__feed(const void *pointer, void *data,
         }
 
         ui->printf_network(fmt::format(fmt::runtime(_("Closing {} feed buffer(s)…")), to_close.size()));
+        auto &bp = weechat::BufferPort::default_port_ref();
         for (auto *buf : to_close)
-            weechat_buffer_close(buf);
+            bp.close(buf);
 
         return WEECHAT_RC_OK;
     }
@@ -1201,12 +1202,14 @@ int command__feed(const void *pointer, void *data,
         std::string parent_label;
         if (short_form && ptr_channel && ptr_channel->buffer)
         {
-            if (const char *parent_sn = weechat_buffer_get_string(ptr_channel->buffer, "short_name");
-                parent_sn && parent_sn[0] == '=' && parent_sn[1])
+            const std::string parent_sn =
+                weechat::BufferPort::default_port_ref().get_string(
+                    ptr_channel->buffer, "short_name");
+            if (parent_sn.size() >= 2 && parent_sn[0] == '=')
             {
-                parent_label = parent_sn + 1;
+                parent_label = parent_sn.substr(1);
             }
-            else if (parent_sn && parent_sn[0])
+            else if (!parent_sn.empty())
             {
                 parent_label = parent_sn;
             }
@@ -1217,8 +1220,9 @@ int command__feed(const void *pointer, void *data,
         const int item_alias = ptr_account->feed_alias_lookup(feed_key, item_id);
         const std::string comments_short =
             xmpp::feed_comments_buffer_short_name(parent_label, item_alias);
-        weechat_buffer_set(comments_ch.buffer, "short_name", comments_short.c_str());
-        weechat_buffer_set(comments_ch.buffer, "short_name_is_set", "1");
+        auto &bp = weechat::BufferPort::default_port_ref();
+        bp.set(comments_ch.buffer, "short_name", comments_short);
+        bp.set(comments_ch.buffer, "short_name_is_set", "1");
 
         {
             std::string uid = stanza::uuid(ptr_account->context);
@@ -2277,7 +2281,8 @@ int command__create([[maybe_unused]] const void *pointer,
         ui->printf_network(fmt::format("Creating instant room {} as {}…", room_bare.c_str(), nick.c_str()));
     }
 
-    int num = weechat_buffer_get_integer(ptr_channel->buffer, "number");
+    int num = weechat::BufferPort::default_port_ref()
+                  .get_integer(ptr_channel->buffer, "number");
     auto buf = fmt::format("/buffer {}", num);
     weechat_command(ptr_account->buffer, buf.c_str());
 

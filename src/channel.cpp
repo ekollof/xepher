@@ -1985,12 +1985,11 @@ void weechat::channel::send_link_preview(std::string_view to, std::string_view u
             }
 
             // Extract content= value for a given og: property (from lowercased head).
-            auto extract_og = [&](const std::string& prop) -> std::string {
+            auto extract_og = [&](std::string_view prop) -> std::string {
                 // Try property="og:PROP" and property='og:PROP'
-                const char quotes[2] = {'"', '\''};
-                for (int qi = 0; qi < 2; ++qi) {
-                    char q = quotes[qi];
-                    std::string needle = std::string("property=") + q + "og:" + prop + q;
+                for (const char q : {'"', '\''}) {
+                    std::string needle =
+                        fmt::format("property={}og:{}{}", q, prop, q);
                     auto pos = head_html.find(needle);
                     if (pos == std::string::npos) continue;
                     auto tag_start = head_html.rfind('<', pos);
@@ -2000,9 +1999,8 @@ void weechat::channel::send_link_preview(std::string_view to, std::string_view u
                     std::string tag_lower = head_html.substr(tag_start, tag_end - tag_start + 1);
                     std::string tag_orig  = html.substr(tag_start, tag_end - tag_start + 1);
                     // Find content= in the tag (double- or single-quoted value)
-                    for (int cqi = 0; cqi < 2; ++cqi) {
-                        char cq = quotes[cqi];
-                        std::string cpfx = std::string("content=") + cq;
+                    for (const char cq : {'"', '\''}) {
+                        std::string cpfx = fmt::format("content={}", cq);
                         auto cpos = tag_lower.find(cpfx);
                         if (cpos == std::string::npos) continue;
                         cpos += cpfx.size();

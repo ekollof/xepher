@@ -14,6 +14,7 @@
 #include "buffer.hh"
 #include "message.hh"
 #include "input.hh"
+#include "weechat/buffer_port.hh"
 #include "weechat/ui_port.hh"
 
 int input__data(struct t_gui_buffer *buffer, const char *text)
@@ -68,7 +69,8 @@ int input__typing(struct t_gui_buffer *buffer)
     weechat::channel *channel = nullptr;
 
     if (!buffer
-        || weechat_buffer_get_pointer(buffer, "plugin") != weechat_plugin)
+        || weechat::BufferPort::default_port_ref().get_pointer(buffer, "plugin")
+               != weechat_plugin)
         return WEECHAT_RC_OK;
 
     buffer__get_account_and_channel(buffer, &account, &channel);

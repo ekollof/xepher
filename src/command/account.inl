@@ -51,15 +51,15 @@ static int prompt_input_return_cb(const void * /*pointer*/, void * /*data*/,
     if (buffer != g_prompt->buffer) return WEECHAT_RC_OK;
 
     // Capture the raw input text before WeeChat clears it
-    const char *raw = weechat_buffer_get_string(buffer, "input");
-    std::string password = raw ? raw : "";
+    auto &bp = weechat::BufferPort::default_port_ref();
+    std::string password = bp.get_string(buffer, "input");
 
     // Unhook both hooks first so we don't re-enter
     if (g_prompt->modifier_hook)  { weechat_unhook(g_prompt->modifier_hook);  g_prompt->modifier_hook  = nullptr; }
     if (g_prompt->input_run_hook) { weechat_unhook(g_prompt->input_run_hook); g_prompt->input_run_hook = nullptr; }
 
     // Clear the input bar (don't let the password be echoed on Enter)
-    weechat_buffer_set(buffer, "input", "");
+    bp.set(buffer, "input", "");
 
     // Take ownership of the prompt context
     auto ctx = std::unique_ptr<password_prompt_ctx>(g_prompt);
@@ -124,10 +124,11 @@ static void prompt_password(struct t_gui_buffer *buffer,
     g_prompt = ctx.release();
 
         ui->printf_network(fmt::format(fmt::runtime(_("{}: enter password (hidden): ")), WEECHAT_XMPP_PLUGIN_NAME));
+    auto &bp = weechat::BufferPort::default_port_ref();
     // Switch focus to the buffer so the user types there
-    weechat_buffer_set(buffer, "display", "1");
+    bp.set(buffer, "display", "1");
     // Clear any leftover input
-    weechat_buffer_set(buffer, "input", "");
+    bp.set(buffer, "input", "");
 }
 
 void command__display_account(weechat::account *account)

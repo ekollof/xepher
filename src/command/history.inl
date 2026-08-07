@@ -305,10 +305,10 @@ int command__edit(const void *pointer, void *data,
 
             const std::string clean_body = weechat::clean_editable_line_body(body);
             std::string input = fmt::format("/edit-to {} {}", selected, clean_body);
-            weechat_buffer_set(buf, "input", input.c_str());
-            weechat_buffer_set(buf, "input_pos",
-                               std::to_string(input.size()).c_str());
-            weechat_buffer_set(buf, "display", "1");
+            auto &bp = weechat::BufferPort::default_port_ref();
+            bp.set(buf, "input", input);
+            bp.set(buf, "input_pos", std::to_string(input.size()));
+            bp.set(buf, "display", "1");
         },
         picker_t::close_cb{},
         buffer);
@@ -698,7 +698,8 @@ int command__reply(const void *pointer, void *data,
             std::string resolved_id = resolve_msg_id(m, ptr_channel);
 
             std::string label = m.body.empty() ? m.id : m.body;
-            std::string sublabel = m.nick.empty() ? "" : "from: " + m.nick;
+            std::string sublabel =
+                m.nick.empty() ? "" : fmt::format("from: {}", m.nick);
             entries.push_back({resolved_id, label, sublabel});
             if (static_cast<int>(entries.size()) >= 20)
                 break;
@@ -717,10 +718,10 @@ int command__reply(const void *pointer, void *data,
             [buf = buffer](std::string_view selected) {
                 // Pre-fill input bar: user types the reply body after this
                 std::string input = fmt::format("/reply-to {} ", selected);
-                weechat_buffer_set(buf, "input", input.c_str());
-                weechat_buffer_set(buf, "input_pos",
-                    std::to_string(input.size()).c_str());
-                weechat_buffer_set(buf, "display", "1");
+                auto &bp = weechat::BufferPort::default_port_ref();
+                bp.set(buf, "input", input);
+                bp.set(buf, "input_pos", std::to_string(input.size()));
+                bp.set(buf, "display", "1");
             },
             picker_t::close_cb{},
             buffer);
@@ -869,7 +870,8 @@ int command__moderate(const void *pointer, void *data,
     {
         if (m.retracted || m.id.empty()) continue;
         std::string label = m.body.empty() ? m.id : m.body;
-        std::string sublabel = m.nick.empty() ? "" : "from: " + m.nick;
+        std::string sublabel =
+            m.nick.empty() ? "" : fmt::format("from: {}", m.nick);
         entries.push_back({m.id, label, sublabel});
         if (static_cast<int>(entries.size()) >= 20)
             break;

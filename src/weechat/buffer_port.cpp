@@ -73,6 +73,27 @@ void WeechatBufferPort::set_pointer(
     weechat_buffer_set_pointer(buffer, std::string(property).c_str(), pointer);
 }
 
+void *WeechatBufferPort::get_pointer(
+    struct t_gui_buffer *const buffer,
+    const std::string_view property)
+{
+    if (!buffer || property.empty())
+        return nullptr;
+    return weechat_buffer_get_pointer(buffer, std::string(property).c_str());
+}
+
+void WeechatBufferPort::close(struct t_gui_buffer *const buffer)
+{
+    if (buffer)
+        weechat_buffer_close(buffer);
+}
+
+void WeechatBufferPort::clear(struct t_gui_buffer *const buffer)
+{
+    if (buffer)
+        weechat_buffer_clear(buffer);
+}
+
 void WeechatBufferPort::nicklist_remove_all(struct t_gui_buffer *const buffer)
 {
     if (buffer)

@@ -37,6 +37,7 @@
 #include "sexp/driver.hh"
 #include "ui/picker.hh"
 #include "weechat/line_store.hh"
+#include "weechat/buffer_port.hh"
 #include "weechat/ui_port.hh"
 #include "xmpp/message_reply.hh"  // extract_line_body_text
 

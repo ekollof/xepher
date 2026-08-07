@@ -705,7 +705,8 @@ bool weechat::connection::handle_channel_search_iq_event(xmpp_stanza_t *stanza)
                     else
                     {
                         // Inline print path (legacy / non-picker).
-                        std::string info_bracketed = info_str.empty() ? "" : " " + info_str;
+                        std::string info_bracketed =
+                            info_str.empty() ? "" : fmt::format(" {}", info_str);
                         cs_ui->printf_date_tags(0, "xmpp_channel_search,notify_none",
                             fmt::format("  {}{}{}{}",
                                 weechat::RuntimePort::default_runtime().color("chat_nick"),

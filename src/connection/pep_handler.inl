@@ -133,7 +133,7 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
                         {
                             weechat::UiPort::for_buffer(ch.buffer)->printf_network(
                                 "Bookmark removed — leaving room");
-                            weechat_buffer_close(ch.buffer);
+                            weechat::BufferPort::default_port_ref().close(ch.buffer);
                         }
                     }
                     continue;
@@ -274,7 +274,7 @@ void weechat::connection::handle_pubsub_pep_event(xmpp_stanza_t *stanza, std::st
                         {
                             weechat::UiPort::for_buffer(ch.buffer)->printf_network(
                                 "Bookmark autojoin disabled — leaving room");
-                            weechat_buffer_close(ch.buffer);
+                            weechat::BufferPort::default_port_ref().close(ch.buffer);
                         }
                     }
                 }

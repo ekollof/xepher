@@ -114,6 +114,25 @@ public:
                      void * /*pointer*/) override
     {}
 
+    [[nodiscard]] void *get_pointer(struct t_gui_buffer * /*buffer*/,
+                                    std::string_view /*property*/) override
+    {
+        return nullptr;
+    }
+
+    int close_count = 0;
+    int clear_count = 0;
+
+    void close(struct t_gui_buffer * /*buffer*/) override
+    {
+        ++close_count;
+    }
+
+    void clear(struct t_gui_buffer * /*buffer*/) override
+    {
+        ++clear_count;
+    }
+
     void nicklist_remove_all(struct t_gui_buffer * /*buffer*/) override
     {
         ++nicklist_remove_all_count;
@@ -182,6 +201,8 @@ public:
     void clear()
     {
         searches.clear();
+        close_count = 0;
+        clear_count = 0;
         nicklist_remove_all_count = 0;
         nicklist_removed.clear();
         nicklist_groups_added.clear();
