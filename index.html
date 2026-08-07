@@ -3,8 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Xepher — XMPP plugin for WeeChat</title>
-  <meta name="description" content="Xepher is a WeeChat plugin written in C++23 that adds full XMPP support, targeting XMPP Compliance Suite 2022.">
+  <title>Xepher — Modern XMPP for WeeChat</title>
+  <meta name="description" content="Modern, full-featured XMPP for WeeChat with OMEMO, MAM, PubSub microblogging, HTTP upload, and terminal image previews. C++23 WeeChat plugin.">
+  <meta name="keywords" content="WeeChat, XMPP, Jabber, OMEMO, MAM, PubSub, terminal, TUI, chat plugin">
+  <link rel="canonical" href="https://ekollof.github.io/xepher/">
+  <meta property="og:title" content="Xepher — Modern XMPP for WeeChat">
+  <meta property="og:description" content="OMEMO, MAM, PubSub microblogging, HTTP upload, and terminal image previews in a C++23 WeeChat plugin.">
+  <meta property="og:url" content="https://ekollof.github.io/xepher/">
+  <meta property="og:type" content="website">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,7 +24,7 @@
       --accent2:  #3fb950;
       --code-bg:  #1f2428;
       --radius:   8px;
-      --max-w:    860px;
+      --max-w:    900px;
     }
 
     body {
@@ -31,17 +37,16 @@
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
-    /* ── header ── */
     header {
       max-width: var(--max-w);
-      margin: 3rem auto 2rem;
+      margin: 2.5rem auto 1.25rem;
       display: flex;
       align-items: center;
       gap: 1.2rem;
     }
     header img.logo {
-      width: 64px;
-      height: 64px;
+      width: 72px;
+      height: 72px;
       object-fit: contain;
       flex-shrink: 0;
     }
@@ -49,31 +54,36 @@
       font-size: 2.2rem;
       font-weight: 700;
       letter-spacing: -0.5px;
+      line-height: 1.15;
     }
-    header h1 span {
+    header .tagline {
       color: var(--muted);
       font-weight: 400;
-      font-size: 1rem;
+      font-size: 1.05rem;
       display: block;
-      margin-top: 0.15rem;
+      margin-top: 0.35rem;
+      max-width: 36rem;
     }
 
-    /* ── main layout ── */
-    main {
-      max-width: var(--max-w);
-      margin: 0 auto;
-    }
+    main { max-width: var(--max-w); margin: 0 auto; }
 
-    /* ── hero buttons ── */
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 1.25rem;
+    }
+    .badges img { height: 20px; }
+
     .cta {
       display: flex;
       gap: 0.75rem;
       flex-wrap: wrap;
-      margin-bottom: 2.5rem;
+      margin-bottom: 1.75rem;
     }
     .btn {
       display: inline-block;
-      padding: 0.5rem 1.1rem;
+      padding: 0.55rem 1.15rem;
       border-radius: var(--radius);
       font-size: 0.9rem;
       font-weight: 600;
@@ -100,12 +110,11 @@
     .btn-kofi:hover { background: #ff7a78; border-color: #ff7a78; text-decoration: none; }
     .btn-kofi img { vertical-align: -2px; margin-right: 0.4rem; height: 1em; }
 
-    /* ── screenshot ── */
     .screenshot-wrap {
       border: 1px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden;
-      margin-bottom: 2.5rem;
+      margin-bottom: 0.5rem;
       background: var(--surface);
     }
     .screenshot-wrap img {
@@ -113,8 +122,12 @@
       width: 100%;
       height: auto;
     }
+    .screenshot-caption {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
 
-    /* ── feature grid ── */
     .features {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -139,18 +152,31 @@
       line-height: 1.5;
     }
 
-    /* ── install block ── */
-    .install {
+    section.block {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 1.4rem 1.6rem;
-      margin-bottom: 2.5rem;
+      margin-bottom: 2rem;
     }
-    .install h2 {
-      font-size: 1.1rem;
+    section.block h2 {
+      font-size: 1.15rem;
       font-weight: 600;
-      margin-bottom: 1rem;
+      margin-bottom: 0.85rem;
+    }
+    section.block p, section.block li {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 0.55rem;
+    }
+    section.block ul { margin: 0.4rem 0 0.8rem 1.2rem; }
+    section.block code {
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: var(--fg);
     }
     pre {
       background: var(--code-bg);
@@ -160,56 +186,14 @@
       overflow-x: auto;
       font: 0.85rem/1.5 "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
       color: var(--accent2);
-    }
-    .install p {
-      font-size: 0.875rem;
-      color: var(--muted);
-      margin-top: 0.8rem;
+      margin: 0.6rem 0 0.9rem;
     }
 
-    /* ── community block ── */
-    .community {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.4rem 1.6rem;
-      margin-bottom: 2.5rem;
-    }
-    .community h2 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 0.6rem;
-    }
-    .community p {
-      font-size: 0.875rem;
-      color: var(--muted);
-      margin-bottom: 0.6rem;
-    }
-    .community p:last-child { margin-bottom: 0; }
-    .community code {
-      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
-      background: var(--code-bg);
-      padding: 0.1rem 0.4rem;
-      border-radius: 4px;
-      font-size: 0.85em;
-    }
-
-    /* ── xep table ── */
-    .xep-section h2 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
-    }
-    .xep-section p {
-      font-size: 0.875rem;
-      color: var(--muted);
-      margin-bottom: 1rem;
-    }
-    table {
+    table.compare, table.xeps {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.85rem;
-      margin-bottom: 2.5rem;
+      margin: 0.75rem 0 0;
     }
     th {
       text-align: left;
@@ -227,11 +211,26 @@
       vertical-align: top;
     }
     tr:last-child td { border-bottom: none; }
-    td:first-child { font-family: monospace; color: var(--accent); white-space: nowrap; }
-    td:nth-child(2) { color: var(--fg); }
-    td:last-child { color: var(--muted); }
+    table.xeps td:first-child {
+      font-family: monospace;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .yes { color: var(--accent2); }
+    .partial { color: #d29922; }
+    .no { color: var(--muted); }
 
-    /* ── footer ── */
+    .xep-section h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+    }
+    .xep-section > p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
     footer {
       max-width: var(--max-w);
       margin: 0 auto;
@@ -250,189 +249,184 @@
 
 <header>
   <img class="logo" src="logo.png" alt="Xepher logo">
-  <h1>Xepher <span>XMPP plugin for WeeChat — C++23</span></h1>
+  <h1>Xepher
+    <span class="tagline">Modern, full-featured XMPP for WeeChat — OMEMO, MAM, PubSub microblogging, HTTP upload, and terminal image previews.</span>
+  </h1>
 </header>
 
 <main>
 
+  <div class="badges">
+    <a href="https://github.com/ekollof/xepher/releases/latest"><img src="https://img.shields.io/github/v/release/ekollof/xepher?display_name=tag&amp;sort=semver" alt="Latest release"></a>
+    <a href="https://github.com/ekollof/xepher/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MPL--2.0-blue.svg" alt="MPL-2.0"></a>
+    <a href="https://xmpp.org/extensions/xep-0459.html"><img src="https://img.shields.io/badge/XMPP-CCS2022-orange" alt="CCS2022"></a>
+    <a href="https://github.com/ekollof/xepher/actions/workflows/packages.yml"><img src="https://img.shields.io/github/actions/workflow/status/ekollof/xepher/packages.yml?branch=master&amp;label=packages" alt="Packages CI"></a>
+  </div>
+
   <div class="cta">
     <a class="btn btn-primary" href="https://github.com/ekollof/xepher/releases/latest">Download packages</a>
-    <a class="btn btn-secondary" href="https://github.com/ekollof/xepher">View on GitHub</a>
+    <a class="btn btn-secondary" href="https://github.com/ekollof/xepher">Star on GitHub</a>
     <a class="btn btn-secondary" href="xmpp:xepher@conference.hackerheaven.org?join">Join MUC</a>
-    <a class="btn btn-secondary" href="https://github.com/ekollof/xepher/wiki">Documentation</a>
-    <a class="btn btn-secondary" href="https://github.com/ekollof/xepher/wiki/Installation">Installation</a>
-    <a class="btn btn-secondary" href="https://github.com/ekollof/xepher/wiki/Troubleshooting">Troubleshooting</a>
+    <a class="btn btn-secondary" href="https://github.com/ekollof/xepher#quick-start">Quick start</a>
+    <a class="btn btn-secondary" href="https://github.com/ekollof/xepher/wiki">Wiki</a>
     <a class="btn btn-kofi" href="https://ko-fi.com/andrath"><img src="https://storage.ko-fi.com/cdn/cup-border.png" alt="">Support on Ko-fi</a>
   </div>
 
   <div class="screenshot-wrap">
-    <img src="screenshot.png" alt="Xepher running in WeeChat showing XMPP chat and microblogging feed">
+    <img src="screenshot.png" alt="Xepher running in WeeChat: XMPP chats and microblogging feed">
   </div>
+  <p class="screenshot-caption">Xepher in WeeChat — encrypted PMs, MUC, and PubSub feeds in a single TUI. (A short demo GIF is welcome as a contribution.)</p>
 
   <div class="features">
     <div class="feature">
       <h3>OMEMO Encryption</h3>
-      <p>End-to-end encryption via XEP-0384 using the <strong>legacy axolotl namespace only</strong> (<code>eu.siacs.conversations.axolotl</code>). OMEMO:2 is not supported. PM OMEMO is production-ready; <strong>non-anonymous MUC multi-recipient encryption is experimental</strong> — see <a href="https://github.com/ekollof/xepher/wiki/Troubleshooting#omemo-muc-encryption-experimental">Troubleshooting</a> and <a href="https://github.com/ekollof/xepher/issues/6">issue&nbsp;#6</a>.</p>
+      <p>XEP-0384 legacy axolotl (<code>eu.siacs.conversations.axolotl</code>) for PMs. BTBV trust, fingerprints, multi-device. Non-anonymous MUC OMEMO is experimental.</p>
     </div>
     <div class="feature">
       <h3>Message Archive (MAM)</h3>
-      <p>XEP-0313 history fetch on connect with local LMDB cache. RSM cursor persisted across reconnects.</p>
+      <p>XEP-0313 history on connect with LMDB cache and RSM cursors across reconnects.</p>
     </div>
     <div class="feature">
       <h3>Microblogging</h3>
-      <p>XEP-0277 / XEP-0472 PubSub social feed — post, reply, boost, retract, comments. Compatible with Movim. Disable entirely with <code>xmpp.look.feeds off</code>.</p>
+      <p>XEP-0277 / XEP-0472 PubSub feeds — post, reply, boost, comments. Movim-friendly. Disable with <code>xmpp.look.feeds off</code>.</p>
     </div>
     <div class="feature">
-      <h3>File Upload</h3>
-      <p>HTTP File Upload (XEP-0363) with Stateless File Sharing (XEP-0447). Interactive picker or direct path.</p>
+      <h3>Files &amp; media</h3>
+      <p>HTTP upload (XEP-0363), SFS/ESFS, stickers, BoB. Inline images via Kitty or cell-art <code>icat</code>.</p>
     </div>
     <div class="feature">
-      <h3>Message Corrections</h3>
-      <p>Edit or retract sent messages (XEP-0308 / XEP-0424). Interactive picker with last 20 messages.</p>
+      <h3>MUC</h3>
+      <p>XEP-0045: create/join, IRC-style admin, bookmarks, moderation, reactions, typing, rejoin after reconnect.</p>
     </div>
     <div class="feature">
-      <h3>Threaded Replies</h3>
-      <p>XEP-0461 reply context with quoted preview. Fallback body stripping per XEP-0428.</p>
-    </div>
-    <div class="feature">
-      <h3>MUC Support</h3>
-      <p>Full XEP-0045 multi-user chat — <code>/create</code> (instant + <code>--reserved</code>), IRC-style admin (<code>/kick</code>, <code>/ban</code>, <code>/voice</code>, <code>/devoice</code>, <code>/op</code>, <code>/deop</code>), owner config (<code>/setmodes</code>, <code>/affiliation</code>, <code>/destroy</code>), registration (<code>/mucregister</code>), direct and mediated invites (<code>/invite</code>, <code>/decline</code>), topic, moderation (XEP-0425), reactions (XEP-0444). IRC-style mode display in the status bar (<code>+miP</code>).</p>
-    </div>
-    <div class="feature">
-      <h3>Ad-hoc Commands</h3>
-      <p>XEP-0050 data forms rendered inline. Multi-step sessions with field validation.</p>
-    </div>
-    <div class="feature">
-      <h3>Ephemeral Messages</h3>
-      <p>XEP-0466 — send messages that auto-delete after N seconds. Tombstoned locally on both ends.</p>
-    </div>
-    <div class="feature">
-      <h3>BTBV Trust Model</h3>
-      <p>Blind Trust Before Verification TOFU — new devices auto-trusted for first JID, subsequent devices marked UNDECIDED. Manual trust via <code>/omemo trust</code> / <code>/omemo distrust</code> with per-device granularity.</p>
-    </div>
-    <div class="feature">
-      <h3>Room Activity Indicators</h3>
-      <p>XEP-0437 — subscribe to MUC activity notifications on connect, display room activity in account buffer when away.</p>
-    </div>
-    <div class="feature">
-      <h3>Encrypted File Sharing</h3>
-      <p>XEP-0448 — AES-256-GCM encrypt files before upload; decrypt on receive automatically.</p>
-    </div>
-    <div class="feature">
-      <h3>Inline Images &amp; Stickers</h3>
-      <p>Kitty terminal graphics via vendored <code>icat.py</code> — SFS/SIMS/OOB uploads, XEP-0449 stickers, XEP-0514 custom emoji, and XEP-0231 BoB (<code>cid:…@bob.xmpp.org</code>) for Movim stickers and small plaintext <code>/upload</code> images (≤8&nbsp;KiB).</p>
-    </div>
-    <div class="feature">
-      <h3>Service Discovery</h3>
-      <p><code>/disco summary</code> prints a cached server capability matrix (domain features, components, upload/pubsub/MUC detection). Auto-printed to the account log ~6&nbsp;s after connect — handy for support logs.</p>
+      <h3>WeeChat-native UX</h3>
+      <p>Receipts, read markers, corrections, replies, encryption bar item, safe <code>/plugin reload xmpp</code>.</p>
     </div>
   </div>
 
-  <div class="install">
+  <section class="block" id="install">
     <h2>Installation</h2>
-    <p style="margin-bottom:1rem;font-size:0.9rem;color:var(--muted)">Pre-built packages for Debian, Fedora, Arch, Void, and Alpine are on <a href="https://github.com/ekollof/xepher/releases/latest">GitHub Releases</a> (latest: <strong>v0.11.0</strong>). Use v0.8.1+ — v0.8.0 RPM/APK had a packaging bug. v0.11.0 adds <code>/disco summary</code>, connect probes gated on server <code>disco#info</code>, and MUC OMEMO troubleshooting docs.</p>
-    <pre># Debian/Ubuntu
-sudo dpkg -i xepher_0.11.0-1_amd64.deb
+    <p>Pre-built packages for Debian, Fedora, Arch, Void, and Alpine are on
+      <a href="https://github.com/ekollof/xepher/releases/latest">GitHub Releases</a>
+      (latest: <strong>v0.12.0</strong>). Use <strong>v0.8.1+</strong>.</p>
+    <pre># Debian / Ubuntu
+sudo dpkg -i xepher_*_amd64.deb
 
 # Fedora
-sudo dnf install ./xepher-0.11.0-1.fc*.x86_64.rpm
+sudo dnf install ./xepher-*-*.x86_64.rpm
 
 # Arch
-sudo pacman -U xepher-0.11.0-1-x86_64.pkg.tar.zst</pre>
-    <p>Or build from source (on BSD use <code>gmake</code> instead of <code>make</code>):</p>
-    <pre>git clone --depth 1 git@github.com:ekollof/xepher.git
+sudo pacman -U xepher-*-x86_64.pkg.tar.zst
+
+# Then in WeeChat (first time or after upgrade)
+/plugin load xmpp
+# or: /plugin reload xmpp</pre>
+    <p>From source (Linux; on BSD use <code>gmake</code>):</p>
+    <pre>git clone --depth 1 https://github.com/ekollof/xepher.git
 cd xepher
-make install-deps   # detects distro, installs packages
-make DEBUG=1        # 147 doctests (plain make skips them)
-make install        # atomic install to ~/.local/share/weechat/plugins/
-# in WeeChat (safe while running):
-/plugin reload xmpp</pre>
-    <p><code>/plugin reload xmpp</code> is supported (disconnects and re-inits; reconnect accounts afterward). <code>make install</code> uses temp+rename so a running WeeChat is safe until reload — do not overwrite the live <code>xmpp.so</code> with a plain <code>cp</code>.</p>
-    <p>Requires WeeChat &ge; 3.0, libstrophe, libxml2, lmdb, libomemo-c, gpgme, libfmt, and GCC &ge; 12 / Clang &ge; 15.</p>
-    <p>See the <a href="https://github.com/ekollof/xepher/wiki/Installation">Installation wiki page</a> for all platforms, BSD notes, and package details.</p>
-  </div>
+make install-deps
+make
+make install
+# WeeChat: /plugin reload xmpp</pre>
+    <p><code>make install</code> uses temp+rename (safe while WeeChat runs). Full platform notes:
+      <a href="https://github.com/ekollof/xepher/wiki/Installation">Installation wiki</a> ·
+      <a href="https://github.com/ekollof/xepher#quick-start">README quick start</a>.</p>
+  </section>
+
+  <section class="block" id="compare">
+    <h2>How it compares</h2>
+    <p>Xepher is a <strong>WeeChat plugin</strong>, not a standalone client. Rough orientation:</p>
+    <table class="compare">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Xepher</th>
+          <th>Gajim / Conversations</th>
+          <th>BitlBee / other bridges</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>UI</td>
+          <td class="yes">WeeChat TUI</td>
+          <td>Desktop / mobile GUI</td>
+          <td>IRC gateway</td>
+        </tr>
+        <tr>
+          <td>OMEMO</td>
+          <td class="yes">PM ready; MUC experimental</td>
+          <td class="yes">Mature</td>
+          <td class="no">Usually none</td>
+        </tr>
+        <tr>
+          <td>MAM / carbons / SM</td>
+          <td class="yes">Yes</td>
+          <td class="yes">Yes</td>
+          <td class="partial">Varies</td>
+        </tr>
+        <tr>
+          <td>PubSub microblog</td>
+          <td class="yes">Yes (Movim-oriented)</td>
+          <td class="partial">Limited</td>
+          <td class="no">No</td>
+        </tr>
+        <tr>
+          <td>Inline terminal images</td>
+          <td class="yes">icat / Kitty / cells</td>
+          <td class="no">N/A (GUI)</td>
+          <td class="no">Rare</td>
+        </tr>
+        <tr>
+          <td>Reload without restart</td>
+          <td class="yes"><code>/plugin reload xmpp</code></td>
+          <td>App restart</td>
+          <td>Daemon restart</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:0.85rem">Choose Xepher if you live in WeeChat and want native XMPP rather than an IRC bridge.</p>
+  </section>
+
+  <section class="block" id="community">
+    <h2>Community</h2>
+    <p>Questions, tips, and announcements:</p>
+    <ul>
+      <li><strong>MUC:</strong> <code>xepher@conference.hackerheaven.org</code> ·
+        <a href="xmpp:xepher@conference.hackerheaven.org?join">join link</a></li>
+      <li>From the plugin: <code>/xmpp enter xepher@conference.hackerheaven.org</code></li>
+      <li><a href="https://github.com/ekollof/xepher/discussions">GitHub Discussions</a> ·
+        <a href="https://github.com/ekollof/xepher/issues">Issues</a>
+        (<code>good first issue</code> / <code>help wanted</code> welcome)</li>
+    </ul>
+  </section>
 
   <div class="xep-section">
     <h2>Implemented XEPs</h2>
-    <p>Targeting <a href="https://xmpp.org/extensions/xep-0459.html">XMPP Compliance Suite 2022 (XEP-0459)</a>.</p>
-    <table>
+    <p>Targeting <a href="https://xmpp.org/extensions/xep-0459.html">XMPP Compliance Suite 2022 (XEP-0459)</a>.
+      Full list also on the <a href="https://github.com/ekollof/xepher#xmpp-compliance-xep-0459-ccs2022">README</a>.</p>
+    <table class="xeps">
       <thead>
         <tr><th>XEP</th><th>Name</th><th>Notes</th></tr>
       </thead>
       <tbody>
-        <tr><td>XEP-0030</td><td>Service Discovery</td><td><code>/disco summary</code> capability matrix; auto-print to account log after connect</td></tr>
-        <tr><td>XEP-0045</td><td>Multi-User Chat</td><td><code>/create</code> (instant + reserved), IRC-style admin (<code>/voice</code>, <code>/op</code>, …), owner config (<code>/setmodes</code>, <code>/affiliation</code>, <code>/destroy</code>), <code>/mucregister</code>, invites (<code>/invite</code>, <code>/decline</code>); partial — no full roomconfig UI</td></tr>
-        <tr><td>XEP-0048</td><td>Bookmarks</td><td></td></tr>
-        <tr><td>XEP-0050</td><td>Ad-Hoc Commands</td><td></td></tr>
-        <tr><td>XEP-0054</td><td>vcard-temp</td><td></td></tr>
-        <tr><td>XEP-0059</td><td>Result Set Management</td><td>RSM paging for MAM and PubSub</td></tr>
-        <tr><td>XEP-0060</td><td>Publish-Subscribe</td><td></td></tr>
-        <tr><td>XEP-0066</td><td>Out of Band Data</td><td></td></tr>
-        <tr><td>XEP-0071</td><td>XHTML-IM</td><td>Rendered with WeeChat color codes</td></tr>
-        <tr><td>XEP-0077</td><td>In-Band Registration</td><td></td></tr>
-        <tr><td>XEP-0084</td><td>User Avatar</td><td></td></tr>
-        <tr><td>XEP-0085</td><td>Chat State Notifications</td><td></td></tr>
-        <tr><td>XEP-0107</td><td>User Mood</td><td></td></tr>
-        <tr><td>XEP-0108</td><td>User Activity</td><td></td></tr>
-        <tr><td>XEP-0115</td><td>Entity Capabilities</td><td></td></tr>
-        <tr><td>XEP-0153</td><td>vCard-Based Avatars</td><td></td></tr>
-        <tr><td>XEP-0184</td><td>Message Delivery Receipts</td><td></td></tr>
-        <tr><td>XEP-0191</td><td>Blocking Command</td><td></td></tr>
-        <tr><td>XEP-0198</td><td>Stream Management</td><td>Resume + retransmit; connect probes (SM, CSI, MAM, bookmarks) gated on server <code>disco#info</code></td></tr>
-        <tr><td>XEP-0199</td><td>XMPP Ping</td><td></td></tr>
-        <tr><td>XEP-0224</td><td>Attention</td><td></td></tr>
-        <tr><td>XEP-0245</td><td>/me Command</td><td></td></tr>
-        <tr><td>XEP-0249</td><td>Direct MUC Invitations</td><td></td></tr>
-        <tr><td>XEP-0277</td><td>Microblogging over XMPP</td><td></td></tr>
-        <tr><td>XEP-0292</td><td>vCard4 over XMPP</td><td></td></tr>
-        <tr><td>XEP-0308</td><td>Last Message Correction</td><td></td></tr>
-        <tr><td>XEP-0313</td><td>Message Archive Management</td><td></td></tr>
-        <tr><td>XEP-0333</td><td>Displayed Markers</td><td></td></tr>
-        <tr><td>XEP-0363</td><td>HTTP File Upload</td><td></td></tr>
-        <tr><td>XEP-0372</td><td>References</td><td></td></tr>
-        <tr><td>XEP-0382</td><td>Spoiler Messages</td><td></td></tr>
-        <tr><td>XEP-0384</td><td>OMEMO Encryption</td><td>legacy axolotl only (no OMEMO:2); PM ready; non-anonymous MUC experimental</td></tr>
-        <tr><td>XEP-0393</td><td>Message Styling</td><td></td></tr>
-        <tr><td>XEP-0402</td><td>PEP Native Bookmarks</td><td></td></tr>
-        <tr><td>XEP-0410</td><td>MUC Self-Ping</td><td></td></tr>
-        <tr><td>XEP-0424</td><td>Message Retraction</td><td></td></tr>
-        <tr><td>XEP-0425</td><td>Message Moderation</td><td></td></tr>
-        <tr><td>XEP-0428</td><td>Fallback Indication</td><td></td></tr>
-        <tr><td>XEP-0433</td><td>Extended Channel Search</td><td></td></tr>
-        <tr><td>XEP-0394</td><td>Message Markup</td><td>Receive-only; takes precedence over XEP-0393</td></tr>
-        <tr><td>XEP-0413</td><td>Order-By</td><td>Newest-first ordering for pubsub MAM queries</td></tr>
-        <tr><td>XEP-0437</td><td>Room Activity Indicators</td><td>Subscribe on connect; activity notifications in account buffer</td></tr>
-        <tr><td>XEP-0441</td><td>MAM Preferences</td><td>/mam prefs — view and set archiving policy</td></tr>
-        <tr><td>XEP-0442</td><td>Pubsub MAM</td><td>Fetch feed history via MAM with RSM cursor persistence</td></tr>
-        <tr><td>XEP-0444</td><td>Message Reactions</td><td></td></tr>
-        <tr><td>XEP-0231</td><td>Bits of Binary</td><td>Receive: inline <code>urn:xmpp:bob</code> + XHTML-IM cid IQ-fetch; send: plaintext <code>/upload</code> images ≤8&nbsp;KiB; caps + IQ hosting</td></tr>
-        <tr><td>XEP-0447</td><td>Stateless File Sharing</td><td></td></tr>
-        <tr><td>XEP-0448</td><td>Encrypted File Sharing</td><td>AES-256-GCM encrypt/decrypt for OMEMO channels</td></tr>
-        <tr><td>XEP-0449</td><td>Stickers</td><td>Receive with SFS payloads; inline via icat</td></tr>
-        <tr><td>XEP-0452</td><td>MUC Mention Notifications</td><td>Receive missed @mention notifications from MUC service</td></tr>
-        <tr><td>XEP-0461</td><td>Message Replies</td><td></td></tr>
-        <tr><td>XEP-0466</td><td>Ephemeral Messages</td><td>/ephemeral &lt;seconds&gt; &lt;text&gt; — auto-tombstone after timer</td></tr>
-        <tr><td>XEP-0472</td><td>PubSub Social Feed</td><td></td></tr>
-        <tr><td>XEP-0490</td><td>Message Displayed Synchronization</td><td>Sync read state across own devices</td></tr>
-        <tr><td>XEP-0492</td><td>Chat Notification Settings</td><td>/notify [jid] [always|on-mention|never]</td></tr>
-        <tr><td>XEP-0511</td><td>OpenGraph Link Previews</td><td></td></tr>
-        <tr><td>XEP-0514</td><td>Emoji Markup</td><td>Custom emoji spans resolved against SFS/SIMS hashes; icat</td></tr>
+        <tr><td>XEP-0030</td><td>Service Discovery</td><td><code>/disco summary</code>; auto-print after connect</td></tr>
+        <tr><td>XEP-0045</td><td>Multi-User Chat</td><td>Admin, bookmarks, create, invitations</td></tr>
+        <tr><td>XEP-0198</td><td>Stream Management</td><td>Resume + retransmit; MUC rejoin on reconnect</td></tr>
+        <tr><td>XEP-0277 / 0472</td><td>Microblogging / Social Feed</td><td>PubSub; Movim-compatible</td></tr>
+        <tr><td>XEP-0313</td><td>MAM</td><td>LMDB cache + RSM</td></tr>
+        <tr><td>XEP-0363</td><td>HTTP File Upload</td><td>SFS / ESFS</td></tr>
+        <tr><td>XEP-0384</td><td>OMEMO</td><td>Legacy axolotl; PM ready; MUC experimental</td></tr>
+        <tr><td>XEP-0444 / 0461 / 0308</td><td>Reactions / Replies / Corrections</td><td></td></tr>
+        <tr><td>XEP-0490</td><td>MDS</td><td>Read sync across devices</td></tr>
       </tbody>
     </table>
-  </div>
-
-  <div class="community">
-    <h2>Community</h2>
-    <p>The official Xepher MUC is the place to ask questions, share tips, and follow announcements.</p>
-    <p><strong>JID:</strong> <code>xepher@conference.hackerheaven.org</code> &middot; <a href="xmpp:xepher@conference.hackerheaven.org?join">Click to join</a></p>
-    <p>From the plugin, once any account is connected: <code>/xmpp enter xepher@conference.hackerheaven.org</code></p>
   </div>
 
 </main>
 
 <footer>
   <span>Xepher — fork of <a href="https://github.com/bqv/weechat-xmpp">bqv/weechat-xmpp</a> by Tony Olagbaiye</span>
-  <span><a href="https://github.com/ekollof/xepher">github.com/ekollof/xepher</a> &middot; <a href="https://ko-fi.com/andrath">Support on Ko-fi</a></span>
+  <span><a href="https://github.com/ekollof/xepher">github.com/ekollof/xepher</a> · <a href="https://ko-fi.com/andrath">Ko-fi</a></span>
 </footer>
 
 </body>
