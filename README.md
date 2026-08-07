@@ -3,7 +3,8 @@
 [![Latest release](https://img.shields.io/github/v/release/ekollof/xepher?display_name=tag&sort=semver)](https://github.com/ekollof/xepher/releases/latest)
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
 [![Language: C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus)](https://en.cppreference.com/w/cpp/23)
-[![XEP-0459 CCS2022](https://img.shields.io/badge/XMPP-CCS2022-orange)](https://xmpp.org/extensions/xep-0459.html)
+[![XMPP XEPs](https://img.shields.io/badge/XMPP-50%2B%20XEPs-orange)](https://github.com/ekollof/xepher#xmpp-protocol-support)
+[![CCS2022 baseline](https://img.shields.io/badge/CCS2022-baseline%20%2B-brightgreen)](https://xmpp.org/extensions/xep-0459.html)
 [![Packages](https://img.shields.io/github/actions/workflow/status/ekollof/xepher/packages.yml?branch=master&label=packages)](https://github.com/ekollof/xepher/actions/workflows/packages.yml)
 [![Website](https://img.shields.io/badge/website-ekollof.github.io%2Fxepher-informational)](https://ekollof.github.io/xepher/)
 
@@ -1336,9 +1337,18 @@ the JID above.
 
 ---
 
-## XMPP Compliance (XEP-0459: CCS2022)
+## XMPP protocol support
 
-### Core IM
+Xepher aims for **modern client interoperability**, not a single suite checkbox.
+[XEP-0459 (Compliance Suites 2022)](https://xmpp.org/extensions/xep-0459.html)
+is a useful **baseline** (Core + Advanced IM areas below), but the plugin goes
+well past that: OMEMO, SFS/ESFS, PubSub social feed, MDS, ephemeral messages,
+stickers/emoji markup, OpenGraph previews, channel search, and more — **50+
+XEPs** in total (see also [DOAP.xml](DOAP.xml)).
+
+Legend: ✅ complete or production-usable · ⚡ experimental / partial · ⏳ planned
+
+### Core IM (CCS2022 baseline)
 
 - ✅ XEP-0030: Service Discovery — `/disco summary` prints a cached capability matrix (domain features, components, upload/pubsub/MUC detection); auto-printed to the account log after connect
 - ✅ XEP-0045: Multi-User Chat — `/create`, IRC-style admin (`/kick`, `/ban`, `/voice`, `/devoice`, `/op`, `/deop`), owner config (`/setmodes`, `/affiliation`, `/destroy`), registration (`/mucregister`), direct and mediated invites (`/invite`, `/decline`); no full interactive roomconfig UI
@@ -1349,7 +1359,7 @@ the JID above.
 - ✅ XEP-0191: Blocking Command
 - ✅ XEP-0198: Stream Management — negotiates SM before application stanzas; session resume with stanza retransmit; resume failure falls back to fresh `<enable/>`; on resume skips redundant roster/presence/MAM/feed fetches; honors server `<enabled location='…'/>` for reconnect; closes stream on invalid peer ack (`handled-count-too-high`); graceful final ack before disconnect
 
-### Advanced IM
+### Advanced IM (CCS2022 baseline)
 
 - ✅ XEP-0245: The `/me` Command
 - ✅ XEP-0249: Direct MUC Invitations
@@ -1362,7 +1372,7 @@ the JID above.
 - ✅ XEP-0444: Message Reactions
 - ✅ XEP-0461: Message Replies
 
-### Additional implemented XEPs
+### Beyond the compliance suite
 
 - ✅ XEP-0004: Data Forms (rendered in-buffer for Ad-Hoc Commands)
 - ✅ XEP-0048: Bookmark Storage (Private XML)
