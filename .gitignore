@@ -9,6 +9,11 @@ cscope*
 *.gcda
 *.json.gz
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
 # Build artifacts directory
 build/
 obj/
