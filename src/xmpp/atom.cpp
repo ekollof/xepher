@@ -56,15 +56,15 @@ namespace
     return s;
 }
 
-void resolve_author_from_uri(std::string &author, const std::string &author_uri)
+void resolve_author_from_uri(std::string &author, std::string_view author_uri)
 {
     if (!author.empty() || author_uri.empty())
         return;
 
-    if (author_uri.size() >= 5 && author_uri.starts_with("xmpp:"))
-        author = author_uri.substr(5);
+    if (author_uri.starts_with("xmpp:"))
+        author = std::string(author_uri.substr(5));
     else
-        author = author_uri;
+        author = std::string(author_uri);
 }
 
 } // namespace

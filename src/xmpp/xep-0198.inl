@@ -28,7 +28,7 @@ namespace stanza {
 
         // <resume xmlns='urn:xmpp:sm:3' h='N' previd='session-id'/>
         struct resume : virtual public spec {
-            resume(uint32_t h, const std::string& previd) : spec("resume") {
+            resume(uint32_t h, std::string_view previd) : spec("resume") {
                 attr("xmlns", "urn:xmpp:sm:3");
                 attr("h", std::to_string(h));
                 attr("previd", previd);

@@ -116,11 +116,13 @@ std::string build_caps_verification_string(
             id_elem.attr_string("name"));
     }
     std::ranges::sort(identities);
-    std::ranges::for_each(identities, [&](const std::string &ident) { s += ident + "<"; });
+    for (const auto &ident : identities)
+        s += fmt::format("{}<", ident);
 
     std::vector<std::string> sorted_features = features;
     std::ranges::sort(sorted_features);
-    std::ranges::for_each(sorted_features, [&](const std::string &feat) { s += feat + "<"; });
+    for (const auto &feat : sorted_features)
+        s += fmt::format("{}<", feat);
 
     std::vector<FormData> forms;
     for (const StanzaView x_elem : query)
@@ -214,12 +216,10 @@ std::string format_caps_debug_summary(
         out += "caps:   (none)";
     else
     {
-        for (std::size_t i = 0; i < sorted_features.size(); ++i)
-        {
-            out += fmt::format("caps:   {}", sorted_features[i]);
-            if (i + 1 < sorted_features.size())
-                out += '\n';
-        }
+        for (const auto &feat : sorted_features)
+            out += fmt::format("caps:   {}\n", feat);
+        if (out.ends_with('\n'))
+            out.pop_back();
     }
     return out;
 }

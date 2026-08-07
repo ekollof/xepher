@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <ranges>
 #include <algorithm>
 #include <openssl/evp.h>
@@ -18,11 +19,11 @@ namespace weechat {
 
 // XEP-0392: Consistent Color Generation
 // Generate a hue angle from a string using SHA-1
-static double generate_angle(const std::string& input)
+static double generate_angle(std::string_view input)
 {
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int hash_len = 0;
-    EVP_Digest(input.c_str(), input.length(), hash, &hash_len, EVP_sha1(), nullptr);
+    EVP_Digest(input.data(), input.size(), hash, &hash_len, EVP_sha1(), nullptr);
     
     // Extract least-significant 16 bits (first two bytes, little-endian)
     uint16_t value = hash[0] | (hash[1] << 8);
@@ -72,17 +73,17 @@ XMPP_TEST_EXPORT std::string angle_to_weechat_color(double angle)
 }
 
 // Main function: generate consistent color for a string (JID or nickname)
-XMPP_TEST_EXPORT std::string consistent_color(const std::string& input)
+XMPP_TEST_EXPORT std::string consistent_color(std::string_view input)
 {
     if (input.empty())
         return "";
-    
+
     // Normalize input to lowercase for consistency (per XEP-0392)
-    std::string normalized = input;
+    std::string normalized(input);
     std::ranges::for_each(normalized, [](char& c) {
         c = std::tolower(static_cast<unsigned char>(c));
     });
-    
+
     double angle = generate_angle(normalized);
     return angle_to_weechat_color(angle);
 }

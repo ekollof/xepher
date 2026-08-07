@@ -25,6 +25,8 @@
 #include "plugin.hh"
 #include "weechat/runtime_port.hh"
 #include "util.hh"
+#include "xmpp/node.hh"
+#include "xmpp/ns.hh"
 #include "xmpp/stanza_view.hh"
 
 XMPP_TEST_EXPORT int char_cmp(const void *p1, const void *p2)
@@ -152,26 +154,25 @@ sm_stanza_for_replay(xmpp_ctx_t *ctx,
     if (!ctx || !stanza)
         return stanza;
 
-    for (xmpp_stanza_t *child = xmpp_stanza_get_children(stanza.get());
-         child != nullptr;
-         child = xmpp_stanza_get_next(child))
-    {
-        const char *ns = xmpp_stanza_get_ns(child);
-        if (ns && std::string_view(ns) == "urn:xmpp:delay")
-            return stanza;
-    }
+    // Already delayed (e.g. second resume of the same queue entry).
+    if (xmpp::StanzaView(stanza.get()).child("delay", "urn:xmpp:delay").valid())
+        return stanza;
 
     xmpp_stanza_t *copy = xmpp_stanza_copy(stanza.get());
     if (!copy)
         return stanza;
 
-    xmpp_stanza_t *delay = xmpp_stanza_new(ctx);
-    xmpp_stanza_set_name(delay, "delay");
-    xmpp_stanza_set_ns(delay, "urn:xmpp:delay");
-    const std::string stamp = format_utc_timestamp(sent_at);
-    xmpp_stanza_set_attribute(delay, "stamp", stamp.c_str());
-    xmpp_stanza_add_child(copy, delay);
-    xmpp_stanza_release(delay);
+    struct sm_delay_spec : stanza::spec {
+        explicit sm_delay_spec(std::string_view stamp) : spec("delay")
+        {
+            xmlns<urn::xmpp::delay>();
+            attr("stamp", stamp);
+        }
+    };
+
+    auto delay_sp = sm_delay_spec(format_utc_timestamp(sent_at)).build(ctx);
+    // add_child clones; shared_ptr still owns delay_sp until scope exit.
+    xmpp_stanza_add_child(copy, delay_sp.get());
     return {copy, xmpp_stanza_release};
 }
 

@@ -118,7 +118,7 @@ inline constexpr std::size_t k_aesgcm_fragment_hex_len =
         {
             if (!is_valid_aesgcm_thumbnail_line(rest))
                 return std::nullopt;
-            if (rest.find('\n') != std::string_view::npos)
+            if (rest.contains('\n'))
                 return std::nullopt;
         }
     }

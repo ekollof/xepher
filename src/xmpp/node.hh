@@ -34,7 +34,7 @@ XMPP_TEST_EXPORT std::string get_text(xmpp_stanza_t *stanza);
 // xmpp_stanza_get_text which concatenates child text (libstrophe allocates).
 [[nodiscard]] XMPP_TEST_EXPORT std::string stanza_element_text(xmpp_stanza_t *stanza);
 
-std::chrono::system_clock::time_point get_time(const std::string& text);
+std::chrono::system_clock::time_point get_time(std::string_view text);
 
 class XMPP_TEST_EXPORT jid {
 public:
@@ -84,9 +84,9 @@ namespace xml {
         virtual void bind(xmpp_ctx_t *context, xmpp_stanza_t *stanza);
 
         inline std::optional<std::string>
-        get_attr(const std::string& name) {
-            auto attribute = attributes.find(name);
-            if (attribute != attributes.end())
+        get_attr(std::string_view name) {
+            if (auto attribute = attributes.find(std::string(name));
+                attribute != attributes.end())
                 return attribute->second;
             return {};
         }
@@ -126,7 +126,7 @@ namespace stanza {
 
     XMPP_TEST_EXPORT extern std::string uuid(xmpp_ctx_t *context);
 
-    XMPP_TEST_EXPORT std::chrono::system_clock::time_point get_time(const std::string& text);
+    XMPP_TEST_EXPORT std::chrono::system_clock::time_point get_time(std::string_view text);
 
     class spec {
     protected:

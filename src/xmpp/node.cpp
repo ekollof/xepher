@@ -52,9 +52,11 @@ XMPP_TEST_EXPORT std::string stanza_element_text(xmpp_stanza_t *stanza)
     return text ? std::string(text.get()) : std::string {};
 }
 
-XMPP_TEST_EXPORT std::chrono::system_clock::time_point get_time(const std::string& text) {
+XMPP_TEST_EXPORT std::chrono::system_clock::time_point get_time(std::string_view text) {
+    // strptime requires a NUL-terminated buffer.
+    const std::string buf(text);
     std::tm tm = {};
-    if (strptime(text.data(), "%FT%T%z", &tm)) {
+    if (strptime(buf.c_str(), "%FT%T%z", &tm)) {
         throw std::invalid_argument("Bad time format");
     } else {
         return std::chrono::system_clock::from_time_t(std::mktime(&tm));

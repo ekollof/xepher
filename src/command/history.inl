@@ -396,7 +396,7 @@ int command__edit_to(const void *pointer, void *data,
 // Send a XEP-0424 message retraction for `msg_id` on `account`/`channel`.
 static void
 do_retract_send(weechat::account *account, weechat::channel *channel,
-                struct t_gui_buffer *buffer, const std::string &msg_id)
+                struct t_gui_buffer *buffer, std::string_view msg_id)
 {
     const char *type = channel->type == weechat::channel::chat_type::MUC
                        ? "groupchat" : "chat";
@@ -425,7 +425,7 @@ do_retract_send(weechat::account *account, weechat::channel *channel,
 // Send a XEP-0425 moderation request for `msg_id` on `account`/`channel`.
 static void
 do_moderate_send(weechat::account *account, weechat::channel *channel,
-                 struct t_gui_buffer *buffer, const std::string &msg_id,
+                 struct t_gui_buffer *buffer, std::string_view msg_id,
                  const char *reason)
 {
     const char *room_jid = channel->id.data();
