@@ -1,15 +1,85 @@
 # Xepher
 
-![Xepher logo](assets/xepher.png)
+[![Latest release](https://img.shields.io/github/v/release/ekollof/xepher?display_name=tag&sort=semver)](https://github.com/ekollof/xepher/releases/latest)
+[![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
+[![Language: C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus)](https://en.cppreference.com/w/cpp/23)
+[![XEP-0459 CCS2022](https://img.shields.io/badge/XMPP-CCS2022-orange)](https://xmpp.org/extensions/xep-0459.html)
+[![Packages](https://img.shields.io/github/actions/workflow/status/ekollof/xepher/packages.yml?branch=master&label=packages)](https://github.com/ekollof/xepher/actions/workflows/packages.yml)
+[![Website](https://img.shields.io/badge/website-ekollof.github.io%2Fxepher-informational)](https://ekollof.github.io/xepher/)
 
-Xepher is a WeeChat plugin written in C++23 that adds full XMPP support to
-WeeChat. It targets [XMPP Compliance Suite 2022 (XEP-0459)](https://xmpp.org/extensions/xep-0459.html)
-and implements a broad set of modern XEPs — including OMEMO encryption, Message
-Archive Management, HTTP file upload, microblogging via PubSub, and more.
+<p align="center">
+  <img src="assets/xepher.png" alt="Xepher logo" width="120">
+</p>
+
+**Modern, full-featured XMPP for WeeChat** — OMEMO, MAM history, PubSub
+microblogging, HTTP upload, and terminal image previews — in a C++23 plugin
+you can reload without restarting WeeChat.
 
 > **Fork of [bqv/weechat-xmpp](https://github.com/bqv/weechat-xmpp)**  
 > Original author: **Tony Olagbaiye** &lt;bqv@fron.io&gt;  
-> Maintained at [github.com/ekollof/xepher](https://github.com/ekollof/xepher)
+> Site: [ekollof.github.io/xepher](https://ekollof.github.io/xepher/) · Repo: [github.com/ekollof/xepher](https://github.com/ekollof/xepher)
+
+### At a glance
+
+| | |
+|---|---|
+| **OMEMO** | Axolotl-namespace E2EE for PMs (MUC experimental); BTBV trust; `/omemo fingerprint` |
+| **History** | XEP-0313 MAM + LMDB cache across reconnects |
+| **Social** | PubSub microblog (Movim-compatible); optional feed buffers |
+| **Files** | XEP-0363 upload, SFS/ESFS, stickers; Kitty/cell inline previews via `icat` |
+| **MUC** | Full XEP-0045: join, admin, bookmarks, moderation, reactions |
+| **UX** | Receipts/read markers, typing, corrections, replies, status bar encryption item |
+
+⭐ **Star the repo** if Xepher is useful — it helps others find it.  
+💬 **Join the MUC:** [`xepher@conference.hackerheaven.org`](xmpp:xepher@conference.hackerheaven.org?join) · [Discussions](https://github.com/ekollof/xepher/discussions)
+
+---
+
+## Quick start
+
+### 1. Install the plugin
+
+**Packages** (recommended) — grab the latest from
+[Releases](https://github.com/ekollof/xepher/releases/latest):
+
+```sh
+# Debian / Ubuntu
+sudo dpkg -i xepher_*_amd64.deb
+
+# Fedora
+sudo dnf install ./xepher-*-*.x86_64.rpm
+
+# Arch Linux
+sudo pacman -U xepher-*-x86_64.pkg.tar.zst
+
+# Void
+sudo xbps-install -R . xepher-*.xbps   # or install the .xbps from Releases
+
+# Alpine
+sudo apk add --allow-untrusted xepher-*-r0.apk
+```
+
+**From source** (Linux; on BSD use `gmake`):
+
+```sh
+git clone --depth 1 https://github.com/ekollof/xepher.git
+cd xepher
+make install-deps    # sudo; detects distro
+make                 # Release build → ./xmpp.so
+make install         # ~/.local/share/weechat/plugins/xmpp.so
+```
+
+### 2. Load and connect (inside WeeChat)
+
+```
+/plugin load xmpp
+/account add work user@example.com secret
+/account connect work
+```
+
+After upgrades: `make install`, then `/plugin reload xmpp` (reconnect accounts).
+
+More detail: [Installation wiki](https://github.com/ekollof/xepher/wiki/Installation) · full deps and platforms below.
 
 ---
 
@@ -17,9 +87,8 @@ Archive Management, HTTP file upload, microblogging via PubSub, and more.
 
 ### Pre-built packages
 
-Binary packages for **v0.8.1** and later (current: **v0.11.0**) are published on
-[GitHub Releases](https://github.com/ekollof/xepher/releases). Pick the file for
-your distribution:
+Binary packages for **v0.8.1+** (current: **[v0.12.0](https://github.com/ekollof/xepher/releases/tag/v0.12.0)**)
+are on [GitHub Releases](https://github.com/ekollof/xepher/releases). Pick your distro:
 
 | Platform | Package |
 |----------|---------|
@@ -29,24 +98,7 @@ your distribution:
 | Void Linux | `xepher-*_x86_64.xbps` |
 | Alpine Linux | `xepher-*-r0.apk` |
 
-> **Note:** Avoid the v0.8.0 Fedora RPM and Alpine APK — they were built with a
-> packaging bug that produced ~1 GB artifacts. Use **v0.8.1** or newer.
-
-Install examples:
-
-```sh
-# Debian/Ubuntu
-sudo dpkg -i xepher_0.11.0-1_amd64.deb
-
-# Fedora
-sudo dnf install ./xepher-0.11.0-1.fc*.x86_64.rpm
-
-# Arch (as root or with sudo)
-sudo pacman -U xepher-0.11.0-1-x86_64.pkg.tar.zst
-```
-
-After installing, restart WeeChat (or run `/plugin load xmpp.so` on first install).
-
+> Avoid v0.8.0 Fedora/Alpine artifacts (~1 GB packaging bug). Use **v0.8.1** or newer.
 ### Dependencies
 
 | Library | Type | Linux | FreeBSD | OpenBSD | macOS (Homebrew) |
@@ -1246,8 +1298,10 @@ cp scripts/icat.py ~/.local/share/weechat/python/autoload/
 
 ## Contributing
 
-Pull requests and issues are welcome. See the
-[Contributing wiki page](https://github.com/ekollof/xepher/wiki/Contributing) and
+Pull requests and issues are welcome — look for
+[`good first issue`](https://github.com/ekollof/xepher/labels/good%20first%20issue) and
+[`help wanted`](https://github.com/ekollof/xepher/labels/help%20wanted).
+See the [Contributing wiki page](https://github.com/ekollof/xepher/wiki/Contributing) and
 [`AGENTS.md`](AGENTS.md) for architecture and style guidance.
 
 - **C++23** throughout — match existing style in the file you edit.
