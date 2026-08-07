@@ -6,25 +6,6 @@ void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const c
         return;
     }
 
-    // Helper: format raw identity key bytes as colon-separated uppercase hex.
-    auto format_fp_hex = [](const std::vector<std::uint8_t> &bytes) -> std::string {
-        if (bytes.empty())
-            return {};
-        std::string out;
-        out.reserve(bytes.size() * 3);
-        bool first = true;
-        for (auto b : bytes)
-        {
-            if (!first)
-                out += ':';
-            first = false;
-            constexpr const char *hex = "0123456789ABCDEF";
-            out += hex[(b >> 4) & 0xF];
-            out += hex[b & 0xF];
-        }
-        return out;
-    };
-
     // Map numeric trust value to a display label.
     auto trust_label = [&](std::string_view jid_sv, std::uint32_t dev_id) -> std::string {
         const auto t = load_tofu_trust(*this, std::string(jid_sv), dev_id);
@@ -73,7 +54,7 @@ void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const c
                 print_info(buffer, fmt::format("  device {:10} : (no key yet)", dev_id));
                 continue;
             }
-            const std::string hex = format_fp_hex(*ik);
+            const std::string hex = format_omemo_fingerprint_hex(*ik);
             const std::string trust = trust_label(jid, dev_id);
             print_info(buffer, fmt::format("  device {:10} [{}]: {}", dev_id, trust, hex));
         }
@@ -94,7 +75,7 @@ void weechat::xmpp::omemo::show_fingerprint(struct t_gui_buffer *buffer, const c
         return;
     }
 
-    const std::string hex = format_fp_hex(*pub);
+    const std::string hex = format_omemo_fingerprint_hex(*pub);
     print_info(buffer, fmt::format("OMEMO own fingerprint (device {}):", device_id));
     print_info(buffer, fmt::format("  {}", hex));
 }
@@ -358,22 +339,21 @@ void weechat::xmpp::omemo::show_devices(struct t_gui_buffer *buffer, const char 
         std::string fp_hint;
         if (ik && !ik->empty())
         {
-            // Short fingerprint prefix for verification (full via /omemo fingerprint).
-            std::string hex;
-            hex.reserve(std::min(ik->size(), std::size_t{8}) * 3);
-            bool first = true;
-            for (std::size_t i = 0; i < ik->size() && i < 8; ++i)
+            // Short prefix of the display fingerprint (no 0x05 type byte).
+            const auto full = format_omemo_fingerprint_hex(*ik);
+            constexpr std::size_t k_prefix_groups = 4; // "AA:BB:CC:DD"
+            std::size_t groups = 0;
+            std::size_t cut = full.size();
+            for (std::size_t i = 0; i < full.size(); ++i)
             {
-                if (!first)
-                    hex += ':';
-                first = false;
-                constexpr const char *h = "0123456789ABCDEF";
-                hex += h[((*ik)[i] >> 4) & 0xF];
-                hex += h[(*ik)[i] & 0xF];
+                if (full[i] == ':' && ++groups == k_prefix_groups)
+                {
+                    cut = i;
+                    break;
+                }
             }
-            if (ik->size() > 8)
-                hex += "…";
-            fp_hint = fmt::format("  {}", hex);
+            fp_hint = fmt::format("  {}{}", full.substr(0, cut),
+                                  cut < full.size() ? "…" : "");
         }
         print_info(buffer, fmt::format("  {:10}  [{}]{}{}",
             device, trust_str,
@@ -407,21 +387,8 @@ void weechat::xmpp::omemo::show_status(struct t_gui_buffer *buffer,
     print_info(buffer, fmt::format("  device id: {}", device_id));
     // Identity fingerprint for verification (same as /omemo fingerprint).
     if (const auto pub = load_bytes(*this, kIdentityPublicKey); pub && !pub->empty())
-    {
-        std::string hex;
-        hex.reserve(pub->size() * 3);
-        bool first = true;
-        for (auto b : *pub)
-        {
-            if (!first)
-                hex += ':';
-            first = false;
-            constexpr const char *h = "0123456789ABCDEF";
-            hex += h[(b >> 4) & 0xF];
-            hex += h[b & 0xF];
-        }
-        print_info(buffer, fmt::format("  fingerprint: {}", hex));
-    }
+        print_info(buffer, fmt::format("  fingerprint: {}",
+                                       format_omemo_fingerprint_hex(*pub)));
     else
         print_info(buffer, "  fingerprint: (not generated yet)");
     print_info(buffer, fmt::format("  database: {}", db_path.empty() ? "(none)" : db_path));

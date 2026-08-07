@@ -32,6 +32,40 @@ constexpr std::uint32_t kPreKeyCount = 100;
 constexpr std::uint32_t kMinPreKeyCount = 25;
 constexpr std::uint32_t kMaxOmemoDeviceId = 0x7fffffffU;
 
+// DJB Curve25519 public keys are serialized with a leading type byte 0x05
+// (Signal Protocol). Conversations / Gajim / another.im fingerprint UIs strip
+// that byte so users compare 32-byte (64 hex nibble) fingerprints. Including
+// it shows as a leading "05:" and confuses side-by-side verification.
+[[nodiscard]] inline auto omemo_fingerprint_key_bytes(std::span<const std::uint8_t> raw)
+    -> std::span<const std::uint8_t>
+{
+    if (raw.size() == 33 && raw.front() == 0x05)
+        return raw.subspan(1);
+    return raw;
+}
+
+// Colon-separated uppercase hex of the display fingerprint (no 0x05 prefix).
+[[nodiscard]] inline auto format_omemo_fingerprint_hex(std::span<const std::uint8_t> raw)
+    -> std::string
+{
+    const auto bytes = omemo_fingerprint_key_bytes(raw);
+    if (bytes.empty())
+        return {};
+    std::string out;
+    out.reserve(bytes.size() * 3);
+    bool first = true;
+    for (const auto b : bytes)
+    {
+        if (!first)
+            out += ':';
+        first = false;
+        constexpr const char *hex = "0123456789ABCDEF";
+        out += hex[(b >> 4) & 0xF];
+        out += hex[b & 0xF];
+    }
+    return out;
+}
+
 struct bundle_metadata {
     std::string signed_pre_key_id;
     std::string signed_pre_key;
