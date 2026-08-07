@@ -1,6 +1,18 @@
 # This is a compiled file.
 # For the original source, see https://github.com/trygveaa/weechat-icat
 # Vendored in xepher under the MIT license (Copyright 2023 Trygve Aaberge)
+#
+# Local changes when Kitty is unavailable:
+#   - "cells" backend: half-block art printed into the WeeChat buffer (PIL, with
+#     chafa fallback). Survives redraws. Colors are converted to WeeChat codes
+#     (not raw ANSI — prnt does not interpret CSI).
+#   - "sixel": optional, usually flashes away under WeeChat repaints.
+# Override: WEECHAT_ICAT_BACKEND=kitty|cells|sixel|auto
+#
+# Why Kitty "just works" with escapes: graphics protocol data is written to the
+# raw TTY (ctermid), NOT via weechat.prnt. The buffer only gets unicode
+# placeholders (U+10EEEE + diacritics) that the terminal re-binds on redraw.
+# That dual path is what cells cannot reproduce without Kitty support.
 
 from __future__ import annotations
 from base64 import b64decode, b64encode
@@ -24,6 +36,8 @@ import os
 import pickle
 import PIL
 import re
+import shutil
+import subprocess
 import sys
 import termios
 import weechat
@@ -113,7 +127,15 @@ def image_created_cb(
         raise result
 
     if data.print_immediately and image_placement_was_returned:
-        weechat.command(data.buffer, "/window refresh")
+        # Kitty: placeholders already printed; refresh binds the texture.
+        # Cells: placeholders were skipped; print the finished art now.
+        # Sixel: writing to the tty already happened; a refresh would wipe it.
+        if isinstance(result, ImagePlacement) and result.cell_lines:
+            new_image_placement(data.buffer, result)
+        elif shared.graphics_backend == "sixel":
+            pass
+        else:
+            weechat.command(data.buffer, "/window refresh")
     else:
         new_image_placement(data.buffer, result)
 
@@ -174,12 +196,40 @@ def create_image(
             display_image(buffer, image_placement)
             break
     else:
+        backend = detect_graphics_backend()
+        shared.graphics_backend = backend
+
+        # Cells + -print_immediately: encode and print synchronously so the art
+        # is inserted in the same command turn as /icat (right under the file
+        # line). Kitty can print placeholders first and fill them in later;
+        # cell art is the final buffer text, so a delayed callback lands too late.
+        if (
+            backend == "cells"
+            and print_immediately
+            and columns
+            and rows
+            and os.path.isfile(path)
+        ):
+            try:
+                image_placement = ImagePlacement(
+                    path, get_random_image_id(), int(columns), int(rows)
+                )
+                image_placement.cell_lines = encode_cells(
+                    path, int(columns), int(rows)
+                )
+                new_image_placement(buffer, image_placement)
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                print_error(f"failed displaying image: {exc}")
+            return
+
         image_created_data = ImageCreatedData(buffer, path, print_immediately)
         callback_data = b64encode(pickle.dumps(image_created_data)).decode("ascii")
         image_placement = create_and_send_image_to_terminal(
             path, columns, rows, image_created_cb, callback_data
         )
-        if print_immediately and image_placement:
+        # Kitty: unicode placeholders go in the buffer immediately; the graphics
+        # protocol payload is written to the tty when ready, then /window refresh.
+        if print_immediately and image_placement and backend == "kitty":
             new_image_placement(buffer, image_placement)
 
 
@@ -248,6 +298,10 @@ def register_commands():
         "            -quiet: don't print any error messages\n"
         "          -restore: instead of displaying a new image, restore the existing "
         "images to a new terminal instance\n"
+        "\n"
+        "Graphics: Kitty when available (tty protocol + buffer placeholders). "
+        "Otherwise half-block cell art in the buffer (stable under redraws). "
+        "Override with WEECHAT_ICAT_BACKEND=kitty|cells|sixel|auto.\n"
         "\n"
         "Note that images are loaded in the background, so they may not be "
         "displayed immediately after running the command."
@@ -362,7 +416,7 @@ def removesuffix(self: str, suffix: str) -> str:
 
 SCRIPT_AUTHOR = "Trygve Aaberge <trygveaa@gmail.com>"
 SCRIPT_LICENSE = "MIT"
-SCRIPT_DESC = "Display images in the chat"
+SCRIPT_DESC = "Display images in the chat (Kitty, or chafa cell art)"
 
 
 def create_cache_paths():
@@ -370,6 +424,64 @@ def create_cache_paths():
     for path in paths:
         if not weechat.mkdir_home(path, 0o755):
             raise RuntimeError("Failed creating cache path")
+
+
+def _env(name: str) -> str:
+    """Read env from the process or WeeChat's view of the environment."""
+    val = os.environ.get(name)
+    if val:
+        return val
+    try:
+        return weechat.string_eval_expression(f"${{env:{name}}}", {}, {}, {}) or ""
+    except Exception:
+        return ""
+
+
+def kitty_graphics_available() -> bool:
+    """Best-effort detection of Kitty graphics protocol support."""
+    if _env("KITTY_WINDOW_ID"):
+        return True
+    if _env("GHOSTTY_RESOURCES_DIR"):
+        return True
+    if _env("WEZTERM_EXECUTABLE"):
+        return True
+    term = _env("TERM").lower()
+    if "kitty" in term:
+        return True
+    term_prog = _env("TERM_PROGRAM").lower()
+    if term_prog in ("kitty", "ghostty", "wezterm"):
+        return True
+    return False
+
+
+def cells_encoder_available() -> bool:
+    # PIL is required by this script already; chafa is an optional encoder.
+    return True
+
+
+def sixel_encoder_available() -> bool:
+    return bool(shutil.which("chafa") or shutil.which("img2sixel"))
+
+
+def detect_graphics_backend() -> str:
+    """
+    Return 'kitty', 'cells', or 'sixel'.
+
+    Prefer Kitty when the terminal supports it. Otherwise use chafa cell art
+    printed into the WeeChat buffer (survives redraws). Pure Sixel to the tty
+    flashes away under WeeChat because redraw paints text over Sixel tiles.
+    Override with WEECHAT_ICAT_BACKEND=kitty|cells|sixel|auto.
+    """
+    forced = _env("WEECHAT_ICAT_BACKEND").strip().lower()
+    if forced in ("kitty", "cells", "sixel"):
+        return forced
+    if kitty_graphics_available():
+        return "kitty"
+    if cells_encoder_available():
+        return "cells"
+    if sixel_encoder_available():
+        return "sixel"
+    return "kitty"
 
 
 def register():
@@ -383,7 +495,9 @@ def register():
         "",
     ):
         create_cache_paths()
+        shared.graphics_backend = detect_graphics_backend()
         register_commands()
+        print_info(f"graphics backend: {shared.graphics_backend}")
 
 
 WeechatCallbackReturnType = Union[int, str, Dict[str, str], None]
@@ -392,12 +506,13 @@ WeechatCallbackReturnType = Union[int, str, Dict[str, str], None]
 class Shared:
     def __init__(self):
         self.SCRIPT_NAME = "icat"
-        self.SCRIPT_VERSION = "0.1.0"
+        self.SCRIPT_VERSION = "0.2.3"
 
         self.weechat_callbacks: Dict[str, Callable[..., WeechatCallbackReturnType]]
         self.cache_path = "${weechat_cache_dir}/icat"
         self.cache_downloaded_images_path = f"{self.cache_path}/downloaded_images"
         self.print_errors = True
+        self.graphics_backend = "kitty"
 
 
 shared = Shared()
@@ -724,6 +839,8 @@ class ImagePlacement:
     columns: int
     rows: int
     terminal_cmds: List[bytes] = field(default_factory=list)
+    # Buffer-native rows for the "cells" backend (chafa symbols / half-blocks).
+    cell_lines: List[str] = field(default_factory=list)
 
 
 ImageCreateFinished = Union[ImagePlacement, Exception]
@@ -763,8 +880,20 @@ def get_random_image_id():
     return (image_id_upper << 24) + image_id_lower
 
 
+def _in_tmux() -> bool:
+    return bool(weechat.string_eval_expression("${env:TMUX}", {}, {}, {}))
+
+
+def wrap_for_tmux(data: bytes) -> bytes:
+    """Pass raw terminal sequences through tmux when needed."""
+    if not _in_tmux() or not data:
+        return data
+    # Escape ESC for tmux DCS passthrough.
+    return b"\033Ptmux;" + data.replace(b"\033", b"\033\033") + b"\033\\"
+
+
 def serialize_gr_command(control_data: Dict[str, Union[str, int]], payload: bytes):
-    tmux = weechat.string_eval_expression("${env:TMUX}", {}, {}, {})
+    tmux = _in_tmux()
     esc = b"\033\033" if tmux else b"\033"
     control_data_str = ",".join(f"{k}={v}" for k, v in control_data.items())
     ans = [
@@ -793,6 +922,328 @@ def write_chunked(control_data: Dict[str, Union[str, int]], data: bytes):
     return cmds
 
 
+def write_raw_to_tty(data: bytes) -> None:
+    with open(os.ctermid(), "wb") as tty:
+        tty.write(data)
+        tty.flush()
+
+
+_ANSI_STRIP_NON_SGR = re.compile(
+    # Drop cursor/mode sequences; keep SGR color (…m) for conversion.
+    rb"\x1b\[\?(?:\d+;)*\d+[hl]"
+    rb"|\x1b\[\d*[ABCDHJKsu]"
+    rb"|\x1b\[\d*;\d*[Hf]"
+    rb"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"
+)
+_ANSI_SGR_RE = re.compile(r"\x1b\[([0-9;]*)m")
+_ANSI_ANY_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b.")
+
+# Basic ANSI 16 → WeeChat named colors (good enough for rare non-truecolor SGR).
+_ANSI_BASIC_FG = [
+    "black",
+    "red",
+    "green",
+    "brown",
+    "blue",
+    "magenta",
+    "cyan",
+    "default",
+    "darkgray",
+    "lightred",
+    "lightgreen",
+    "yellow",
+    "lightblue",
+    "lightmagenta",
+    "lightcyan",
+    "white",
+]
+
+
+def rgb_to_xterm256(r: int, g: int, b: int) -> int:
+    """Map 24-bit RGB to the nearest xterm 256-color index."""
+    r = max(0, min(255, int(r)))
+    g = max(0, min(255, int(g)))
+    b = max(0, min(255, int(b)))
+    # Prefer gray ramp when nearly neutral.
+    if abs(r - g) < 10 and abs(g - b) < 10 and abs(r - b) < 10:
+        gray = (r + g + b) // 3
+        if gray < 8:
+            return 16
+        if gray > 248:
+            return 231
+        return 232 + min(23, max(0, (gray - 8) // 10))
+
+    def quant(v: int) -> int:
+        if v < 48:
+            return 0
+        if v < 114:
+            return 1
+        return min(5, (v - 35) // 40)
+
+    return 16 + 36 * quant(r) + 6 * quant(g) + quant(b)
+
+
+def _weechat_color_pair(fg: Optional[str], bg: Optional[str]) -> str:
+    """Build a WeeChat color string (main thread only — uses weechat.color)."""
+    if fg is None and bg is None:
+        return weechat.color("reset")
+    if fg is not None and bg is not None:
+        return weechat.color(f"{fg},{bg}")
+    if fg is not None:
+        return weechat.color(fg)
+    return weechat.color(f",{bg}")
+
+
+def _apply_sgr_params(
+    params: List[int], fg: Optional[str], bg: Optional[str]
+) -> tuple[Optional[str], Optional[str]]:
+    """Update fg/bg color names/numbers from one SGR parameter list."""
+    i = 0
+    while i < len(params):
+        p = params[i]
+        if p == 0:
+            fg, bg = None, None
+            i += 1
+        elif p == 39:
+            fg = None
+            i += 1
+        elif p == 49:
+            bg = None
+            i += 1
+        elif p == 38 and i + 1 < len(params):
+            mode = params[i + 1]
+            if mode == 2 and i + 4 < len(params):
+                fg = str(rgb_to_xterm256(params[i + 2], params[i + 3], params[i + 4]))
+                i += 5
+            elif mode == 5 and i + 2 < len(params):
+                fg = str(max(0, min(255, params[i + 2])))
+                i += 3
+            else:
+                i += 2
+        elif p == 48 and i + 1 < len(params):
+            mode = params[i + 1]
+            if mode == 2 and i + 4 < len(params):
+                bg = str(rgb_to_xterm256(params[i + 2], params[i + 3], params[i + 4]))
+                i += 5
+            elif mode == 5 and i + 2 < len(params):
+                bg = str(max(0, min(255, params[i + 2])))
+                i += 3
+            else:
+                i += 2
+        elif 30 <= p <= 37:
+            fg = _ANSI_BASIC_FG[p - 30]
+            i += 1
+        elif 90 <= p <= 97:
+            fg = _ANSI_BASIC_FG[p - 90 + 8]
+            i += 1
+        elif 40 <= p <= 47:
+            bg = _ANSI_BASIC_FG[p - 40]
+            i += 1
+        elif 100 <= p <= 107:
+            bg = _ANSI_BASIC_FG[p - 100 + 8]
+            i += 1
+        else:
+            # Ignore bold/underline/etc. for cell art.
+            i += 1
+    return fg, bg
+
+
+def ansi_to_weechat(text: str) -> str:
+    """Convert ANSI SGR in a line to WeeChat color codes; drop other escapes.
+
+    Must run on the WeeChat main thread (uses weechat.color). WeeChat 4.x
+    weechat.color() does not accept #RRGGBB here, so truecolor is quantized
+    to xterm-256 indices.
+    """
+    if "\x1b" not in text:
+        return text
+
+    out: List[str] = []
+    pos = 0
+    fg: Optional[str] = None
+    bg: Optional[str] = None
+    for match in _ANSI_SGR_RE.finditer(text):
+        if match.start() > pos:
+            out.append(text[pos : match.start()])
+        raw = match.group(1)
+        params = [int(x) for x in raw.split(";") if x != ""] if raw else [0]
+        fg, bg = _apply_sgr_params(params, fg, bg)
+        out.append(_weechat_color_pair(fg, bg))
+        pos = match.end()
+    out.append(text[pos:])
+    converted = "".join(out)
+    # Safety: never leave raw ESC sequences in the buffer.
+    converted = _ANSI_ANY_RE.sub("", converted)
+    return converted
+
+
+def _chafa_env() -> Dict[str, str]:
+    """Environment so chafa does not degrade to ASCII in hook_process children."""
+    env = os.environ.copy()
+    term = env.get("TERM") or ""
+    if not term or term == "dumb":
+        env["TERM"] = "xterm-256color"
+    env["COLORTERM"] = env.get("COLORTERM") or "truecolor"
+    env.pop("NO_COLOR", None)
+    return env
+
+
+def encode_cells_pil(path: str, columns: int, rows: int) -> List[str]:
+    """Half-block art with PIL (two pixels per cell via U+2580 ▀).
+
+    Emits ANSI truecolor SGR; display_image converts to WeeChat colors.
+    Independent of TTY/TERM, so no ASCII fallback in background workers.
+    """
+    columns = max(1, int(columns))
+    rows = max(1, int(rows))
+    with Image.open(path) as im:
+        im = im.convert("RGB")
+        # Each text row covers two source rows (upper + lower half of ▀).
+        try:
+            resample = Image.Resampling.LANCZOS  # type: ignore[attr-defined]
+        except AttributeError:
+            resample = Image.LANCZOS  # type: ignore[attr-defined]
+        im = im.resize((columns, rows * 2), resample)
+        pix = im.load()
+        assert pix is not None
+        lines: List[str] = []
+        for y in range(rows):
+            parts: List[str] = []
+            y0 = y * 2
+            y1 = y0 + 1
+            for x in range(columns):
+                r0, g0, b0 = pix[x, y0]
+                r1, g1, b1 = pix[x, y1]
+                parts.append(
+                    f"\x1b[38;2;{r0};{g0};{b0};48;2;{r1};{g1};{b1}m\u2580"
+                )
+            parts.append("\x1b[0m")
+            lines.append("".join(parts))
+        return lines
+
+
+def encode_cells_chafa(path: str, columns: int, rows: int) -> List[str]:
+    """chafa half-block symbols (forced full color + non-dumb TERM)."""
+    columns = max(1, int(columns))
+    rows = max(1, int(rows))
+    chafa = shutil.which("chafa")
+    if not chafa:
+        raise RuntimeError("chafa not found")
+
+    proc = subprocess.run(
+        [
+            chafa,
+            "-f",
+            "symbols",
+            "-s",
+            f"{columns}x{rows}",
+            "-c",
+            "full",
+            "--animate=off",
+            "--polite=on",
+            "--symbols=half",
+            path,
+        ],
+        capture_output=True,
+        check=False,
+        env=_chafa_env(),
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"chafa cells encode failed (rc={proc.returncode}): {err or 'no output'}"
+        )
+
+    cleaned = _ANSI_STRIP_NON_SGR.sub(b"", proc.stdout)
+    text = cleaned.decode("utf-8", errors="replace")
+    lines: List[str] = []
+    for raw in text.splitlines():
+        line = raw.rstrip("\r")
+        if not line.strip("\x1b[0m \t"):
+            lines.append(" ")
+            continue
+        lines.append(line)
+    if not lines:
+        lines = [" "]
+    if len(lines) > rows:
+        lines = lines[:rows]
+    while len(lines) < rows:
+        lines.append(" ")
+    return lines
+
+
+def encode_cells(path: str, columns: int, rows: int) -> List[str]:
+    """Encode image as unicode half-block rows (ANSI → WeeChat at display)."""
+    try:
+        return encode_cells_pil(path, columns, rows)
+    except Exception as pil_err:  # pylint: disable=broad-exception-caught
+        try:
+            return encode_cells_chafa(path, columns, rows)
+        except Exception as chafa_err:  # pylint: disable=broad-exception-caught
+            raise RuntimeError(
+                f"cells encode failed (pil={pil_err}; chafa={chafa_err})"
+            ) from chafa_err
+
+
+def encode_sixel(
+    path: str,
+    columns: int,
+    rows: int,
+    terminal_size: Optional[TerminalSize] = None,
+) -> bytes:
+    """Encode an image as Sixel using chafa (preferred) or img2sixel."""
+    columns = max(1, int(columns))
+    rows = max(1, int(rows))
+
+    chafa = shutil.which("chafa")
+    if chafa:
+        proc = subprocess.run(
+            [
+                chafa,
+                "-f",
+                "sixel",
+                "-s",
+                f"{columns}x{rows}",
+                "--animate=off",
+                "--polite=on",
+                path,
+            ],
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            return wrap_for_tmux(proc.stdout)
+        err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"chafa sixel encode failed (rc={proc.returncode}): {err or 'no output'}"
+        )
+
+    img2sixel = shutil.which("img2sixel")
+    if img2sixel:
+        if terminal_size and terminal_size.columns and terminal_size.rows:
+            cell_w = max(1, terminal_size.width // terminal_size.columns)
+            cell_h = max(1, terminal_size.height // terminal_size.rows)
+        else:
+            cell_w, cell_h = 8, 16
+        width_px = columns * cell_w
+        height_px = rows * cell_h
+        proc = subprocess.run(
+            [img2sixel, "-w", str(width_px), "-h", str(height_px), path],
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            return wrap_for_tmux(proc.stdout)
+        err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"img2sixel encode failed (rc={proc.returncode}): {err or 'no output'}"
+        )
+
+    raise RuntimeError(
+        "Sixel backend selected but neither chafa nor img2sixel is installed"
+    )
+
+
 def get_cell_character(
     image_id: int,
     y: int,
@@ -811,6 +1262,7 @@ def get_cell_character(
 def create_and_send_image_to_terminal_bg(data_serialized: str) -> str:
     try:
         data: ImageCreateData = pickle.loads(b64decode(data_serialized))
+        # Dimensions always come from PIL; Kitty also needs PNG payload.
         image_data = load_image_data(data.path)
 
         if data.image_placement:
@@ -834,7 +1286,9 @@ def create_and_send_image_to_terminal_bg(data_serialized: str) -> str:
                 data.path, data.image_id, round(columns), round(rows)
             )
 
-        send_image_to_terminal(image_placement, image_data)
+        send_image_to_terminal(
+            image_placement, image_data, terminal_size=data.terminal_size
+        )
 
         return b64encode(pickle.dumps(image_placement)).decode("ascii")
     except Exception as e:  # pylint: disable=broad-exception-caught
@@ -917,25 +1371,54 @@ def create_and_send_image_to_terminal(
 
 
 def send_image_to_terminal(
-    image_placement: ImagePlacement, image_data: Optional[ImageData] = None
+    image_placement: ImagePlacement,
+    image_data: Optional[ImageData] = None,
+    terminal_size: Optional[TerminalSize] = None,
 ):
+    # Always re-detect: hook_process "func:" workers start with a fresh Shared().
+    backend = detect_graphics_backend()
+    shared.graphics_backend = backend
+
+    if backend == "cells":
+        if not image_placement.cell_lines:
+            image_placement.cell_lines = encode_cells(
+                image_placement.path,
+                image_placement.columns,
+                image_placement.rows,
+            )
+        # Nothing to write to the tty — display_image prints into the buffer.
+        return
+
     if image_placement.terminal_cmds:
         with open(os.ctermid(), "wb") as tty:
             for cmd in image_placement.terminal_cmds:
                 tty.write(cmd)
                 tty.flush()
-    else:
-        control_data = {
-            "a": "T",
-            "q": 2,
-            "f": 100,
-            "U": 1,
-            "c": image_placement.columns,
-            "r": image_placement.rows,
-            "i": image_placement.image_id,
-        }
+        return
+
+    if backend == "sixel":
+        sixel = encode_sixel(
+            image_placement.path,
+            image_placement.columns,
+            image_placement.rows,
+            terminal_size or get_terminal_size(),
+        )
+        image_placement.terminal_cmds = [sixel]
+        write_raw_to_tty(sixel)
+        return
+
+    control_data = {
+        "a": "T",
+        "q": 2,
+        "f": 100,
+        "U": 1,
+        "c": image_placement.columns,
+        "r": image_placement.rows,
+        "i": image_placement.image_id,
+    }
+    if image_data is None:
         image_data = load_image_data(image_placement.path)
-        image_placement.terminal_cmds = write_chunked(control_data, image_data.data)
+    image_placement.terminal_cmds = write_chunked(control_data, image_data.data)
 
 
 def send_images_to_terminal_bg(data_serialized: str):
@@ -998,6 +1481,43 @@ def send_images_to_terminal(
 
 
 def display_image(buffer: str, image_placement: ImagePlacement):
+    """Place image rows in the WeeChat buffer.
+
+    Kitty: unicode placeholders bound to the graphics protocol image id.
+    Cells: chafa half-block / symbol rows (redraw-safe buffer text).
+    Sixel: label only; the Sixel stream is tty-only and usually wiped on refresh.
+    """
+    backend = shared.graphics_backend
+    if image_placement.cell_lines:
+        backend = "cells"
+    elif image_placement.terminal_cmds and backend != "kitty":
+        # Restored sixel payloads without cell art.
+        backend = "sixel"
+
+    if backend == "cells":
+        lines = image_placement.cell_lines
+        if not lines:
+            for _ in range(max(1, image_placement.rows)):
+                weechat.prnt(buffer, " ")
+            return
+        last = len(lines) - 1
+        for i, line in enumerate(lines):
+            # ANSI → WeeChat colors (raw ESC must never hit the buffer).
+            converted = ansi_to_weechat(line)
+            if i == last:
+                converted += weechat.color("reset")
+            weechat.prnt(buffer, converted)
+        return
+
+    if backend == "sixel":
+        label = os.path.basename(image_placement.path) or "image"
+        weechat.prnt(
+            buffer,
+            f"{weechat.color('darkgray')}"
+            f"[sixel {image_placement.columns}x{image_placement.rows} {label}]",
+        )
+        return
+
     for y in range(image_placement.rows):
         chars = [
             get_cell_character(image_placement.image_id, y, x, include_color=x == 0)
