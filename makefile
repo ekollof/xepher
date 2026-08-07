@@ -74,7 +74,7 @@ export OBJCOPY
 
 .DEFAULT_GOAL := all
 
-.PHONY: all configure weechat-xmpp xmpp.so test clean distclean install install-deps release coverage debug check diff tools seed-libdiff
+.PHONY: all configure weechat-xmpp xmpp.so test clean distclean install install-deps release coverage debug check tools
 
 configure:
 	$(CMAKE) $(CMAKE_ARGS)
@@ -104,7 +104,6 @@ clean:
 	$(RM) -f xmpp.so tests/xmpp.cov.so tests/run tests/run.cov compile_commands.json
 	$(RM) -f tools/dump_mam_db tools/dump_omemo_db
 	$(RM) -rf obj
-	$(MAKE) -C deps/diff clean || true
 
 distclean: clean
 	$(RM) -rf $(BUILD_DIR) .depend *~
@@ -143,16 +142,3 @@ endif
 
 check:
 	clang-check --analyze src/*.c src/*.cc src/*.cpp
-
-diff:
-	$(CMAKE) $(BUILD_ARGS) --target xepher_libdiff
-
-# Seed vendored libdiff.a without a full CMake configure (packaging tarballs lack .git).
-seed-libdiff:
-	@if [ ! -f deps/diff/libdiff.a ]; then \
-		echo ">>> Seeding deps/diff/libdiff.a"; \
-		cd deps/diff && \
-		echo "HAVE___PROGNAME=1" > configure.local && \
-		env -u MAKEFLAGS -u MFLAGS CC="$(CC)" sh ./configure && \
-		env -u MAKEFLAGS -u MFLAGS $(MAKE) -j1 CC="$(CC)" CFLAGS="-fPIC"; \
-	fi

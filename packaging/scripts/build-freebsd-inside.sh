@@ -32,7 +32,6 @@ PLIST="${BUILD_DIR}/plist"
 
 cp -a "${PROJECT_DIR}/." "${SRC}/"
 gmake -C "${SRC}" clean
-gmake -C "${SRC}" seed-libdiff
 gmake -C "${SRC}" PACKAGE_BUILD=1 weechat-xmpp
 
 install -d "${DESTDIR}/usr/local/lib/weechat/plugins"

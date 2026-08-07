@@ -43,15 +43,6 @@ USE_GMAKE =	Yes
 
 MAKE_FLAGS =	PACKAGE_BUILD=1
 
-pre-build:
-	@echo "Building vendored libdiff"
-	@if [ ! -f ${WRKSRC}/deps/diff/libdiff.a ]; then \
-		cd ${WRKSRC}/deps/diff && \
-		echo "HAVE___PROGNAME=1" > configure.local && \
-		env -u MAKEFLAGS ${SH} ./configure && \
-		${MAKE} ${MAKE_FLAGS} CFLAGS="${CFLAGS} -fPIC"; \
-	fi
-
 do-build:
 	@cd ${WRKSRC} && ${SETENV} ${MAKE_ENV} ${MAKE_PROGRAM} ${MAKE_FLAGS} weechat-xmpp
 

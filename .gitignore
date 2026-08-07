@@ -72,16 +72,6 @@ sexp/parser.tab.hh
 sexp/position.hh
 sexp/stack.hh
 
-# Dependency build artifacts
-deps/diff/configure.local
-deps/diff/config.h
-deps/diff/config.log
-deps/diff/Makefile.configure
-deps/diff/*.o
-deps/diff/libdiff.a
-deps/diff/diffchars
-deps/diff/diffwords
-
 # Auto-generated makefile dependencies
 .depend
 
@@ -101,5 +91,4 @@ libstrophe_*
 weechat-[0-9]*/
 weechat_[0-9]*
 
-deps/diff/config.log.old
 reference/*

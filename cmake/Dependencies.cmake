@@ -21,7 +21,6 @@ find_library(XEPHER_FMT NAMES fmt REQUIRED)
 add_library(xepher_deps INTERFACE)
 target_link_libraries(xepher_deps INTERFACE
     Xepher::sexp
-    "${XEPHER_LIBDIFF_A}"
     PkgConfig::STROPH
     PkgConfig::GPGME
     PkgConfig::OMEMO
@@ -47,7 +46,6 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/libstrophe")
     target_include_directories(xepher_deps INTERFACE "${CMAKE_SOURCE_DIR}/libstrophe")
 endif()
 
-add_dependencies(xepher_deps xepher_libdiff)
 add_library(Xepher::deps ALIAS xepher_deps)
 # libstrophe 0.10+ provides xmpp_stanza_new_from_string / xmpp_stanza_add_child_ex.
 # Older packages (some Slackware builds) need compile-time shims in strophe_compat.hh.

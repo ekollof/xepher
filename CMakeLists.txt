@@ -52,7 +52,6 @@ include("${CMAKE_SOURCE_DIR}/cmake/XepherFlags.cmake")
 if(XEPHER_USE_LLD)
     xepher_try_use_lld()
 endif()
-include("${CMAKE_SOURCE_DIR}/cmake/LibDiff.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/Sexp.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake")
 

@@ -91,7 +91,6 @@ cmake --build build --target tools    # LMDB inspector binaries
 - **`PACKAGE_BUILD=1`**: all packaging scripts and specs pass this to `make`. Skips the `.source` ELF section and developer tools (`XEPHER_BUILD_TOOLS=OFF`). Without it, tarball builds lacking `.git` can archive the entire build tree and produce gigabyte RPM/APK packages.
 - **`.source` embed** (Linux only, **opt-in**): set `EMBED_SOURCE=1` or `-DXEPHER_EMBED_SOURCE=ON` (also used by `make release`). Default off so iterative links skip the full-tree tar/`objcopy`. Skipped when `PACKAGE_BUILD=1`.
 - **`make clean`** removes `xmpp.so`, `build/` artifacts, and test/tool outputs so container builds never reuse a host-built plugin.
-- **`make seed-libdiff`**: seeds `deps/diff/libdiff.a` via autotools (packaging tarballs without `.git`).
 
 ### Packaging infrastructure
 
@@ -117,7 +116,7 @@ gh workflow run packages.yml -f version=X.Y.Z -f distros=alpine -f attach_to_rel
 - Alpine and Void invoke `docker run` directly inside the script.
 
 **Shared helpers** (`packaging/scripts/`):
-- `prepare-source-tree.sh` — copy `/project` to a writable dir, `make clean`, `make seed-libdiff` while `.git` exists, set `safe.directory` for submodule steps.
+- `prepare-source-tree.sh` — copy `/project` to a writable dir, `make clean`, set `safe.directory` for any submodule steps.
 - `build-{deb,rpm,arch,alpine,void}-inside.sh` — per-distro logic; all pass `PACKAGE_BUILD=1`.
 - `docker-arch-wrapper.sh` — Arch `makepkg` runs as non-root `builder`; chowns `/output` for artifact copy.
 

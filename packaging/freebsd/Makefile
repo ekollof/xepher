@@ -35,15 +35,6 @@ GH_ACCOUNT=	ekollof
 MAKE_ENV=	PACKAGE_BUILD=1
 ALL_TARGET=	weechat-xmpp
 
-pre-build:
-	@${ECHO_MSG} "Building vendored libdiff"
-	@if [ ! -f ${WRKSRC}/deps/diff/libdiff.a ]; then \
-		cd ${WRKSRC}/deps/diff && \
-		echo "HAVE___PROGNAME=1" > configure.local && \
-		env -u MAKEFLAGS ${SH} ./configure && \
-		${SETENV} ${MAKE_ENV} ${MAKE_CMD} CFLAGS="${CFLAGS} -fPIC"; \
-	fi
-
 do-install:
 	${MKDIR} ${STAGEDIR}${PREFIX}/lib/weechat/plugins
 	${INSTALL_PROGRAM} ${WRKSRC}/xmpp.so \

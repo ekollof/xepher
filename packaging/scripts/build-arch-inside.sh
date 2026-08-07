@@ -72,7 +72,7 @@ sha256sums=('SKIP')
 
 build() {
     cd "\${srcdir}/xepher-\${pkgver}"
-    # Tarball has no .git; libdiff.a is pre-seeded in prepare_source_tree.
+    # Tarball has no .git; build does not require VCS metadata.
     rm -rf obj build
     rm -f xmpp.so
     make PACKAGE_BUILD=1 weechat-xmpp

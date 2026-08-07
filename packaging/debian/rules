@@ -7,7 +7,6 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 	dh $@
 
 override_dh_auto_build:
-	[ -f deps/diff/libdiff.a ] || $(MAKE) seed-libdiff
 	$(MAKE) PACKAGE_BUILD=1 weechat-xmpp
 
 override_dh_auto_install:

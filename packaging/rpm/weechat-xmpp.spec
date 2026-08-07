@@ -56,9 +56,7 @@ Features include:
 
 %prep
 %autosetup -n %{name}-%{version}
-# Note: git submodules (deps/diff) must be bundled in the source tarball.
 # When creating the tarball, run:
-#   git submodule update --init --recursive
 #   tar czf xepher-%%{version}.tar.gz --exclude=.git xepher/
 
 %build
