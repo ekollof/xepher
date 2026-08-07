@@ -316,12 +316,30 @@ bool weechat::connection::handle_omemo_pubsub_iq_event(xmpp_stanza_t *stanza, st
                             }
                         }
     
-                        if (!found_self)
+                        // Missing self, or user requested /omemo republish after a
+                        // fresh server fetch — publish merged list so peers get PEP.
+                        if (!found_self || account.omemo.force_own_devicelist_publish)
                         {
-                            weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
-                                "omemo: our device {} missing from server legacy devicelist — re-publishing",
-                                account.omemo.device_id));
-    
+                            const bool forced = account.omemo.force_own_devicelist_publish;
+                            account.omemo.force_own_devicelist_publish = false;
+                            if (forced)
+                            {
+                                weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                                    fmt::format(
+                                        "omemo: republishing legacy devicelist "
+                                        "(device {}, {} id(s) after server merge)",
+                                        account.omemo.device_id,
+                                        account.omemo.get_cached_device_ids(account_bare).size()));
+                            }
+                            else
+                            {
+                                weechat::UiPort::for_buffer(account.buffer)->printf_network(
+                                    fmt::format(
+                                        "omemo: our device {} missing from server legacy "
+                                        "devicelist — re-publishing",
+                                        account.omemo.device_id));
+                            }
+
                             auto dl_stanza = account.get_devicelist();
                             if (dl_stanza)
                                 account.connection.send(dl_stanza.get());

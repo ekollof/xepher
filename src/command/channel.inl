@@ -90,11 +90,19 @@ int command__enter([[maybe_unused]] const void *pointer,
                 ptr_channel = &ch;
                 ptr_account->load_pgp_keys();
             }
+            else
+            {
+                // Room buffer already open (e.g. after disconnect without close).
+                // buffer__get_* may still point at the account buffer — resolve.
+                ptr_channel = &ptr_account->channels.at(jid);
+            }
             if (!ptr_channel) {
                 weechat_string_free_split(jids);
                 return WEECHAT_RC_ERROR;
             }
 
+            // Treat as a fresh join so smart-filter/MAM paths refresh occupancy.
+            ptr_channel->joining = true;
             xmpp::send_muc_join_presence(*ptr_account, pres_jid, room_password);
 
             // The optional trailing positional arg is the first message to
@@ -133,6 +141,7 @@ int command__enter([[maybe_unused]] const void *pointer,
             ptr_channel = &ch;
         }
 
+        ptr_channel->joining = true;
         xmpp::send_muc_join_presence(*ptr_account, pres_jid, room_password);
     }
 

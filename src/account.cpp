@@ -146,7 +146,11 @@ std::shared_ptr<xmpp_stanza_t> weechat::account::get_devicelist()
     // Collect peer device IDs from the LMDB-cached axolotl devicelist for our
     // own JID.  This is the server's last-known list and must be preserved so
     // we don't overwrite it with only our own device (singleton clobber bug).
-    const std::string own_bare_jid = jid();
+    // Cache keys are bare JIDs — normalize even though jid() is usually bare.
+    const std::string own_bare_jid = [&] {
+        const auto bare = ::jid(nullptr, jid()).bare;
+        return bare.empty() ? jid() : bare;
+    }();
     const auto cached_ids = omemo.get_cached_device_ids(own_bare_jid);
 
     // <list xmlns='eu.siacs.conversations.axolotl'>
@@ -218,12 +222,24 @@ std::shared_ptr<xmpp_stanza_t> weechat::account::get_devicelist()
             .item(stanza::xep0060::item().id("current").payload(list_el)))
         .publish_options(stanza::xep0060::publish_options().child_spec(pub_opts));
 
-    auto iq_s = stanza::iq().type("set").id(stanza::uuid(context));
+    // PEP publishes target our bare JID so servers deliver +notify correctly.
+    auto iq_s = stanza::iq()
+        .type("set")
+        .to(own_bare_jid)
+        .from(own_bare_jid)
+        .id(stanza::uuid(context));
     static_cast<stanza::xep0060::iq&>(iq_s).pubsub(pubsub_el);
+
+    // Count unique devices for the log (self + siblings not already equal to self).
+    const std::size_t sibling_count = std::ranges::count_if(
+        cached_ids,
+        [&](std::uint32_t id) {
+            return id != omemo.device_id && id != 0 && id <= 0x7fffffffU;
+        });
 
     weechat::UiPort::for_buffer(buffer)->printf_network(
         fmt::format("omemo: publishing legacy devicelist for device {} ({} total device(s)) with open access model",
-                    omemo.device_id, cached_ids.size() + 1));
+                    omemo.device_id, sibling_count + 1));
 
     return iq_s.build(context);
 }

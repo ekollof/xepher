@@ -89,12 +89,21 @@ int command__omemo(const void *pointer, void *data,
 
             ui->printf_network(_("Republishing OMEMO devicelist and bundle..."));
 
-            // Publish axolotl devicelist
+            // Fetch the server's current list first, then re-publish with merge
+            // (force_own_devicelist_publish) so we do not clobber sibling devices
+            // and so PEP +notify reaches contacts after a merge.
+            ptr_account->omemo.force_own_devicelist_publish = true;
+            ptr_account->omemo.request_axolotl_devicelist(
+                *ptr_account, ptr_account->jid());
+
+            // Immediate publish from local cache so something goes out even if
+            // the IQ is slow; a second publish follows when the fetch returns.
             auto devicelist_stanza = ptr_account->get_devicelist();
             if (devicelist_stanza)
             {
                 ptr_account->connection.send(devicelist_stanza.get());
-        ui->printf_network(fmt::format("Devicelist published (device ID: {})",
+                ui->printf_network(fmt::format(
+                    "Devicelist published (device ID: {}) — will re-publish after server list merge",
                     ptr_account->omemo.device_id));
             }
 
@@ -106,14 +115,18 @@ int command__omemo(const void *pointer, void *data,
             {
                 ptr_account->connection.send(bundle_stanza);
                 xmpp_stanza_release(bundle_stanza);
-        ui->printf_network(fmt::format("Bundle published for device {}",
+                ui->printf_network(fmt::format("Bundle published for device {}",
                     ptr_account->omemo.device_id));
             }
             else
             {
-        ui->printf_error(fmt::format("{}: failed to generate OMEMO bundle",
+                ui->printf_error(fmt::format("{}: failed to generate OMEMO bundle",
                     WEECHAT_XMPP_PLUGIN_NAME));
             }
+
+            ui->printf_network(
+                "Note: the other client may need to re-open the chat or wait for "
+                "a PEP update; try /omemo fetch <your-jid> on their side if still missing.");
 
             return WEECHAT_RC_OK;
         }

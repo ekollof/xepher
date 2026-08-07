@@ -7,6 +7,9 @@
 #include <fmt/core.h>
 
 #include "account.hh"
+#include "channel.hh"
+#include "weechat/ui_port.hh"
+#include "xmpp/iq_bookmarks.hh"
 #include "xmpp/node.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/xep-0045.inl"
@@ -37,6 +40,35 @@ void send_muc_join_presence(weechat::account &account,
     auto join_pres = stanza::presence().to(pres_jid).from(account.jid());
     static_cast<stanza::xep0045::presence &>(join_pres).muc_join(room_password);
     account.connection.send(join_pres.build(account.context).get());
+}
+
+void rejoin_open_mucs(weechat::account &account, const std::string_view reason)
+{
+    const std::string account_nick(account.nickname());
+    const std::string account_jid(account.jid());
+    const std::string reason_str(reason.empty() ? "reconnect" : reason);
+
+    for (auto &[room_jid, ch] : account.channels)
+    {
+        if (ch.type != weechat::channel::chat_type::MUC || !ch.buffer)
+            continue;
+        if (is_biboumi_gateway_room(room_jid))
+            continue;
+
+        std::string_view bookmark_nick;
+        if (auto bm_it = account.bookmarks.find(room_jid);
+            bm_it != account.bookmarks.end())
+            bookmark_nick = bm_it->second.nick;
+
+        const std::string pres_jid = muc_presence_jid(
+            room_jid, bookmark_nick, account_nick, account_jid);
+
+        // Reset join flood filter so history/occupants refresh like a real join.
+        ch.joining = true;
+        weechat::UiPort::for_buffer(account.buffer)->printf_network(
+            fmt::format("Re-joining MUC after {}: {}", reason_str, room_jid));
+        send_muc_join_presence(account, pres_jid);
+    }
 }
 
 }  // namespace xmpp

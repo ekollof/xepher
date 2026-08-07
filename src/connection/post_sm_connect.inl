@@ -452,35 +452,12 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
         }
     }
 
-    // XEP-0198 resume preserves the c2s session but MUC membership is separate
-    // directed presence. Re-join open MUC buffers so nicklists, MAM catch-up,
-    // and occupant discovery run again (status 110 + joining flag).
-    if (resumed_session)
-    {
-        const std::string account_nick(account.nickname());
-        const std::string account_jid(account.jid());
-
-        for (auto &[room_jid, ch] : account.channels)
-        {
-            if (ch.type != weechat::channel::chat_type::MUC || !ch.buffer)
-                continue;
-            if (::xmpp::is_biboumi_gateway_room(room_jid))
-                continue;
-
-            std::string_view bookmark_nick;
-            if (auto bm_it = account.bookmarks.find(room_jid);
-                bm_it != account.bookmarks.end())
-                bookmark_nick = bm_it->second.nick;
-
-            const std::string pres_jid = ::xmpp::muc_presence_jid(
-                room_jid, bookmark_nick, account_nick, account_jid);
-
-            ch.joining = true;
-            weechat::UiPort::for_buffer(account.buffer)->printf_network(
-                fmt::format("Re-joining MUC after SM resume: {}", room_jid));
-            ::xmpp::send_muc_join_presence(account, pres_jid);
-        }
-    }
+    // MUC occupancy is directed presence, independent of the c2s session.
+    // Re-join open room buffers after SM resume *and* after a full reconnect
+    // (TCP drop, conflict, forced reconnect). Without this, buffers stay open
+    // but the client is not in the room until the user closes and re-opens them.
+    ::xmpp::rejoin_open_mucs(account,
+                             resumed_session ? "SM resume" : "reconnect");
 
     // Initialize Client State Indication (XEP-0352).
     // XEP-0352 §5.2: CSI resets to active on new/resumed streams — re-send

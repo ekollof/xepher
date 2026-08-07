@@ -28,4 +28,9 @@ void send_muc_join_presence(weechat::account &account,
                             std::string_view pres_jid,
                             std::string_view room_password = {});
 
+// Re-send join presence for every open MUC buffer (skips biboumi gateways).
+// Call after any reconnect — SM resume and full reconnect both drop MUC
+// occupancy independently of the c2s session. reason is for the network log line.
+void rejoin_open_mucs(weechat::account &account, std::string_view reason);
+
 }  // namespace xmpp

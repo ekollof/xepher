@@ -144,6 +144,10 @@ namespace weechat {
             // into a single PubSub IQ.
             bool bundle_republish_pending = false;
 
+            // When true, the next own-devicelist IQ/PEP result forces a publish
+            // of the merged list (used by /omemo republish after server fetch).
+            bool force_own_devicelist_publish = false;
+
             // Devices for which a bundle fetch IQ is currently in-flight.
             // Prevents duplicate fetches when repeated PEP devicelist events
             // arrive before the first IQ result returns.
