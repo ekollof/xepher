@@ -28,7 +28,11 @@ namespace weechat::xmpp
 
         std::optional<std::string> encrypt(struct t_gui_buffer *buffer, std::string_view source, std::vector<std::string>&& target, std::string_view message);
 
-        std::optional<std::string> verify(struct t_gui_buffer *buffer, std::string_view certificate);
+        // XEP-0027: detached signature over presence <status/> character data
+        // (may be empty). Returns signer fingerprint when GPGME reports one.
+        std::optional<std::string> verify(struct t_gui_buffer *buffer,
+                                          std::string_view signed_text,
+                                          std::string_view signature);
 
         std::optional<std::string> sign(struct t_gui_buffer *buffer, std::string_view source, std::string_view message);
     };

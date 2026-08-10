@@ -440,7 +440,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
             {
                 if (pres.signature && channel->type != weechat::channel::chat_type::MUC)
                 {
-                    user->profile.pgp_id = account.pgp.verify(channel->buffer, pres.signature->c_str());
+                    // XEP-0027: signature is over <status/> CDATA (may be empty).
+                    const std::string_view status_text =
+                        pres.status ? std::string_view(*pres.status)
+                                    : std::string_view{};
+                    user->profile.pgp_id = account.pgp.verify(
+                        channel->buffer, status_text, *pres.signature);
                     if (user->profile.pgp_id.has_value())
                         channel->pgp.ids.emplace(user->profile.pgp_id.value());
                 }
@@ -642,7 +647,12 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
         {
             if (pres.signature && channel->type != weechat::channel::chat_type::MUC)
             {
-                user->profile.pgp_id = account.pgp.verify(channel->buffer, pres.signature->c_str());
+                // XEP-0027: signature is over <status/> CDATA (may be empty).
+                const std::string_view status_text =
+                    pres.status ? std::string_view(*pres.status)
+                                : std::string_view{};
+                user->profile.pgp_id = account.pgp.verify(
+                    channel->buffer, status_text, *pres.signature);
                 if (user->profile.pgp_id.has_value())
                     channel->pgp.ids.emplace(user->profile.pgp_id.value());
             }

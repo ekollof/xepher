@@ -35,8 +35,10 @@ void pgp_print(struct t_gui_buffer *buffer, std::string_view msg)
 std::string format_key(weechat::xmpp::pgp &pgp, std::string_view keyid)
 {
     gpgme_key_t key = nullptr;
-    gpgme_error_t err = gpgme_get_key(pgp.gpgme, keyid.data(), &key, false);
-    if (err) {
+    // gpgme_get_key requires a null-terminated C string.
+    const std::string keyid_nt(keyid);
+    gpgme_error_t err = gpgme_get_key(pgp.gpgme, keyid_nt.c_str(), &key, false);
+    if (err || !key) {
         return fmt::format("{} (none)", keyid);
     }
     std::vector<std::string> subkey_ids;
@@ -140,11 +142,14 @@ std::optional<std::string> weechat::xmpp::pgp::encrypt(struct t_gui_buffer *buff
 
     for (const std::string& target : targets)
     {
-        err = gpgme_get_key(this->gpgme, target.data(), &keys[0], false);
+        err = gpgme_get_key(this->gpgme, target.c_str(), &keys[0], false);
         if (err) goto encrypt_finish;
     }
-    err = gpgme_get_key(this->gpgme, source.data(), &keys[1], false);
-    if (err) goto encrypt_finish;
+    {
+        const std::string source_nt(source);
+        err = gpgme_get_key(this->gpgme, source_nt.c_str(), &keys[1], false);
+        if (err) goto encrypt_finish;
+    }
 
     err = gpgme_op_encrypt(this->gpgme, keys, GPGME_ENCRYPT_ALWAYS_TRUST, in_g.h, out_g.h);
     if (err) goto encrypt_finish;
@@ -222,63 +227,68 @@ decrypt_finish:
     return decrypted;
 }
 
-std::optional<std::string> weechat::xmpp::pgp::verify(struct t_gui_buffer *buffer, std::string_view certificate)
+std::optional<std::string> weechat::xmpp::pgp::verify(struct t_gui_buffer *buffer,
+                                                      std::string_view signed_text,
+                                                      std::string_view signature)
 {
+    // XEP-0027 presence signatures are detached OpenPGP signatures of the
+    // <status/> character data (possibly empty), not clearsigned messages.
+    // gpgme_op_verify(sig, nullptr, plain) is clearsign/inline semantics and
+    // often leaves signatures==nullptr — the old code then crashed on
+    // vrf_result->signatures->fpr. Never call gpgme_op_receive_keys here:
+    // keyserver I/O from the presence handler hangs/crashes WeeChat.
     struct data_guard {
         gpgme_data_t h = nullptr;
         ~data_guard() { if (h) gpgme_data_release(h); }
-    } in_g, out_g;
+    } sig_g, text_g;
 
-    std::optional<std::string> result;
-    gpgme_verify_result_t vrf_result = nullptr;
-    gpgme_error_t err;
+    if (signature.empty())
+        return std::nullopt;
 
-    std::string buf = fmt::format(PGP_SIGNATURE_HEADER "{}" PGP_SIGNATURE_FOOTER, certificate);
-    std::span<const char> buf_span = buf;
-    err = gpgme_data_new_from_mem(&in_g.h, buf_span.data(), buf_span.size(), false);
-    if (err) goto verify_finish;
+    std::string armored =
+        fmt::format(PGP_SIGNATURE_HEADER "{}" PGP_SIGNATURE_FOOTER, signature);
 
-    err = gpgme_data_new(&out_g.h);
-    if (err) goto verify_finish;
+    // copy=1: buffers must outlive only until op_verify returns; string_view
+    // data need not be null-terminated.
+    gpgme_error_t err =
+        gpgme_data_new_from_mem(&sig_g.h, armored.data(), armored.size(), 1);
+    if (err)
+        goto verify_finish;
 
-    // For a clearsigned block (header+content+footer all in one buffer):
-    // sig=in_g.h (the block), signed_text=nullptr (implicit in clearsign),
-    // plaintext=out_g.h (receives extracted plain text).
-    // Passing out_g.h as signed_text was wrong (detached-sig semantics).
-    err = gpgme_op_verify(this->gpgme, in_g.h, nullptr, out_g.h);
-    if (err) goto verify_finish;
-
-    if (vrf_result = gpgme_op_verify_result(this->gpgme);
-            !(vrf_result->signatures->summary & GPGME_SIGSUM_VALID))
     {
-      //goto verify_finish;
+        const char *text_ptr = signed_text.empty() ? "" : signed_text.data();
+        err = gpgme_data_new_from_mem(&text_g.h, text_ptr, signed_text.size(), 1);
+        if (err)
+            goto verify_finish;
     }
 
-    result = std::string(vrf_result->signatures->fpr);
+    // Detached: signature blob + original signed text; no plaintext output.
+    err = gpgme_op_verify(this->gpgme, sig_g.h, text_g.h, nullptr);
+    if (err)
+        goto verify_finish;
 
     {
-        gpgme_key_t key = nullptr;
-        err = gpgme_get_key(this->gpgme, result->c_str(), &key, false);
-        if (err) {
-            const char *keyids[2] = { result->c_str(), nullptr };
-            // Attempt to fetch the key from a keyserver; if it fails (e.g.
-            // GPG_ERR_NO_DATA from Dirmngr), clear the error silently —
-            // a keyserver miss is not user-actionable.
-            gpgme_error_t fetch_err = gpgme_op_receive_keys(this->gpgme, keyids);
-            if (fetch_err)
-                err = GPG_ERR_NO_ERROR;
-        } else {
-            gpgme_key_release(key);
-        }
+        gpgme_verify_result_t vrf = gpgme_op_verify_result(this->gpgme);
+        if (!vrf || !vrf->signatures)
+            return std::nullopt;
+
+        gpgme_signature_t sig = vrf->signatures;
+        // fpr is often null when the public key is missing; never construct
+        // std::string from a null const char*.
+        if (!sig->fpr || !sig->fpr[0])
+            return std::nullopt;
+
+        return std::string(sig->fpr);
     }
 
 verify_finish:
-    if (err) {
+    if (err)
+    {
         pgp_print(buffer, fmt::format("[PGP]\t{} - {}",
-                gpgme_strsource(err), gpgme_strerror(err)));
-        return std::nullopt;
+                                      gpgme_strsource(err),
+                                      gpgme_strerror(err)));
     }
-    return result;
+    return std::nullopt;
 }
 
 std::optional<std::string> weechat::xmpp::pgp::sign(struct t_gui_buffer *buffer, std::string_view source, std::string_view message)
@@ -310,7 +320,10 @@ std::optional<std::string> weechat::xmpp::pgp::sign(struct t_gui_buffer *buffer,
     }
     if (err) goto sign_finish;
 
-    err = gpgme_get_key(this->gpgme, source.data(), &key_g.k, false);
+    {
+        const std::string source_nt(source);
+        err = gpgme_get_key(this->gpgme, source_nt.c_str(), &key_g.k, false);
+    }
     if (err) {
         pgp_print(nullptr, fmt::format("(gpg) get key fail for {}", source));
         goto sign_finish;
