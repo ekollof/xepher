@@ -3,10 +3,35 @@ find_package(PkgConfig REQUIRED)
 find_package(LibXml2 REQUIRED)
 find_package(OpenSSL REQUIRED)
 
+# Minimum libstrophe: 0.12.0
+#   - 0.9+:  conn flags + keepalive
+#   - 0.10+: xmpp_stanza_new_from_string / add_child_ex
+#   - 0.11+: xmpp_ctx_set_verbosity
+#   - 0.12+: XMPP_CONN_FLAG_DISABLE_SM (we disable libstrophe SM; use XEP-0198 ourselves)
+# Slackware 15 stock packages are often ~0.8.x — too old; build/install libstrophe
+# from source or a newer SlackBuild.
+set(XEPHER_LIBSTROPHE_MIN_VERSION "0.12.0")
 pkg_check_modules(STROPH REQUIRED IMPORTED_TARGET libstrophe)
+if(STROPH_VERSION)
+    if(STROPH_VERSION VERSION_LESS "${XEPHER_LIBSTROPHE_MIN_VERSION}")
+        message(FATAL_ERROR
+            "libstrophe ${STROPH_VERSION} is too old (need >= ${XEPHER_LIBSTROPHE_MIN_VERSION}).\n"
+            "  Found: ${STROPH_LIBRARIES} (include: ${STROPH_INCLUDE_DIRS})\n"
+            "  Xepher needs a modern libstrophe for connection flags, keepalive,\n"
+            "  stream-management control, stanza builders, and TLS certfail hooks.\n"
+            "  Upgrade the system package or build libstrophe from:\n"
+            "    https://github.com/strophe/libstrophe/releases")
+    endif()
+    message(STATUS "libstrophe: ${STROPH_VERSION} (minimum ${XEPHER_LIBSTROPHE_MIN_VERSION})")
+else()
+    message(WARNING
+        "libstrophe.pc has no Version field; cannot enforce "
+        ">= ${XEPHER_LIBSTROPHE_MIN_VERSION}. Relying on symbol probes.")
+endif()
 # sexp/driver.hh includes <strophe.h>; pkg-config -I is required on BSD where
 # headers live under /usr/local/include (not a default compiler search path).
-# LibXml2: required for strophe_compat.hh fallback when libstrophe < 0.10.
+# LibXml2: still used by strophe_compat.hh if a rare partial install lacks
+# xmpp_stanza_new_from_string despite a modern version string.
 target_link_libraries(xepher_sexp PRIVATE PkgConfig::STROPH LibXml2::LibXml2)
 
 pkg_check_modules(GPGME REQUIRED IMPORTED_TARGET gpgme)
@@ -47,8 +72,8 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/libstrophe")
 endif()
 
 add_library(Xepher::deps ALIAS xepher_deps)
-# libstrophe feature probes — older packages (Slackware 15 ships ~0.8.x) lack
-# several APIs; strophe_compat.hh provides no-op / best-effort shims.
+# libstrophe feature probes — belt-and-suspenders after the version floor.
+# Incomplete/custom builds can still miss symbols; strophe_compat.hh shims those.
 include(CheckSymbolExists)
 include(CheckCSourceCompiles)
 set(CMAKE_REQUIRED_INCLUDES ${STROPH_INCLUDE_DIRS})

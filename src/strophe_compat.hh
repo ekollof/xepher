@@ -4,8 +4,9 @@
 
 #pragma once
 
-// Compatibility wrappers for libstrophe APIs missing on older releases
-// (e.g. Slackware 15 ships ~0.8.x without flags/keepalive/verbosity).
+// Compatibility wrappers for libstrophe APIs that may still be missing on
+// incomplete installs. CMake requires libstrophe >= 0.12.0 (see
+// cmake/Dependencies.cmake); these shims are for rare partial headers/libs.
 //
 // CMake probes symbols and writes strophe_compat_config.hh (0/1 macros).
 

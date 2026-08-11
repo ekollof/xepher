@@ -151,7 +151,7 @@ All packages install:
 
 ### Runtime Dependencies
 - weechat (>= 3.0)
-- libstrophe
+- libstrophe (>= 0.12.0; CMake enforces this)
 - libxml2
 - lmdb
 - libsignal-protocol-c

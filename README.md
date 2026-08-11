@@ -104,7 +104,7 @@ are on [GitHub Releases](https://github.com/ekollof/xepher/releases). Pick your 
 
 | Library | Type | Linux | FreeBSD | OpenBSD | macOS (Homebrew) |
 |---------|------|-------|---------|---------|-----------------|
-| libstrophe | runtime | ✅ package | ✅ `pkg install libstrophe` | ✅ `pkg_add libstrophe` | ✅ `brew install libstrophe` |
+| libstrophe (≥ 0.12) | runtime | ✅ package | ✅ `pkg install libstrophe` | ✅ `pkg_add libstrophe` | ✅ `brew install libstrophe` |
 | libxml2 | runtime | ✅ package | ✅ `pkg install libxml2` | ✅ `pkg_add libxml` | ✅ `brew install libxml2` |
 | lmdb | runtime | ✅ package | ✅ `pkg install lmdb` | ✅ `pkg_add lmdb` | ✅ `brew install lmdb` |
 | libomemo-c | runtime | ✅ package | ✅ `pkg install libomemo-c` | ✅ `pkg_add libomemo-c` | ⚠️ build from source |

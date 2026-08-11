@@ -16,7 +16,7 @@ fi
 echo "Detected OS: $OS"
 
 # Common packages across distros
-# Runtime deps: libstrophe, libxml2, lmdb, libomemo-c (libsignal-protocol-c), gpgme, libfmt, libcurl, libssl/libcrypto (OpenSSL)
+# Runtime deps: libstrophe (>= 0.12), libxml2, lmdb, libomemo-c (libsignal-protocol-c), gpgme, libfmt, libcurl, libssl/libcrypto (OpenSSL)
 # Build deps: clang/clang++, cmake (>= 3.22), ninja, bison, flex, git
 
 case "$OS" in
