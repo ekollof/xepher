@@ -9,7 +9,7 @@
 #include <functional>
 #include <type_traits>
 #include <string>
-#include <strophe.h>
+#include "strophe_compat.hh"
 
 // RAII guard for strings allocated by libstrophe (xmpp_jid_bare, xmpp_jid_resource,
 // xmpp_uuid_gen, xmpp_stanza_get_text, etc.).  Freed via xmpp_free() on scope exit.

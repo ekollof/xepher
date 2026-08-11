@@ -4,12 +4,10 @@
 
 #pragma once
 
-// Compatibility wrappers for libstrophe APIs added in 0.10.0
-// (xmpp_stanza_new_from_string, xmpp_stanza_add_child_ex). Older packages
-// (e.g. some Slackware builds) still ship pre-0.10 headers/libraries.
+// Compatibility wrappers for libstrophe APIs missing on older releases
+// (e.g. Slackware 15 ships ~0.8.x without flags/keepalive/verbosity).
 //
-// CMake defines XEPHER_HAVE_XMPP_STANZA_NEW_FROM_STRING and
-// XEPHER_HAVE_XMPP_STANZA_ADD_CHILD_EX when the symbols are available.
+// CMake probes symbols and writes strophe_compat_config.hh (0/1 macros).
 
 #include <string>
 #include <strophe.h>
@@ -19,6 +17,99 @@
 #if !XEPHER_HAVE_XMPP_STANZA_NEW_FROM_STRING
 #include <libxml/parser.h>
 #include <libxml/tree.h>
+#endif
+
+// ── Connection flag macros (0.9+) ──────────────────────────────────────────
+#if XEPHER_DEFINE_XMPP_CONN_FLAG_MACROS
+#ifndef XMPP_CONN_FLAG_DISABLE_TLS
+#define XMPP_CONN_FLAG_DISABLE_TLS (1UL << 0)
+#endif
+#ifndef XMPP_CONN_FLAG_MANDATORY_TLS
+#define XMPP_CONN_FLAG_MANDATORY_TLS (1UL << 1)
+#endif
+#ifndef XMPP_CONN_FLAG_LEGACY_SSL
+#define XMPP_CONN_FLAG_LEGACY_SSL (1UL << 2)
+#endif
+#ifndef XMPP_CONN_FLAG_TRUST_TLS
+#define XMPP_CONN_FLAG_TRUST_TLS (1UL << 3)
+#endif
+#ifndef XMPP_CONN_FLAG_LEGACY_AUTH
+#define XMPP_CONN_FLAG_LEGACY_AUTH (1UL << 4)
+#endif
+#endif
+
+#if XEPHER_DEFINE_XMPP_CONN_FLAG_DISABLE_SM
+#ifndef XMPP_CONN_FLAG_DISABLE_SM
+// Harmless on pre-SM libstrophe (no built-in SM to disable).
+#define XMPP_CONN_FLAG_DISABLE_SM (1UL << 5)
+#endif
+#endif
+
+// ── Optional C API shims (declared only when the system header lacks them) ─
+// Provided as static inline so strophe.hh decltype() and call sites that use
+// the real C names still compile against ancient headers.
+
+#if !XEPHER_HAVE_XMPP_CTX_SET_VERBOSITY
+static inline void xmpp_ctx_set_verbosity(xmpp_ctx_t * /*ctx*/, int /*level*/)
+{}
+#endif
+
+#if !XEPHER_HAVE_XMPP_CONN_GET_FLAGS
+static inline long xmpp_conn_get_flags(const xmpp_conn_t * /*conn*/)
+{
+    return 0;
+}
+#endif
+
+#if !XEPHER_HAVE_XMPP_CONN_SET_FLAGS
+static inline int xmpp_conn_set_flags(xmpp_conn_t *conn, long flags)
+{
+    // 0.8.x only had xmpp_conn_disable_tls — map DISABLE_TLS when possible.
+#if XEPHER_HAVE_XMPP_CONN_DISABLE_TLS
+    if (conn && (flags & XMPP_CONN_FLAG_DISABLE_TLS))
+        xmpp_conn_disable_tls(conn);
+#else
+    (void)conn;
+#endif
+    (void)flags;
+    return 0;
+}
+#endif
+
+#if !XEPHER_HAVE_XMPP_CONN_SET_KEEPALIVE
+static inline void xmpp_conn_set_keepalive(xmpp_conn_t * /*conn*/,
+                                          int /*timeout*/,
+                                          int /*interval*/)
+{}
+#endif
+
+#if !XEPHER_HAVE_XMPP_CONN_SET_CERTFAIL_HANDLER
+// Minimal stubs so call sites can still #if around real TLS cert inspection.
+#ifndef XEPHER_STROPHE_TLS_CERT_STUBS
+#define XEPHER_STROPHE_TLS_CERT_STUBS
+struct _xmpp_tlscert_t;
+typedef struct _xmpp_tlscert_t xmpp_tlscert_t;
+typedef int (*xmpp_certfail_handler)(const xmpp_tlscert_t *cert,
+                                     const char *errormsg);
+#endif
+static inline void xmpp_conn_set_certfail_handler(
+    xmpp_conn_t * /*conn*/, xmpp_certfail_handler /*h*/)
+{}
+#endif
+
+#if !XEPHER_HAVE_XMPP_CONNECT_RAW
+// IBR path checks XEPHER_HAVE_XMPP_CONNECT_RAW before calling.
+#ifndef XMPP_EOK
+#define XMPP_EOK 0
+#endif
+static inline int xmpp_connect_raw(xmpp_conn_t * /*conn*/,
+                                   const char * /*domain*/,
+                                   unsigned short /*port*/,
+                                   xmpp_conn_handler /*cb*/,
+                                   void * /*userdata*/)
+{
+    return -1;
+}
 #endif
 
 namespace xepher::strophe {

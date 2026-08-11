@@ -25,7 +25,7 @@
 
 #include "fmt/core.h"
 #include "util.hh"
-#include "strophe.h"
+#include "strophe_compat.hh"
 #include "pgp.hh"
 #include "omemo.hh"
 #include "config.hh"

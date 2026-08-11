@@ -3,3 +3,12 @@
 
 #define XEPHER_HAVE_XMPP_STANZA_NEW_FROM_STRING @_xepher_strophe_new_from_string@
 #define XEPHER_HAVE_XMPP_STANZA_ADD_CHILD_EX @_xepher_strophe_add_child_ex@
+#define XEPHER_HAVE_XMPP_CTX_SET_VERBOSITY @_xepher_strophe_ctx_set_verbosity@
+#define XEPHER_HAVE_XMPP_CONN_GET_FLAGS @_xepher_strophe_conn_get_flags@
+#define XEPHER_HAVE_XMPP_CONN_SET_FLAGS @_xepher_strophe_conn_set_flags@
+#define XEPHER_HAVE_XMPP_CONN_SET_KEEPALIVE @_xepher_strophe_conn_set_keepalive@
+#define XEPHER_HAVE_XMPP_CONN_DISABLE_TLS @_xepher_strophe_conn_disable_tls@
+#define XEPHER_HAVE_XMPP_CONN_SET_CERTFAIL_HANDLER @_xepher_strophe_conn_set_certfail@
+#define XEPHER_HAVE_XMPP_CONNECT_RAW @_xepher_strophe_connect_raw@
+#define XEPHER_DEFINE_XMPP_CONN_FLAG_MACROS @_xepher_define_conn_flag_macros@
+#define XEPHER_DEFINE_XMPP_CONN_FLAG_DISABLE_SM @_xepher_define_conn_flag_disable_sm@

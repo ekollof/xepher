@@ -375,6 +375,7 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
     }
     m_conn.set_flags(flags);
 
+#if XEPHER_HAVE_XMPP_CONN_SET_CERTFAIL_HANDLER
     // Register a certfail handler so that TLS certificate verification failures
     // are surfaced as warnings rather than silently leaving conn->tls == nullptr.
     // A nullptr conn->tls with a TLS write interface still set causes a crash in
@@ -401,6 +402,7 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
             errormsg ? errormsg : "(no details)"));
         return 1; // accept cert, keep conn->tls valid, avoid nullptr-deref crash
     });
+#endif
 
     const char *altdomain = nullptr;
     unsigned short altport = 0;

@@ -511,6 +511,13 @@ static void ibr_register(const char *account_name, const char *jid, const char *
         return;
     }
 
+#if !XEPHER_HAVE_XMPP_CONNECT_RAW
+    ui->printf_error(fmt::format(
+        fmt::runtime(_("{}: IBR: needs libstrophe with xmpp_connect_raw (0.9+); "
+                       "system libstrophe is too old")),
+        WEECHAT_XMPP_PLUGIN_NAME));
+    return;
+#else
     // Trust TLS for registration (certificate may not be fully validated yet)
     int flags = xmpp_conn_get_flags(st->conn);
     flags |= XMPP_CONN_FLAG_TRUST_TLS;
@@ -519,13 +526,18 @@ static void ibr_register(const char *account_name, const char *jid, const char *
     // Set a dummy JID (server domain) so libstrophe knows what stream to open
     xmpp_conn_set_jid(st->conn, server.c_str());
 
-        ui->printf_network(fmt::format(fmt::runtime(_("{}: IBR: connecting to {} for registration of {}...")), WEECHAT_XMPP_PLUGIN_NAME, server.c_str(), jid));
+    ui->printf_network(fmt::format(
+        fmt::runtime(_("{}: IBR: connecting to {} for registration of {}...")),
+        WEECHAT_XMPP_PLUGIN_NAME, server.c_str(), jid));
 
     int rc = xmpp_connect_raw(st->conn, nullptr, 0, ibr_conn_handler, st.get());
     if (rc != XMPP_EOK) {
-        ui->printf_error(fmt::format(fmt::runtime(_("{}: IBR: xmpp_connect_raw failed (rc={})")), WEECHAT_XMPP_PLUGIN_NAME, rc));
+        ui->printf_error(fmt::format(
+            fmt::runtime(_("{}: IBR: xmpp_connect_raw failed (rc={})")),
+            WEECHAT_XMPP_PLUGIN_NAME, rc));
         return;
     }
+#endif
 
     // Drive the event loop from a periodic WeeChat timer (10 ms ticks).
     // Transfer ownership to the timer callback — it will delete st when done.
