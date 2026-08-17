@@ -18,6 +18,29 @@
 
 namespace libsignal {
 
+    [[nodiscard]] inline auto signal_error_name(int code) -> const char *
+    {
+        switch (code)
+        {
+            case SG_ERR_NOMEM: return "out of memory";
+            case SG_ERR_INVAL: return "invalid argument";
+            case SG_ERR_UNKNOWN: return "unknown";
+            case SG_ERR_DUPLICATE_MESSAGE: return "duplicate message";
+            case SG_ERR_INVALID_KEY: return "invalid key";
+            case SG_ERR_INVALID_KEY_ID: return "invalid key id";
+            case SG_ERR_INVALID_MAC: return "invalid mac";
+            case SG_ERR_INVALID_MESSAGE: return "invalid message";
+            case SG_ERR_INVALID_VERSION: return "invalid version";
+            case SG_ERR_LEGACY_MESSAGE: return "legacy message";
+            case SG_ERR_NO_SESSION: return "no session";
+            case SG_ERR_STALE_KEY_EXCHANGE: return "stale key exchange";
+            case SG_ERR_UNTRUSTED_IDENTITY: return "untrusted identity";
+            case SG_ERR_VRF_SIG_VERIF_FAILED: return "signature verification failed";
+            case SG_ERR_INVALID_PROTO_BUF: return "invalid protobuf";
+            default: return nullptr;
+        }
+    }
+
     template<typename T>
     struct deleter {
         void operator() (T *ptr) { SIGNAL_UNREF(ptr); }
@@ -42,8 +65,14 @@ namespace libsignal {
             typename = std::enable_if_t<std::is_same_v<int, std::invoke_result_t<Fun, pointer_type, Args...>>>>
         inline void call(Args&&... args) {
             int ret = func(*this, std::forward<Args>(args)...);
-            if (ret != success) throw std::runtime_error(
-                fmt::format("Signal Error: expected {}, was {}", success, ret));
+            if (ret != success)
+            {
+                if (const char *name = signal_error_name(ret))
+                    throw std::runtime_error(
+                        fmt::format("Signal Error: {} ({})", name, ret));
+                throw std::runtime_error(
+                    fmt::format("Signal Error: expected {}, was {}", success, ret));
+            }
         }
 
         template<typename Fun, Fun &func, typename... Args,

@@ -141,6 +141,7 @@ void weechat::xmpp::omemo::trust_jid(struct t_gui_buffer *buffer,
             if (device_id && *dev_id != *device_id)
                 continue;
             store_tofu_trust(*this, std::string_view(jid), *dev_id, omemo_trust::VERIFIED);
+            failed_session_bootstrap.erase({std::string(jid), *dev_id});
             print_info(buffer, fmt::format("OMEMO: marked device {} for {} as VERIFIED.", *dev_id, jid));
             any_changed = true;
         }

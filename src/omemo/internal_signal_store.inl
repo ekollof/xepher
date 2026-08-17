@@ -918,10 +918,48 @@ int identity_is_trusted(const signal_protocol_address *address, std::uint8_t *ke
         return (trust == omemo_trust::VERIFIED || trust == omemo_trust::BLIND) ? 1 : 0;
     }
 
-    // Key mismatch → identity changed; untrusted until user re-verifies.
+    // Key mismatch → peer reset/reinstalled this device id.
+    // Replace the stored identity, drop the dead session, and re-apply BTBV:
+    // BLIND if the JID has no VERIFIED/UNTRUSTED devices, else UNDECIDED
+    // (user must /omemo trust before we encrypt to them again).
     const std::vector<std::uint8_t> incoming {key_data, key_data + key_len};
     if (*stored != incoming)
-        return 0;
+    {
+        if (!self->lmdb_write_txn_)
+        {
+            print_error(nullptr,
+                        fmt::format("omemo: identity key changed for {}/{} — "
+                                    "run /omemo fetch then retry (or /omemo trust after verifying)",
+                                    addr_name, device_id));
+            return 0;
+        }
+
+        const auto old_trust = load_tofu_trust(*self, addr_name, device_id);
+        const omemo_trust new_trust =
+            (old_trust && (*old_trust == omemo_trust::VERIFIED
+                           || *old_trust == omemo_trust::UNTRUSTED))
+                ? omemo_trust::UNDECIDED
+                : get_default_trust(*self, addr_name);
+
+        delete_bytes(*self, key_for_session(addr_name, static_cast<std::uint32_t>(device_id)));
+        store_bytes(*self, key_for_identity(addr_name, device_id), key_data, key_len);
+        store_tofu_trust(*self, addr_name, device_id, new_trust);
+
+        print_error(nullptr,
+                    fmt::format("omemo: identity key changed for {}/{} — trust now {}{}",
+                                addr_name, device_id,
+                                new_trust == omemo_trust::UNDECIDED ? "UNDECIDED"
+                                : new_trust == omemo_trust::BLIND ? "BLIND"
+                                : new_trust == omemo_trust::VERIFIED ? "VERIFIED"
+                                : "UNTRUSTED",
+                                new_trust == omemo_trust::UNDECIDED
+                                    ? "; run /omemo fingerprint then /omemo trust"
+                                    : ""));
+        XDEBUG("omemo: replaced identity for {}/{} after key change (trust={})",
+               addr_name, device_id, static_cast<int>(new_trust));
+
+        return (new_trust == omemo_trust::VERIFIED || new_trust == omemo_trust::BLIND) ? 1 : 0;
+    }
 
     // Key matches — check trust level.
     const auto trust = load_tofu_trust(*self, addr_name, device_id);

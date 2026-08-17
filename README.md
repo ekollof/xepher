@@ -930,6 +930,8 @@ you have exchanged encrypted traffic with that contact.
 
 Only `BLIND` and `VERIFIED` devices receive encrypted key material. `UNTRUSTED` devices are silently skipped. When you enable OMEMO in a MUC, all occupant devices default to `BLIND` trust — verify important contacts with `/omemo trust` if desired.
 
+If a contact reinstalls their client (same device id, new identity key), the old session is dropped and BTBV is reapplied. Previously `BLIND` contacts are accepted again automatically. If you had `VERIFIED` or `UNTRUSTED` any of their devices, the new key is `UNDECIDED` until you run `/omemo fingerprint <jid>` and `/omemo trust <jid> [device-id]`. `Signal Error: untrusted identity (-1010)` means that gate fired.
+
 | Command | Description |
 |---------|-------------|
 | `/omemo` | Enable OMEMO for the current buffer. Works for both PMs and non-anonymous MUCs (MUC OMEMO support is **experimental and untested** — see planning doc). |
@@ -955,6 +957,15 @@ Only `BLIND` and `VERIFIED` devices receive encrypted key material. `UNTRUSTED` 
 - **`OMEMO (pending)` never clears** — occupant bundles are still fetching; wait
   or run `/omemo fetch <occupant-jid>` for stuck contacts. Sending is blocked until
   the counter reaches zero.
+- **`session bootstrap failed … no cached bundle`** — first send often happens
+  before the PEP bundle fetch finishes. A follow-up send (or `/omemo fetch` /
+  `/omemo kex`) after the bundle arrives is expected to succeed.
+- **`Signal Error: untrusted identity (-1010)`** — the peer's identity key is
+  not trusted (they reset the app, or you have `UNDECIDED`/`UNTRUSTED` on that
+  device). Check `/omemo fingerprint <jid>`, then `/omemo trust` if the new
+  fingerprint is yours to accept.
+- **`omemo: signed prekey rotated to id N`** — our own signed prekey aged out
+  and was republished. Normal; not a peer error.
 - **Garbled `No session for:` in logs** — was a libsignal logging bug with stale
   peer addresses during MUC decrypt recovery (fixed in `6aa24fd`). Upgrade and
   restart WeeChat; enable `/set xmpp.look.debug on` and
