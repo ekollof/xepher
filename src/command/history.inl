@@ -107,7 +107,7 @@ reply_display_prefix(weechat::account *account, const weechat::channel *channel)
 {
     if (channel->type == weechat::channel::chat_type::MUC)
     {
-        const std::string_view nick = account->nickname();
+        const std::string_view nick = channel->own_nick();
         if (nick.empty())
             return account->jid();
 
@@ -127,7 +127,8 @@ reply_display_prefix(weechat::account *account, const weechat::channel *channel)
     return self_user ? std::string(self_user->as_prefix_raw()) : account->jid();
 }
 
-// Servers do not carbon-copy self-sent replies; echo locally like PM send_message.
+// Echo locally so the reply appears immediately. MUC server echo is skipped
+// when the buffer already has id_<origin-id> (see message_handler).
 static void
 echo_outgoing_reply(weechat::account *account,
                     weechat::channel *channel,
@@ -150,7 +151,7 @@ echo_outgoing_reply(weechat::account *account,
     std::string tags;
     if (channel->type == weechat::channel::chat_type::MUC)
     {
-        const std::string_view nick = account->nickname();
+        const std::string_view nick = channel->own_nick();
         tags = fmt::format("xmpp_message,message,nick_{},notify_none,self_msg,log1,id_{}",
                            nick, origin_id);
     }

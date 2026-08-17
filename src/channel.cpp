@@ -252,6 +252,17 @@ weechat::channel::channel(weechat::account& account,
             display_name = std::move(*cached);
         if (!display_name.empty())
             apply_muc_display_name(display_name);
+
+        // Prefer the bookmark nick so local echo / self-detection match the
+        // occupant JID we actually join as (not weechat.look.nick / user0).
+        std::string_view join_nick;
+        if (const auto bm_it = account.bookmarks.find(std::string(id));
+            bm_it != account.bookmarks.end() && !bm_it->second.nick.empty())
+            join_nick = bm_it->second.nick;
+        else
+            join_nick = account.nickname();
+        if (!join_nick.empty())
+            set_self_nick(join_nick);
     }
 
     // Smart filter: assume we are joining (initial presence flood) for MUC channels.
@@ -900,6 +911,28 @@ std::optional<weechat::channel::member*> weechat::channel::member_search(std::st
         return &members.at(full_id);
 
     return std::nullopt;
+}
+
+void weechat::channel::set_self_nick(std::string_view nick)
+{
+    if (nick.empty())
+        return;
+    self_nick = std::string(nick);
+    if (buffer && type == chat_type::MUC)
+        BufferPort::default_port_ref().set(buffer, "localvar_set_nick", self_nick);
+}
+
+std::string_view weechat::channel::own_nick() const
+{
+    if (!self_nick.empty())
+        return self_nick;
+    if (type == chat_type::MUC)
+    {
+        if (auto bm_it = account.bookmarks.find(id);
+            bm_it != account.bookmarks.end() && !bm_it->second.nick.empty())
+            return bm_it->second.nick;
+    }
+    return account.nickname();
 }
 
 void weechat::channel::finish_nick_change(std::string_view old_full_jid,
@@ -2058,7 +2091,7 @@ void weechat::channel::send_link_preview(std::string_view to, std::string_view u
                 std::string prefix;
                 if (task->channel.type == weechat::channel::chat_type::MUC)
                 {
-                    const std::string_view our_nick = task->channel.account.nickname();
+                    const std::string_view our_nick = task->channel.own_nick();
                     prefix = our_nick.empty()
                         ? std::string(task->channel.account.jid())
                         : user::as_prefix_raw(our_nick);

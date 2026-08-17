@@ -360,6 +360,12 @@ namespace weechat
                                            add_member_opts opts = {});
         std::optional<member*> member_search(std::string_view id);
         std::optional<member*> remove_member(std::string_view id, std::string_view reason = {});
+        // Occupant nick in this MUC (bookmark/account nick, then status 110 / /nick).
+        std::string self_nick;
+
+        void set_self_nick(std::string_view nick);
+        [[nodiscard]] std::string_view own_nick() const;
+
         // XEP-0045 status 303: drop old occupant from members/nicklist without a leave line.
         void finish_nick_change(std::string_view old_full_jid, std::string_view new_nick);
         void set_member_offline(std::string_view id, weechat::user *known_user = nullptr);

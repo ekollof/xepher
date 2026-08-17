@@ -40,6 +40,14 @@ void send_muc_join_presence(weechat::account &account,
     auto join_pres = stanza::presence().to(pres_jid).from(account.jid());
     static_cast<stanza::xep0045::presence &>(join_pres).muc_join(room_password);
     account.connection.send(join_pres.build(account.context).get());
+
+    const ::jid parsed(nullptr, std::string(pres_jid));
+    if (!parsed.bare.empty() && !parsed.resource.empty())
+    {
+        if (auto ch_it = account.channels.find(parsed.bare);
+            ch_it != account.channels.end())
+            ch_it->second.set_self_nick(parsed.resource);
+    }
 }
 
 void rejoin_open_mucs(weechat::account &account, const std::string_view reason)

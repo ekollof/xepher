@@ -751,7 +751,7 @@ namespace weechat
         tls_policy tls() { return static_cast<tls_policy>(this->option_tls.integer()); }
         void tls(tls_policy tls) { this->option_tls = fmt::format("%d", std::to_underlying(tls)); }
         void tls(std::string tls) { this->option_tls = tls; }
-        std::string_view nickname() { return this->option_nickname.string(); }
+        std::string_view nickname() const { return this->option_nickname.string(); }
         void nickname(std::string nickname) { this->option_nickname = nickname; }
         bool autoconnect() { return this->option_autoconnect.boolean(); }
         void autoconnect(bool autoconnect) { this->option_autoconnect = autoconnect ? "on" : "off"; }

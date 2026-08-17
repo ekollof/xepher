@@ -161,6 +161,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     break;
                 case 110: // Self-Presence: [presence | Any room presence]: Inform user that presence refers to one of its own room occupants
                     presence_is_self = true;
+                    if (channel && !pres.from->resource.empty())
+                        channel->set_self_nick(pres.from->resource);
                     // Status 110 is sent last in the initial presence flood — clear joining flag.
                     // Status 110 is also delivered when any other resource joins the same room
                     // (the server re-sends the full occupant list to all members).  Guard against
@@ -478,7 +480,11 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                         // Self nick change: keep account default nick in sync so
                         // subsequent joins (and /nick with no args) show the new nick.
                         if (presence_is_self && !new_nick.empty())
+                        {
                             account.nickname(new_nick);
+                            if (channel)
+                                channel->set_self_nick(new_nick);
+                        }
                         // user pointer may be invalidated by finish_nick_change
                         user = nullptr;
                     }
@@ -509,6 +515,8 @@ bool weechat::connection::presence_handler(xmpp_stanza_t *stanza, bool top_level
                     {
                         const char *assigned = !pres.from->resource.empty()
                             ? pres.from->resource.c_str() : pres.from->full.c_str();
+                        if (presence_is_self && assigned && *assigned)
+                            channel->set_self_nick(assigned);
                         weechat::UiPort::for_buffer(channel->buffer)->printf_date_tags_network(
                             0, "xmpp_presence,notify_none,no_trigger",
                             fmt::format("{}[Room] Server assigned you the nick: {}{}{}",

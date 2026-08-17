@@ -703,7 +703,7 @@ int command__muc_nick(const void *pointer, void *data,
     if (argc < 2)
     {
         /* Print current nick */
-        std::string_view current_nick = ptr_account->nickname();
+        std::string_view current_nick = ptr_channel->own_nick();
         ui->printf_network(fmt::format(fmt::runtime(_("Current nick in {}: {}")), ptr_channel->id.data(), current_nick.empty() ? "(unknown)" : current_nick.data()));
         return WEECHAT_RC_OK;
     }

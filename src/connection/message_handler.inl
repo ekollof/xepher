@@ -1571,10 +1571,11 @@ message_handler_after_omemo:
     bool is_from_self = false;
     if (weechat_strcasecmp(type, "groupchat") == 0)
     {
-        // nick was set to the resource (occupant nick) above; compare to our config nick.
-        const std::string_view our_nick = account.nickname();
+        // Occupant nick from the room, not the account-default / weechat nick.
+        const std::string our_nick = channel ? std::string(channel->own_nick())
+                                             : std::string(account.nickname());
         if (nick && !our_nick.empty()
-            && weechat_strcasecmp(nick, our_nick.data()) == 0)
+            && weechat_strcasecmp(nick, our_nick.c_str()) == 0)
             is_from_self = true;
     }
     else if (from_bare && weechat_strcasecmp(from_bare, account.jid().data()) == 0)
@@ -2056,13 +2057,20 @@ message_handler_after_omemo:
 
     std::string final_text; // used by spoiler / ephemeral / oob suffix blocks below
 
-    // /reply local echo already tagged id_<origin-id>; skip the server echo dup.
+    // Local echo (/reply, PM send) already tagged id_<origin-id>; skip the
+    // server echo even when MUC self-nick detection missed (bookmark nick
+    // != account nickname / weechat.look.nick).
     bool skip_live_self_render = false;
-    if (!date && is_from_self && stable_id && channel && channel->buffer)
+    if (!date && channel && channel->buffer)
     {
-        const std::string id_needle = fmt::format("id_{}", stable_id);
+        const std::string id_needle = stable_id
+            ? fmt::format("id_{}", stable_id) : std::string{};
+        const std::string origin_id_needle = origin_id
+            ? fmt::format("id_{}", origin_id) : std::string{};
+        const std::string origin_tag_needle = origin_id
+            ? fmt::format("origin_id_{}", origin_id) : std::string{};
         skip_live_self_render = weechat::line_store_buffer_contains_any_tag(
-            channel->buffer, {id_needle});
+            channel->buffer, {id_needle, origin_id_needle, origin_tag_needle});
     }
 
     // XEP-0461: emit reply context as a separate quote line above the message.
