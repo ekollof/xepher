@@ -9,6 +9,10 @@ if [ -f /etc/os-release ]; then
     # shellcheck disable=SC1091
     . /etc/os-release
     OS=$ID
+    # Normalize Arch derivatives (Omarchy, EndeavourOS, Garuda, CachyOS, ...) to arch
+    case " ${ID_LIKE:-} " in
+        *" arch "*) OS=arch ;;
+    esac
 else
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 fi
