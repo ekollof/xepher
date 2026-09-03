@@ -1594,7 +1594,12 @@ message_handler_after_omemo:
         weechat_string_dyn_concat(dyn_tags, replace_id, -1);
     }
 
-    if (date != 0 || encrypted || is_from_self)
+    // NOTE: live OMEMO/PGP messages (|encrypted| set) must NOT be tagged
+    // notify_none — the plaintext is already decoded at this point, and
+    // notify_none suppresses the hotlist + weechat_pv signal entirely,
+    // which killed all PM notifications for encrypted chats. Only history
+    // replay (date != 0) and self-messages are silent.
+    if (date != 0 || is_from_self)
     {
         weechat_string_dyn_concat(dyn_tags, ",notify_none", -1);
         // Self-messages in MUC are still real messages and should be logged.
