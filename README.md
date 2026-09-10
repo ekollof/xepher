@@ -1052,6 +1052,9 @@ normally without inline display.
 **Note:** The plugin passes `-print_immediately` to icat so placeholder lines are
 printed synchronously, directly under the message that shared the image. Kitty
 terminals correctly scroll these image cells together with the buffer text.
+On non-Kitty terminals chafa probes the display itself (see `scripts/icat.py`):
+real iterm/kitty/sixel graphics are written to the tty asynchronously when the
+background encode finishes, otherwise symbol art is printed into the buffer.
 
 During **MAM replay**, image URLs are never passed directly to icat (async HTTP
 downloads would land out of order). Instead the plugin resolves each image to a

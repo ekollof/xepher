@@ -3,10 +3,14 @@
 # Vendored in xepher under the MIT license (Copyright 2023 Trygve Aaberge)
 #
 # Local changes when Kitty is unavailable:
+#   - "sixel" backend: chafa with no -f flag, so chafa probes the terminal
+#     itself (ctty-based, works with stdout piped) and picks iterm/kitty/
+#     sixels when supported, falling back to symbols art printed into the
+#     WeeChat buffer. Needs chafa >= 1.14 for the probe; older chafa just
+#     emits symbols (safe). WEECHAT_ICAT_BACKEND=sixel forces explicit sixel.
 #   - "cells" backend: half-block art printed into the WeeChat buffer (PIL, with
 #     chafa fallback). Survives redraws. Colors are converted to WeeChat codes
 #     (not raw ANSI — prnt does not interpret CSI).
-#   - "sixel": optional, usually flashes away under WeeChat repaints.
 # Override: WEECHAT_ICAT_BACKEND=kitty|cells|sixel|auto
 #
 # Why Kitty "just works" with escapes: graphics protocol data is written to the
@@ -300,7 +304,8 @@ def register_commands():
         "images to a new terminal instance\n"
         "\n"
         "Graphics: Kitty when available (tty protocol + buffer placeholders). "
-        "Otherwise half-block cell art in the buffer (stable under redraws). "
+        "Otherwise chafa probes the terminal itself and uses iterm/kitty/sixels "
+        "when supported, else symbol art in the buffer (stable under redraws). "
         "Override with WEECHAT_ICAT_BACKEND=kitty|cells|sixel|auto.\n"
         "\n"
         "Note that images are loaded in the background, so they may not be "
@@ -467,9 +472,11 @@ def detect_graphics_backend() -> str:
     """
     Return 'kitty', 'cells', or 'sixel'.
 
-    Prefer Kitty when the terminal supports it. Otherwise use chafa cell art
-    printed into the WeeChat buffer (survives redraws). Pure Sixel to the tty
-    flashes away under WeeChat because redraw paints text over Sixel tiles.
+    Prefer Kitty when the terminal supports it. Otherwise let chafa probe
+    the terminal ('sixel' backend = chafa autodetect: iterm/kitty/sixels
+    when supported, symbols-as-buffer-text otherwise). Plain half-block
+    cell art is the fallback when chafa is missing. Pure tty graphics can
+    flash away under WeeChat repaints while buffer text survives redraws.
     Override with WEECHAT_ICAT_BACKEND=kitty|cells|sixel|auto.
     """
     forced = _env("WEECHAT_ICAT_BACKEND").strip().lower()
@@ -477,10 +484,10 @@ def detect_graphics_backend() -> str:
         return forced
     if kitty_graphics_available():
         return "kitty"
-    if cells_encoder_available():
-        return "cells"
     if sixel_encoder_available():
         return "sixel"
+    if cells_encoder_available():
+        return "cells"
     return "kitty"
 
 
@@ -506,7 +513,7 @@ WeechatCallbackReturnType = Union[int, str, Dict[str, str], None]
 class Shared:
     def __init__(self):
         self.SCRIPT_NAME = "icat"
-        self.SCRIPT_VERSION = "0.2.3"
+        self.SCRIPT_VERSION = "0.2.4"
 
         self.weechat_callbacks: Dict[str, Callable[..., WeechatCallbackReturnType]]
         self.cache_path = "${weechat_cache_dir}/icat"
@@ -1156,6 +1163,42 @@ def encode_cells_chafa(path: str, columns: int, rows: int) -> List[str]:
 
     cleaned = _ANSI_STRIP_NON_SGR.sub(b"", proc.stdout)
     text = cleaned.decode("utf-8", errors="replace")
+    return _clean_symbol_lines(text, rows)
+
+
+def encode_cells(path: str, columns: int, rows: int) -> List[str]:
+    """Encode image as unicode half-block rows (ANSI → WeeChat at display)."""
+    try:
+        return encode_cells_pil(path, columns, rows)
+    except Exception as pil_err:  # pylint: disable=broad-exception-caught
+        try:
+            return encode_cells_chafa(path, columns, rows)
+        except Exception as chafa_err:  # pylint: disable=broad-exception-caught
+            raise RuntimeError(
+                f"cells encode failed (pil={pil_err}; chafa={chafa_err})"
+            ) from chafa_err
+
+
+def sniff_graphics_kind(data: bytes) -> Optional[str]:
+    """Detect a terminal graphics protocol in chafa output.
+
+    Returns 'kitty', 'sixel', 'iterm', or None (symbols/text art).
+    Only inspects the head: SGR text art can never contain DCS/APC/OSC
+    introducers, so a match is unambiguous. tmux-wrapped payloads start
+    with ESC P tmux; — check Kitty/iTerm magics before the bare DCS one.
+    """
+    head = data[:512]
+    if b"\x1b_G" in head or b"\x1b\x1b_G" in head:
+        return "kitty"
+    if b"1337;File=" in head:
+        return "iterm"
+    if re.search(rb"\x1b(?:\x1b)?P\d*;\d*;\d*q", head):
+        return "sixel"
+    return None
+
+
+def _clean_symbol_lines(text: str, rows: int) -> List[str]:
+    """Normalize chafa symbols output into exactly `rows` buffer lines."""
     lines: List[str] = []
     for raw in text.splitlines():
         line = raw.rstrip("\r")
@@ -1172,17 +1215,50 @@ def encode_cells_chafa(path: str, columns: int, rows: int) -> List[str]:
     return lines
 
 
-def encode_cells(path: str, columns: int, rows: int) -> List[str]:
-    """Encode image as unicode half-block rows (ANSI → WeeChat at display)."""
-    try:
-        return encode_cells_pil(path, columns, rows)
-    except Exception as pil_err:  # pylint: disable=broad-exception-caught
-        try:
-            return encode_cells_chafa(path, columns, rows)
-        except Exception as chafa_err:  # pylint: disable=broad-exception-caught
-            raise RuntimeError(
-                f"cells encode failed (pil={pil_err}; chafa={chafa_err})"
-            ) from chafa_err
+def encode_chafa_auto(
+    path: str, columns: int, rows: int
+) -> tuple[str, Union[bytes, List[str]]]:
+    """Encode via chafa with no -f flag so it auto-detects the terminal.
+
+    chafa >= 1.14 probes the terminal (ctty, so it also works with stdout
+    piped, e.g. under WeeChat hook_process) and emits iterm/kitty/sixels
+    when supported, falling back to symbols otherwise. Older chafa without
+    autodetection just emits symbols, which is safe too.
+
+    Returns (kind, payload): kind is 'kitty', 'sixel', 'iterm' with tty
+    bytes as payload, or 'symbols' with buffer text lines as payload.
+    """
+    columns = max(1, int(columns))
+    rows = max(1, int(rows))
+    chafa = shutil.which("chafa")
+    if not chafa:
+        raise RuntimeError("chafa not found")
+
+    proc = subprocess.run(
+        [
+            chafa,
+            "-s",
+            f"{columns}x{rows}",
+            "--animate=off",
+            "--polite=on",
+            path,
+        ],
+        capture_output=True,
+        check=False,
+        env=_chafa_env(),
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"chafa auto encode failed (rc={proc.returncode}): {err or 'no output'}"
+        )
+
+    kind = sniff_graphics_kind(proc.stdout)
+    if kind:
+        return kind, wrap_for_tmux(proc.stdout)
+    cleaned = _ANSI_STRIP_NON_SGR.sub(b"", proc.stdout)
+    text = cleaned.decode("utf-8", errors="replace")
+    return "symbols", _clean_symbol_lines(text, rows)
 
 
 def encode_sixel(
@@ -1397,6 +1473,28 @@ def send_image_to_terminal(
         return
 
     if backend == "sixel":
+        if _env("WEECHAT_ICAT_BACKEND").strip().lower() != "sixel" and shutil.which(
+            "chafa"
+        ):
+            # Auto: let chafa probe the terminal and pick iterm/kitty/sixels
+            # or symbols. Symbols output becomes buffer text (like cells);
+            # graphics bytes go to the tty (already tmux-wrapped).
+            kind, payload = encode_chafa_auto(
+                image_placement.path,
+                image_placement.columns,
+                image_placement.rows,
+            )
+            if kind == "symbols" and isinstance(payload, list):
+                image_placement.cell_lines = payload
+                # Nothing to write to the tty — display_image prints into the buffer.
+                return
+            if isinstance(payload, bytes):
+                image_placement.terminal_cmds = [payload]
+                write_raw_to_tty(payload)
+                return
+            raise RuntimeError(f"chafa auto returned unusable payload (kind={kind})")
+        # Explicit sixel: forced via WEECHAT_ICAT_BACKEND=sixel, or chafa is
+        # missing and img2sixel is the only encoder.
         sixel = encode_sixel(
             image_placement.path,
             image_placement.columns,
@@ -1485,7 +1583,9 @@ def display_image(buffer: str, image_placement: ImagePlacement):
 
     Kitty: unicode placeholders bound to the graphics protocol image id.
     Cells: chafa half-block / symbol rows (redraw-safe buffer text).
-    Sixel: label only; the Sixel stream is tty-only and usually wiped on refresh.
+    Sixel (chafa autodetect): label only; the graphics stream is tty-only
+    and usually wiped on refresh. The label names the format chafa actually
+    picked (kitty/sixel/iterm), or the art is buffer text on symbols fallback.
     """
     backend = shared.graphics_backend
     if image_placement.cell_lines:
@@ -1511,10 +1611,13 @@ def display_image(buffer: str, image_placement: ImagePlacement):
 
     if backend == "sixel":
         label = os.path.basename(image_placement.path) or "image"
+        kind = "sixel"
+        if image_placement.terminal_cmds:
+            kind = sniff_graphics_kind(image_placement.terminal_cmds[0]) or "sixel"
         weechat.prnt(
             buffer,
             f"{weechat.color('darkgray')}"
-            f"[sixel {image_placement.columns}x{image_placement.rows} {label}]",
+            f"[{kind} {image_placement.columns}x{image_placement.rows} {label}]",
         )
         return
 
