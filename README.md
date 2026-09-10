@@ -1059,6 +1059,11 @@ Blank rows are reserved under the message and the pixels are drawn at those
 screen rows (cursor-addressed, no refresh after), so images follow their links
 like Kitty placeholders do. When the buffer is hidden, scrolled, or the image
 is taller than the chat area, drawing falls back to the cursor position.
+Scrolling erases sixel pixels before the repaint (tracked per buffer, so other
+windows are untouched); scrolling back to the bottom — or switching back to
+the buffer — redraws images whose slots provably did not move. Unlike buffer
+text, pixels cannot follow content that shifted, so images stay gone once new
+lines arrive after a scroll.
 
 During **MAM replay**, image URLs are never passed directly to icat (async HTTP
 downloads would land out of order). Instead the plugin resolves each image to a

@@ -14,6 +14,10 @@
 #     after — a repaint would cover fresh pixels). Falls back to drawing
 #     at the cursor when the buffer is hidden, scrolled, or the image is
 #     taller than the chat area.
+#   - Scroll: positioned draws are tracked per buffer with a line counter
+#     (hook_print). Scroll commands erase pixels pre-repaint; returning to
+#     the bottom (or switching back to the buffer) redraws images whose
+#     slots provably did not move. Resize/close/clear invalidate tracking.
 #   - "cells" backend: half-block art printed into the WeeChat buffer (PIL, with
 #     chafa fallback). Survives redraws. Colors are converted to WeeChat codes
 #     (not raw ANSI — prnt does not interpret CSI).
@@ -501,6 +505,96 @@ def detect_graphics_backend() -> str:
     return "kitty"
 
 
+def buffer_line_count_cb(
+    data: str,
+    buffer: str,
+    date: int,
+    tags: int,
+    displayed: int,
+    highlight: int,
+    prefix: str,
+    message: str,
+) -> int:
+    # Every added line shifts sixel blank slots; the counter lets redraws
+    # prove a slot has not moved. Cheap enough to run on all buffers.
+    shared.buffer_line_counts[buffer] = shared.buffer_line_counts.get(buffer, 0) + 1
+    return weechat.WEECHAT_RC_OK
+
+
+def window_scroll_run_cb(data: str, buffer: str, command: str) -> int:
+    # Erase tracked pixels BEFORE the scroll repaint (recorded rows are
+    # still valid only now). Redraw, if possible, happens in the
+    # window_scrolled handler after the scroll lands.
+    try:
+        parts = command.split()
+        verb = parts[1] if len(parts) > 1 else ""
+        if verb.startswith("scroll"):
+            win = weechat.window_search_with_buffer(buffer) or weechat.current_window()
+            if verb in ("scroll_bottom", "scroll_beyond_end") and not weechat.window_get_integer(
+                win, "scrolling"
+            ):
+                return weechat.WEECHAT_RC_OK  # no-op: already at bottom
+            if verb == "scroll_top" and weechat.window_get_integer(
+                win, "first_line_displayed"
+            ):
+                return weechat.WEECHAT_RC_OK  # no-op: already at top
+            target = weechat.window_get_pointer(win, "buffer")
+            if target:
+                erase_tracked_sixels(target)
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+    return weechat.WEECHAT_RC_OK
+
+
+def window_scrolled_cb(data: str, signal: str, signal_data: str) -> int:
+    # Window finished scrolling: re-draw images whose slots provably did
+    # not move (only possible when back at the bottom with no new lines).
+    try:
+        buf = weechat.window_get_pointer(signal_data, "buffer")
+        if buf:
+            redraw_placeable_sixels(buf)
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+    return weechat.WEECHAT_RC_OK
+
+
+def buffer_switch_cb(data: str, signal: str, signal_data: str) -> int:
+    # Switching buffers repaints (wiping pixels): restore placeable images
+    # in the buffer just switched to.
+    try:
+        redraw_placeable_sixels(signal_data)
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+    return weechat.WEECHAT_RC_OK
+
+
+def sigwinch_cb(data: str, signal: str, signal_data: str) -> int:
+    # Resize repaints everything (wiping pixels) and shifts rows: forget
+    # recorded positions; bytes are kept for -restore.
+    for entries in shared.sixel_registry.values():
+        for entry in entries:
+            entry[1] = None
+            entry[2] = None
+            entry[3] = None
+    return weechat.WEECHAT_RC_OK
+
+
+def buffer_closed_cb(data: str, signal: str, signal_data: str) -> int:
+    shared.sixel_registry.pop(signal_data, None)
+    shared.buffer_line_counts.pop(signal_data, None)
+    return weechat.WEECHAT_RC_OK
+
+
+def buffer_cleared_cb(data: str, signal: str, signal_data: str) -> int:
+    # Lines gone: slots invalid; restart the counter.
+    for entry in shared.sixel_registry.get(signal_data, []):
+        entry[1] = None
+        entry[2] = None
+        entry[3] = None
+    shared.buffer_line_counts[signal_data] = 0
+    return weechat.WEECHAT_RC_OK
+
+
 def register():
     if weechat.register(
         shared.SCRIPT_NAME,
@@ -514,6 +608,15 @@ def register():
         create_cache_paths()
         shared.graphics_backend = detect_graphics_backend()
         register_commands()
+        weechat.hook_print("", "", "", 1, get_callback_name(buffer_line_count_cb), "")
+        weechat.hook_command_run(
+            "/window scroll*", get_callback_name(window_scroll_run_cb), ""
+        )
+        weechat.hook_signal("window_scrolled", get_callback_name(window_scrolled_cb), "")
+        weechat.hook_signal("buffer_switch", get_callback_name(buffer_switch_cb), "")
+        weechat.hook_signal("signal_sigwinch", get_callback_name(sigwinch_cb), "")
+        weechat.hook_signal("buffer_closed", get_callback_name(buffer_closed_cb), "")
+        weechat.hook_signal("buffer_cleared", get_callback_name(buffer_cleared_cb), "")
         print_info(f"graphics backend: {shared.graphics_backend}")
 
 
@@ -523,13 +626,19 @@ WeechatCallbackReturnType = Union[int, str, Dict[str, str], None]
 class Shared:
     def __init__(self):
         self.SCRIPT_NAME = "icat"
-        self.SCRIPT_VERSION = "0.2.5"
+        self.SCRIPT_VERSION = "0.2.6"
 
         self.weechat_callbacks: Dict[str, Callable[..., WeechatCallbackReturnType]]
         self.cache_path = "${weechat_cache_dir}/icat"
         self.cache_downloaded_images_path = f"{self.cache_path}/downloaded_images"
         self.print_errors = True
         self.graphics_backend = "kitty"
+        # Positioned sixel draws: buffer ptr -> [[placement, line_count,
+        # abs_row, chat_x], ...]. line_count/abs_row None = drawn at an
+        # unknown position (cursor fallback): kept for -restore but never
+        # auto-redrawn.
+        self.sixel_registry: Dict[str, List[list]] = {}
+        self.buffer_line_counts: Dict[str, int] = {}
 
 
 shared = Shared()
@@ -957,37 +1066,57 @@ def write_positioned_to_tty(data: bytes, col: int, row: int) -> None:
     write_raw_to_tty(wrap_for_tmux(blob))
 
 
-def draw_sixel_at_chat_bottom(buffer: str, sixel: bytes, rows: int) -> bool:
+# Max positioned sixel draws remembered per buffer for scroll erase/redraw.
+MAX_SIXEL_TRACKED_PER_BUFFER = 16
+
+
+def draw_sixel_at_chat_bottom(
+    buffer: str, sixel: bytes, rows: int
+) -> Optional[tuple[int, int]]:
     """Draw sixel pixels onto the blank rows reserved at the chat bottom.
 
-    Returns True when positioned drawing was possible: the buffer is
-    displayed in a window, the window is following the bottom (not
-    scrolling), and the image fits in the chat area. Otherwise False and
-    the caller falls back to writing at the current cursor position.
+    Returns (abs_row, chat_x) — 0-based — when positioned drawing was
+    possible: the buffer is displayed in a window, the window is following
+    the bottom (not scrolling), and the image fits in the chat area.
+    Otherwise None and the caller falls back to writing at the current
+    cursor position.
 
     WeeChat window coordinates are 0-based; CSI H addressing is 1-based.
     """
     try:
         win = weechat.window_search_with_buffer(buffer)
         if not win:
-            return False
+            return None
         if weechat.window_get_integer(win, "scrolling"):
-            return False
+            return None
         chat_x = weechat.window_get_integer(win, "win_chat_x")
         chat_y = weechat.window_get_integer(win, "win_chat_y")
         chat_w = weechat.window_get_integer(win, "win_chat_width")
         chat_h = weechat.window_get_integer(win, "win_chat_height")
     except Exception:  # pylint: disable=broad-exception-caught
-        return False
+        return None
     rows = max(1, int(rows))
     if chat_w <= 0 or chat_h <= 0 or rows > chat_h:
-        return False
+        return None
     col = chat_x + 1
     row = chat_y + chat_h - rows + 1
     if col < 1 or row < 1:
-        return False
+        return None
     write_positioned_to_tty(sixel, col, row)
-    return True
+    return (chat_y + chat_h - rows, chat_x)
+
+
+def track_sixel_draw(
+    buffer: str,
+    image_placement: ImagePlacement,
+    line_count: Optional[int],
+    abs_row: Optional[int],
+    chat_x: Optional[int],
+) -> None:
+    """Remember a tty sixel draw for scroll erase / redraw (main thread)."""
+    entries = shared.sixel_registry.setdefault(buffer, [])
+    entries.append([image_placement, line_count, abs_row, chat_x])
+    del entries[: max(0, len(entries) - MAX_SIXEL_TRACKED_PER_BUFFER)]
 
 
 def draw_sixel_after_label(buffer: str, image_placement: ImagePlacement) -> None:
@@ -995,7 +1124,9 @@ def draw_sixel_after_label(buffer: str, image_placement: ImagePlacement) -> None
 
     Must run on the WeeChat main thread (prnt + window geometry), right
     after display_image printed the label line, so the blanks are the last
-    chat rows and the computed screen slot matches them exactly.
+    chat rows and the computed screen slot matches them exactly. The line
+    counter is stamped after our own blank prnts so a later match proves
+    the slots have not moved.
     """
     if image_placement.cell_lines or not image_placement.terminal_cmds:
         return
@@ -1003,11 +1134,89 @@ def draw_sixel_after_label(buffer: str, image_placement: ImagePlacement) -> None
     for _ in range(rows):
         weechat.prnt(buffer, " ")
     sixel = image_placement.terminal_cmds[0]
-    if draw_sixel_at_chat_bottom(buffer, sixel, rows):
+    slot = draw_sixel_at_chat_bottom(buffer, sixel, rows)
+    if slot is not None:
+        abs_row, chat_x = slot
+        track_sixel_draw(
+            buffer, image_placement, shared.buffer_line_counts.get(buffer, 0),
+            abs_row, chat_x,
+        )
         return
     # Fallback: buffer hidden, scrolled, or image taller than the chat
     # area — draw at the current cursor position (old behavior).
     write_raw_to_tty(wrap_for_tmux(sixel))
+    track_sixel_draw(buffer, image_placement, None, None, None)
+
+
+def erase_tracked_sixels(buffer: str) -> None:
+    """Paint spaces over tracked sixel pixels in one buffer (pre-scroll).
+
+    Runs before the scroll repaint, so recorded absolute rows are still
+    valid. Afterwards rows are forgotten; kept bytes+counts may allow a
+    redraw when back at the bottom. No refresh: the model already holds
+    blanks at these cells, so no desync.
+    """
+    blob_parts: List[bytes] = []
+    for entry in shared.sixel_registry.get(buffer, []):
+        placement, _, abs_row, chat_x = entry
+        if abs_row is None or chat_x is None:
+            continue
+        cols = max(1, int(placement.columns))
+        rows = max(1, int(placement.rows))
+        for r in range(rows):
+            blob_parts.append(
+                f"\x1b[{abs_row + r + 1};{chat_x + 1}H".encode("ascii")
+                + b" " * cols
+            )
+        entry[2] = None
+        entry[3] = None
+    if blob_parts:
+        write_raw_to_tty(wrap_for_tmux(b"\x1b7" + b"".join(blob_parts) + b"\x1b8"))
+
+
+def redraw_placeable_sixels(buffer: str) -> None:
+    """Re-draw tracked images whose blank slots are provably unmoved.
+
+    Valid only when no lines were printed since the draw (line counter
+    match) and the window is back at the bottom. Draws at recorded rows
+    with fresh chat geometry; never falls back to cursor writes.
+    """
+    entries = shared.sixel_registry.get(buffer)
+    if not entries:
+        return
+    try:
+        win = weechat.window_search_with_buffer(buffer)
+        if not win or weechat.window_get_integer(win, "scrolling"):
+            return
+        chat_x = weechat.window_get_integer(win, "win_chat_x")
+        chat_y = weechat.window_get_integer(win, "win_chat_y")
+        chat_h = weechat.window_get_integer(win, "win_chat_height")
+    except Exception:  # pylint: disable=broad-exception-caught
+        return
+    if chat_h <= 0:
+        return
+    current = shared.buffer_line_counts.get(buffer, 0)
+    for entry in entries:
+        placement, count, abs_row, _ = entry
+        rows = max(1, int(placement.rows))
+        if (
+            count is None
+            or abs_row is None
+            or count != current
+            or abs_row < chat_y
+            or abs_row + rows > chat_y + chat_h
+            or not placement.terminal_cmds
+        ):
+            continue
+        try:
+            write_positioned_to_tty(
+                placement.terminal_cmds[0], chat_x + 1, abs_row + 1
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            entry[1] = None
+            entry[2] = None
+            continue
+        entry[3] = chat_x
 
 
 _ANSI_STRIP_NON_SGR = re.compile(
