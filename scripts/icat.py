@@ -8,6 +8,12 @@
 #     sixels when supported, falling back to symbols art printed into the
 #     WeeChat buffer. Needs chafa >= 1.14 for the probe; older chafa just
 #     emits symbols (safe). WEECHAT_ICAT_BACKEND=sixel forces explicit sixel.
+#   - Positioning: the background worker only encodes; the main-thread
+#     callback prints N blank rows under the label, then draws the pixels
+#     at those exact screen rows (cursor save/address/restore, no refresh
+#     after — a repaint would cover fresh pixels). Falls back to drawing
+#     at the cursor when the buffer is hidden, scrolled, or the image is
+#     taller than the chat area.
 #   - "cells" backend: half-block art printed into the WeeChat buffer (PIL, with
 #     chafa fallback). Survives redraws. Colors are converted to WeeChat codes
 #     (not raw ANSI — prnt does not interpret CSI).
@@ -133,15 +139,19 @@ def image_created_cb(
     if data.print_immediately and image_placement_was_returned:
         # Kitty: placeholders already printed; refresh binds the texture.
         # Cells: placeholders were skipped; print the finished art now.
-        # Sixel: writing to the tty already happened; a refresh would wipe it.
+        # Sixel: reserve blank rows under the label, then draw the pixels
+        # onto them (a refresh would wipe fresh pixels).
         if isinstance(result, ImagePlacement) and result.cell_lines:
             new_image_placement(data.buffer, result)
         elif shared.graphics_backend == "sixel":
-            pass
+            new_image_placement(data.buffer, result)
+            draw_sixel_after_label(data.buffer, result)
         else:
             weechat.command(data.buffer, "/window refresh")
     else:
         new_image_placement(data.buffer, result)
+        if shared.graphics_backend == "sixel":
+            draw_sixel_after_label(data.buffer, result)
 
 
 def images_restored_cb(buffer: str, result: ImagesSendFinished):
@@ -513,7 +523,7 @@ WeechatCallbackReturnType = Union[int, str, Dict[str, str], None]
 class Shared:
     def __init__(self):
         self.SCRIPT_NAME = "icat"
-        self.SCRIPT_VERSION = "0.2.4"
+        self.SCRIPT_VERSION = "0.2.5"
 
         self.weechat_callbacks: Dict[str, Callable[..., WeechatCallbackReturnType]]
         self.cache_path = "${weechat_cache_dir}/icat"
@@ -935,6 +945,71 @@ def write_raw_to_tty(data: bytes) -> None:
         tty.flush()
 
 
+def write_positioned_to_tty(data: bytes, col: int, row: int) -> None:
+    """Write graphics bytes at an explicit 1-based screen position.
+
+    Save cursor, address (col, row), write the payload, restore cursor.
+    The whole blob goes through tmux wrapping as one unit when in tmux.
+    No WeeChat refresh afterwards: a full repaint would paint the reserved
+    blank lines over the fresh pixels.
+    """
+    blob = b"\x1b7" + f"\x1b[{row};{col}H".encode("ascii") + data + b"\x1b8"
+    write_raw_to_tty(wrap_for_tmux(blob))
+
+
+def draw_sixel_at_chat_bottom(buffer: str, sixel: bytes, rows: int) -> bool:
+    """Draw sixel pixels onto the blank rows reserved at the chat bottom.
+
+    Returns True when positioned drawing was possible: the buffer is
+    displayed in a window, the window is following the bottom (not
+    scrolling), and the image fits in the chat area. Otherwise False and
+    the caller falls back to writing at the current cursor position.
+
+    WeeChat window coordinates are 0-based; CSI H addressing is 1-based.
+    """
+    try:
+        win = weechat.window_search_with_buffer(buffer)
+        if not win:
+            return False
+        if weechat.window_get_integer(win, "scrolling"):
+            return False
+        chat_x = weechat.window_get_integer(win, "win_chat_x")
+        chat_y = weechat.window_get_integer(win, "win_chat_y")
+        chat_w = weechat.window_get_integer(win, "win_chat_width")
+        chat_h = weechat.window_get_integer(win, "win_chat_height")
+    except Exception:  # pylint: disable=broad-exception-caught
+        return False
+    rows = max(1, int(rows))
+    if chat_w <= 0 or chat_h <= 0 or rows > chat_h:
+        return False
+    col = chat_x + 1
+    row = chat_y + chat_h - rows + 1
+    if col < 1 or row < 1:
+        return False
+    write_positioned_to_tty(sixel, col, row)
+    return True
+
+
+def draw_sixel_after_label(buffer: str, image_placement: ImagePlacement) -> None:
+    """Reserve blank rows in the buffer, then paint sixel pixels onto them.
+
+    Must run on the WeeChat main thread (prnt + window geometry), right
+    after display_image printed the label line, so the blanks are the last
+    chat rows and the computed screen slot matches them exactly.
+    """
+    if image_placement.cell_lines or not image_placement.terminal_cmds:
+        return
+    rows = max(1, int(image_placement.rows))
+    for _ in range(rows):
+        weechat.prnt(buffer, " ")
+    sixel = image_placement.terminal_cmds[0]
+    if draw_sixel_at_chat_bottom(buffer, sixel, rows):
+        return
+    # Fallback: buffer hidden, scrolled, or image taller than the chat
+    # area — draw at the current cursor position (old behavior).
+    write_raw_to_tty(wrap_for_tmux(sixel))
+
+
 _ANSI_STRIP_NON_SGR = re.compile(
     # Drop cursor/mode sequences; keep SGR color (…m) for conversion.
     rb"\x1b\[\?(?:\d+;)*\d+[hl]"
@@ -1255,7 +1330,9 @@ def encode_chafa_auto(
 
     kind = sniff_graphics_kind(proc.stdout)
     if kind:
-        return kind, wrap_for_tmux(proc.stdout)
+        # Raw bytes: tmux wrapping is applied at write time (either around
+        # the whole cursor-positioned blob or around the bare stream).
+        return kind, proc.stdout
     cleaned = _ANSI_STRIP_NON_SGR.sub(b"", proc.stdout)
     text = cleaned.decode("utf-8", errors="replace")
     return "symbols", _clean_symbol_lines(text, rows)
@@ -1266,8 +1343,14 @@ def encode_sixel(
     columns: int,
     rows: int,
     terminal_size: Optional[TerminalSize] = None,
+    wrap: bool = True,
 ) -> bytes:
-    """Encode an image as Sixel using chafa (preferred) or img2sixel."""
+    """Encode an image as Sixel using chafa (preferred) or img2sixel.
+
+    wrap=False returns the raw stream for embedding in a larger
+    cursor-positioned blob (tmux wrapping is applied to the whole blob
+    at write time instead).
+    """
     columns = max(1, int(columns))
     rows = max(1, int(rows))
 
@@ -1288,7 +1371,7 @@ def encode_sixel(
             check=False,
         )
         if proc.returncode == 0 and proc.stdout:
-            return wrap_for_tmux(proc.stdout)
+            return wrap_for_tmux(proc.stdout) if wrap else proc.stdout
         err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
         raise RuntimeError(
             f"chafa sixel encode failed (rc={proc.returncode}): {err or 'no output'}"
@@ -1309,7 +1392,7 @@ def encode_sixel(
             check=False,
         )
         if proc.returncode == 0 and proc.stdout:
-            return wrap_for_tmux(proc.stdout)
+            return wrap_for_tmux(proc.stdout) if wrap else proc.stdout
         err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
         raise RuntimeError(
             f"img2sixel encode failed (rc={proc.returncode}): {err or 'no output'}"
@@ -1363,7 +1446,12 @@ def create_and_send_image_to_terminal_bg(data_serialized: str) -> str:
             )
 
         send_image_to_terminal(
-            image_placement, image_data, terminal_size=data.terminal_size
+            image_placement,
+            image_data,
+            terminal_size=data.terminal_size,
+            # Encode only: the main-thread callback reserves blank rows and
+            # draws the pixels at the matching screen position.
+            defer_tty_write=True,
         )
 
         return b64encode(pickle.dumps(image_placement)).decode("ascii")
@@ -1450,7 +1538,15 @@ def send_image_to_terminal(
     image_placement: ImagePlacement,
     image_data: Optional[ImageData] = None,
     terminal_size: Optional[TerminalSize] = None,
+    defer_tty_write: bool = False,
 ):
+    """Encode (and unless deferred, draw) an image.
+
+    The create path defers the tty write: the background worker only
+    encodes, and the main-thread callback reserves blank buffer rows and
+    draws the pixels onto them at the right screen position. The -restore
+    path writes immediately at the cursor (bulk recovery, old behavior).
+    """
     # Always re-detect: hook_process "func:" workers start with a fresh Shared().
     backend = detect_graphics_backend()
     shared.graphics_backend = backend
@@ -1468,7 +1564,9 @@ def send_image_to_terminal(
     if image_placement.terminal_cmds:
         with open(os.ctermid(), "wb") as tty:
             for cmd in image_placement.terminal_cmds:
-                tty.write(cmd)
+                # Sixel payloads are stored raw; wrap at write time. Kitty
+                # chunks carry their own tmux handling — write as-is.
+                tty.write(wrap_for_tmux(cmd) if backend == "sixel" else cmd)
                 tty.flush()
         return
 
@@ -1477,8 +1575,7 @@ def send_image_to_terminal(
             "chafa"
         ):
             # Auto: let chafa probe the terminal and pick iterm/kitty/sixels
-            # or symbols. Symbols output becomes buffer text (like cells);
-            # graphics bytes go to the tty (already tmux-wrapped).
+            # or symbols. Symbols output becomes buffer text (like cells).
             kind, payload = encode_chafa_auto(
                 image_placement.path,
                 image_placement.columns,
@@ -1490,7 +1587,8 @@ def send_image_to_terminal(
                 return
             if isinstance(payload, bytes):
                 image_placement.terminal_cmds = [payload]
-                write_raw_to_tty(payload)
+                if not defer_tty_write:
+                    write_raw_to_tty(wrap_for_tmux(payload))
                 return
             raise RuntimeError(f"chafa auto returned unusable payload (kind={kind})")
         # Explicit sixel: forced via WEECHAT_ICAT_BACKEND=sixel, or chafa is
@@ -1500,9 +1598,11 @@ def send_image_to_terminal(
             image_placement.columns,
             image_placement.rows,
             terminal_size or get_terminal_size(),
+            wrap=not defer_tty_write,
         )
         image_placement.terminal_cmds = [sixel]
-        write_raw_to_tty(sixel)
+        if not defer_tty_write:
+            write_raw_to_tty(sixel)
         return
 
     control_data = {
