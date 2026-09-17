@@ -239,6 +239,7 @@ namespace weechat
         std::unordered_map<std::string, member> members;
         
         time_t last_mam_fetch = 0;
+        time_t last_self_ping = 0;
 
         // Smart filter: last time each nick spoke (key = resource nick in MUC)
         std::unordered_map<std::string, time_t> last_speak;

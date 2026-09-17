@@ -1236,10 +1236,12 @@ message_handler_after_omemo:
     // embed a legacy compatibility quote prefix that must be stripped.
     // Trimmed body storage — must outlive `text` usage below.
     std::string trimmed_body;
+    std::string reply_fallback_quote;
     if (text)
     {
         const auto fallback_body = ::xmpp::apply_fallback_body_trim(
             ::xmpp::StanzaView(stanza), text, has_message_correction);
+        reply_fallback_quote = fallback_body.stripped;
         switch (fallback_body.disposition)
         {
         case ::xmpp::FallbackBodyDisposition::Cleared:
@@ -1763,6 +1765,14 @@ message_handler_after_omemo:
                 reply_prefix = std::move(quote->excerpt);
                 reply_quote_nick = std::move(quote->quote_nick);
             }
+        }
+        // XEP-0461 §3.1: if the referenced message is not displayed, use the
+        // compatibility fallback quote instead of a generic "[reply]" label.
+        if (reply_prefix.empty() && !reply_fallback_quote.empty())
+        {
+            auto parsed = ::xmpp::parse_fallback_quote_text(reply_fallback_quote);
+            reply_prefix = std::move(parsed.excerpt);
+            reply_quote_nick = std::move(parsed.quote_nick);
         }
         if (reply_prefix.empty())
             reply_prefix = std::string(::xmpp::default_reply_excerpt());

@@ -32,7 +32,7 @@ int command__ping(const void *pointer, void *data,
     std::string id = stanza::uuid(ptr_account->context);
 
     // Track ping time for response measurement
-    ptr_account->user_ping_queries[id] = time(nullptr);
+    ptr_account->user_ping_queries[id] = {.start = time(nullptr)};
 
     auto ui = weechat::UiPort::for_buffer(buffer);
     if (target)
@@ -405,19 +405,12 @@ int command__selfping(const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    // Construct our full MUC JID (room@server/nickname)
-    std::string muc_jid =
-        fmt::format("{}/{}", ptr_channel->id, ptr_account->nickname());
+    const std::string nick = std::string(ptr_channel->own_nick());
+    const std::string muc_jid = fmt::format("{}/{}", ptr_channel->id,
+                                           nick.empty() ? ptr_account->nickname() : nick);
 
     ui->printf_network(fmt::format("Sending MUC self-ping to {}...", muc_jid));
-
-    // Send self-ping to our own MUC nickname
-    auto iq = stanza::iq()
-        .type("get")
-        .id(stanza::uuid(ptr_account->context))
-        .to(muc_jid)
-        .ping();
-    ptr_account->connection.send(iq.build(ptr_account->context).get());
+    ptr_account->send_muc_self_ping(*ptr_channel, false);
 
     return WEECHAT_RC_OK;
 }

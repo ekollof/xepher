@@ -1,3 +1,26 @@
+void weechat::account::send_muc_self_ping(channel &ch, bool quiet)
+{
+    const std::string nick = std::string(ch.own_nick());
+    if (nick.empty() || !connection || !xmpp_conn_is_connected(connection))
+        return;
+
+    const std::string muc_jid = fmt::format("{}/{}", ch.id, nick);
+    const std::string id = stanza::uuid(context);
+    user_ping_queries[id] = {
+        .start = time(nullptr),
+        .muc_room = ch.id,
+        .quiet = quiet,
+    };
+    ch.last_self_ping = time(nullptr);
+
+    auto iq = stanza::iq()
+        .type("get")
+        .id(id)
+        .to(muc_jid)
+        .ping();
+    connection.send(iq.build(context).get());
+}
+
 int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaining_calls)
 {
     (void) data;
@@ -53,19 +76,54 @@ int weechat::account::idle_timer_cb(const void *pointer, void *data, int remaini
     // <not-acceptable/> — we can no longer confirm we are still in the room.
     {
         static constexpr time_t PING_TIMEOUT_SECS = 30;
-        std::vector<std::string> stale_ids;
-        for (auto &[pid, start_time] : account->user_ping_queries)
+        std::vector<std::pair<std::string, account::ping_query>> stale;
+        for (auto &[pid, query] : account->user_ping_queries)
         {
-            if (now - start_time > PING_TIMEOUT_SECS)
-                stale_ids.push_back(pid);
+            if (now - query.start > PING_TIMEOUT_SECS)
+                stale.emplace_back(pid, query);
         }
-        for (auto &pid : stale_ids)
+        for (auto &[pid, query] : stale)
         {
             account->user_ping_queries.erase(pid);
-            weechat::UiPort::for_buffer(account->buffer)->printf_error(
-                fmt::format("Ping {} timed out (no response within {} s)",
-                            pid, PING_TIMEOUT_SECS));
+            if (!query.muc_room.empty())
+            {
+                weechat::UiPort::for_buffer(account->buffer)->printf_error(
+                    fmt::format("MUC self-ping to {} timed out — rejoining",
+                                query.muc_room));
+                std::string nick{account->nickname()};
+                if (auto it = account->channels.find(query.muc_room);
+                    it != account->channels.end())
+                {
+                    const auto own = it->second.own_nick();
+                    if (!own.empty())
+                        nick = std::string(own);
+                }
+                const std::string rejoin_jid = ::xmpp::muc_presence_jid(
+                    query.muc_room, {}, nick, account->jid());
+                ::xmpp::send_muc_join_presence(*account, rejoin_jid);
+            }
+            else
+            {
+                weechat::UiPort::for_buffer(account->buffer)->printf_error(
+                    fmt::format("Ping {} timed out (no response within {} s)",
+                                pid, PING_TIMEOUT_SECS));
+            }
         }
+    }
+
+    // XEP-0410: after ~15 minutes, ping our occupant JID so a silently
+    // dropped MUC membership is detected (and rejoined) without waiting
+    // for the user to notice a hung room.
+    static constexpr time_t k_muc_self_ping_interval = 15 * 60;
+    for (auto &[_, ch] : account->channels)
+    {
+        if (ch.type != weechat::channel::chat_type::MUC || ch.joining)
+            continue;
+        if (::xmpp::is_biboumi_gateway_room(ch.id))
+            continue;
+        if (ch.last_self_ping != 0 && now - ch.last_self_ping < k_muc_self_ping_interval)
+            continue;
+        account->send_muc_self_ping(ch, true);
     }
 
     return WEECHAT_RC_OK;

@@ -17,6 +17,47 @@ namespace {
         || msg.child("apply-to", k_fasten_ns).valid();
 }
 
+// XEP-0428 start/end are Unicode code-point offsets (inclusive/exclusive).
+[[nodiscard]] std::size_t utf8_codepoint_byte_offset(std::string_view text, std::size_t cp_index)
+{
+    std::size_t byte = 0;
+    std::size_t cp = 0;
+    while (byte < text.size() && cp < cp_index)
+    {
+        const unsigned char c = static_cast<unsigned char>(text[byte]);
+        std::size_t len = 1;
+        if ((c & 0xE0) == 0xC0)
+            len = 2;
+        else if ((c & 0xF0) == 0xE0)
+            len = 3;
+        else if ((c & 0xF8) == 0xF0)
+            len = 4;
+        if (byte + len > text.size())
+            return text.size();
+        byte += len;
+        ++cp;
+    }
+    return byte;
+}
+
+[[nodiscard]] StanzaView find_reply_fallback(StanzaView msg)
+{
+    StanzaView first_fallback;
+    for (const auto &child : msg)
+    {
+        if (child.name() != "fallback")
+            continue;
+        const auto ns = child.xmlns();
+        if (!ns || *ns != k_fallback_ns)
+            continue;
+        if (!first_fallback.valid())
+            first_fallback = child;
+        if (child.attr_string("for") == k_reply_ns)
+            return child;
+    }
+    return first_fallback;
+}
+
 [[nodiscard]] FallbackBodyResult trim_reply_fallback_quote(
     StanzaView fallback_elem, std::string_view text)
 {
@@ -28,34 +69,44 @@ namespace {
     if (end_attr.empty())
         return {};
 
-    const long end = parse_int64(end_attr).value_or(0);
-    if (end <= 0)
+    const long end_cp = parse_int64(end_attr).value_or(0);
+    if (end_cp <= 0)
         return {};
 
     const std::string start_attr = fb_body.attr_string("start");
-    long start = start_attr.empty() ? 0L : parse_int64(start_attr).value_or(0);
-    if (start < 0)
-        start = 0;
+    long start_cp = start_attr.empty() ? 0L : parse_int64(start_attr).value_or(0);
+    if (start_cp < 0)
+        start_cp = 0;
+    if (start_cp >= end_cp)
+        return {};
 
-    if (static_cast<std::size_t>(end) < text.size())
+    const std::size_t start_byte =
+        utf8_codepoint_byte_offset(text, static_cast<std::size_t>(start_cp));
+    const std::size_t end_byte =
+        utf8_codepoint_byte_offset(text, static_cast<std::size_t>(end_cp));
+    if (start_byte >= end_byte)
+        return {};
+
+    FallbackBodyResult result;
+    result.stripped = std::string(text.substr(start_byte, end_byte - start_byte));
+
+    if (start_byte > 0 || end_byte < text.size())
     {
         std::string rebuilt;
-        if (start > 0)
-            rebuilt = std::string(text.substr(0, static_cast<std::size_t>(start)));
+        if (start_byte > 0)
+            rebuilt = std::string(text.substr(0, start_byte));
 
-        std::string_view suffix = text.substr(static_cast<std::size_t>(end));
+        std::string_view suffix = text.substr(end_byte);
         const auto first_non_ws = suffix.find_first_not_of(" \t\r\n");
         if (first_non_ws != std::string_view::npos)
             suffix.remove_prefix(first_non_ws);
         rebuilt += suffix;
 
-        FallbackBodyResult result;
         result.disposition = FallbackBodyDisposition::Trimmed;
         result.trimmed = std::move(rebuilt);
         return result;
     }
 
-    FallbackBodyResult result;
     result.disposition = FallbackBodyDisposition::Cleared;
     return result;
 }
@@ -80,8 +131,11 @@ FallbackBodyResult apply_fallback_body_trim(
         return result;
     }
 
-    const StanzaView fallback_elem = msg.child("fallback", k_fallback_ns);
     if (!msg.child("reply", k_reply_ns).valid())
+        return {};
+
+    const StanzaView fallback_elem = find_reply_fallback(msg);
+    if (!fallback_elem.valid())
         return {};
 
     return trim_reply_fallback_quote(fallback_elem, body_text);

@@ -545,6 +545,9 @@ without opening the picker. Useful for quick replies.
 
 - Clients that do not support XEP-0461 will display the plain message text
   without the quoted context.
+- Incoming replies render a quote line from the referenced buffer message.
+  If that message is no longer in the buffer, the sender's XEP-0428 fallback
+  quote is shown instead of a generic `[reply]` label.
 - In MUC rooms, the MUC-assigned stanza-id (XEP-0359) is used when present,
   as required by the spec for rooms with `stanza-id` support.
 - You must be connected and inside a chat buffer to use `/reply`.
@@ -835,7 +838,7 @@ Required fields are marked with `*`. Multi-step sessions are supported.
 | `/notify [<jid>] [always\|on-mention\|never]` | Get or set per-chat notification preference (XEP-0492) |
 | `/invite [--mediated] <jid> [reason]` | Invite a user to the current MUC (XEP-0249 direct by default; `--mediated` for XEP-0045 §7.8.2) |
 | `/decline [room inviter [reason]]` | Decline a pending mediated MUC invitation (XEP-0045 §7.8.2; account buffer) |
-| `/selfping` | Verify MUC membership (XEP-0410) |
+| `/selfping` | Verify MUC membership (XEP-0410; also runs automatically every 15 min) |
 | `/edit` | Picker: choose a sent message to correct (XEP-0308) |
 | `/edit-to <id> <text>` | Correct a specific message by ID — used by the `/edit` picker |
 | `/retract` | Picker: choose a sent message to delete (XEP-0424) |

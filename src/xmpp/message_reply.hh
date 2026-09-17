@@ -40,6 +40,16 @@ nick_from_line_tags(std::span<const std::string_view> tags);
 [[nodiscard]] XMPP_TEST_EXPORT std::string format_reply_quote_body(
     std::string_view quote_nick, std::string_view excerpt);
 
+// Turn a XEP-0428 reply fallback body range (quoted `> nick` / `> text` lines)
+// into quote-line nick + excerpt when the referenced message is not in-buffer.
+struct ReplyFallbackQuote {
+    std::string quote_nick;
+    std::string excerpt;
+};
+
+[[nodiscard]] XMPP_TEST_EXPORT ReplyFallbackQuote
+parse_fallback_quote_text(std::string_view text);
+
 inline constexpr std::string_view default_reply_excerpt()
 {
     return "[reply]";

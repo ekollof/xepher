@@ -25,20 +25,34 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
     if (ping_it == account.user_ping_queries.end())
         return false;
 
-    auto& [_, start_time] = *ping_it;
-    const long rtt_ms = ::xmpp::compute_ping_rtt_ms(start_time, time(nullptr));
+    const auto query = ping_it->second;
+    const long rtt_ms = ::xmpp::compute_ping_rtt_ms(query.start, time(nullptr));
     account.user_ping_queries.erase(ping_it);
 
     const char *from_jid = from ? from : own_jid_str.data();
 
     const auto muc_from = from ? ::xmpp::parse_muc_ping_from(from) : std::nullopt;
-    const bool is_muc_selfping = muc_from && ::xmpp::is_muc_self_ping(
-        *muc_from,
-        account.nickname(),
-        [&](const std::string_view room) {
-            return account.channels.contains(std::string(room));
-        });
-    const std::string room_jid = muc_from ? muc_from->room_jid : std::string{};
+    std::string expected_nick{account.nickname()};
+    if (muc_from)
+    {
+        if (auto ch_it = account.channels.find(muc_from->room_jid);
+            ch_it != account.channels.end())
+        {
+            const auto own = ch_it->second.own_nick();
+            if (!own.empty())
+                expected_nick = std::string(own);
+        }
+    }
+    const bool is_muc_selfping = !query.muc_room.empty()
+        || (muc_from && ::xmpp::is_muc_self_ping(
+            *muc_from,
+            expected_nick,
+            [&](const std::string_view room) {
+                return account.channels.contains(std::string(room));
+            }));
+    const std::string room_jid = !query.muc_room.empty()
+        ? query.muc_room
+        : (muc_from ? muc_from->room_jid : std::string{});
 
     auto ui = weechat::UiPort::for_buffer(account.buffer);
 
@@ -46,8 +60,11 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
     {
         if (is_muc_selfping)
         {
-            ui->printf_network(fmt::format(
-                "MUC self-ping OK: still in {}", room_jid));
+            if (!query.quiet)
+            {
+                ui->printf_network(fmt::format(
+                    "MUC self-ping OK: still in {}", room_jid));
+            }
         }
         else
         {
@@ -65,8 +82,11 @@ bool weechat::connection::handle_ping_iq_event(xmpp_stanza_t *stanza, std::strin
         switch (::xmpp::classify_muc_self_ping_error(err_view))
         {
         case ::xmpp::MucSelfPingErrorOutcome::still_joined:
-            ui->printf_network(fmt::format(
-                "MUC self-ping: still in {} (reflected error)", room_jid));
+            if (!query.quiet)
+            {
+                ui->printf_network(fmt::format(
+                    "MUC self-ping: still in {} (reflected error)", room_jid));
+            }
             break;
         case ::xmpp::MucSelfPingErrorOutcome::ambiguous:
         {

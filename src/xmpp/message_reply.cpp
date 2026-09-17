@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <vector>
 #include <fmt/core.h>
 #include <memory>
 #include <ranges>
@@ -152,6 +153,48 @@ std::string format_reply_quote_body(std::string_view quote_nick, std::string_vie
                            dim, cyan, quote_nick, dim, dim, excerpt, reset);
     }
     return fmt::format("{}│ {}{}{}", dim, dim, excerpt, reset);
+}
+
+ReplyFallbackQuote parse_fallback_quote_text(std::string_view text)
+{
+    ReplyFallbackQuote out;
+    std::vector<std::string> lines;
+    for (auto part : text | std::views::split('\n'))
+    {
+        std::string_view line(part.begin(), part.end());
+        if (!line.empty() && line.back() == '\r')
+            line.remove_suffix(1);
+        while (!line.empty()
+               && (line.front() == '>' || line.front() == ' ' || line.front() == '\t'))
+            line.remove_prefix(1);
+        if (!line.empty())
+            lines.emplace_back(line);
+    }
+    if (lines.empty())
+        return out;
+
+    std::size_t body_from = 0;
+    if (lines.size() >= 2)
+    {
+        std::string_view first = lines.front();
+        if (first.ends_with(':'))
+            first.remove_suffix(1);
+        if (!first.empty() && first.size() <= 64 && !first.contains(' '))
+        {
+            out.quote_nick = std::string(first);
+            body_from = 1;
+        }
+    }
+
+    std::string excerpt;
+    for (std::size_t i = body_from; i < lines.size(); ++i)
+    {
+        if (!excerpt.empty())
+            excerpt += ' ';
+        excerpt += lines[i];
+    }
+    out.excerpt = build_reply_excerpt(excerpt);
+    return out;
 }
 
 }  // namespace xmpp

@@ -36,5 +36,7 @@
 #include "debug.hh"
 #include "weechat/ui_port.hh"
 #include "connection/internal.hh"
+#include "xmpp/iq_bookmarks.hh"
+#include "xmpp/muc_join.hh"
 
 #include "account/callbacks.inl"

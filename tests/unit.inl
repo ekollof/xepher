@@ -1495,6 +1495,25 @@ TEST_CASE("message_ephemeral spoiler and fallback helpers")
         xmpp::StanzaView(reply), "> quote\n\nanswer", false);
     CHECK(fb.disposition == xmpp::FallbackBodyDisposition::Trimmed);
     CHECK(fb.trimmed == "answer");
+    CHECK(fb.stripped == "> quote");
+
+    // XEP-0428 offsets are Unicode code points, not UTF-8 bytes (é is 2 bytes).
+    const std::string unicode_body = "> José:\n\nanswer";
+    xmpp_stanza_t *reply_utf8 = xmpp_stanza_new_from_string(env.ctx,
+        "<message xmlns='jabber:client' type='chat'>"
+        "<reply xmlns='urn:xmpp:reply:0' to='orig' id='x'/>"
+        "<fallback xmlns='urn:xmpp:fallback:0' for='urn:xmpp:reply:0'>"
+        "<body start='0' end='7'/>"
+        "</fallback>"
+        "<body>&gt; José:\n\nanswer</body>"
+        "</message>");
+    REQUIRE(reply_utf8 != nullptr);
+    const auto fb_utf8 = xmpp::apply_fallback_body_trim(
+        xmpp::StanzaView(reply_utf8), unicode_body, false);
+    CHECK(fb_utf8.disposition == xmpp::FallbackBodyDisposition::Trimmed);
+    CHECK(fb_utf8.trimmed == "answer");
+    CHECK(fb_utf8.stripped == "> José:");
+    xmpp_stanza_release(reply_utf8);
 
     xmpp_stanza_t *reactions = xmpp_stanza_new_from_string(env.ctx,
         "<message xmlns='jabber:client' type='chat'>"
@@ -1633,6 +1652,13 @@ TEST_CASE("message_reactions and reply helpers")
     CHECK(xmpp::strip_leading_reply_chain(
               "\xE2\x86\xAA alice: hi there") == "alice: hi there");
     CHECK(xmpp::build_reply_excerpt("short") == "short");
+
+    auto fb_quote = xmpp::parse_fallback_quote_text("> Alice:\n> We should bake a cake\n");
+    CHECK(fb_quote.quote_nick == "Alice");
+    CHECK(fb_quote.excerpt == "We should bake a cake");
+    auto fb_plain = xmpp::parse_fallback_quote_text("> just a quote\n");
+    CHECK(fb_plain.quote_nick.empty());
+    CHECK(fb_plain.excerpt == "just a quote");
 
     const std::string long_line(201, 'x');
     CHECK(xmpp::should_truncate_reply_excerpt(long_line));

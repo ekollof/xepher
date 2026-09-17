@@ -229,7 +229,12 @@ namespace weechat
         
         std::unordered_set<std::string> user_disco_queries;
         std::unordered_set<std::string> user_disco_items_queries;  // disco#items queries initiated by /disco items
-        std::unordered_map<std::string, time_t> user_ping_queries;  // ping_id -> start_time
+        struct ping_query {
+            time_t start = 0;
+            std::string muc_room;  // set for XEP-0410 self-ping
+            bool quiet = false;    // automatic pings: suppress OK log lines
+        };
+        std::unordered_map<std::string, ping_query> user_ping_queries;  // ping_id -> query
         std::unordered_map<std::string, std::string> caps_disco_queries;  // disco_id -> verification_hash
         std::unordered_map<std::string, std::string> upload_disco_queries;  // disco_id -> service_jid
 
@@ -524,6 +529,9 @@ namespace weechat
         static void disconnect_all();
 
         bool connected() { return is_connected; }
+
+        // XEP-0410: ping our own occupant JID. quiet=true for periodic checks.
+        void send_muc_self_ping(channel &ch, bool quiet);
 
         // Suppress libstrophe conn_handler side-effects during account destruction.
         void begin_teardown() { tearing_down_ = true; }

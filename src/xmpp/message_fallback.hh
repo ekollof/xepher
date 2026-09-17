@@ -28,6 +28,9 @@ enum class FallbackBodyDisposition {
 struct FallbackBodyResult {
     FallbackBodyDisposition disposition = FallbackBodyDisposition::Unchanged;
     std::string trimmed;
+    // XEP-0428 body range that was stripped (compatibility quote). Used when
+    // XEP-0461 cannot resolve the referenced message in the buffer.
+    std::string stripped;
 };
 
 [[nodiscard]] XMPP_TEST_EXPORT bool stanza_has_fallback(StanzaView msg);

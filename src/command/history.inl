@@ -152,13 +152,15 @@ echo_outgoing_reply(weechat::account *account,
     if (channel->type == weechat::channel::chat_type::MUC)
     {
         const std::string_view nick = channel->own_nick();
-        tags = fmt::format("xmpp_message,message,nick_{},notify_none,self_msg,log1,id_{}",
-                           nick, origin_id);
+        tags = fmt::format(
+            "xmpp_message,message,nick_{},notify_none,self_msg,log1,id_{},origin_id_{}",
+            nick, origin_id, origin_id);
     }
     else
     {
-        tags = fmt::format("xmpp_message,message,private,notify_none,self_msg,log1,id_{}",
-                           origin_id);
+        tags = fmt::format(
+            "xmpp_message,message,private,notify_none,self_msg,log1,id_{},origin_id_{}",
+            origin_id, origin_id);
     }
 
     ui->printf_date_tags(0, tags.c_str(), fmt::format("{}\t{}", prefix, reply_text));
@@ -583,30 +585,31 @@ int command__react(const void *pointer, void *data,
         
         if (line_data)
         {
-            const char *tags = (const char*)weechat_hdata_string(hdata_line_data, line_data, "tags");
-            
-            // Look for messages with ID that aren't from us
-            if (tags && std::string_view(tags).contains("id_") && !std::string_view(tags).contains("self_msg"))
+            const int tags_count = weechat_hdata_integer(hdata_line_data, line_data, "tags_count");
+            bool from_self = false;
+            std::string msg_id;
+            std::string sid;
+            std::string sid_by;
+            for (int n = 0; n < tags_count; ++n)
             {
-                // Extract the message ID and (for MUC) stanza-id from tags
-                std::string msg_id;
-                std::string sid;
-                std::string sid_by;
-                char **tag_array = weechat_string_split(tags, ",", nullptr, 0, 0, nullptr);
-                if (tag_array)
-                {
-                    for (int i = 0; tag_array[i]; i++)
-                    {
-                        const std::string_view t { tag_array[i] };
-                        if (t.starts_with("id_") && msg_id.empty())
-                            msg_id = t.substr(3);
-                        else if (t.starts_with("stanza_id_by_"))
-                            sid_by = t.substr(13);
-                        else if (t.starts_with("stanza_id_"))
-                            sid = t.substr(10);
-                    }
-                    weechat_string_free_split(tag_array);
-                }
+                const std::string key = fmt::format("{}|tags_array", n);
+                const char *tag = weechat_hdata_string(hdata_line_data, line_data, key.c_str());
+                if (!tag)
+                    continue;
+                const std::string_view t { tag };
+                if (t == "self_msg")
+                    from_self = true;
+                else if (t.starts_with("id_") && msg_id.empty())
+                    msg_id = t.substr(3);
+                else if (t.starts_with("stanza_id_by_"))
+                    sid_by = t.substr(13);
+                else if (t.starts_with("stanza_id_") && sid.empty())
+                    sid = t.substr(10);
+            }
+
+            // Look for messages with ID that aren't from us
+            if (!from_self && !msg_id.empty())
+            {
                 // XEP-0444 §4.2: For groupchat, MUST use the MUC-assigned stanza-id.
                 if (!msg_id.empty())
                 {

@@ -57,7 +57,7 @@ inline constexpr int k_line_store_default_max_scan = 256;
                                                          std::string_view acked_id,
                                                          std::string_view new_glyph);
 
-// Scan recent buffer lines for any tag string containing one of the needles.
+// Scan recent buffer lines for an exact match of any needle in tags_array.
 [[nodiscard]] XMPP_TEST_EXPORT bool line_store_buffer_contains_any_tag(
     struct t_gui_buffer *buffer,
     std::initializer_list<std::string_view> needles,

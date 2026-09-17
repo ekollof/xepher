@@ -462,15 +462,20 @@ bool line_store_buffer_contains_any_tag(struct t_gui_buffer *buffer,
         void *line_data = weechat_hdata_pointer(hdata_line, line, "data");
         if (line_data)
         {
-            const char *tags = weechat_hdata_string(hdata_line_data, line_data, "tags");
-            if (tags)
-            {
-                const std::string_view tag_view(tags);
-                if (std::ranges::any_of(needles, [&](std::string_view needle) {
-                        return !needle.empty() && tag_view.contains(needle);
-                    }))
-                    return true;
-            }
+            const int tags_count =
+                weechat_hdata_integer(hdata_line_data, line_data, "tags_count");
+            const bool matched = std::ranges::any_of(
+                std::views::iota(0, tags_count), [&](int n) {
+                    const char *tag = line_data_tag_at(line_data, n, hdata_line_data);
+                    if (!tag)
+                        return false;
+                    const std::string_view tag_view(tag);
+                    return std::ranges::any_of(needles, [&](std::string_view needle) {
+                        return !needle.empty() && tag_view == needle;
+                    });
+                });
+            if (matched)
+                return true;
         }
         line = weechat_hdata_pointer(hdata_line, line, "prev_line");
     }
