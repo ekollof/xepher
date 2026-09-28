@@ -38,6 +38,7 @@ case "$OS" in
             libstrophe-dev \
             libxml2-dev \
             liblmdb-dev \
+            libomemo-c-dev \
             libsignal-protocol-c-dev \
             libgpgme-dev \
             libfmt-dev \
@@ -59,6 +60,7 @@ case "$OS" in
             libstrophe-devel \
             libxml2-devel \
             lmdb-devel \
+            libomemo-c-devel \
             libsignal-protocol-c-devel \
             gpgme-devel \
             fmt-devel \
@@ -82,6 +84,7 @@ case "$OS" in
             libstrophe \
             libxml2 \
             lmdb \
+            libomemo-c \
             libsignal-protocol-c \
             gpgme \
             fmt \
@@ -121,6 +124,7 @@ case "$OS" in
             libstrophe-devel \
             libxml2-devel \
             lmdb-devel \
+            libomemo-c-devel \
             libsignal-protocol-c-devel \
             gpgme-devel \
             fmt-devel \
@@ -131,6 +135,9 @@ case "$OS" in
     
     alpine)
         echo "Installing dependencies for Alpine Linux..."
+        echo "Note: libomemo-c-dev, libsignal-protocol-c-dev and weechat live in the"
+        echo "      community repository — enable it for your release if apk cannot"
+        echo "      find them (e.g. https://dl-cdn.alpinelinux.org/alpine/v3.22/community)."
         sudo apk add --no-cache \
             clang \
             cmake \
@@ -141,6 +148,7 @@ case "$OS" in
             libstrophe-dev \
             libxml2-dev \
             lmdb-dev \
+            libomemo-c-dev \
             libsignal-protocol-c-dev \
             gpgme-dev \
             fmt-dev \
@@ -159,6 +167,7 @@ case "$OS" in
             net-libs/libstrophe \
             dev-libs/libxml2 \
             dev-db/lmdb \
+            net-libs/libomemo-c \
             net-libs/libsignal-protocol-c \
             app-crypt/gpgme \
             dev-libs/libfmt \
@@ -225,7 +234,7 @@ case "$OS" in
             curl \
             openssl \
             weechat
-        echo "Note: libsignal-protocol-c may need to be built from source on NetBSD."
+        echo "Note: libsignal-protocol-c and libomemo-c may need to be built from source on NetBSD."
         ;;
 
     darwin)
