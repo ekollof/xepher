@@ -68,7 +68,9 @@ case "$OS" in
             weechat-devel
         ;;
     
-    arch|manjaro)
+    # Note: artix is matched explicitly — Artix ships ID=artix with an
+    # empty ID_LIKE, so the normalization above does not catch it.
+    arch|artix|manjaro)
         echo "Installing dependencies for Arch-based system..."
         sudo pacman -Sy --needed --noconfirm \
             clang \
