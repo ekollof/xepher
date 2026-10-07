@@ -43,4 +43,8 @@ download_image_to_cache_sync(account &acct, std::string_view url);
 // Join all background image-cache download threads (plugin unload).
 void shutdown_icat_background_workers();
 
+// Bind left-clicks on inline image rows to open their tagged local asset.
+void init_icat_mouse();
+void shutdown_icat_mouse();
+
 }  // namespace weechat

@@ -5,11 +5,13 @@
 #include "weechat/icat_preview.hh"
 
 #include <filesystem>
+#include <charconv>
 #include <fstream>
 #include <functional>
 #include <list>
 #include <mutex>
 #include <optional>
+#include <ranges>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -23,6 +25,7 @@
 #include "plugin.hh"
 #include "util.hh"
 #include "weechat/ui_port.hh"
+#include "weechat/buffer_port.hh"
 
 namespace weechat {
 
@@ -31,6 +34,74 @@ namespace {
 // Joinable background image-cache downloads — drained on plugin unload.
 std::mutex g_icat_bg_mutex;
 std::list<std::thread> g_icat_bg_workers;
+struct t_hook *g_icat_mouse_hook = nullptr;
+
+int open_image_done(const void *, void *, const char *, int return_code,
+                    const char *, const char *)
+{
+    if (return_code == WEECHAT_HOOK_PROCESS_ERROR || return_code > 0)
+        UiPort::for_buffer(nullptr)->printf_error(
+            fmt::format("xmpp: xdg-open failed ({})", return_code));
+    return WEECHAT_RC_OK;
+}
+
+int open_image_cb(const void *, void *, const char *, struct t_hashtable *event)
+{
+    if (!event || g_plugin_unloading)
+        return WEECHAT_RC_OK;
+    const auto *full_name = static_cast<const char *>(
+        weechat_hashtable_get(event, "_buffer_full_name"));
+    const auto *tags = static_cast<const char *>(
+        weechat_hashtable_get(event, "_chat_line_tags"));
+    if (!full_name || !tags || !std::string_view(full_name).starts_with("xmpp."))
+        return WEECHAT_RC_OK;
+    auto *buffer = BufferPort::default_port_ref().search("==", full_name);
+    if (!buffer)
+        return WEECHAT_RC_OK;
+
+    // The shared live icat script uses this historical tag for all plugins.
+    constexpr std::string_view prefix = "weeslack_file_";
+    for (auto part : std::string_view(tags) | std::views::split(','))
+    {
+        const std::string_view tag(part.begin(), part.end());
+        if (!tag.starts_with(prefix))
+            continue;
+        const auto hex = tag.substr(prefix.size());
+        if (hex.empty() || hex.size() % 2 || hex.size() > 8192)
+            return WEECHAT_RC_OK;
+        std::string path;
+        path.reserve(hex.size() / 2);
+        for (auto pair : hex | std::views::chunk(2))
+        {
+            unsigned int byte = 0;
+            const auto [end, error] = std::from_chars(pair.data(), pair.data() + 2, byte, 16);
+            if (error != std::errc{} || end != pair.data() + 2 || byte == 0)
+                return WEECHAT_RC_OK;
+            path.push_back(static_cast<char>(byte));
+        }
+        std::error_code error;
+        auto ui = UiPort::for_buffer(buffer);
+        if (!path.starts_with('/') || !std::filesystem::is_regular_file(path, error))
+        {
+            ui->printf_error("xmpp: image file is unavailable");
+            return WEECHAT_RC_OK;
+        }
+        const auto free_options = [](t_hashtable *options) { weechat_hashtable_free(options); };
+        using options_ptr = std::unique_ptr<t_hashtable, decltype(free_options)>;
+        options_ptr options(weechat_hashtable_new(8, WEECHAT_HASHTABLE_STRING,
+                            WEECHAT_HASHTABLE_STRING, nullptr, nullptr),
+                            free_options);
+        if (!options)
+            return WEECHAT_RC_OK;
+        // Explicit argv keeps spaces and shell characters literal.
+        weechat_hashtable_set(options.get(), "arg1", path.c_str());
+        if (!weechat_hook_process_hashtable("xdg-open", options.get(), 30000,
+                                            &open_image_done, nullptr, nullptr))
+            ui->printf_error("xmpp: could not start xdg-open");
+        return WEECHAT_RC_OK;
+    }
+    return WEECHAT_RC_OK;
+}
 
 void join_icat_background_workers()
 {
@@ -264,6 +335,30 @@ resolve_local_icat_path(const icat_preview_request &req, account &acct)
 }
 
 }  // namespace
+
+void init_icat_mouse()
+{
+    g_icat_mouse_hook = weechat_hook_hsignal("xmpp_open_image", &open_image_cb,
+                                            nullptr, nullptr);
+    auto *keys = weechat_hashtable_new(8, WEECHAT_HASHTABLE_STRING,
+                                      WEECHAT_HASHTABLE_STRING, nullptr, nullptr);
+    if (!keys)
+        return;
+    weechat_hashtable_set(keys, "__quiet", "1");
+    weechat_hashtable_set(keys, "@chat(xmpp.*):button1", "hsignal:xmpp_open_image");
+    weechat_key_bind("mouse", keys);
+    weechat_hashtable_free(keys);
+}
+
+void shutdown_icat_mouse()
+{
+    if (g_icat_mouse_hook)
+    {
+        weechat_unhook(g_icat_mouse_hook);
+        g_icat_mouse_hook = nullptr;
+    }
+    weechat_key_unbind("mouse", "@chat(xmpp.*):button1");
+}
 
 void shutdown_icat_background_workers()
 {

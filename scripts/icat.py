@@ -1896,6 +1896,9 @@ def display_image(buffer: str, image_placement: ImagePlacement):
     and usually wiped on refresh. The label names the format chafa actually
     picked (kitty/sixel/iterm), or the art is buffer text on symbols fallback.
     """
+    # Hex keeps commas, spaces and non-ASCII filenames safe inside line tags.
+    file_tag = "weeslack_file_" + os.fsencode(os.path.realpath(image_placement.path)).hex()
+    tags = "notify_none,no_highlight," + file_tag
     backend = shared.graphics_backend
     if image_placement.cell_lines:
         backend = "cells"
@@ -1907,7 +1910,7 @@ def display_image(buffer: str, image_placement: ImagePlacement):
         lines = image_placement.cell_lines
         if not lines:
             for _ in range(max(1, image_placement.rows)):
-                weechat.prnt(buffer, " ")
+                weechat.prnt_date_tags(buffer, 0, tags, " ")
             return
         last = len(lines) - 1
         for i, line in enumerate(lines):
@@ -1915,7 +1918,7 @@ def display_image(buffer: str, image_placement: ImagePlacement):
             converted = ansi_to_weechat(line)
             if i == last:
                 converted += weechat.color("reset")
-            weechat.prnt(buffer, converted)
+            weechat.prnt_date_tags(buffer, 0, tags, converted)
         return
 
     if backend == "sixel":
@@ -1923,8 +1926,8 @@ def display_image(buffer: str, image_placement: ImagePlacement):
         kind = "sixel"
         if image_placement.terminal_cmds:
             kind = sniff_graphics_kind(image_placement.terminal_cmds[0]) or "sixel"
-        weechat.prnt(
-            buffer,
+        weechat.prnt_date_tags(
+            buffer, 0, tags,
             f"{weechat.color('darkgray')}"
             f"[{kind} {image_placement.columns}x{image_placement.rows} {label}]",
         )
@@ -1935,7 +1938,7 @@ def display_image(buffer: str, image_placement: ImagePlacement):
             get_cell_character(image_placement.image_id, y, x, include_color=x == 0)
             for x in range(image_placement.columns)
         ]
-        weechat.prnt(buffer, "".join(chars))
+        weechat.prnt_date_tags(buffer, 0, tags, "".join(chars))
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 

@@ -235,6 +235,8 @@ void weechat::plugin::init(int argc, char *argv[])
 
     completion__init(); // TODO: port
 
+    weechat::init_icat_mouse();
+
     m_process_timer = weechat_hook_timer(WEECHAT_TIMER_SECONDS(1000), 0, 0,
                                          &weechat::account::timer_cb,
                                          nullptr, nullptr);
@@ -273,6 +275,7 @@ void weechat::plugin::end() {
     // CRITICAL: Set flag FIRST so in-flight callbacks and worker threads
     // stop touching plugin state before we tear it down.
     weechat::g_plugin_unloading = true;
+    weechat::shutdown_icat_mouse();
 
     weechat::cancel_focus_core_buffer_timer();
 
@@ -346,4 +349,3 @@ XMPP_TEST_EXPORT weechat::plugin::~plugin()
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-

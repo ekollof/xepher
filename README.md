@@ -27,7 +27,7 @@ you can reload without restarting WeeChat.
 | **OMEMO** | Axolotl-namespace E2EE for PMs (MUC experimental); BTBV trust; `/omemo fingerprint` |
 | **History** | XEP-0313 MAM + LMDB cache across reconnects |
 | **Social** | PubSub microblog (Movim-compatible); optional feed buffers |
-| **Files** | XEP-0363 upload, SFS/ESFS, stickers; Kitty/cell inline previews via `icat` |
+| **Files** | XEP-0363 upload, SFS/ESFS, stickers; Kitty/cell inline previews via `icat` with left-click to open |
 | **MUC** | Full XEP-0045: join, admin, bookmarks, moderation, reactions |
 | **UX** | Receipts/read markers, typing, corrections, replies, status bar encryption item |
 
@@ -1045,6 +1045,11 @@ protocol:
   references are IQ-fetched from the sender, cached under
   `~/.local/share/weechat/xmpp/bob_cache/<account>/`, and displayed inline (the
   `[Sticker]` placeholder is not shown when icat is enabled).
+
+With WeeChat mouse mode enabled (`/mouse enable`), left-click an image row
+to open its downloaded local asset in the default desktop application via
+`xdg-open`. This requires the updated `scripts/icat.py`; reload it after updating
+(`/script reload icat.py`). Missing or removed assets produce an error.
 
 Only image MIME types (`image/*`) trigger icat. Other file types are announced
 normally without inline display.
