@@ -558,6 +558,12 @@ namespace weechat
         void mam_query_free_all();
         void cancel_channel_mam(std::string_view channel_id);
         void reset_mam_sync();
+        bool defer_channel_mam_message(std::string_view channel_id,
+                                       std::string_view result_query_id,
+                                       xmpp_stanza_t *message);
+        void flush_channel_mam_messages(std::string_view channel_id);
+        std::unordered_map<std::string, std::vector<std::shared_ptr<xmpp_stanza_t>>>
+            mam_deferred_messages;
 
         // Global MAM concurrency limiter support
         bool try_acquire_mam_slot();

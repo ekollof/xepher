@@ -25,6 +25,7 @@ struct MamForwardedDispatch {
     xmpp_stanza_t *message = nullptr;
     std::string archive_id;
     std::string delay_stamp;
+    std::string query_id;
 };
 
 struct MamDedupNeedles {
@@ -54,6 +55,9 @@ struct MamPmDiscoveryPolicy {
 parse_carbon_inner_message(StanzaView envelope, std::string_view account_bare_jid);
 
 [[nodiscard]] XMPP_TEST_EXPORT bool stanza_is_mam_result(StanzaView msg);
+// Account catch-up must wait for the chat's history fetch before rendering.
+[[nodiscard]] XMPP_TEST_EXPORT bool mam_result_needs_chat_ordering(
+    std::string_view result_query_id, std::string_view chat_query_id);
 [[nodiscard]] XMPP_TEST_EXPORT std::optional<std::string>
 mam_pubsub_query_id(StanzaView msg);
 [[nodiscard]] XMPP_TEST_EXPORT std::optional<MamForwardedDispatch>

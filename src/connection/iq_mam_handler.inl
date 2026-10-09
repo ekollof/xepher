@@ -67,6 +67,8 @@ void weechat::connection::handle_mam_query_iq_error(xmpp_stanza_t *stanza)
             is_global_query ? " and flushing deferred OMEMO key-transports" : ""));
         account.mam_query_remove(failed_mam_query.id);
         account.release_mam_slot();
+        if (!is_global_query)
+            account.flush_channel_mam_messages(failed_mam_query.with);
         if (is_global_query)
         {
             account.omemo.global_mam_catchup = false;
@@ -150,6 +152,8 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
             fin_stable ? std::string(*fin_stable) : "(unset)"));
         account.mam_query_remove(mam_query.id);
         account.release_mam_slot();
+        if (!is_global_query)
+            account.flush_channel_mam_messages(mam_query.with);
         if (is_global_query)
         {
             account.omemo.global_mam_catchup = false;
@@ -195,6 +199,7 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
                 account.pm_open_register(ch.id);
             account.mam_query_remove(mam_query.id);
             account.release_mam_slot();
+            account.flush_channel_mam_messages(ch.id);
 
             // Print "History loaded" completion banner matching the fetch banner
             // printed at the start of fetch_mam().

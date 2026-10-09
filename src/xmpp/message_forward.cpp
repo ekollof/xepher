@@ -104,6 +104,12 @@ bool stanza_is_mam_result(StanzaView msg)
     return msg.child("result", k_mam_ns).valid();
 }
 
+bool mam_result_needs_chat_ordering(std::string_view result_query_id,
+                                   std::string_view chat_query_id)
+{
+    return !chat_query_id.empty() && result_query_id != chat_query_id;
+}
+
 std::optional<std::string> mam_pubsub_query_id(StanzaView msg)
 {
     const StanzaView result = msg.child("result", k_mam_ns);
@@ -132,6 +138,7 @@ std::optional<MamForwardedDispatch> parse_mam_forwarded_dispatch(StanzaView enve
     MamForwardedDispatch dispatch;
     dispatch.message = message.raw();
     dispatch.archive_id = result.attr_string("id");
+    dispatch.query_id = result.attr_string("queryid");
 
     const StanzaView delay = forwarded.child("delay", k_delay_ns);
     if (delay.valid())

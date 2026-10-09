@@ -1155,6 +1155,9 @@ stream resumption preserves them. Closing a chat cancels its pending history
 work. Global catch-up shares the configured MAM concurrency
 limit with chat fetches. Unstable archive pages do not advance reconnect
 checkpoints, so a later catch-up can query them again.
+When account catch-up overlaps a chat's history fetch, account results wait for
+the chat fetch to finish before display. This keeps recent replies below older
+history instead of leaving them near the top of the replay.
 
 ### Service discovery & roster
 

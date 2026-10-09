@@ -457,6 +457,13 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     }
                 }
 
+                // Global catch-up and per-chat history can overlap. Rendering
+                // the newest global result first would put it above the older
+                // chat history, and dedup would suppress its later sorted copy.
+                if (partner && account.defer_channel_mam_message(
+                        *partner, dispatch->query_id, stanza))
+                    return 1;
+
                 if (!dispatch->archive_id.empty() || (msg_id && *msg_id))
                 {
                     const auto dedup_needles = ::xmpp::mam_dedup_needles(

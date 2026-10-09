@@ -2330,8 +2330,15 @@ TEST_CASE("parse_mam_forwarded_dispatch extracts archive metadata")
     auto dispatch = xmpp::parse_mam_forwarded_dispatch(view);
     REQUIRE(dispatch.has_value());
     CHECK(dispatch->archive_id == "arch-1");
+    CHECK(dispatch->query_id == "q1");
     CHECK(dispatch->delay_stamp == "2020-01-01T12:00:00Z");
     CHECK(xmpp::parse_forward_delay_stamp(dispatch->delay_stamp) > 0);
+    // The chat's own pages render immediately. Concurrent account catch-up
+    // (including a query without queryid) waits until the chat fetch finishes.
+    CHECK_FALSE(xmpp::mam_result_needs_chat_ordering(dispatch->query_id, "q1"));
+    CHECK(xmpp::mam_result_needs_chat_ordering(dispatch->query_id, "chat-history"));
+    CHECK(xmpp::mam_result_needs_chat_ordering("", "chat-history"));
+    CHECK_FALSE(xmpp::mam_result_needs_chat_ordering("q1", ""));
 
     const auto partner = xmpp::mam_conversation_partner_jid(
         "bob@example.org", "alice@example.org", "alice@example.org");

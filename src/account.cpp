@@ -288,6 +288,7 @@ void weechat::account::cancel_channel_mam(std::string_view channel_id)
 {
     if (channel_id.empty())
         return;
+    mam_deferred_messages.erase(std::string(channel_id));
     std::erase_if(mam_deferred_pages, [&](const auto &page) {
         return page.channel_id == channel_id;
     });
@@ -299,6 +300,39 @@ void weechat::account::cancel_channel_mam(std::string_view channel_id)
     });
 }
 
+bool weechat::account::defer_channel_mam_message(std::string_view channel_id,
+                                                std::string_view result_query_id,
+                                                xmpp_stanza_t *message)
+{
+    if (!message || channel_id.empty())
+        return false;
+    const bool chat_fetch_active = std::ranges::any_of(mam_queries, [&](const auto &entry) {
+        const auto &[_, query] = entry;
+        return query.with == channel_id
+            && ::xmpp::mam_result_needs_chat_ordering(result_query_id, query.id);
+    }) || std::ranges::any_of(mam_deferred_pages, [&](const auto &page) {
+        return page.channel_id == channel_id && page.after.empty();
+    });
+    if (!chat_fetch_active)
+        return false;
+    mam_deferred_messages[std::string(channel_id)].emplace_back(
+        xmpp_stanza_clone(message), xmpp_stanza_release);
+    return true;
+}
+
+void weechat::account::flush_channel_mam_messages(std::string_view channel_id)
+{
+    auto pending = mam_deferred_messages.extract(std::string(channel_id));
+    if (pending.empty())
+        return;
+    // The chat fetch has finished. Normal MAM dedup removes copies already
+    // rendered by it, leaving newer account-catchup results at the bottom.
+    std::ranges::for_each(pending.mapped(), [&](const auto &message) {
+        connection.message_handler(message.get());
+    });
+    mam_cache_write_batch_commit();
+}
+
 void weechat::account::reset_mam_sync()
 {
     if (mam_defer_timer)
@@ -307,6 +341,7 @@ void weechat::account::reset_mam_sync()
         mam_defer_timer = nullptr;
     }
     mam_deferred_pages.clear();
+    mam_deferred_messages.clear();
     mam_query_free_all();
     mam_inflight = 0;
     mam_jitter_next_initial = false;
@@ -558,6 +593,7 @@ weechat::account::~account()
     // xmpp_stanza_release() on an already-freed context, causing a segfault.
     // Explicitly drain the queue here, while the context is still valid.
     sm_outqueue.clear();
+    mam_deferred_messages.clear();
 
     // channels are destroyed after mam_db_env in member reverse-destruction order,
     // but channel::~channel() updates MAM state for PM buffers. Destroy channels
