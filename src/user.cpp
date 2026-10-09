@@ -92,9 +92,9 @@ std::string weechat::user::get_colour_for_nicklist()
     if (cached_nick_color_name.empty())
     {
         std::string_view color_name = this->profile.display_name;
+        const std::string bare = color_name.empty() ? jid(nullptr, this->id).bare : std::string{};
         if (color_name.empty())
         {
-            const std::string bare = jid(nullptr, this->id).bare;
             color_name = bare.empty() ? std::string_view(this->id) : bare;
         }
         if (!color_name.empty())
