@@ -416,6 +416,61 @@ TEST_CASE("omemo::has_session returns false with no established session")
     CHECK_FALSE(env.omemo->has_session("bob@example.com", 42));
 }
 
+TEST_CASE("OMEMO outgoing trust gate applies to siblings and removed devices")
+{
+    omemo_test_env env;
+    using weechat::xmpp::omemo_trust;
+    constexpr std::string_view sibling_jid = "alice@example.com";
+    constexpr std::uint32_t sibling_id = 42;
+    auto seed = [&](omemo_trust trust, std::string_view devices) {
+        auto txn = lmdb::txn::begin(env.omemo->db_env);
+        env.omemo->dbi.omemo.put(txn, "trust:alice@example.com:42",
+            fmt::format("{}", static_cast<int>(trust)));
+        env.omemo->dbi.omemo.put(txn, "axolotl_devicelist:alice@example.com", devices);
+        txn.commit();
+        env.omemo->tofu_trust_cache_.clear();
+        env.omemo->axolotl_devicelist_cache_.clear();
+    };
+    CHECK_FALSE(env.omemo->can_encrypt_to_device(sibling_jid, sibling_id));
+    seed(omemo_trust::BLIND, "42");
+    CHECK(env.omemo->can_encrypt_to_device(sibling_jid, sibling_id));
+    seed(omemo_trust::VERIFIED, "42");
+    CHECK(env.omemo->can_encrypt_to_device(sibling_jid, sibling_id));
+    seed(omemo_trust::UNDECIDED, "42");
+    CHECK_FALSE(env.omemo->can_encrypt_to_device(sibling_jid, sibling_id));
+    seed(omemo_trust::UNTRUSTED, "42");
+    CHECK_FALSE(env.omemo->can_encrypt_to_device(sibling_jid, sibling_id));
+    seed(omemo_trust::VERIFIED, "43");
+    CHECK_FALSE(env.omemo->can_encrypt_to_device(sibling_jid, sibling_id));
+}
+
+TEST_CASE("OMEMO replenishes consumed prekeys without replacing unused keys")
+{
+    omemo_test_env env;
+    const auto bundle_iq = env.omemo->build_axolotl_bundle(env.ctx, nullptr, nullptr);
+    REQUIRE(bundle_iq);
+    const xmpp::StanzaView bundle = xmpp::StanzaView(bundle_iq.get())
+        .child("pubsub").child("publish").child("item").child("bundle");
+    const auto prekey = bundle.child("prekeys").child("preKeyPublic");
+    REQUIRE(prekey.valid());
+    const auto prekey_id = parse_uint32(prekey.attr_string("preKeyId"));
+    REQUIRE(prekey_id);
+    CHECK_FALSE(env.omemo->replenish_consumed_prekey(env.ctx, *prekey_id));
+    REQUIRE(signal_protocol_pre_key_remove_key(env.omemo->store_context, *prekey_id) == 0);
+    CHECK(env.omemo->replenish_consumed_prekey(env.ctx, *prekey_id));
+    CHECK(signal_protocol_pre_key_contains_key(env.omemo->store_context, *prekey_id) == 1);
+    CHECK_FALSE(env.omemo->replenish_consumed_prekey(env.ctx, *prekey_id));
+    const auto replacement_iq = env.omemo->build_axolotl_bundle(env.ctx, nullptr, nullptr);
+    REQUIRE(replacement_iq);
+    const auto replacement_keys = xmpp::StanzaView(replacement_iq.get())
+        .child("pubsub").child("publish").child("item").child("bundle").child("prekeys");
+    const auto replacement = std::ranges::find_if(replacement_keys, [&](const auto key) {
+        return key.attr_string("preKeyId") == prekey.attr_string("preKeyId");
+    });
+    REQUIRE(replacement != end(replacement_keys));
+    CHECK((*replacement).text() != prekey.text());
+}
+
 // ── 6. LMDB key migration: legacy_* → axolotl_* on reinit ───────────────────
 
 TEST_CASE("omemo::init() migrates legacy_* LMDB keys to axolotl_*")
@@ -582,60 +637,61 @@ TEST_CASE("MAM replay self-session: Signal session to own device survives reinit
     const std::uint32_t own_device_id = env.omemo->device_id;
     REQUIRE(own_device_id != 0);
 
-    // 1. Export our real legacy bundle as XML text.
-    //    get_axolotl_bundle() returns an <iq><pubsub><publish><item><bundle> tree.
-    //    We serialise the <bundle> element to XML text (same bytes the server would
-    //    send back in a pubsub result), then wrap it in the <items><item> envelope
-    //    that production iq_handler.inl hands to handle_axolotl_bundle().
-    //    Parsing with xmpp_stanza_new_from_string reproduces the exact production
-    //    code path: server XML → libstrophe parser → items stanza pointer.
-    xmpp_stanza_t *iq = env.omemo->get_axolotl_bundle(env.ctx, nullptr, nullptr);
-    REQUIRE(iq != nullptr);
-
-    // Walk to the <bundle> element inside the IQ tree.
-    auto *pubsub  = xmpp_stanza_get_child_by_name(iq, "pubsub");
-    auto *publish = pubsub  ? xmpp_stanza_get_child_by_name(pubsub,  "publish") : nullptr;
-    auto *iq_item = publish ? xmpp_stanza_get_child_by_name(publish, "item")    : nullptr;
-    auto *bundle  = iq_item ? xmpp_stanza_get_child_by_name_and_ns(
-                                  iq_item, "bundle", "eu.siacs.conversations.axolotl") : nullptr;
-    REQUIRE(bundle != nullptr);
-
-    // Serialise the <bundle> subtree to XML text.
-    // xmpp_stanza_to_text emits xmlns= on the root element, so the NS is
-    // preserved when re-parsed below (verified by manual inspection).
-    const std::string bundle_xml = stanza_to_xml(env.ctx, bundle);
-    xmpp_stanza_release(iq);
-    REQUIRE_FALSE(bundle_xml.empty());
-
-    // Wrap with the <items><item id='N'> envelope that the IQ result handler
-    // passes to handle_axolotl_bundle() (see iq_handler.inl line 4173).
-    const std::string items_xml =
-        "<items><item id='" + std::to_string(own_device_id) + "'>"
-        + bundle_xml
-        + "</item></items>";
-
-    // Parse: this is exactly the production path through libstrophe.
-    xmpp_stanza_t *items = xmpp_stanza_new_from_string(env.ctx, items_xml.c_str());
-    REQUIRE(items != nullptr);
-
-    // Verify the parser preserved the bundle NS so extract_legacy_bundle_from_items
-    // will find it (guards against a regression in the XML round-trip).
-    {
-        auto *parsed_item   = xmpp_stanza_get_child_by_name(items, "item");
-        auto *parsed_bundle = parsed_item
-            ? xmpp_stanza_get_child_by_name_and_ns(
-                  parsed_item, "bundle", "eu.siacs.conversations.axolotl")
-            : nullptr;
-        REQUIRE(parsed_bundle != nullptr);
-    }
+    // Export a real bundle and place it in the normal PubSub result envelope.
+    const auto iq = env.omemo->build_axolotl_bundle(env.ctx, nullptr, nullptr);
+    REQUIRE(iq);
+    const auto bundle = xmpp::StanzaView(iq.get()).child("pubsub")
+        .child("publish").child("item").child("bundle", "eu.siacs.conversations.axolotl");
+    REQUIRE(bundle.valid());
+    stanza::xep0060::item bundle_item;
+    bundle_item.id(fmt::format("{}", own_device_id));
+    bundle_item.child(std::shared_ptr<xmpp_stanza_t>(iq, bundle.raw()));
+    stanza::xep0060::items bundle_items;
+    bundle_items.child(bundle_item);
+    const auto items = bundle_items.build(env.ctx);
+    REQUIRE(items);
 
     // 2. Establish a self-session: feed our own real bundle to handle_axolotl_bundle
     //    using our own JID + device_id as the "remote peer".
     //    account=nullptr → is_own_device=false → establish_session_from_bundle runs.
-    env.omemo->handle_axolotl_bundle(nullptr, nullptr, own_jid.c_str(), own_device_id, items);
-    xmpp_stanza_release(items);
+    env.omemo->handle_axolotl_bundle(nullptr, nullptr, own_jid.c_str(), own_device_id, items.get());
 
     // 3. Verify the session exists immediately after bootstrap.
+    CHECK(env.omemo->has_session(own_jid.c_str(), own_device_id));
+
+    // An authoritative removal must exclude even a device with a live session,
+    // without destroying the session needed to decrypt archived messages.
+    struct device_list : stanza::spec {
+        explicit device_list(std::optional<std::uint32_t> id) : spec("list")
+        {
+            attr("xmlns", "eu.siacs.conversations.axolotl");
+            if (id)
+            {
+                struct device : stanza::spec {
+                    explicit device(std::uint32_t id) : spec("device")
+                    {
+                        attr("id", fmt::format("{}", id));
+                    }
+                } entry(*id);
+                child(entry);
+            }
+        }
+    };
+    auto make_device_items = [&](std::optional<std::uint32_t> id) {
+        stanza::xep0060::item item;
+        item.child(device_list(id));
+        stanza::xep0060::items items;
+        items.child(item);
+        return items.build(env.ctx);
+    };
+    const auto active_items = make_device_items(own_device_id);
+    REQUIRE(active_items);
+    env.omemo->handle_axolotl_devicelist(nullptr, own_jid.c_str(), active_items.get());
+    CHECK(env.omemo->can_encrypt_to_device(own_jid, own_device_id));
+    const auto removed_items = make_device_items(std::nullopt);
+    REQUIRE(removed_items);
+    env.omemo->handle_axolotl_devicelist(nullptr, own_jid.c_str(), removed_items.get());
+    CHECK_FALSE(env.omemo->can_encrypt_to_device(own_jid, own_device_id));
     CHECK(env.omemo->has_session(own_jid.c_str(), own_device_id));
 
     // 4. Reinit (simulates WeeChat restart — LMDB is reopened, Signal state reloaded).
@@ -645,6 +701,7 @@ TEST_CASE("MAM replay self-session: Signal session to own device survives reinit
     //    This is the key invariant Bug 3's fix depends on: the persisted session
     //    allows decode() to succeed when processing MAM-replayed self-sent messages.
     CHECK(env.omemo->has_session(own_jid.c_str(), own_device_id));
+    CHECK_FALSE(env.omemo->can_encrypt_to_device(own_jid, own_device_id));
 }
 
 // ── 11. Bootstrap-race guard: handle_axolotl_bundle mirrors the same guarantee ─

@@ -975,7 +975,20 @@ you have exchanged encrypted traffic with that contact.
 | `UNTRUSTED` | Explicitly distrusted | User ran `/omemo distrust <jid> [device-id]`; device is excluded from encryption |
 | `UNDECIDED` | New device | A new device for a JID that already has `VERIFIED` or `UNTRUSTED` keys |
 
-Only `BLIND` and `VERIFIED` devices receive encrypted key material. `UNTRUSTED` devices are silently skipped. When you enable OMEMO in a MUC, all occupant devices default to `BLIND` trust — verify important contacts with `/omemo trust` if desired.
+Only `BLIND` and `VERIFIED` devices receive encrypted key material. `UNTRUSTED` and
+`UNDECIDED` devices are skipped. MUC occupants follow the same BTBV policy as PM
+contacts; verify important contacts with `/omemo trust`.
+
+The same trust gate applies to your other devices and to key transports. Device-list
+refreshes never promote an `UNDECIDED` identity to trusted. The current PEP device
+list determines outgoing recipients: removed devices stop receiving keys, while
+their sessions remain available for archive decryption. Archived messages cannot
+add removed devices back to that list.
+
+PM and MUC messages both use the legacy Axolotl wire format (flat `<key>` elements
+under `<header>`), as specified by XEP-0384 version 0.3.0. OMEMO:2 is unsupported.
+Consumed pre-keys are replenished for payloadless key transports as well as chat
+messages; bundle publication waits until account catch-up completes when necessary.
 
 If a contact reinstalls their client (same device id, new identity key), the old session is dropped and BTBV is reapplied. Previously `BLIND` contacts are accepted again automatically. If you had `VERIFIED` or `UNTRUSTED` any of their devices, the new key is `UNDECIDED` until you run `/omemo fingerprint <jid>` and `/omemo trust <jid> [device-id]`. `Signal Error: untrusted identity (-1010)` means that gate fired.
 

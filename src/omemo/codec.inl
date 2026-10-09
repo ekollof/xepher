@@ -61,15 +61,16 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     const std::string own_bare_jid = ::jid(nullptr, account->jid().data()).bare;
     const std::string peer_bare = normalize_bare_jid(*account->context, jid);
 
-    // Learn sender device for future encode (Psi+/multi-client often appears as
-    // sid before PEP devicelist is refreshed). Skip own-device self-echo.
-    if (!peer_bare.empty() && *sender_device_id != device_id
-        && peer_bare != own_bare_jid)
+    // Refresh announcements for live traffic from unknown devices. Archived
+    // senders must never resurrect devices removed from the current PEP list.
+    if (!suppress_peer_traffic && !peer_bare.empty() && peer_bare != own_bare_jid)
     {
-        if (ensure_axolotl_device_on_list(*this, peer_bare, *sender_device_id)
-            && !suppress_peer_traffic)
+        const auto devices = load_axolotl_devicelist(*this, peer_bare);
+        if (!devices || !std::ranges::any_of(split(*devices, ';'), [&](const auto &entry) {
+                return parse_uint32(entry).value_or(0) == *sender_device_id;
+            }))
         {
-            // New device: pull full list (merge with Converse/etc.) and bundle.
+            // New device: refresh the authoritative list and fetch its bundle.
             request_axolotl_devicelist(*account, peer_bare);
             if (!has_session(peer_bare.c_str(), *sender_device_id))
                 request_axolotl_bundle(*account, peer_bare, *sender_device_id);
@@ -86,7 +87,7 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     // Inbound copies of messages sent from this device cannot be decrypted — the
     // Signal protocol never establishes {own_jid, own_device_id} as an inbound
     // session. Catches any handler path that still reaches decode().
-    if (*sender_device_id == device_id)
+    if (::xmpp::is_own_omemo_sender(peer_bare, *sender_device_id, own_bare_jid, device_id))
     {
         XDEBUG("OMEMO decode: skipping self-sent stanza (sid == own device_id {})", device_id);
         return std::nullopt;
@@ -336,6 +337,19 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
         return std::nullopt;
     }
 
+    // Signal has already consumed the pre-key, even for a payloadless transport
+    // or a message whose payload later fails authentication. Replenish only an
+    // actually removed record: repeated prekey envelopes may use an old id.
+    if (used_prekey_id && replenish_consumed_prekey(*account->context, *used_prekey_id))
+    {
+        if (global_mam_catchup)
+            bundle_republish_pending = true;
+        else if (auto bundle = build_axolotl_bundle(*account->context, nullptr, nullptr))
+            (void)send_within_stanza_byte_limit(
+                account->connection, bundle.get(),
+                k_proxy_safe_stanza_bytes, "OMEMO bundle republish");
+    }
+
     // Key-transport element: no payload, nothing more to decrypt.
     // The session is now established from our side.
     if (!payload_view.valid() || payload.empty())
@@ -360,28 +374,6 @@ std::optional<std::string> weechat::xmpp::omemo::decode(weechat::account *accoun
     {
         print_error(buffer, "OMEMO (legacy) payload decryption failed.");
         return std::nullopt;
-    }
-    if (used_prekey_id && account)
-    {
-            if (replace_used_prekey(*this, *account->context, *used_prekey_id))
-            {
-                if (global_mam_catchup)
-                {
-                    bundle_republish_pending = true;
-                    XDEBUG("omemo: consumed pre-key {} — bundle republish deferred (MAM catchup active)",
-                           *used_prekey_id);
-                }
-                else
-                {
-                    print_info(buffer, fmt::format(
-                        "OMEMO: replaced consumed pre-key {} — republishing bundle",
-                        *used_prekey_id));
-                    if (std::shared_ptr<xmpp_stanza_t> lbs { get_axolotl_bundle(*account->context, nullptr, nullptr), xmpp_stanza_release })
-                        (void)send_within_stanza_byte_limit(
-                            account->connection, lbs.get(),
-                            k_proxy_safe_stanza_bytes, "OMEMO bundle republish");
-                }
-            }
     }
     // XEP-0384 §6: MUST send a heartbeat when counter >= 53 (first time per ratchet key).
     {
@@ -503,22 +495,13 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
             if (own_jid == recipient_jid && *remote_device_id == device_id && !include_own_device)
                 continue;
 
-            // BTBV trust gate: skip UNTRUSTED; skip UNDECIDED for peers only.
-            // Own-account sibling devices must still receive keys so carbons and
-            // other clients (e.g. Movim) can decrypt outbound PM traffic.
+            // Apply the same BTBV trust gate to contacts and sibling devices.
             {
                 const auto trust = load_tofu_trust(*this, recipient_jid, *remote_device_id);
-                const bool is_own_account = (recipient_jid == own_jid);
-                if (trust && *trust == omemo_trust::UNTRUSTED)
+                if (trust && *trust != omemo_trust::VERIFIED && *trust != omemo_trust::BLIND)
                 {
-                    XDEBUG("omemo encode: skipping device {}/{} (trust=UNTRUSTED)",
-                           recipient_jid, *remote_device_id);
-                    continue;
-                }
-                if (trust && *trust == omemo_trust::UNDECIDED && !is_own_account)
-                {
-                    XDEBUG("omemo encode: skipping device {}/{} (trust=UNDECIDED)",
-                           recipient_jid, *remote_device_id);
+                    XDEBUG("omemo encode: skipping device {}/{} (trust={})",
+                           recipient_jid, *remote_device_id, static_cast<int>(*trust));
                     continue;
                 }
             }
@@ -537,6 +520,10 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
                 }
             }
 
+            // Bootstrap may have assigned UNDECIDED trust. A policy rejection
+            // must not be treated as a corrupt session or delete archive state.
+            if (!can_encrypt_to_device(recipient_jid, *remote_device_id))
+                continue;
             const auto transport = encrypt_axolotl_transport_key(*this, recipient_jid, *remote_device_id, *ep);
             if (!transport)
             {
@@ -637,10 +624,8 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode(weechat::account *account,
 }
 
 // Multi-recipient encode for MUC OMEMO (docs/planning-muc-omemo.md §3.1 + §6).
-// Encrypts the payload once, then for each recipient bare JID produces a
-// <keys jid="..."> wrapper containing the encrypted transport keys for
-// that recipient's devices (plus own devices). Uses the legacy axolotl
-// namespace as required by the project.
+// Encrypts the payload once and emits legacy flat <key> elements for every
+// recipient's devices (plus own devices), directly below <header>.
 //
 // Trust note: Occupants are looked up by their real bare JID. New occupants
 // discovered via presence/disco/admin are treated with the project's default
@@ -703,7 +688,6 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
                                      bool include_own_device) -> bool
     {
         bool added = false;
-        stanza::xep0384::axolotl_keys keys_for_this(recipient_jid);
 
         for (const auto &dev : split(device_list_str, ';'))
         {
@@ -716,10 +700,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
 
             {
                 const auto trust = load_tofu_trust(*this, recipient_jid, *remote_device_id);
-                const bool is_own_account = (recipient_jid == own_jid);
-                if (trust && *trust == omemo_trust::UNTRUSTED)
-                    continue;
-                if (trust && *trust == omemo_trust::UNDECIDED && !is_own_account)
+                if (trust && *trust != omemo_trust::VERIFIED && *trust != omemo_trust::BLIND)
                     continue;
             }
 
@@ -738,6 +719,8 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
                 }
             }
 
+            if (!can_encrypt_to_device(recipient_jid, *remote_device_id))
+                continue;
             const auto transport = encrypt_axolotl_transport_key(*this, recipient_jid, *remote_device_id, *ep);
             if (!transport)
             {
@@ -752,7 +735,7 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
 
             const auto& [tkey, is_kex] = *transport;
             const auto encoded_transport = base64_encode(*account->context, tkey);
-            keys_for_this.add_key(stanza::xep0384::axolotl_key(
+            header_spec.add_key(stanza::xep0384::axolotl_key(
                 fmt::format("{}", *remote_device_id),
                 encoded_transport,
                 is_kex));
@@ -761,7 +744,6 @@ xmpp_stanza_t *weechat::xmpp::omemo::encode_muc(weechat::account *account,
 
         if (added)
         {
-            header_spec.add_keys(keys_for_this);
             added_any_key = true;
         }
         return added;

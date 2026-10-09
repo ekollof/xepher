@@ -1,3 +1,22 @@
+bool weechat::xmpp::omemo::can_encrypt_to_device(
+    std::string_view jid, std::uint32_t remote_device_id)
+{
+    const auto trust = load_tofu_trust(*this, jid, remote_device_id);
+    if (!trust || (*trust != omemo_trust::VERIFIED && *trust != omemo_trust::BLIND))
+        return false;
+    const auto devices = load_axolotl_devicelist(*this, jid);
+    return devices && std::ranges::any_of(split(*devices, ';'), [&](const auto &entry) {
+        return parse_uint32(entry).value_or(0) == remote_device_id;
+    });
+}
+
+bool weechat::xmpp::omemo::replenish_consumed_prekey(
+    xmpp_ctx_t *context, std::uint32_t prekey_id)
+{
+    return pre_key_contains(prekey_id, this) == 0
+        && replace_used_prekey(*this, context, prekey_id);
+}
+
 XMPP_TEST_EXPORT weechat::xmpp::omemo::~omemo()
 {
     // Teardown order matters for libsignal ref-counted objects.

@@ -271,37 +271,13 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
         }
     }
 
-    // Multi-client PEP is often incomplete: one client (e.g. Converse) republishes
-    // a list that omits another (e.g. Psi+). A full replace would drop devices we
-    // already have a Signal session with (learned from inbound sid), so outbound
-    // encrypt would no longer include a key for that client — Psi→Xepher works,
-    // Xepher→Psi fails. Union PEP devices with any previous device that still has
-    // a live session.
-    if (auto prev = load_axolotl_devicelist(*this, bare_jid))
-    {
-        for (const auto &dev : split(*prev, ';'))
-        {
-            const auto id = parse_uint32(dev);
-            if (!id || !is_valid_omemo_device_id(*id))
-                continue;
-            const std::string id_str = fmt::format("{}", *id);
-            if (std::ranges::find(devices, id_str) != devices.end())
-                continue;
-            if (has_session(bare_jid.c_str(), *id))
-            {
-                devices.push_back(id_str);
-                XDEBUG("omemo: keeping {}/{} (live session) missing from PEP list",
-                       bare_jid, *id);
-            }
-        }
-    }
+    // PEP is authoritative for outgoing recipients. Keep archived sessions
+    // for decryption, but never restore a removed device to the sending list.
 
     auto devicelist_str = join(devices, ";");
     missing_axolotl_devicelist.erase(bare_jid);
     store_axolotl_devicelist(*this, bare_jid, devicelist_str);
 
-    // Sibling devices on our own account must be BLIND-trusted so encode includes
-    // keys for carbon-copy delivery to other clients (BTBV UNDECIDED would skip them).
     // Always keep our local device_id on the cached list so /omemo devices and
     // multi-device encrypt see it even before the PEP re-publish is echoed.
     if (account)
@@ -318,21 +294,8 @@ XMPP_TEST_EXPORT void weechat::xmpp::omemo::handle_axolotl_devicelist(weechat::a
                 if (auto updated = load_axolotl_devicelist(*this, bare_jid))
                     devicelist_str = *updated;
             }
-            // Re-read after possible self-merge so sibling loop sees the full list.
-            const auto cached = load_axolotl_devicelist(*this, bare_jid)
-                .value_or(devicelist_str);
-            for (const auto &dev : split(cached, ';'))
-            {
-                const auto sibling_id = parse_uint32(dev);
-                if (!sibling_id || !is_valid_omemo_device_id(*sibling_id)
-                    || *sibling_id == device_id)
-                {
-                    continue;
-                }
-                const auto trust = load_tofu_trust(*this, bare_jid, *sibling_id);
-                if (!trust || *trust == omemo_trust::UNDECIDED)
-                    store_tofu_trust(*this, bare_jid, *sibling_id, omemo_trust::BLIND);
-            }
+            // Trust belongs to identity keys, not announcements. In particular,
+            // an UNDECIDED identity change must survive a device-list refresh.
         }
     }
 

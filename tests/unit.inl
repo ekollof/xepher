@@ -1293,6 +1293,13 @@ TEST_CASE("message_omemo parses axolotl header and decode jid")
     REQUIRE(xmpp::axolotl_header_sender_id(enc) == 424242u);
     CHECK(xmpp::is_own_device_omemo_self_copy(enc, 424242u));
     CHECK_FALSE(xmpp::is_own_device_omemo_self_copy(enc, 1u));
+    CHECK(xmpp::is_own_omemo_sender("alice@example.org", 424242u,
+                                    "alice@example.org", 424242u));
+    CHECK_FALSE(xmpp::is_own_omemo_sender("bob@example.org", 424242u,
+                                          "alice@example.org", 424242u));
+    CHECK_FALSE(xmpp::is_own_omemo_sender("alice@example.org", 1u,
+                                          "alice@example.org", 424242u));
+    CHECK_FALSE(xmpp::is_own_omemo_sender("", 424242u, "", 424242u));
     CHECK_FALSE(xmpp::axolotl_payload_is_empty(enc));
 
     CHECK(xmpp::resolve_omemo_decode_jid(
@@ -3166,11 +3173,10 @@ TEST_CASE("XEP-0384 axolotl encrypted envelope builder")
     unit_strophe_env env;
     REQUIRE(env.ctx != nullptr);
 
-    stanza::xep0384::axolotl_keys keys("alice@example.org");
-    keys.add_key(stanza::xep0384::axolotl_key("1111111", "QUJDRA==", true));
-
     stanza::xep0384::axolotl_header hdr("2222222");
-    hdr.add_keys(keys).add_iv(stanza::xep0384::axolotl_iv("UVdFUlM="));
+    hdr.add_key(stanza::xep0384::axolotl_key("1111111", "QUJDRA==", true))
+       .add_key(stanza::xep0384::axolotl_key("3333333", "RUZHSA=="))
+       .add_iv(stanza::xep0384::axolotl_iv("UVdFUlM="));
 
     stanza::xep0384::axolotl_encrypted enc;
     enc.add_header(hdr).add_payload(stanza::xep0384::axolotl_payload("RkFLRV9QTEFJTlRFWFQ="));
@@ -3179,33 +3185,21 @@ TEST_CASE("XEP-0384 axolotl encrypted envelope builder")
     msg.id("o1").to("alice@example.org").type("chat").omemo_axolotl_encrypted(enc);
 
     auto built = msg.build(env.ctx);
-    std::string xml = stanza_to_xml(env.ctx, built.get());
-
-    xmpp_stanza_t *root = xmpp_stanza_new_from_string(env.ctx, xml.c_str());
-    REQUIRE(root != nullptr);
-
-    xmpp_stanza_t *enc_el = find_child_ns(root, "encrypted", "eu.siacs.conversations.axolotl");
-    REQUIRE(enc_el != nullptr);
-
-    xmpp_stanza_t *header_el = xmpp_stanza_get_child_by_name(enc_el, "header");
-    REQUIRE(header_el != nullptr);
-    auto sid = attr_opt(header_el, "sid");
-    REQUIRE(sid.has_value());
-    CHECK(*sid == "2222222");
-
-    xmpp_stanza_t *keys_el = xmpp_stanza_get_child_by_name(header_el, "keys");
-    REQUIRE(keys_el != nullptr);
-    auto keys_jid = attr_opt(keys_el, "jid");
-    REQUIRE(keys_jid.has_value());
-    CHECK(*keys_jid == "alice@example.org");
-
-    xmpp_stanza_t *payload_el = xmpp_stanza_get_child_by_name(enc_el, "payload");
-    REQUIRE(payload_el != nullptr);
-    auto ptext = text_opt(payload_el);
-    REQUIRE(ptext.has_value());
-    CHECK(*ptext == "RkFLRV9QTEFJTlRFWFQ=");
-
-    xmpp_stanza_release(root);
+    const auto encrypted = xmpp::StanzaView(built.get())
+        .child("encrypted", "eu.siacs.conversations.axolotl");
+    REQUIRE(encrypted.valid());
+    const auto header = encrypted.child("header");
+    REQUIRE(header.valid());
+    CHECK(header.attr_string("sid") == "2222222");
+    CHECK_FALSE(header.child("keys").valid());
+    std::vector<std::string> recipient_ids;
+    std::ranges::copy(header
+        | std::views::filter([](const auto child) { return child.name() == "key"; })
+        | std::views::transform([](const auto child) { return child.attr_string("rid"); }),
+        std::back_inserter(recipient_ids));
+    CHECK(recipient_ids == std::vector<std::string>{"1111111", "3333333"});
+    CHECK(header.child("key").attr_string("prekey") == "true");
+    CHECK(encrypted.child("payload").text() == "RkFLRV9QTEFJTlRFWFQ=");
 }
 
 TEST_CASE("XEP-0384 axolotl bundle builder")

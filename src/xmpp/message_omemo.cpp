@@ -42,6 +42,14 @@ std::optional<std::uint32_t> axolotl_header_sender_id(StanzaView encrypted)
     return std::nullopt;
 }
 
+bool is_own_omemo_sender(
+    std::string_view sender_bare_jid, std::uint32_t sender_device_id,
+    std::string_view own_bare_jid, std::uint32_t own_device_id)
+{
+    return !own_bare_jid.empty() && sender_bare_jid == own_bare_jid
+        && sender_device_id == own_device_id;
+}
+
 bool is_own_device_omemo_self_copy(StanzaView encrypted, std::uint32_t own_device_id)
 {
     if (auto sender = axolotl_header_sender_id(encrypted))

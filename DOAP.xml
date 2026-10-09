@@ -337,7 +337,7 @@
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0384.html' />
         <xmpp:status>partial</xmpp:status>
-        <xmpp:version>0.9.0</xmpp:version>
+        <xmpp:version>0.3.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
                 >OMEMO Encryption using the legacy axolotl namespace (`eu.siacs.conversations.axolotl`) only. OMEMO:2 (`urn:xmpp:omemo:2`) is not published or supported. BTBV (Blind Trust Before Verification) TOFU trust model (UNTRUSTED=0/VERIFIED=1/UNDECIDED=2/BLIND=3 in LMDB `trust:{jid}:{dev}`); only VERIFIED+BLIND receive keys at encode time. PM OMEMO is production-ready; non-anonymous MUC multi-recipient encryption (encode_muc, real-JID occupant mapping, passive bundle prefetch without key-transport spam) is experimental — see docs/planning-muc-omemo.md. Includes auto-detection, per-device bundle/bootstrap, key-transport, MAM plaintext cache for self-decrypt. XEP-0450 ATM removed.</xmpp:note>

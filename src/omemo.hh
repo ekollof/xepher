@@ -276,6 +276,10 @@ namespace weechat {
 
             // Check if a session exists with a particular remote device.
             XMPP_TEST_EXPORT bool has_session(const char *jid, std::uint32_t remote_device_id);
+            [[nodiscard]] XMPP_TEST_EXPORT bool can_encrypt_to_device(
+                std::string_view jid, std::uint32_t remote_device_id);
+            [[nodiscard]] XMPP_TEST_EXPORT bool replenish_consumed_prekey(
+                xmpp_ctx_t *context, std::uint32_t prekey_id);
 
             // Decode an OMEMO-encrypted message returning cleartext.
             // Returns std::nullopt if decryption fails or if the message was a
@@ -297,7 +301,7 @@ namespace weechat {
 
             // MUC variant (docs/planning-muc-omemo.md §3.1)
             // Encrypts for multiple recipient bare JIDs (occupants + own account).
-            // The resulting stanza will contain multiple <keys jid='...'> wrappers.
+            // The resulting stanza uses legacy flat <key> elements under <header>.
             xmpp_stanza_t *encode_muc(weechat::account *account, struct t_gui_buffer *buffer,
                                       std::string_view room_jid,
                                       const std::vector<std::string>& recipient_bare_jids,

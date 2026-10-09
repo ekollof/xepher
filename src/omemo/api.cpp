@@ -52,6 +52,7 @@
 #include "xmpp/node.hh"
 #include "xmpp/iq_pubsub_feed.hh"
 #include "xmpp/ns.hh"
+#include "xmpp/message_omemo.hh"
 #include "xmpp/stanza.hh"
 #include "xmpp/stanza_view.hh"
 #include "xmpp/xep-0060.inl"
@@ -80,7 +81,7 @@ const char *OMEMO_ADVICE = "[OMEMO encrypted message (XEP-0384)]";
 #include "omemo/api.inl"
 
 // MUC OMEMO entry point (docs/planning-muc-omemo.md §3.1)
-// Full multi-recipient support is implemented (multiple <keys jid=...> blocks,
+// Full multi-recipient support is implemented (legacy flat <key> elements,
 // proper real-JID handling on send/receive, bundle tracking, etc.).
 // The implementation lives in codec.inl (included via api.inl).
 // Declaration is in omemo.hh.

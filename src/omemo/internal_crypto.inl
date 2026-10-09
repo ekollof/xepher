@@ -462,6 +462,10 @@ enum class prekey_decrypt_strategy {
     const omemo_lmdb_write_scope write_scope {self};
     const signal_store_peer_scope peer_scope {self, jid, remote_device_id};
 
+    // All outgoing paths, including key transports, obey identity trust.
+    if (!self.can_encrypt_to_device(jid, remote_device_id))
+        return std::nullopt;
+
     // Per Conversations: Signal-encrypt innerKey(16) || authTag(16) = 32 bytes
     std::array<std::uint8_t, 32> bundle {};
     auto bundle_span = std::span(bundle);

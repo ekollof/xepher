@@ -31,15 +31,6 @@ namespace stanza {
             }
         };
 
-        // <keys jid='…'> … </keys>  (same element name, legacy namespace)
-        struct axolotl_keys : virtual public spec {
-            explicit axolotl_keys(std::string_view jid) : spec("keys") {
-                attr("jid", jid);
-            }
-
-            axolotl_keys& add_key(xep0384::axolotl_key k) { child(k); return *this; }
-        };
-
         // <iv>BASE64</iv>
         struct axolotl_iv : virtual public spec {
             explicit axolotl_iv(std::string_view b64) : spec("iv") {
@@ -47,15 +38,13 @@ namespace stanza {
             }
         };
 
-        // <header sid='…'> <keys …/> <iv>…</iv> </header>
+        // <header sid='…'> <key …/> <iv>…</iv> </header>
         struct axolotl_header : virtual public spec {
             explicit axolotl_header(std::string_view sid) : spec("header") {
                 attr("sid", sid);
             }
 
-            // New-style: <header><keys jid='…'><key …/></keys></header>
-            axolotl_header& add_keys(xep0384::axolotl_keys k) { child(k); return *this; }
-            // Legacy flat layout: <header><key …/></header> (Conversations/older Gajim compat)
+            // Legacy layout: <header><key …/></header> (Conversations/Gajim).
             axolotl_header& add_key(xep0384::axolotl_key k) { child(k); return *this; }
             axolotl_header& add_iv(xep0384::axolotl_iv iv) { child(iv); return *this; }
         };

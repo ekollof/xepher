@@ -24,6 +24,10 @@ inline constexpr std::string_view k_omemo_undecryptable_placeholder =
 [[nodiscard]] XMPP_TEST_EXPORT std::optional<std::uint32_t>
 axolotl_header_sender_id(StanzaView encrypted);
 
+[[nodiscard]] XMPP_TEST_EXPORT bool is_own_omemo_sender(
+    std::string_view sender_bare_jid, std::uint32_t sender_device_id,
+    std::string_view own_bare_jid, std::uint32_t own_device_id);
+
 [[nodiscard]] XMPP_TEST_EXPORT bool is_own_device_omemo_self_copy(
     StanzaView encrypted, std::uint32_t own_device_id);
 
