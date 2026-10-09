@@ -71,7 +71,7 @@ git clone --depth 1 https://github.com/ekollof/xepher.git
 cd xepher
 make install-deps    # sudo; detects distro
 make                 # Release build → ./xmpp.so
-make install         # ~/.local/share/weechat/plugins/xmpp.so
+make install         # plugin + icat.py/feed_compose.py with Python autoload
 ```
 
 ### 2. Load and connect (inside WeeChat)
@@ -1242,7 +1242,7 @@ for faster MAM replay on reconnect.
 **Setup:**
 
 ```sh
-cp scripts/icat.py ~/.local/share/weechat/python/autoload/
+make install-scripts
 ```
 
 Inside WeeChat:
@@ -1453,8 +1453,19 @@ helper reads from `raw_xml_<account>.log`.
 
 ## Companion scripts
 
-Optional Python scripts live in `scripts/`.  They are **not** loaded
-automatically — install the ones you want by hand.
+Companion Python scripts live in `scripts/`. User-level `make install` installs
+both `icat.py` and `feed_compose.py` and enables autoload with relative symlinks.
+Use `make install-scripts` to install/update them without compiling the plugin.
+The default data directory is `${XDG_DATA_HOME:-$HOME/.local/share}/weechat`;
+override it with `make install-scripts WEECHATHOME=/path/to/weechat`.
+System/root plugin installation does not modify a user's script directory.
+
+Direct CMake users can run `cmake --build build --target install-scripts`;
+configure `-DXEPHER_WEECHAT_HOME=/path/to/weechat` to override the destination.
+WeeChat's Python plugin must be enabled. Autoload takes effect at startup;
+in a running WeeChat, use `/python load icat.py` and
+`/python load feed_compose.py`, or `/python reload <script>.py` for loaded scripts.
+`icat.py` also requires Pillow; script installation does not install Python dependencies.
 
 ### feed_compose.py — compose posts in `$EDITOR`
 
@@ -1476,7 +1487,7 @@ The easiest way to invoke it is with the `--edit` flag:
 Or install and invoke directly:
 
 ```sh
-cp scripts/feed_compose.py ~/.local/share/weechat/python/autoload/
+make install-scripts
 ```
 
 Inside WeeChat:
@@ -1497,7 +1508,7 @@ when `xmpp.look.icat` is enabled.
 Requires Python `PIL`/`Pillow` (`pip install Pillow` or `python-pillow` package).
 
 ```sh
-cp scripts/icat.py ~/.local/share/weechat/python/autoload/
+make install-scripts
 ```
 
 ---

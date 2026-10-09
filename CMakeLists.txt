@@ -79,6 +79,20 @@ set_target_properties(xepher_plugin PROPERTIES
 add_custom_target(weechat-xmpp DEPENDS xepher_plugin)
 add_custom_target(xmpp ALIAS xepher_plugin)
 
+if(DEFINED ENV{XDG_DATA_HOME} AND NOT "$ENV{XDG_DATA_HOME}" STREQUAL "")
+    set(_xepher_weechat_home "$ENV{XDG_DATA_HOME}/weechat")
+else()
+    set(_xepher_weechat_home "$ENV{HOME}/.local/share/weechat")
+endif()
+set(XEPHER_WEECHAT_HOME "${_xepher_weechat_home}" CACHE PATH "WeeChat user data directory")
+add_custom_target(install-scripts
+    COMMAND "${CMAKE_COMMAND}"
+        "-DXEPHER_SCRIPT_SOURCE_DIR=${CMAKE_SOURCE_DIR}/scripts"
+        "-DXEPHER_WEECHAT_HOME=${XEPHER_WEECHAT_HOME}"
+        -P "${CMAKE_SOURCE_DIR}/cmake/InstallScripts.cmake"
+    VERBATIM
+)
+
 include("${CMAKE_SOURCE_DIR}/cmake/Tests.cmake")
 xepher_add_tests(xepher_plugin)
 

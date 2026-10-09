@@ -1,7 +1,21 @@
 # scripts/
 
 Companion Python scripts for **Xepher** (weechat-xmpp plugin).  
-These are optional; they are **not** loaded automatically by the plugin.
+User-level `make install` installs both scripts and enables WeeChat Python
+autoload. `make install-scripts` installs them without building the plugin.
+Scripts are stored in `python/` with relative links in `python/autoload/`.
+The default WeeChat data directory follows `XDG_DATA_HOME`, falling back to
+`~/.local/share/weechat`; override it with `WEECHATHOME=/path/to/weechat`.
+
+For direct CMake builds, configure `-DXEPHER_WEECHAT_HOME=/path/to/weechat`
+and run `cmake --build build --target install-scripts`.
+System/root plugin installation does not install user scripts.
+
+Enable WeeChat's Python plugin. Restart WeeChat to autoload the scripts, or
+use `/python load icat.py` and `/python load feed_compose.py` now. For already
+loaded scripts, use `/python reload icat.py` or `/python reload feed_compose.py`.
+`icat.py` requires Pillow (`python-pillow` or `pip install Pillow`); the installer
+does not install Python dependencies or change `xmpp.look.icat`.
 
 ## feed_compose.py
 
@@ -11,10 +25,10 @@ Enter.
 
 ### Install
 
-Copy (or symlink) the script into WeeChat's Python autoload directory:
+Install both companion scripts and their autoload links:
 
 ```sh
-cp scripts/feed_compose.py ~/.local/share/weechat/python/autoload/
+make install-scripts
 ```
 
 Or load it once without autoloading:

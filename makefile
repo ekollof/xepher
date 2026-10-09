@@ -67,6 +67,8 @@ CMAKE_ARGS += -DXEPHER_EMBED_SOURCE=$(if $(filter 1,$(EMBED_SOURCE)),ON,OFF)
 BUILD_ARGS := --build $(BUILD_DIR) -j$(NPROC)
 
 PREFIX ?= /usr/local
+WEECHATHOME ?= $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)/weechat
+export WEECHATHOME
 LIBDIR ?= $(PREFIX)/lib
 OBJCOPY ?= $(shell command -v objcopy 2>/dev/null || command -v llvm-objcopy 2>/dev/null || true)
 export LIBDIR
@@ -110,6 +112,10 @@ distclean: clean
 
 install: weechat-xmpp
 	@$(MAKE) -f legacy/install.mk install
+
+.PHONY: install-scripts
+install-scripts:
+	$(CMAKE) -DXEPHER_SCRIPT_SOURCE_DIR="$(CURDIR)/scripts" -DXEPHER_WEECHAT_HOME="$(WEECHATHOME)" -P cmake/InstallScripts.cmake
 
 install-deps:
 	./install-deps.sh
