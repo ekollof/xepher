@@ -44,6 +44,8 @@
 #include "ui/picker.hh"
 #include "xmpp/embed.hh"
 
+namespace xmpp { struct data_form; }
+
 namespace weechat
 {
     class channel;
@@ -266,6 +268,9 @@ namespace weechat
             weechat::ui::picker<std::pair<std::string, std::string>> *picker = nullptr;  // command JID and node
         };
         std::unordered_map<std::string, adhoc_query_info> adhoc_queries;  // iq_id -> info
+        [[nodiscard]] auto edit_adhoc_form(std::string_view target, std::string_view node,
+            std::string_view session_id, ::xmpp::data_form form, const ::xmpp::AdhocSession &session)
+            -> std::expected<void, std::string>;
         // Scoped by responder, command node, and session ID.
         std::map<std::tuple<std::string, std::string, std::string>, ::xmpp::AdhocSession> adhoc_sessions;
 

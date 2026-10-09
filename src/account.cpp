@@ -41,6 +41,7 @@
 #include "debug.hh"
 #include "util.hh"
 #include "weechat/ui_port.hh"
+#include "ui/form_editor.hh"
 #include "xmpp/message_forward.hh"
 
 // Use a pointer that's never freed to prevent destructor running at program exit
@@ -997,6 +998,8 @@ struct t_gui_buffer *weechat::account::create_buffer()
 
 void weechat::account::reset()
 {
+    ui::form_editor::close_owner(name);
+    adhoc_queries.clear();
     adhoc_sessions.clear();
     setvcard_queries.clear();
     if (connection)

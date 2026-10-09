@@ -418,7 +418,6 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
     const std::string target_jid = iq_from_str.empty() ? query.target_jid : iq_from_str;
     const std::string requested_node = query.node;
     const std::string requested_session = query.session_id;
-    const char *from_jid = target_jid.c_str();
     (void)from;
     (void)to;
     if (adhoc_command.valid() && !query.is_list
@@ -427,8 +426,11 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
         return;
 
     auto adhoc_ui = weechat::UiPort::for_buffer(adhoc_buf);
+    const auto editor_id = weechat::ui::adhoc_form_id(
+        account.name, target_jid, requested_node, requested_session);
     if (weechat_strcasecmp(type, "error") == 0)
     {
+        weechat::ui::form_editor::failed(editor_id, ::xmpp::iq_error_text(view.child("error")));
         adhoc_ui->printf_date_tags_error(0, "xmpp_adhoc,notify_none",
             fmt::format("[adhoc] Error executing command {}: {}",
                 requested_node.empty() ? "(discovery)" : requested_node,
@@ -452,12 +454,14 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
             }
             else
             {
+                weechat::ui::form_editor::close(editor_id);
                 account.adhoc_sessions.erase(key);
                 adhoc_ui->printf_date_tags_error(0, "xmpp_adhoc,notify_none", session.error());
             }
         }
         else if (cmd_status == "completed" || cmd_status == "canceled")
         {
+            weechat::ui::form_editor::close(editor_id);
             account.adhoc_sessions.erase(key);
             adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
                 fmt::format("[adhoc] Command {} {}", cmd_node, cmd_status));
@@ -475,18 +479,37 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
             const std::string form_type = x_form.attr_string("type");
             if (!form_type.empty() && std::string_view(form_type) == "result")
             {
-                // Display result form (read-only)
-                render_data_form(adhoc_buf, x_form.raw(), from_jid, cmd_node.c_str(), nullptr);
+                weechat::ui::form_editor::close(editor_id);
+                if (const auto result = ::xmpp::parse_data_form(x_form); result)
+                    std::ranges::for_each(::xmpp::data_form_lines(*result), [&](std::string_view line) {
+                        adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none", line);
+                    });
+                else adhoc_ui->printf_error(result.error());
             }
-            else
+            else if (form_type == "form" && cmd_status == "executing" && !session_id.empty())
             {
-                // Input form — render and prompt for submission
-                render_data_form(adhoc_buf, x_form.raw(), from_jid, cmd_node.c_str(),
-                    cmd_status == "executing" && !session_id.empty() ? session_id.c_str() : nullptr);
+                auto form = ::xmpp::parse_data_form(x_form);
+                const auto session = account.adhoc_sessions.find(key);
+                if (!form) {
+                    weechat::ui::form_editor::close(editor_id);
+                    adhoc_ui->printf_error(form.error());
+                }
+                else if (session != account.adhoc_sessions.end()) {
+                    const auto fallback = ::xmpp::data_form_lines(*form);
+                    auto opened = account.edit_adhoc_form(target_jid, cmd_node, session_id,
+                        std::move(*form), session->second);
+                    if (!opened) {
+                        std::ranges::for_each(fallback, [&](std::string_view line) {
+                            adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none", line);
+                        });
+                        adhoc_ui->printf_error(opened.error());
+                    }
+                }
             }
         }
         else if (!cmd_status.empty() && std::string_view(cmd_status) == "executing" && !x_form.valid())
         {
+            weechat::ui::form_editor::close(editor_id);
             adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
                 fmt::format("[adhoc] Command {} in progress (no form)",
                     !cmd_node.empty() ? cmd_node : ""));

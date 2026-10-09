@@ -99,7 +99,8 @@ auto parse_adhoc_session(StanzaView command) -> std::expected<AdhocSession, std:
 
 auto make_adhoc_command(std::string_view node, std::string_view session_id,
     std::string_view action, std::span<const std::string_view> fields,
-    const AdhocSession *session) -> std::expected<stanza::spec, std::string>
+    const AdhocSession *session, const stanza::xep0004::form *submission)
+    -> std::expected<stanza::spec, std::string>
 {
     if (node.empty())
         return std::unexpected("a command node is required");
@@ -115,6 +116,8 @@ auto make_adhoc_command(std::string_view node, std::string_view session_id,
         return std::unexpected("action is not allowed at this command stage");
     if (action == "cancel" && !fields.empty())
         return std::unexpected("cancel does not accept form fields");
+    if (submission && (!fields.empty() || action == "cancel"))
+        return std::unexpected("explicit forms cannot be mixed with fields or cancellation");
 
     auto values = session ? session->hidden_fields
                          : std::map<std::string, std::vector<std::string>>{};
@@ -144,7 +147,11 @@ auto make_adhoc_command(std::string_view node, std::string_view session_id,
         }
     } command(node, session_id, action);
     // Cancellation contains no payload, including cached hidden fields.
-    if (action != "cancel" && (!values.empty() || !fields.empty()
+    if (submission) {
+        auto form = *submission;
+        command.child(form);
+    }
+    else if (action != "cancel" && (!values.empty() || !fields.empty()
         || (session && session->has_form)))
     {
         stanza::xep0004::form form("submit");

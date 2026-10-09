@@ -30,6 +30,7 @@ struct AdhocSession {
 // An empty action requests the session's default, or execute for a new command.
 [[nodiscard]] XMPP_TEST_EXPORT auto make_adhoc_command(
     std::string_view node, std::string_view session_id, std::string_view action,
-    std::span<const std::string_view> fields, const AdhocSession *session = nullptr)
+    std::span<const std::string_view> fields, const AdhocSession *session = nullptr,
+    const stanza::xep0004::form *submission = nullptr)
     -> std::expected<stanza::spec, std::string>;
 }

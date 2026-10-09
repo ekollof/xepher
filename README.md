@@ -30,6 +30,7 @@ you can reload without restarting WeeChat.
 | **Files** | XEP-0363 upload, SFS/ESFS, stickers; Kitty/cell inline previews via `icat` with left-click to open |
 | **MUC** | Full XEP-0045: join, admin, bookmarks, moderation, reactions |
 | **UX** | Receipts/read markers, typing, corrections, replies, status bar encryption item |
+| **Forms** | Guided ad-hoc command forms with defaults, choices, validation, and masked private fields |
 
 ⭐ **Star the repo** if Xepher is useful — it helps others find it.  
 💬 **Join the MUC:** [`xepher@conference.hackerheaven.org`](xmpp:xepher@conference.hackerheaven.org?join) · [Discussions](https://github.com/ekollof/xepher/discussions)
@@ -147,7 +148,7 @@ platforms are **not routinely tested**. Known considerations:
 - `libsignal-protocol-c` and `libomemo-c` are packaged on FreeBSD and OpenBSD;
   on NetBSD they may still need to be built from pkgsrc source.
 - Default builds use Release (`-O2 -DNDEBUG`). Use `DEBUG=1` for dev builds
-  (`-O0 -DDEBUG` + 147 doctests). Use `ASAN=1` for AddressSanitizer
+  (`-O0 -DDEBUG` + 171 doctests). Use `ASAN=1` for AddressSanitizer
   (`-fsanitize=address`; `-lasan -lrt` on Linux only). Combine: `gmake DEBUG=1 ASAN=1`.
 - The `.source` ELF section embedding step (`objcopy --add-section`) is
   Linux-only, **off by default** (use `make release` or `EMBED_SOURCE=1`),
@@ -208,7 +209,7 @@ cd xepher
 git submodule update --init --recursive
 make install-deps   # installs system packages (requires sudo)
 make                # optimized plugin (no doctests)
-make DEBUG=1        # dev build + 147 doctests
+make DEBUG=1        # dev build + 171 doctests and form editor smoke test
 make test           # doctests only (CTest)
 make tools          # optional: dump_mam_db / dump_omemo_db LMDB inspectors
 make install        # atomic install to ~/.local/share/weechat/plugins/ — do NOT run as root
@@ -218,8 +219,11 @@ make install        # atomic install to ~/.local/share/weechat/plugins/ — do N
 On BSD, replace `make` with **`gmake`** throughout.
 
 Doctest is vendored under `deps/doctest/` (v2.5.2). `make DEBUG=1` or `make test`
-runs **147 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
-system package. Plain `make` skips doctests.
+runs **171 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
+system package. When `weechat-headless` is available, it also runs an isolated
+form editor smoke test covering input masking, history suppression, rejection
+and retry, cancellation, and cleanup without connecting any XMPP accounts.
+Plain `make` skips these checks.
 
 To build a distribution-style plugin locally (same as packages):
 
@@ -846,7 +850,7 @@ The command picker uses the endpoint JID advertised for each command.
 
 ```
 /adhoc example.com                          # list available commands
-/adhoc example.com announce                 # execute a command (form rendered inline)
+/adhoc example.com announce                 # execute a command (opens its form editor)
 /adhoc example.com announce <id> subject=Hello body=World
 /adhoc example.com announce <id> --action=next subject=Hello
 /adhoc example.com announce <id> --action=prev
@@ -854,6 +858,35 @@ The command picker uses the endpoint JID advertised for each command.
 /adhoc example.com announce <id> --action=cancel
 ```
 
+Input forms open in a dedicated `xmpp.form.*` buffer (WeeChat 4.3 or newer).
+Enter values in the order offered by the server; pressing Enter keeps the
+current default. Required fields are marked `*`. Boolean fields accept `true`,
+`false`, `1`, or `0`; list fields display numbered choices. For multiple values,
+enter quoted strings separated by spaces, or paste separate lines. Selected
+list values retain the server's option order.
+
+The editor accepts these controls without a leading slash:
+
+| Control | Effect |
+|---------|--------|
+| `:edit NUMBER` | Revisit a displayed field |
+| `:review` | Review current answers |
+| `:clear` | Unset the current field explicitly |
+| `:empty` | Set the current text field to an empty string |
+| `:omit` | Omit an optional field, leaving its server value unchanged |
+| `:submit [ACTION]` | Submit using the server default or an allowed action (`next`, `prev`, `complete`) |
+| `:cancel` | Cancel the ad-hoc command without sending form values |
+| `/close` | Close the local editor without sending anything |
+
+Use `::` for a value beginning with a literal colon. Hidden fields are returned
+unchanged and fixed fields remain read-only. Private fields are masked in both
+the input bar and review; form input is excluded from WeeChat command history.
+Submissions still appear in opt-in raw XML protocol logs. Server rejection keeps
+your answers available for correction and retry. Completing a command,
+disconnecting, or unloading the plugin closes its editors. Result forms,
+including multi-row reports, are displayed read-only in the account buffer.
+
+The manual commands above remain available, including on older WeeChat versions.
 Required fields are marked with `*`. Each executing response lists its allowed
 actions and default. Omitting `--action` (or choosing `execute`) uses that default;
 `cancel` is always available and sends no form payload. Hidden fields such as
@@ -1430,7 +1463,7 @@ See the [Contributing wiki page](https://github.com/ekollof/xepher/wiki/Contribu
   `stanza::spec` builders for outbound stanzas, and `weechat::UiPort` /
   `BufferPort` / `LineStorePort` for WeeChat output. Raw `xmpp_stanza_get_*`
   and `weechat_printf` belong only in hook/adapter glue.
-- **Tests** — run `make DEBUG=1` or `make test` (147 doctests) after changes; manual WeeChat testing
+- **Tests** — run `make DEBUG=1` or `make test` (171 doctests plus the optional form editor smoke test) after changes; manual WeeChat testing
   for integration behaviour.
 - **Releases** — see [Releasing wiki](https://github.com/ekollof/xepher/wiki/Releasing);
   pushing a `v*` tag triggers GitHub Actions to build and attach packages.
@@ -1494,7 +1527,7 @@ Legend: ✅ complete or production-usable · ⚡ experimental / partial · ⏳ p
 
 ### Beyond the compliance suite
 
-- ✅ XEP-0004: Data Forms (rendered in-buffer for Ad-Hoc Commands)
+- ✅ XEP-0004: Data Forms (interactive editor for Ad-Hoc Commands, all core field types, defaults, required fields, and result tables; other form workflows remain separate)
 - ✅ XEP-0048: Bookmark Storage (Private XML)
 - ✅ XEP-0049: Private XML Storage
 - ✅ XEP-0050: Ad-Hoc Commands

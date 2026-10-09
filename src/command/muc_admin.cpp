@@ -43,6 +43,7 @@
 #include "util.hh"
 #include "sexp/driver.hh"
 #include "ui/picker.hh"
+#include "ui/form_editor.hh"
 #include "weechat/buffer_port.hh"
 #include "weechat/ui_port.hh"
 

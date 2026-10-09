@@ -1936,6 +1936,7 @@ TEST_CASE("server_capability_map")
 }
 
 #include "xmpp/iq_adhoc.hh"
+#include "xmpp/data_form.hh"
 #include "xmpp/iq_pubsub_mam.hh"
 
 struct adhoc_test_spec : stanza::spec {
@@ -1944,6 +1945,105 @@ struct adhoc_test_spec : stanza::spec {
     using spec::xmlns;
     using spec::text;
 };
+
+TEST_CASE("data form editor preserves defaults, hidden values, field order and private text")
+{
+    unit_strophe_env env;
+    auto stanza = stanza_from_string(env.ctx,
+        "<x xmlns='jabber:x:data' type='form'><title>Settings</title>"
+        "<instructions>First</instructions><instructions>Second</instructions>"
+        "<field var='FORM_TYPE' type='hidden'><value>urn:example:test</value></field>"
+        "<field type='fixed'><value>Section</value></field>"
+        "<field var='name' label='Name'><required/><value>Alice</value></field>"
+        "<field var='password' type='text-private'><value>do-not-display</value></field>"
+        "<field var='enabled' type='boolean'/>"
+        "<field var='optional' type='future-type'/>"
+        "<field var='tags' type='list-multi'><option label='A'><value>a</value></option>"
+        "<option label='B'><value>b</value></option><option label='C'><value>c</value></option></field>"
+        "<field var='lines' type='text-multi'><value>line 1</value><value>line 2</value></field></x>");
+    auto form = xmpp::parse_data_form(xmpp::StanzaView(stanza.get()));
+    REQUIRE(form);
+    CHECK(form->title == "Settings");
+    CHECK(form->instructions == std::vector<std::string>{"First", "Second"});
+    CHECK(form->fields[5].type == "text-single");
+    CHECK_FALSE(form->fields[5].included);
+    CHECK_FALSE(xmpp::set_data_form_values(form->fields[0], std::vector<std::string>{"tamper"}));
+    CHECK_FALSE(xmpp::set_data_form_values(form->fields[2], std::vector<std::string>{""}));
+    CHECK(form->fields[2].values == std::vector<std::string>{"Alice"});
+    REQUIRE(xmpp::set_data_form_values(form->fields[6], std::vector<std::string>{"c", "a", "c"}));
+    CHECK(form->fields[6].values == std::vector<std::string>{"a", "c"});
+    CHECK_FALSE(xmpp::set_data_form_values(form->fields[6], std::vector<std::string>{"not-an-option"}));
+    REQUIRE(xmpp::set_data_form_values(form->fields[4], std::vector<std::string>{"true"}));
+    CHECK(form->fields[4].values == std::vector<std::string>{"1"});
+    CHECK_FALSE(xmpp::set_data_form_values(form->fields[4], std::vector<std::string>{"yes"}));
+    auto submission = xmpp::submit_data_form(*form);
+    REQUIRE(submission);
+    auto built = submission->build(env.ctx);
+    const xmpp::StanzaView view(built.get());
+    CHECK(view.attr_string("type") == "submit");
+    std::vector<std::string> names;
+    std::ranges::for_each(view, [&](auto field) { names.emplace_back(field.attr_string("var")); });
+    CHECK(names == std::vector<std::string>{"FORM_TYPE", "name", "password", "enabled", "tags", "lines"});
+    CHECK(view.child("field").child("value").text() == "urn:example:test");
+    const auto lines = xmpp::data_form_lines(*form);
+    CHECK_FALSE(std::ranges::any_of(lines, [](std::string_view line) { return line.contains("do-not-display") || line.contains("urn:example:test"); }));
+    CHECK(std::ranges::any_of(lines, [](std::string_view line) { return line.contains("********"); }));
+    xmpp::AdhocSession session;
+    session.has_form = true;
+    session.default_action = "complete";
+    session.actions = {"complete", "cancel"};
+    session.hidden_fields["FORM_TYPE"] = {"urn:example:test"};
+    auto command = xmpp::make_adhoc_command("settings", "sid", "complete", {}, &session, &*submission);
+    REQUIRE(command);
+    const auto command_built = command->build(env.ctx);
+    CHECK(std::ranges::distance(xmpp::StanzaView(command_built.get())) == 1);
+    CHECK_FALSE(xmpp::make_adhoc_command("settings", "sid", "cancel", {}, &session, &*submission));
+}
+
+TEST_CASE("data forms enforce required fields, list-single cardinality and explicit clearing")
+{
+    unit_strophe_env env;
+    auto stanza = stanza_from_string(env.ctx,
+        "<x xmlns='jabber:x:data' type='form'><field var='required'><required/></field>"
+        "<field var='choice' type='list-single'><option><value>a</value></option><option><value>b</value></option></field>"
+        "<field var='users' type='jid-multi'/><field var='text'><value>default</value></field></x>");
+    auto form = xmpp::parse_data_form(xmpp::StanzaView(stanza.get()));
+    REQUIRE(form);
+    CHECK_FALSE(xmpp::submit_data_form(*form));
+    REQUIRE(xmpp::set_data_form_values(form->fields[0], std::vector<std::string>{"present"}));
+    CHECK_FALSE(xmpp::set_data_form_values(form->fields[1], std::vector<std::string>{"a", "b"}));
+    REQUIRE(xmpp::set_data_form_values(form->fields[2], std::vector<std::string>{"a@example.org", "a@example.org", "b@example.org"}));
+    CHECK(form->fields[2].values.size() == 2);
+    CHECK_FALSE(xmpp::set_data_form_values(form->fields[2], std::vector<std::string>{"@example.org"}));
+    CHECK_FALSE(xmpp::set_data_form_values(form->fields[2], std::vector<std::string>{"bad jid@example.org"}));
+    CHECK_FALSE(xmpp::set_data_form_values(form->fields[2], std::vector<std::string>{"bad<jid@example.org"}));
+    CHECK_FALSE(xmpp::set_data_form_values(form->fields[2], std::vector<std::string>{"a@example.org/"}));
+    REQUIRE(xmpp::set_data_form_values(form->fields[3], {}));
+    auto submission = xmpp::submit_data_form(*form);
+    REQUIRE(submission);
+    auto built = submission->build(env.ctx);
+    const auto cleared = xmpp::StanzaView(built.get()).child("field").next_sibling().next_sibling();
+    CHECK(cleared.attr_string("var") == "text");
+    CHECK_FALSE(cleared.child("value").valid());
+    auto duplicate = stanza_from_string(env.ctx, "<x xmlns='jabber:x:data' type='form'><field var='a'/><field var='a'/></x>");
+    CHECK_FALSE(xmpp::parse_data_form(xmpp::StanzaView(duplicate.get())));
+}
+
+TEST_CASE("data form result tables apply reported labels and private field types")
+{
+    unit_strophe_env env;
+    auto stanza = stanza_from_string(env.ctx,
+        "<x xmlns='jabber:x:data' type='result'><reported><field var='name' label='Name'/>"
+        "<field var='secret' type='text-private'/></reported><item><field var='name'><value>Alice</value></field>"
+        "<field var='secret'><value>hidden-password</value></field></item></x>");
+    const auto form = xmpp::parse_data_form(xmpp::StanzaView(stanza.get()));
+    REQUIRE(form);
+    CHECK(form->items.size() == 1);
+    CHECK_FALSE(xmpp::submit_data_form(*form));
+    const auto lines = xmpp::data_form_lines(*form);
+    CHECK(std::ranges::any_of(lines, [](std::string_view line) { return line.contains("Name") && line.contains("Alice"); }));
+    CHECK_FALSE(std::ranges::any_of(lines, [](std::string_view line) { return line.contains("hidden-password"); }));
+}
 
 TEST_CASE("ad-hoc requester actions and data form round trip")
 {

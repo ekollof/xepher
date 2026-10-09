@@ -63,6 +63,28 @@ macro(xepher_add_tests plugin_target)
         VERBATIM
     )
 
+    # Exercise the actual buffer callbacks, privacy modifiers and editor lifecycle.
+    find_program(XEPHER_WEECHAT_HEADLESS NAMES weechat-headless)
+    if(XEPHER_WEECHAT_HEADLESS)
+        add_library(xepher_form_editor_smoke MODULE EXCLUDE_FROM_ALL
+            "${CMAKE_SOURCE_DIR}/tests/form_editor_smoke.cc")
+        target_include_directories(xepher_form_editor_smoke PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        xepher_apply_common_compile_options(xepher_form_editor_smoke)
+        target_link_libraries(xepher_form_editor_smoke PRIVATE Xepher::deps)
+        target_link_options(xepher_form_editor_smoke PRIVATE "$<TARGET_FILE:${plugin_target}>")
+        set_target_properties(xepher_form_editor_smoke PROPERTIES PREFIX "" OUTPUT_NAME "formprobe")
+        add_dependencies(xepher_form_editor_smoke ${plugin_target})
+        add_dependencies(xepher_test xepher_form_editor_smoke)
+        add_test(NAME doctest_form_editor
+            COMMAND "${XEPHER_WEECHAT_HEADLESS}" --stdout -a -t -P buflist -r
+                "/plugin load $<TARGET_FILE:${plugin_target}>;/plugin load $<TARGET_FILE:xepher_form_editor_smoke>;/plugin unload formprobe;/plugin unload xmpp;/quit")
+        set_tests_properties(doctest_form_editor PROPERTIES
+            TIMEOUT 15 LABELS "doctest"
+            SKIP_REGULAR_EXPRESSION "FORM_SMOKE_SKIP"
+            PASS_REGULAR_EXPRESSION "FORM_SMOKE_PASS"
+            FAIL_REGULAR_EXPRESSION "FORM_SMOKE_FAIL")
+    endif()
+
     # ── Coverage path (opt-in; not built by default) ─────────────────────────
     file(GLOB_RECURSE XEPHER_TEST_PLUGIN_SOURCES CONFIGURE_DEPENDS
         "${CMAKE_SOURCE_DIR}/src/*.cpp"

@@ -571,7 +571,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0004.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>2.13.2</xmpp:version>
-        <xmpp:note xml:lang='en'>Data Forms - rendered in the buffer for Ad-Hoc Commands; manual field=value submission with repeated names for multiple values and automatic preservation of hidden fields; no general interactive form editor</xmpp:note>
+        <xmpp:note xml:lang='en'>Data Forms - reusable interactive editor integrated with Ad-Hoc Commands (WeeChat 4.3+): core field types, defaults, required-field checks, numbered list choices in server order, multiple values, explicit clearing/omission, hidden-field preservation, and masked private fields without input history. Result forms and reported/item tables are rendered read-only. Manual field=value submission remains available. Room configuration and registration forms are not yet integrated with this editor.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

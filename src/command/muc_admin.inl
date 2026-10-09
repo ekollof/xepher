@@ -265,6 +265,8 @@ int command__adhoc(const void *pointer, void *data,
 
     auto iq = stanza::iq().type("set").id(submit_id).to(target_jid);
     iq.child(*command);
+    weechat::ui::form_editor::close(weechat::ui::adhoc_form_id(
+        ptr_account->name, target_jid, node, session_id));
     ptr_account->connection.send(iq.build(ptr_account->context).get());
     if (action == "cancel" && session != ptr_account->adhoc_sessions.end())
         ptr_account->adhoc_sessions.erase(session);

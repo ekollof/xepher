@@ -30,6 +30,7 @@
 #include "completion.hh"
 #include "debug.hh"
 #include "weechat/icat_preview.hh"
+#include "ui/form_editor.hh"
 #include <fmt/core.h>
 
 #define WEECHAT_TIMER_INTERVAL_SEC 0.01
@@ -318,6 +319,7 @@ void weechat::plugin::end() {
     weechat::shutdown_icat_background_workers();
 
     // Disconnect closes buffers and joins per-account upload threads.
+    weechat::ui::form_editor::close_all();
     weechat::account::disconnect_all();
 
     // Persist config while account objects still exist.
