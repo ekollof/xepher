@@ -266,12 +266,12 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
 
             if (adhoc_info.picker)
             {
-                // Picker path: add entry (value = node URI, label = friendly name)
-                using picker_t = weechat::ui::picker<std::string>;
+                // Keep the advertised endpoint together with its command node.
+                using picker_t = weechat::ui::picker<std::pair<std::string, std::string>>;
                 std::string label = !cmd_name.empty() ? cmd_name : (!cmd_node.empty() ? cmd_node : "(unnamed)");
                 std::string sublabel = !cmd_node.empty() ? cmd_node : "";
                 adhoc_info.picker->add_entry(
-                    picker_t::entry{cmd_node, label, sublabel, true});
+                    picker_t::entry{{cmd_jid.empty() ? adhoc_info.target_jid : cmd_jid, cmd_node}, label, sublabel, true});
             }
             else
             {
@@ -301,9 +301,9 @@ bool weechat::connection::handle_disco_items_iq_event(xmpp_stanza_t *stanza)
         }
         else if (count == 0)
         {
-            using picker_t = weechat::ui::picker<std::string>;
+            using picker_t = weechat::ui::picker<std::pair<std::string, std::string>>;
             adhoc_info.picker->add_entry(
-                picker_t::entry{"", "(no commands available)", "", false});
+                picker_t::entry{{}, "(no commands available)", "", false});
         }
 
         account.adhoc_queries.erase(iq_id);

@@ -842,6 +842,8 @@ buffers at all.
 
 ### Ad-hoc Commands and Data Forms (XEP-0050 / XEP-0004)
 
+The command picker uses the endpoint JID advertised for each command.
+
 ```
 /adhoc example.com                          # list available commands
 /adhoc example.com announce                 # execute a command (form rendered inline)

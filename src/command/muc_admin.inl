@@ -164,16 +164,16 @@ int command__adhoc(const void *pointer, void *data,
     {
         // List available commands via disco#items with commands node.
         // Open an interactive picker so the user can choose a command to run.
-        using picker_t = weechat::ui::picker<std::string>;
+        using picker_t = weechat::ui::picker<std::pair<std::string, std::string>>;
         weechat::account *acct = ptr_account;
-        std::string tjid_str = target_jid;
 
         auto p_holder = std::make_shared<picker_t *>(nullptr);
         auto p = std::make_unique<picker_t>(
             "xmpp.picker.adhoc",
             fmt::format("Ad-hoc commands on {}  (XEP-0050)  — select to execute", target_jid),
             std::vector<picker_t::entry>{},   // populated async as disco#items result arrives
-            [acct, tjid_str](std::string_view node_uri) {
+            [acct](const std::pair<std::string, std::string> &selected) {
+                const auto &[tjid_str, node_uri] = selected;
                 auto command = ::xmpp::make_adhoc_command(node_uri, "", "", {});
                 if (!command || !acct->connected())
                     return;
