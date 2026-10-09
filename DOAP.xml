@@ -85,7 +85,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0045.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.35.5</xmpp:version>
-        <xmpp:note xml:lang='en'>Multi-User Chat (MUC) - join/leave, send/receive, IRC-style admin (/kick, /ban, /voice, /devoice, /op, /deop), owner config (/setmodes, /affiliation list|set, /destroy), registration (/mucregister), direct and mediated invites (/invite, /decline); history maxstanzas='0' on join (MAM catch-up); no interactive full roomconfig UI</xmpp:note>
+        <xmpp:note xml:lang='en'>Multi-User Chat (MUC) - join/leave, send/receive, IRC-style admin (/kick, /ban, /voice, /devoice, /op, /deop), owner config (/roomconfig full interactive server form on WeeChat 4.3+, /setmodes, /affiliation list|set, /destroy), registration (/mucregister), direct and mediated invites (/invite, /decline); history maxstanzas='0' on join (MAM catch-up). Interactive configuration supports submit/cancel with server acknowledgement and retains answers after rejection.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -571,7 +571,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0004.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>2.13.2</xmpp:version>
-        <xmpp:note xml:lang='en'>Data Forms - reusable interactive editor integrated with Ad-Hoc Commands (WeeChat 4.3+): core field types, defaults, required-field checks, numbered list choices in server order, multiple values, explicit clearing/omission, hidden-field preservation, and masked private fields without input history. Result forms and reported/item tables are rendered read-only. Manual field=value submission remains available. Room configuration and registration forms are not yet integrated with this editor.</xmpp:note>
+        <xmpp:note xml:lang='en'>Data Forms - reusable interactive editor integrated with Ad-Hoc Commands and MUC room configuration (WeeChat 4.3+): core field types, defaults, required-field checks, numbered list choices in server order, multiple values, explicit clearing/omission, hidden-field preservation, and masked private fields without input history. Result forms and reported/item tables are rendered read-only. Manual ad-hoc field=value submission remains available. Registration forms are not yet integrated with this editor.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

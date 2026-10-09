@@ -40,6 +40,7 @@ int command__modes(COMMAND_ARGS);
 int command__names(COMMAND_ARGS);
 int command__create(COMMAND_ARGS);
 int command__setmodes(COMMAND_ARGS);
+int command__roomconfig(COMMAND_ARGS);
 int command__destroy(COMMAND_ARGS);
 int command__affiliation(COMMAND_ARGS);
 int command__voice(COMMAND_ARGS);

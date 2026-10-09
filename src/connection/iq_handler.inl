@@ -474,8 +474,15 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     const char *owner_stanza_id = id;
     if (owner_stanza_id && account.muc_owner_queries.contains(owner_stanza_id))
     {
-        auto info = account.muc_owner_queries[owner_stanza_id];
+        const auto &pending_owner = account.muc_owner_queries.at(owner_stanza_id);
+        if (!pending_owner.editor_id.empty()
+            && (view.attr_string("from") != pending_owner.room_jid
+                || (view.attr_string("type") != "result" && view.attr_string("type") != "error")))
+            return true;
+        auto info = pending_owner;
         account.muc_owner_queries.erase(owner_stanza_id);
+        if (account.handle_room_config_editor(view, info))
+            return true;
         struct t_gui_buffer *out = info.buffer ? info.buffer : account.buffer;
 
         const ::xmpp::StanzaView owner_q = view.child("query", "http://jabber.org/protocol/muc#owner");
@@ -505,6 +512,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             {
                 case weechat::account::muc_owner_kind::config_get:   what = "fetch room config form"; break;
                 case weechat::account::muc_owner_kind::config_set:   what = "submit room config";     break;
+                case weechat::account::muc_owner_kind::config_edit_get:
+                case weechat::account::muc_owner_kind::config_edit_set:
+                case weechat::account::muc_owner_kind::config_edit_cancel: break; // handled above
                 case weechat::account::muc_owner_kind::destroy:      what = "destroy room";           break;
                 case weechat::account::muc_owner_kind::aff_set:      what = "set affiliation";        break;
                 case weechat::account::muc_owner_kind::aff_list:     what = "list affiliations";      break;
@@ -522,6 +532,9 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
             auto ui = weechat::UiPort::for_buffer(out);
             switch (info.kind)
             {
+                case weechat::account::muc_owner_kind::config_edit_get:
+                case weechat::account::muc_owner_kind::config_edit_set:
+                case weechat::account::muc_owner_kind::config_edit_cancel: return true; // handled above
                 case weechat::account::muc_owner_kind::config_get:
                 {
                     if (auto ch_it = account.channels.find(info.room_jid);

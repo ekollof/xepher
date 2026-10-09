@@ -148,7 +148,7 @@ platforms are **not routinely tested**. Known considerations:
 - `libsignal-protocol-c` and `libomemo-c` are packaged on FreeBSD and OpenBSD;
   on NetBSD they may still need to be built from pkgsrc source.
 - Default builds use Release (`-O2 -DNDEBUG`). Use `DEBUG=1` for dev builds
-  (`-O0 -DDEBUG` + 171 doctests). Use `ASAN=1` for AddressSanitizer
+  (`-O0 -DDEBUG` + 172 doctests). Use `ASAN=1` for AddressSanitizer
   (`-fsanitize=address`; `-lasan -lrt` on Linux only). Combine: `gmake DEBUG=1 ASAN=1`.
 - The `.source` ELF section embedding step (`objcopy --add-section`) is
   Linux-only, **off by default** (use `make release` or `EMBED_SOURCE=1`),
@@ -209,7 +209,7 @@ cd xepher
 git submodule update --init --recursive
 make install-deps   # installs system packages (requires sudo)
 make                # optimized plugin (no doctests)
-make DEBUG=1        # dev build + 171 doctests and form editor smoke test
+make DEBUG=1        # dev build + 172 doctests and form editor smoke test
 make test           # doctests only (CTest)
 make tools          # optional: dump_mam_db / dump_omemo_db LMDB inspectors
 make install        # atomic install to ~/.local/share/weechat/plugins/ — do NOT run as root
@@ -219,7 +219,7 @@ make install        # atomic install to ~/.local/share/weechat/plugins/ — do N
 On BSD, replace `make` with **`gmake`** throughout.
 
 Doctest is vendored under `deps/doctest/` (v2.5.2). `make DEBUG=1` or `make test`
-runs **171 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
+runs **172 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
 system package. When `weechat-headless` is available, it also runs an isolated
 form editor smoke test covering input masking, history suppression, rejection
 and retry, cancellation, and cleanup without connecting any XMPP accounts.
@@ -844,6 +844,23 @@ buffers at all.
 
 ---
 
+### Room configuration (XEP-0045)
+
+Run `/roomconfig` in a MUC buffer to fetch and edit the server's complete room
+configuration form (owner-only, WeeChat 4.3+). This includes server-supported
+settings such as room name, description, logging, maximum occupants, and owners.
+The editor uses the same controls described below: Enter keeps a default,
+`:edit NUMBER` revisits a field, `:review` shows the answers, and `:submit` saves.
+Hidden fields and unchanged defaults are preserved; passwords are masked and
+input is excluded from command history. Opt-in raw XML logs include submissions.
+
+Changes are confirmed only after the server accepts them. A rejection keeps
+your answers for correction and retry. `:cancel` sends protocol cancellation;
+**cancelling initial configuration of a newly created locked room destroys that
+room**, as required by XEP-0045. `/close` closes the editor locally without sending
+anything. Disconnecting closes editors. `/setmodes` remains available for quick
+mode changes; avoid changing the same room concurrently in another client.
+
 ### Ad-hoc Commands and Data Forms (XEP-0050 / XEP-0004)
 
 The command picker uses the endpoint JID advertised for each command.
@@ -974,6 +991,7 @@ only after the server acknowledges publication.
 | `/names` | List all known occupants in the current MUC with IRC-style role/affiliation prefixes (same symbols as the nicklist; sorted by rank then nick) |
 | `/modes` | Display the MUC room modes and metadata (XEP-0045 §6.4/6.5). The mode flags alone also appear in the buffer's status-bar `modes` slot IRC-style (e.g. `+miP` for a moderated, members-only, persistent room) — automatically updated on join and on status-104 config-change notifications |
 | `/setmodes [+/-][m][i][k][p][P][N][S] [secret] [--confirm]` | Set/clear room mode flags (XEP-0045 §10.2, owner-only). Without `--confirm` prints the planned diff |
+| `/roomconfig` | Edit the server's full room configuration form in the current MUC buffer (owner-only, WeeChat 4.3+) |
 | `/destroy [<reason> [<alt-jid> [<alt-password>]]] [--confirm]` | Destroy the current MUC room (XEP-0045 §10.7, owner-only). Irreversible — use `--confirm` to apply |
 
 ### MUC nicklist prefixes
@@ -1463,7 +1481,7 @@ See the [Contributing wiki page](https://github.com/ekollof/xepher/wiki/Contribu
   `stanza::spec` builders for outbound stanzas, and `weechat::UiPort` /
   `BufferPort` / `LineStorePort` for WeeChat output. Raw `xmpp_stanza_get_*`
   and `weechat_printf` belong only in hook/adapter glue.
-- **Tests** — run `make DEBUG=1` or `make test` (171 doctests plus the optional form editor smoke test) after changes; manual WeeChat testing
+- **Tests** — run `make DEBUG=1` or `make test` (172 doctests plus the optional form editor smoke test) after changes; manual WeeChat testing
   for integration behaviour.
 - **Releases** — see [Releasing wiki](https://github.com/ekollof/xepher/wiki/Releasing);
   pushing a `v*` tag triggers GitHub Actions to build and attach packages.
@@ -1504,7 +1522,7 @@ Legend: ✅ complete or production-usable · ⚡ experimental / partial · ⏳ p
 ### Core IM (CCS2022 baseline)
 
 - ✅ XEP-0030: Service Discovery — `/disco summary` prints a cached capability matrix (domain features, components, upload/pubsub/MUC detection); auto-printed to the account log after connect
-- ✅ XEP-0045: Multi-User Chat — `/create`, IRC-style admin (`/kick`, `/ban`, `/voice`, `/devoice`, `/op`, `/deop`), owner config (`/setmodes`, `/affiliation`, `/destroy`), registration (`/mucregister`), direct and mediated invites (`/invite`, `/decline`); no full interactive roomconfig UI
+- ✅ XEP-0045: Multi-User Chat — `/create`, IRC-style admin (`/kick`, `/ban`, `/voice`, `/devoice`, `/op`, `/deop`), owner config (`/roomconfig` full interactive form, `/setmodes`, `/affiliation`, `/destroy`), registration (`/mucregister`), direct and mediated invites (`/invite`, `/decline`)
 - ✅ XEP-0054: vcard-temp (retrieval via `/whois`, publishing via `/setvcard`)
 - ✅ XEP-0077: In-Band Registration (`/account register`, `unregister`, `password`)
 - ✅ XEP-0115: Entity Capabilities (persistent caching)
@@ -1527,7 +1545,7 @@ Legend: ✅ complete or production-usable · ⚡ experimental / partial · ⏳ p
 
 ### Beyond the compliance suite
 
-- ✅ XEP-0004: Data Forms (interactive editor for Ad-Hoc Commands, all core field types, defaults, required fields, and result tables; other form workflows remain separate)
+- ✅ XEP-0004: Data Forms (interactive editor for Ad-Hoc Commands and MUC room configuration, all core field types, defaults, required fields, and result tables; registration workflows remain separate)
 - ✅ XEP-0048: Bookmark Storage (Private XML)
 - ✅ XEP-0049: Private XML Storage
 - ✅ XEP-0050: Ad-Hoc Commands

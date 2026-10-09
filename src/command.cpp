@@ -802,6 +802,16 @@ void command__init()
         weechat::UiPort::for_buffer(nullptr)->printf_error( "Failed to setup command /modes");
 
     hook = weechat_hook_command(
+        "roomconfig", N_("edit the complete MUC room configuration (owner-only)"), "",
+        N_("Fetches the server's configuration form in the current MUC buffer. "
+           "Requires WeeChat 4.3+. Use :submit to apply or :cancel to cancel. "
+           "Cancelling initial configuration destroys a newly created locked room. "
+           "Closing the editor locally sends nothing."),
+        nullptr, &command__roomconfig, nullptr, nullptr);
+    if (!hook)
+        weechat::UiPort::for_buffer(nullptr)->printf_error("Failed to setup command /roomconfig");
+
+    hook = weechat_hook_command(
         "setmodes",
         N_("set MUC room mode flags (XEP-0045 §10.2, owner-only)"),
         N_("[+|-][m][i][k][p][P][N][S] [<secret>] [--confirm]"),

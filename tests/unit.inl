@@ -2045,6 +2045,46 @@ TEST_CASE("data form result tables apply reported labels and private field types
     CHECK_FALSE(std::ranges::any_of(lines, [](std::string_view line) { return line.contains("hidden-password"); }));
 }
 
+#include "xmpp/iq_room_config.hh"
+
+TEST_CASE("room configuration fetch, full submit and cancel use the owner namespace")
+{
+    unit_strophe_env env;
+    auto fetch = xmpp::make_room_config_query();
+    REQUIRE(fetch);
+    auto fetch_xml = fetch->build(env.ctx);
+    xmpp::StanzaView fetch_view(fetch_xml.get());
+    CHECK(fetch_view.xmlns() == "http://jabber.org/protocol/muc#owner");
+    CHECK_FALSE(fetch_view.child("x", "jabber:x:data").valid());
+    auto input = stanza_from_string(env.ctx,
+        "<x xmlns='jabber:x:data' type='form'>"
+        "<field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/muc#roomconfig</value></field>"
+        "<field var='muc#roomconfig_roomname'><value>Original</value></field>"
+        "<field var='muc#roomconfig_roomowners' type='jid-multi'><value>owner@example.org</value></field>"
+        "<field var='muc#roomconfig_roomsecret' type='text-private'><value>secret</value></field></x>");
+    auto form = xmpp::parse_data_form(xmpp::StanzaView(input.get()));
+    REQUIRE(form);
+    REQUIRE(xmpp::set_data_form_values(form->fields[1], std::vector<std::string>{"Changed"}));
+    auto submit = xmpp::make_room_config_query(&*form);
+    REQUIRE(submit);
+    auto submit_xml = submit->build(env.ctx);
+    const auto x = xmpp::StanzaView(submit_xml.get()).child("x", "jabber:x:data");
+    CHECK(x.attr_string("type") == "submit");
+    CHECK(x.child("field").child("value").text() == "http://jabber.org/protocol/muc#roomconfig");
+    std::vector<std::string> values;
+    for (auto field : x) values.push_back(field.child("value").text());
+    CHECK(values == std::vector<std::string>{"http://jabber.org/protocol/muc#roomconfig", "Changed", "owner@example.org", "secret"});
+    form->fields[1].required = true;
+    form->fields[1].values.clear();
+    CHECK_FALSE(xmpp::make_room_config_query(&*form));
+    auto cancel = xmpp::make_room_config_query(&*form, true);
+    REQUIRE(cancel);
+    auto cancel_xml = cancel->build(env.ctx);
+    const auto cancelled = xmpp::StanzaView(cancel_xml.get()).child("x", "jabber:x:data");
+    CHECK(cancelled.attr_string("type") == "cancel");
+    CHECK_FALSE(cancelled.child("field").valid());
+}
+
 TEST_CASE("ad-hoc requester actions and data form round trip")
 {
     unit_strophe_env env;
