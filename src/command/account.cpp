@@ -29,6 +29,10 @@
 #include "xmpp/node.hh"
 #include "xmpp/iq_error.hh"
 #include "xmpp/data_form.hh"
+#include "xmpp/iq_registration.hh"
+#include "ui/form_editor.hh"
+#include <map>
+#include <chrono>
 #include "xmpp/xep-0054.inl"
 #include "xmpp/xep-0292.inl"
 #include "account.hh"

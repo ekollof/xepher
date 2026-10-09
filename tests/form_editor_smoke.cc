@@ -34,6 +34,7 @@ int weechat_plugin_init(struct t_weechat_plugin *api, int, char **)
     }
     bool passed = true;
     int calls = 0;
+    int closed = 0;
     auto opened = weechat::ui::form_editor::open("probe", "test", "Form smoke test", std::move(*model),
         {"complete", "cancel"}, "complete", [&](std::string_view action, const xmpp::data_form &answers) -> std::expected<void, std::string> {
             ++calls;
@@ -41,7 +42,7 @@ int weechat_plugin_init(struct t_weechat_plugin *api, int, char **)
                 && answers.fields[0].values == std::vector<std::string>{"Changed"}
                 && answers.fields[1].values == std::vector<std::string>{"private-test-value"};
             return {};
-        });
+        }, [&] { ++closed; });
     if (!opened && opened.error().starts_with("Interactive forms require WeeChat")) {
         weechat_command(nullptr, "/print -stdout FORM_SMOKE_SKIP");
         return WEECHAT_RC_OK;
@@ -69,7 +70,7 @@ int weechat_plugin_init(struct t_weechat_plugin *api, int, char **)
         passed = passed && calls == 3;
     }
     weechat::ui::form_editor::close_owner("probe");
-    passed = passed && !weechat_buffer_search("xmpp", "xmpp.form.test");
+    passed = passed && closed == 1 && !weechat_buffer_search("xmpp", "xmpp.form.test");
     weechat_command(nullptr, passed ? "/print -stdout FORM_SMOKE_PASS" : "/print -stdout FORM_SMOKE_FAIL");
     return WEECHAT_RC_OK;
 }

@@ -12,6 +12,7 @@
 
 int command__enter(COMMAND_ARGS);
 void command__init();
+void command__shutdown_registration();
 
 // Declarations for all command__ functions defined in src/command/*.inl.
 // These are needed by command__init() in command.cpp.

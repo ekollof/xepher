@@ -148,7 +148,7 @@ platforms are **not routinely tested**. Known considerations:
 - `libsignal-protocol-c` and `libomemo-c` are packaged on FreeBSD and OpenBSD;
   on NetBSD they may still need to be built from pkgsrc source.
 - Default builds use Release (`-O2 -DNDEBUG`). Use `DEBUG=1` for dev builds
-  (`-O0 -DDEBUG` + 172 doctests). Use `ASAN=1` for AddressSanitizer
+  (`-O0 -DDEBUG` + 174 doctests). Use `ASAN=1` for AddressSanitizer
   (`-fsanitize=address`; `-lasan -lrt` on Linux only). Combine: `gmake DEBUG=1 ASAN=1`.
 - The `.source` ELF section embedding step (`objcopy --add-section`) is
   Linux-only, **off by default** (use `make release` or `EMBED_SOURCE=1`),
@@ -209,7 +209,7 @@ cd xepher
 git submodule update --init --recursive
 make install-deps   # installs system packages (requires sudo)
 make                # optimized plugin (no doctests)
-make DEBUG=1        # dev build + 172 doctests and form editor smoke test
+make DEBUG=1        # dev build + 174 doctests and form editor smoke test
 make test           # doctests only (CTest)
 make tools          # optional: dump_mam_db / dump_omemo_db LMDB inspectors
 make install        # atomic install to ~/.local/share/weechat/plugins/ — do NOT run as root
@@ -219,10 +219,16 @@ make install        # atomic install to ~/.local/share/weechat/plugins/ — do N
 On BSD, replace `make` with **`gmake`** throughout.
 
 Doctest is vendored under `deps/doctest/` (v2.5.2). `make DEBUG=1` or `make test`
-runs **172 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
+runs **174 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
 system package. When `weechat-headless` is available, it also runs an isolated
 form editor smoke test covering input masking, history suppression, rejection
 and retry, cancellation, and cleanup without connecting any XMPP accounts.
+With Python 3 and the OpenSSL CLI available, CTest also runs
+`tests/test_registration_tls.py` using Python's standard-library `unittest`.
+It starts local mock servers and isolated WeeChat instances to verify that
+registration sends no query or credentials without STARTTLS or with an
+untrusted certificate. These tests skip if loopback port 5222 is occupied;
+they never connect to an existing listener or create real accounts.
 Plain `make` skips these checks.
 
 To build a distribution-style plugin locally (same as packages):
@@ -933,6 +939,24 @@ not host commands for other clients.
 /account password <account> <new-password>  # change password in-band (XEP-0077)
 ```
 
+`/account register` negotiates STARTTLS with certificate verification before
+requesting registration fields. When the server supplies a data form, it opens
+the interactive editor (WeeChat 4.3+). Username and password fields without
+defaults are filled from the command; password fields are masked. The username
+must match the requested JID. An edited password is saved with the account only
+after the server confirms success. Other fields, such as email or invitation
+codes, use the server's form. Only the completed data form is submitted, with
+hidden fields preserved; legacy username/password siblings are not included.
+
+Use `:submit` to register or `:cancel` to abandon the attempt. Server errors keep
+answers available for correction. Closing the editor, a connection failure,
+plugin unload, or the ten-minute form deadline ends the attempt. No account is
+added until registration succeeds. The initial connection has a 30-second
+deadline. Unsupported CAPTCHA/media challenges and older WeeChat versions
+require the server's web registration instead. Flat username/password
+registration remains supported. The password in the initial command can appear
+in command history; the editor itself excludes its input from history.
+
 ### Messaging
 
 | Command | Description |
@@ -1481,7 +1505,7 @@ See the [Contributing wiki page](https://github.com/ekollof/xepher/wiki/Contribu
   `stanza::spec` builders for outbound stanzas, and `weechat::UiPort` /
   `BufferPort` / `LineStorePort` for WeeChat output. Raw `xmpp_stanza_get_*`
   and `weechat_printf` belong only in hook/adapter glue.
-- **Tests** — run `make DEBUG=1` or `make test` (172 doctests plus the optional form editor smoke test) after changes; manual WeeChat testing
+- **Tests** — run `make DEBUG=1` or `make test` (174 doctests plus the optional form editor smoke test) after changes; manual WeeChat testing
   for integration behaviour.
 - **Releases** — see [Releasing wiki](https://github.com/ekollof/xepher/wiki/Releasing);
   pushing a `v*` tag triggers GitHub Actions to build and attach packages.
@@ -1524,7 +1548,7 @@ Legend: ✅ complete or production-usable · ⚡ experimental / partial · ⏳ p
 - ✅ XEP-0030: Service Discovery — `/disco summary` prints a cached capability matrix (domain features, components, upload/pubsub/MUC detection); auto-printed to the account log after connect
 - ✅ XEP-0045: Multi-User Chat — `/create`, IRC-style admin (`/kick`, `/ban`, `/voice`, `/devoice`, `/op`, `/deop`), owner config (`/roomconfig` full interactive form, `/setmodes`, `/affiliation`, `/destroy`), registration (`/mucregister`), direct and mediated invites (`/invite`, `/decline`)
 - ✅ XEP-0054: vcard-temp (retrieval via `/whois`, publishing via `/setvcard`)
-- ✅ XEP-0077: In-Band Registration (`/account register`, `unregister`, `password`)
+- ✅ XEP-0077: In-Band Registration (`/account register` with interactive data forms and verified TLS, `unregister`, `password`; CAPTCHA/media challenges unsupported)
 - ✅ XEP-0115: Entity Capabilities (persistent caching)
 - ✅ XEP-0163: Personal Eventing Protocol
 - ✅ XEP-0191: Blocking Command
@@ -1545,7 +1569,7 @@ Legend: ✅ complete or production-usable · ⚡ experimental / partial · ⏳ p
 
 ### Beyond the compliance suite
 
-- ✅ XEP-0004: Data Forms (interactive editor for Ad-Hoc Commands and MUC room configuration, all core field types, defaults, required fields, and result tables; registration workflows remain separate)
+- ✅ XEP-0004: Data Forms (interactive editor for Ad-Hoc Commands, MUC room configuration, and account registration; all core field types, defaults, required fields, and result tables; MUC registration remains separate)
 - ✅ XEP-0048: Bookmark Storage (Private XML)
 - ✅ XEP-0049: Private XML Storage
 - ✅ XEP-0050: Ad-Hoc Commands

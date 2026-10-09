@@ -25,7 +25,7 @@ class XMPP_TEST_EXPORT form_editor {
 public:
     static auto open(std::string_view owner, std::string_view id, std::string_view title,
         ::xmpp::data_form form, std::vector<std::string> actions, std::string_view default_action,
-        form_submit_callback submit) -> std::expected<void, std::string>;
+        form_submit_callback submit, std::function<void()> closed = {}) -> std::expected<void, std::string>;
     static void close(std::string_view id);
     static void close_owner(std::string_view owner);
     static void close_all();
@@ -43,6 +43,7 @@ private:
     std::vector<std::string> actions_;
     std::string default_action_;
     form_submit_callback submit_;
+    std::function<void()> closed_;
     t_gui_buffer *buffer_ = nullptr;
     std::unique_ptr<form_input_guard> guard_;
     std::optional<std::size_t> current_;

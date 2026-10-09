@@ -2046,6 +2046,50 @@ TEST_CASE("data form result tables apply reported labels and private field types
 }
 
 #include "xmpp/iq_room_config.hh"
+#include "xmpp/iq_registration.hh"
+
+TEST_CASE("registration forms prefill credentials and submit only namespaced data forms")
+{
+    unit_strophe_env env;
+    auto input = stanza_from_string(env.ctx,
+        "<query xmlns='jabber:iq:register'><username/><password/>"
+        "<x xmlns='jabber:x:data' type='form'>"
+        "<field var='FORM_TYPE' type='hidden'><value>jabber:iq:register</value></field>"
+        "<field var='token' type='hidden'><value>server-token</value></field>"
+        "<field var='username'><value/></field><field var='password'/>"
+        "<field var='email'><required/></field></x></query>");
+    auto form = xmpp::registration_form(xmpp::StanzaView(input.get()), "alice", "private-password");
+    REQUIRE(form);
+    CHECK(form->fields[2].values == std::vector<std::string>{"alice"});
+    CHECK(form->fields[3].type == "text-private");
+    CHECK(form->fields[3].values == std::vector<std::string>{"private-password"});
+    CHECK_FALSE(xmpp::registration_submission(*form));
+    REQUIRE(xmpp::set_data_form_values(form->fields[4], std::vector<std::string>{"alice@example.org"}));
+    auto submission = xmpp::registration_submission(*form);
+    REQUIRE(submission);
+    auto built = submission->build(env.ctx);
+    const xmpp::StanzaView query(built.get());
+    CHECK(query.xmlns() == "jabber:iq:register");
+    CHECK_FALSE(query.child("username").valid());
+    CHECK_FALSE(query.child("password").valid());
+    const auto x = query.child("x", "jabber:x:data");
+    CHECK(x.attr_string("type") == "submit");
+    CHECK(x.child("field").child("value").text() == "jabber:iq:register");
+    const auto lines = xmpp::data_form_lines(*form);
+    CHECK_FALSE(std::ranges::any_of(lines, [](std::string_view line) { return line.contains("private-password"); }));
+}
+
+TEST_CASE("registration rejects unsupported captcha and media challenges")
+{
+    unit_strophe_env env;
+    for (const auto xml : {
+        "<query xmlns='jabber:iq:register'><captcha xmlns='urn:xmpp:captcha'/></query>",
+        "<query xmlns='jabber:iq:register'><x xmlns='jabber:x:data' type='form'><field var='FORM_TYPE' type='hidden'><value>urn:xmpp:captcha</value></field></x></query>",
+        "<query xmlns='jabber:iq:register'><x xmlns='jabber:x:data' type='form'><field var='challenge'><media xmlns='urn:xmpp:media-element'/></field></x></query>"}) {
+        auto input = stanza_from_string(env.ctx, xml);
+        CHECK_FALSE(xmpp::registration_form(xmpp::StanzaView(input.get()), "alice", "password"));
+    }
+}
 
 TEST_CASE("room configuration fetch, full submit and cancel use the owner namespace")
 {

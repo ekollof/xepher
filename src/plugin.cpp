@@ -319,6 +319,7 @@ void weechat::plugin::end() {
     weechat::shutdown_icat_background_workers();
 
     // Disconnect closes buffers and joins per-account upload threads.
+    command__shutdown_registration();
     weechat::ui::form_editor::close_all();
     weechat::account::disconnect_all();
 

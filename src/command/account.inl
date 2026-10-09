@@ -198,9 +198,7 @@ void command__account_list(int argc, char **argv)
 // Forward declaration — defined later in this file.
 void command__add_account(const char *name, const char *jid, const char *password);
 
-// Holds transient state for a single IBR attempt.  Created on the heap; the
-// WeeChat timer callback owns it and deletes it when the operation completes
-// (success, error, or disconnect).
+// The registry owns attempts until completion; callbacks look them up by name.
 struct ibr_state {
     std::string account_name;
     std::string jid;
@@ -215,6 +213,9 @@ struct ibr_state {
     xmpp_ctx_t  *ctx;
     xmpp_conn_t *conn;
     bool         done;            // set to true once we are finished
+    std::string editor_id;
+    bool editing = false;
+    std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
 
     ibr_state(std::string n, std::string j, std::string p,
               std::string srv, struct t_gui_buffer *buf)
@@ -233,6 +234,7 @@ struct ibr_state {
     {}
 
     ~ibr_state() {
+        weechat::ui::form_editor::close(editor_id);
         if (timer_hook) { weechat_unhook(timer_hook); timer_hook = nullptr; }
         if (conn)       { xmpp_conn_release(conn);    conn = nullptr; }
         if (ctx)        { xmpp_ctx_free(ctx);         ctx = nullptr; }
@@ -240,9 +242,18 @@ struct ibr_state {
     }
 };
 
+static std::map<std::string, std::unique_ptr<ibr_state>> registration_attempts;
+
+void command__shutdown_registration()
+{
+    std::ranges::for_each(registration_attempts, [](auto &entry) {
+        weechat::ui::form_editor::close(entry.second->editor_id);
+    });
+    registration_attempts.clear();
+}
+
 // WeeChat timer callback: drives the libstrophe event loop for the IBR
-// connection.  When done is set the callback deletes the ibr_state (which
-// unhooks itself) and returns WEECHAT_RC_OK for the last call.
+// connection. Completed attempts are removed after xmpp_run_once returns.
 static int ibr_timer_cb(const void *pointer, void *data, int /*remaining*/)
 {
     (void) data;
@@ -251,11 +262,18 @@ static int ibr_timer_cb(const void *pointer, void *data, int /*remaining*/)
 
     xmpp_run_once(st->ctx, 10);
 
+    if (std::chrono::steady_clock::now() >= st->deadline) {
+        weechat::UiPort::for_buffer(nullptr)->printf_error("Registration timed out; run /account register again");
+        st->done = true;
+    }
+
     if (st->done) {
         // Unhook before deleting so weechat doesn't call us again
         struct t_hook *h = st->timer_hook;
         st->timer_hook = nullptr;
-        { std::unique_ptr<ibr_state> owned(st); } // RAII delete
+        xmpp_disconnect(st->conn);
+        weechat::ui::form_editor::close(st->editor_id);
+        registration_attempts.erase(st->account_name);
         weechat_unhook(h);
     }
     return WEECHAT_RC_OK;
@@ -268,6 +286,8 @@ static int ibr_set_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     if (!st || st->done) return 0;
 
     const ::xmpp::StanzaView view(stanza);
+    if (view.attr_string("from") != st->server && !view.attr_string("from").empty()) return 1;
+    if (view.type() != "result" && view.type() != "error") return 1;
     if (view.type() == "result") {
         weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: registration successful for {} — adding account")), WEECHAT_XMPP_PLUGIN_NAME, st->jid.c_str()));
         command__add_account(st->account_name.c_str(), st->jid.c_str(), st->password.c_str());
@@ -277,11 +297,15 @@ static int ibr_set_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
         };
         const std::string condition = ::xmpp::iq_error_condition(view, k_set_error_conditions);
         weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: registration failed: {}")), WEECHAT_XMPP_PLUGIN_NAME, condition));
+        if (st->editing) {
+            weechat::ui::form_editor::failed(st->editor_id, condition);
+            return 0;
+        }
     }
 
     xmpp_disconnect(conn);
     st->done = true;
-    return 1; // consume
+    return 0; // remove the completed ID handler
 }
 
 // IQ result handler for the IBR <iq type='get'> field-list response.
@@ -291,6 +315,8 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     if (!st || st->done) return 0;
 
     const ::xmpp::StanzaView view(stanza);
+    if (!view.attr_string("from").empty() && view.attr_string("from") != st->server) return 1;
+    if (view.type() != "result" && view.type() != "error") return 1;
     if (view.type() != "result") {
         // Server returned an error to our field-list query
         static constexpr std::array<std::string_view, 2> k_get_error_conditions = {
@@ -304,6 +330,12 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     }
 
     const ::xmpp::StanzaView query = view.child("query", "jabber:iq:register");
+    if (view.child("captcha", "urn:xmpp:captcha").valid()) {
+        weechat::UiPort::for_buffer(st->buffer)->printf_error("CAPTCHA registration is unsupported; use the server's web registration");
+        xmpp_disconnect(conn);
+        st->done = true;
+        return 0;
+    }
     if (!query.valid()) {
         weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR: server response missing <query xmlns='jabber:iq:register'>")), WEECHAT_XMPP_PLUGIN_NAME));
         xmpp_disconnect(conn);
@@ -319,39 +351,57 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
         return 1;
     }
 
-    // XEP-0077 §6: x:data form takes precedence over flat fields.
-    // A terminal client cannot fill in arbitrary form fields interactively,
-    // so we detect this, print the form instructions and field list, and abort
-    // with a helpful message directing the user to the server's web registration.
+    // XEP-0077 §6: submit only the data form when one is supplied.
     const ::xmpp::StanzaView xdata = query.child("x", "jabber:x:data");
     if (xdata.valid()) {
-        weechat::UiPort::for_buffer(st->buffer)->printf_error(fmt::format(fmt::runtime(_("{}: IBR: server requires a data form for registration"
-                         " — web registration required")), WEECHAT_XMPP_PLUGIN_NAME));
-
-        // Print the form title/instructions if present
-        if (const ::xmpp::StanzaView title_el = xdata.child("title"); title_el.valid()) {
-            const std::string title = title_el.text();
-            if (!title.empty())
-        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form title: {}")), WEECHAT_XMPP_PLUGIN_NAME, title.c_str()));
+        auto form = ::xmpp::registration_form(query, ::jid(nullptr, st->jid).local, st->password);
+        if (form) {
+            st->deadline = std::chrono::steady_clock::now() + std::chrono::minutes(10);
+            st->editor_id = weechat::ui::adhoc_form_id("registration", st->account_name, st->server, "");
+            auto opened = weechat::ui::form_editor::open("registration", st->editor_id,
+                fmt::format("Register {}", st->jid), std::move(*form), {"submit", "cancel"}, "submit",
+                [name = st->account_name](std::string_view action, const ::xmpp::data_form &answers)
+                    -> std::expected<void, std::string> {
+                    const auto found = registration_attempts.find(name);
+                    if (found == registration_attempts.end() || found->second->done)
+                        return std::unexpected("Registration connection ended; restart /account register");
+                    auto &attempt = *found->second;
+                    if (action == "cancel") { attempt.done = true; return {}; }
+                    if (action != "submit") return std::unexpected("Unsupported registration action");
+                    auto payload = ::xmpp::registration_submission(answers);
+                    if (!payload) return std::unexpected(payload.error());
+                    for (const auto &field : answers.fields) {
+                        if (field.var == "username" && (!field.included || field.values.size() != 1
+                            || field.values.front() != ::jid(nullptr, attempt.jid).local))
+                            return std::unexpected("Username must match the JID passed to /account register");
+                        if (field.var == "password") {
+                            if (!field.included || field.values.size() != 1 || field.values.front().empty())
+                                return std::unexpected("A non-empty registration password is required");
+                            attempt.password = field.values.front();
+                        }
+                    }
+                    const auto id = stanza::uuid(attempt.ctx);
+                    auto request = stanza::iq().type("set").to(attempt.server).id(id);
+                    request.child(*payload);
+                    xmpp_id_handler_add(attempt.conn, ibr_set_result_handler, id.c_str(), &attempt);
+                    xmpp_send(attempt.conn, request.build(attempt.ctx).get());
+                    return {};
+                }, [name = st->account_name] {
+                    if (const auto found = registration_attempts.find(name); found != registration_attempts.end())
+                        found->second->done = true;
+                });
+            if (opened) { st->editing = true; return 0; }
+            weechat::UiPort::for_buffer(st->buffer)->printf_error(opened.error());
         }
-        if (const ::xmpp::StanzaView instr_el = xdata.child("instructions"); instr_el.valid()) {
-            const std::string instructions = instr_el.text();
-            if (!instructions.empty())
-        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form instructions: {}")), WEECHAT_XMPP_PLUGIN_NAME, instructions.c_str()));
-        }
-
-        // Print each field's var and label so the user can identify what's needed
-        for (const auto& field : ::xmpp::parse_data_form_fields(xdata)) {
-            if (!field.label.empty())
-        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form field: {} ({})")), WEECHAT_XMPP_PLUGIN_NAME, field.var, field.label));
-            else
-        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR form field: {}")), WEECHAT_XMPP_PLUGIN_NAME, field.var));
-        }
-
-        weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format(fmt::runtime(_("{}: IBR: use the server's web interface to register an account")), WEECHAT_XMPP_PLUGIN_NAME));
+        else weechat::UiPort::for_buffer(st->buffer)->printf_error(form.error());
+        auto redirect = query.child("x", "jabber:x:oob");
+        if (!redirect.valid()) redirect = view.child("x", "jabber:x:oob");
+        const auto url = redirect.child("url").text();
+        if (!url.empty())
+            weechat::UiPort::for_buffer(st->buffer)->printf_network(fmt::format("Web registration: {}", url));
         xmpp_disconnect(conn);
         st->done = true;
-        return 1;
+        return 0;
     }
 
     // Warn about required fields beyond username+password that we cannot fill
@@ -424,6 +474,47 @@ static int ibr_get_result_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void
     return 1; // consume
 }
 
+static int ibr_tls_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata)
+{
+    auto &attempt = *static_cast<ibr_state *>(userdata);
+    const ::xmpp::StanzaView response(stanza);
+    if (response.name() != "proceed" || xmpp_conn_tls_start(conn) != XMPP_EOK) {
+        weechat::UiPort::for_buffer(attempt.buffer)->printf_error("Registration TLS negotiation failed");
+        attempt.done = true;
+        xmpp_disconnect(conn);
+    }
+    else xmpp_conn_open_stream_default(conn);
+    return 0;
+}
+
+static int ibr_features_handler(xmpp_conn_t *conn, xmpp_stanza_t *stanza, void *userdata)
+{
+    auto *st = static_cast<ibr_state *>(userdata);
+    const ::xmpp::StanzaView features(stanza);
+    if (!xmpp_conn_is_secured(conn)) {
+        if (!features.child("starttls", XMPP_NS_TLS).valid()) {
+            weechat::UiPort::for_buffer(st->buffer)->printf_error("Registration requires verified TLS; server did not offer STARTTLS");
+            st->done = true;
+            xmpp_disconnect(conn);
+            return 0;
+        }
+        struct starttls_spec : stanza::spec {
+            starttls_spec() : spec("starttls") { attr("xmlns", XMPP_NS_TLS); }
+        } request;
+        xmpp_handler_add(conn, ibr_tls_handler, XMPP_NS_TLS, nullptr, nullptr, st);
+        xmpp_send(conn, request.build(st->ctx).get());
+        return 0;
+    }
+    struct query_spec : stanza::spec {
+        query_spec() : spec("query") { attr("xmlns", "jabber:iq:register"); }
+    } query;
+    auto request = stanza::iq().type("get").to(st->server).id("ibr-get");
+    request.child(query);
+    xmpp_id_handler_add(conn, ibr_get_result_handler, "ibr-get", st);
+    xmpp_send(conn, request.build(st->ctx).get());
+    return 0;
+}
+
 // Connection event callback for the IBR raw connection.
 static void ibr_conn_handler(xmpp_conn_t *conn, xmpp_conn_event_t status,
                               int error, xmpp_stream_error_t *stream_error, void *userdata)
@@ -439,23 +530,7 @@ static void ibr_conn_handler(xmpp_conn_t *conn, xmpp_conn_event_t status,
     }
 
     if (status == XMPP_CONN_CONNECT) {
-        // Stream is open, authenticated feature negotiation skipped.
-        // Send IBR field-list query.
-        xmpp_ctx_t *ctx = st->ctx;
-        struct ibr_get_spec : stanza::spec {
-            explicit ibr_get_spec(std::string_view to_jid) : spec("iq") {
-                attr("type", "get");
-                attr("id", "ibr-get");
-                attr("to", to_jid);
-                struct query_spec : stanza::spec {
-                    query_spec() : spec("query") { attr("xmlns", "jabber:iq:register"); }
-                } q;
-                child(q);
-            }
-        } ibr_get_iq(st->server);
-        auto built = ibr_get_iq.build(ctx);
-        xmpp_id_handler_add(conn, ibr_get_result_handler, "ibr-get", st);
-        xmpp_send(conn, built.get());
+        xmpp_handler_add(conn, ibr_features_handler, XMPP_NS_STREAMS, "features", nullptr, st);
         return;
     }
 
@@ -479,6 +554,10 @@ static void ibr_register(const char *account_name, const char *jid, const char *
         ui->printf_error(fmt::format(fmt::runtime(_("{}: /account register requires <name> <jid> <password>")), WEECHAT_XMPP_PLUGIN_NAME));
         return;
     }
+    if (registration_attempts.contains(account_name) || weechat::accounts.contains(account_name)) {
+        ui->printf_error("An account or registration attempt with this name already exists");
+        return;
+    }
 
     // Extract server domain from JID using a temporary context
     xmpp_log_t nolog = { nullptr, nullptr };
@@ -497,7 +576,8 @@ static void ibr_register(const char *account_name, const char *jid, const char *
 
     // Allocate IBR state (owned by timer callback, deleted on completion).
     // The logger is a value member of ibr_state, so no separate heap allocation needed.
-    auto st = std::make_unique<ibr_state>(account_name, jid, password, server, buffer);
+    // Registration outlives the initiating buffer; report to the core buffer.
+    auto st = std::make_unique<ibr_state>(account_name, jid, password, server, nullptr);
 
     st->ctx = xmpp_ctx_new(nullptr, &st->logger);
     if (!st->ctx) {
@@ -518,10 +598,7 @@ static void ibr_register(const char *account_name, const char *jid, const char *
         WEECHAT_XMPP_PLUGIN_NAME));
     return;
 #else
-    // Trust TLS for registration (certificate may not be fully validated yet)
-    int flags = xmpp_conn_get_flags(st->conn);
-    flags |= XMPP_CONN_FLAG_TRUST_TLS;
-    xmpp_conn_set_flags(st->conn, flags);
+    // Keep libstrophe's default certificate verification enabled.
 
     // Set a dummy JID (server domain) so libstrophe knows what stream to open
     xmpp_conn_set_jid(st->conn, server.c_str());
@@ -540,13 +617,13 @@ static void ibr_register(const char *account_name, const char *jid, const char *
 #endif
 
     // Drive the event loop from a periodic WeeChat timer (10 ms ticks).
-    // Transfer ownership to the timer callback — it will delete st when done.
     st->timer_hook = weechat_hook_timer(10, 0, 0, ibr_timer_cb, st.get(), nullptr);
     if (!st->timer_hook) {
         ui->printf_error(fmt::format(fmt::runtime(_("{}: IBR: failed to register timer hook")), WEECHAT_XMPP_PLUGIN_NAME));
         return; // st destroyed by unique_ptr on scope exit
     }
-    st.release(); // ownership transferred to timer callback
+    const auto name = st->account_name;
+    registration_attempts.emplace(name, std::move(st));
 }
 
 void command__account_register(struct t_gui_buffer *buffer, int argc, char **argv)

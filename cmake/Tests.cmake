@@ -85,6 +85,18 @@ macro(xepher_add_tests plugin_target)
             FAIL_REGULAR_EXPRESSION "FORM_SMOKE_FAIL")
     endif()
 
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    find_program(XEPHER_OPENSSL_CLI NAMES openssl)
+    if(Python3_Interpreter_FOUND AND XEPHER_WEECHAT_HEADLESS AND XEPHER_OPENSSL_CLI)
+        add_test(NAME doctest_registration_tls
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_registration_tls.py"
+                --plugin "$<TARGET_FILE:${plugin_target}>"
+                --weechat "${XEPHER_WEECHAT_HEADLESS}" --openssl "${XEPHER_OPENSSL_CLI}" -v)
+        set_tests_properties(doctest_registration_tls PROPERTIES
+            TIMEOUT 45 LABELS "doctest" RUN_SERIAL TRUE
+            SKIP_REGULAR_EXPRESSION "OK \\(skipped=2\\)")
+    endif()
+
     # ── Coverage path (opt-in; not built by default) ─────────────────────────
     file(GLOB_RECURSE XEPHER_TEST_PLUGIN_SOURCES CONFIGURE_DEPENDS
         "${CMAKE_SOURCE_DIR}/src/*.cpp"

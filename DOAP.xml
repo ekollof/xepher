@@ -571,7 +571,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0004.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>2.13.2</xmpp:version>
-        <xmpp:note xml:lang='en'>Data Forms - reusable interactive editor integrated with Ad-Hoc Commands and MUC room configuration (WeeChat 4.3+): core field types, defaults, required-field checks, numbered list choices in server order, multiple values, explicit clearing/omission, hidden-field preservation, and masked private fields without input history. Result forms and reported/item tables are rendered read-only. Manual ad-hoc field=value submission remains available. Registration forms are not yet integrated with this editor.</xmpp:note>
+        <xmpp:note xml:lang='en'>Data Forms - reusable interactive editor integrated with Ad-Hoc Commands, MUC room configuration, and account registration (WeeChat 4.3+): core field types, defaults, required-field checks, numbered list choices in server order, multiple values, explicit clearing/omission, hidden-field preservation, and masked private fields without input history. Result forms and reported/item tables are rendered read-only. Manual ad-hoc field=value submission remains available. MUC registration forms are not yet integrated with this editor.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -859,7 +859,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0077.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>2.4</xmpp:version>
-        <xmpp:note xml:lang='en'>In-Band Registration — §3.1 /account register &lt;name&gt; &lt;jid&gt; &lt;password&gt;: new account registration before authentication; supports username/password flat fields, already-registered detection, OOB-redirect, and x:data form detection with helpful abort message. §3.2 /account unregister &lt;account&gt;: cancels the account on the server while authenticated. §3.3 /account password &lt;account&gt; &lt;new-password&gt;: in-band password change while authenticated (TLS required). §10: advertises jabber:iq:register in disco#info.</xmpp:note>
+        <xmpp:note xml:lang='en'>In-Band Registration — §3.1 /account register &lt;name&gt; &lt;jid&gt; &lt;password&gt;: new account registration before authentication over verified STARTTLS; supports username/password flat fields, already-registered detection, OOB-redirect, and interactive x:data forms on WeeChat 4.3+. Forms take precedence over flat fields, preserve hidden values, mask passwords, and retain answers after rejection; accounts are added only after server acknowledgement. CAPTCHA/media challenges are unsupported and direct users to web registration. §3.2 /account unregister &lt;account&gt;: cancels the account on the server while authenticated. §3.3 /account password &lt;account&gt; &lt;new-password&gt;: in-band password change while authenticated (TLS required). §10: advertises jabber:iq:register in disco#info.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

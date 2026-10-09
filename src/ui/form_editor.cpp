@@ -39,7 +39,7 @@ std::string adhoc_form_id(std::string_view owner, std::string_view target,
 
 auto form_editor::open(std::string_view owner, std::string_view id, std::string_view title,
     ::xmpp::data_form form, std::vector<std::string> actions, std::string_view default_action,
-    form_submit_callback submit) -> std::expected<void, std::string>
+    form_submit_callback submit, std::function<void()> closed) -> std::expected<void, std::string>
 {
     const auto version = RuntimePort::default_runtime().version_string();
     const auto dot = version.find('.');
@@ -57,6 +57,7 @@ auto form_editor::open(std::string_view owner, std::string_view id, std::string_
     editor->actions_ = std::move(actions);
     editor->default_action_ = default_action;
     editor->submit_ = std::move(submit);
+    editor->closed_ = std::move(closed);
     auto &bp = BufferPort::default_port_ref();
     editor->buffer_ = bp.create(fmt::format("xmpp.form.{}", id), input_cb, editor.get(), nullptr,
                                 close_cb, editor.get(), nullptr);
@@ -102,7 +103,9 @@ int form_editor::close_cb(const void *pointer, void *, t_gui_buffer *)
 {
     const auto *editor = static_cast<const form_editor *>(pointer);
     const auto id = editor->id_;
+    auto closed = editor->closed_;
     editors.erase(id);
+    if (closed) closed();
     return WEECHAT_RC_OK;
 }
 
