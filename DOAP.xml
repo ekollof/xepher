@@ -35,6 +35,10 @@
     <programming-language>C++</programming-language>
 
     <os>Linux</os>
+    <os>macOS (best-effort)</os>
+    <os>FreeBSD (best-effort)</os>
+    <os>OpenBSD (best-effort)</os>
+    <os>NetBSD (best-effort)</os>
 
     <category
             rdf:resource='https://linkmauve.fr/ns/xmpp-doap#category-client'
@@ -106,11 +110,11 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0054.html' />
-        <xmpp:status>complete</xmpp:status>
+        <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.3.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >vcard-temp — fetch (all standard fields) and publish own vCard via /whois and /setvcard; auto-fetch triggered by XEP-0153 presence hash</xmpp:note>
+                >vcard-temp — /whois fetches and displays supported profile fields and photos; /setvcard edits fn, nickname, email, url, desc, org, title, tel, bday, and note. Editing rebuilds the vCard from supported fields and does not preserve all other fields. Auto-fetch triggered by XEP-0153 presence hash; no vCard PHOTO publishing.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -132,7 +136,7 @@
          <xmpp:version>1.1.4</xmpp:version>
          <xmpp:note
                      xml:lang='en'
-                 >User Avatar - receive/cache/display avatars; publish own avatar via /setavatar with XEP-0153 presence hash broadcast</xmpp:note>
+                 >User Avatar - receive/cache/display avatars; /setavatar publishes PEP avatar data and metadata and updates the local avatar hash used by subsequent XEP-0153 presences; does not publish a vCard PHOTO or immediately broadcast presence</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -501,11 +505,11 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0392.html' />
-        <xmpp:status>complete</xmpp:status>
+        <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.0.1</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >Consistent Color Generation - SHA-1 based algorithm mapping nicknames to colors</xmpp:note>
+                >Consistent Color Generation - SHA-1 angle generation with lowercased nickname input and simplified HSL-to-terminal-palette mapping; does not implement the specified HSLuv conversion or palette selection</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -574,9 +578,9 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0050.html' />
-        <xmpp:status>complete</xmpp:status>
+        <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.3.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Ad-Hoc Commands - /adhoc command executes server-side commands with data-form rendering</xmpp:note>
+        <xmpp:note xml:lang='en'>Ad-Hoc Commands - /adhoc discovers and executes server-side commands, renders data forms, and submits single-value fields with a session ID; only the execute action is available, without explicit next, prev, complete, or cancel actions</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -610,9 +614,9 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0442.html' />
-        <xmpp:status>complete</xmpp:status>
+        <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.2.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Pubsub Message Archive Management (Experimental) - on reconnect, sends disco#info to each pubsub service; when urn:xmpp:mam:2 is advertised, fetches the node archive via MAM IQ with node= filter and XEP-0413 order-by instead of plain pubsub items IQ; falls back to XEP-0060 max_items fetch for servers that do not support pubsub MAM; forwarded item payloads (Atom entries) extracted from MAM result messages and rendered to the feed buffer with deduplication; RSM last cursor persisted to LMDB; urn:xmpp:mam:2#pubsub and urn:xmpp:order-by:1 advertised in caps</xmpp:note>
+        <xmpp:note xml:lang='en'>Pubsub Message Archive Management (Experimental) - on reconnect, sends disco#info to each pubsub service; when urn:xmpp:mam:2 is advertised, fetches the node archive via MAM IQ with node= filter and XEP-0413 order-by instead of plain pubsub items IQ; falls back to XEP-0060 max_items fetch for servers that do not support pubsub MAM; forwarded item payloads (Atom entries) extracted from MAM result messages and rendered to the feed buffer with deduplication; RSM last cursor persisted to LMDB, but incomplete results are not automatically paged; urn:xmpp:mam:2#pubsub and urn:xmpp:order-by:1 advertised in caps</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -711,7 +715,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0153.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>1.1.1</xmpp:version>
-        <xmpp:note xml:lang='en'>vCard-Based Avatars - receives photo hash from presence and advertises in caps; publishing own avatar not implemented</xmpp:note>
+        <xmpp:note xml:lang='en'>vCard-Based Avatars - receives presence photo hashes and fetches roster contacts' vCards; emits the cached own avatar hash in presence and advertises support in caps. /setavatar publishes via XEP-0084 only; no vCard PHOTO publishing or full synchronization between the two avatar protocols.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -727,9 +731,9 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0283.html' />
-        <xmpp:status>complete</xmpp:status>
+        <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.2.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Moved - displays account migration notices when a contact has moved to a new JID</xmpp:note>
+        <xmpp:note xml:lang='en'>Moved - displays unverified migration notices from incoming subscription requests; PEP verification, automatic roster migration, and publishing an own-account migration are not implemented</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -763,9 +767,9 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0372.html' />
-        <xmpp:status>complete</xmpp:status>
+        <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.5.0</xmpp:version>
-        <xmpp:note xml:lang='en'>References - sends and renders @mention and URI references inline in messages</xmpp:note>
+        <xmpp:note xml:lang='en'>References - incoming mention references targeting the local JID trigger highlights; data references are used for SIMS media sharing. Outgoing mention references and general reference editing are not implemented.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -792,7 +796,7 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0428.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.2.1</xmpp:version>
-        <xmpp:note xml:lang='en'>Fallback Indication - sent alongside retraction and reply stanzas; [start,end) byte range parsed on receive per §2.2</xmpp:note>
+        <xmpp:note xml:lang='en'>Fallback Indication - sent alongside retraction and reply stanzas; reply fallback [start,end) Unicode code-point ranges are converted to UTF-8 byte offsets for trimming on receive</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
@@ -853,11 +857,19 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0077.html' />
-        <xmpp:status>complete</xmpp:status>
+        <xmpp:status>partial</xmpp:status>
         <xmpp:version>2.4</xmpp:version>
         <xmpp:note xml:lang='en'>In-Band Registration — §3.1 /account register &lt;name&gt; &lt;jid&gt; &lt;password&gt;: new account registration before authentication; supports username/password flat fields, already-registered detection, OOB-redirect, and x:data form detection with helpful abort message. §3.2 /account unregister &lt;account&gt;: cancels the account on the server while authenticated. §3.3 /account password &lt;account&gt; &lt;new-password&gt;: in-band password change while authenticated (TLS required). §10: advertises jabber:iq:register in disco#info.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
+
+    <release>
+      <Version>
+        <revision>0.12.0</revision>
+        <created>2026-07-24</created>
+        <xmpp:note xml:lang='en'>Safe plugin unload/reload and atomic installation; OMEMO multi-client and MUC bootstrap fixes; /omemo prune; upload path handling and picker/preview improvements; faster debug builds.</xmpp:note>
+      </Version>
+    </release>
 
     <release>
       <Version>
