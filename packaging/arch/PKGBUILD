@@ -7,7 +7,7 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/ekollof/xepher"
 license=('MPL2')
 depends=(
-    'weechat'
+    'weechat>=4.3'
     'libstrophe'
     'libxml2'
     'lmdb'

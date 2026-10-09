@@ -14,7 +14,6 @@
 #include "xmpp/iq_adhoc.hh"
 #include "weechat/buffer_port.hh"
 #include "weechat/ui_port.hh"
-#include "weechat/runtime_port.hh"
 
 namespace weechat::ui {
 namespace {
@@ -41,14 +40,6 @@ auto form_editor::open(std::string_view owner, std::string_view id, std::string_
     ::xmpp::data_form form, std::vector<std::string> actions, std::string_view default_action,
     form_submit_callback submit, std::function<void()> closed) -> std::expected<void, std::string>
 {
-    const auto version = RuntimePort::default_runtime().version_string();
-    const auto dot = version.find('.');
-    const auto major = number(std::string_view(version).substr(0, dot));
-    unsigned minor = 0;
-    if (dot != std::string::npos)
-        (void)std::from_chars(version.data() + dot + 1, version.data() + version.size(), minor);
-    if (!major || *major < 4 || (*major == 4 && minor < 3))
-        return std::unexpected("Interactive forms require WeeChat 4.3 or newer; use /adhoc field=value submission");
     close(id);
     auto editor = std::make_unique<form_editor>();
     editor->owner_ = owner;

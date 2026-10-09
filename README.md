@@ -117,7 +117,7 @@ are on [GitHub Releases](https://github.com/ekollof/xepher/releases). Pick your 
 | bison | build | ✅ package | ✅ `pkg install bison` | ✅ `pkg_add bison` | ✅ `brew install bison` |
 | flex | build | ✅ package | ✅ `pkg install flex` | ✅ `pkg_add flex` | ✅ `brew install flex` |
 | doctest (header-only) | test | ✅ vendored in `deps/doctest/` | — | — | — |
-| WeeChat >= 3.0 | runtime | ✅ package | ✅ `pkg install weechat` | ✅ `pkg_add weechat` | ✅ `brew install weechat` |
+| WeeChat >= 4.3 | headers + runtime | ✅ package | ✅ `pkg install weechat` | ✅ `pkg_add weechat` | ✅ `brew install weechat` |
 
 On FreeBSD and OpenBSD, run `./install-deps.sh` (or build from the port skeletons in
 `packaging/freebsd/` and `packaging/openbsd/`). Use `gmake` instead of `make`.
@@ -315,20 +315,12 @@ of `-gdwarf-4` on macOS automatically. `install-deps.sh` installs Homebrew
 
 ### WeeChat version compatibility
 
-WeeChat 4.3.0 (May 2024) changed the base64 API. This fork defaults to
-`>= 4.3.0`. If you get a compilation error like
-`invalid conversion from 'int' to 'const char*'`, open `omemo.cpp`, find this
-block near line 42, and change `#if 1` to `#if 0`:
-
-```cpp
-#if 1  // Set to 0 for WeeChat < 4.3.0
-    #define WEECHAT_BASE64 "64"
-#else
-    #define WEECHAT_BASE64 64
-#endif
-```
-
-Then rebuild with `make clean && make`.
+WeeChat **4.3 or newer** is required for both building and running Xepher.
+CMake checks the installed development package's version through
+`pkg-config weechat` and rejects versions below 4.3 during configuration.
+Install the matching WeeChat development headers and rebuild the plugin after
+a WeeChat plugin API change; WeeChat checks plugin API compatibility when loading.
+The minimum C++ language standard remains **C++23**.
 
 ---
 
@@ -924,7 +916,7 @@ your answers available for correction and retry. Completing a command,
 disconnecting, or unloading the plugin closes its editors. Result forms,
 including multi-row reports, are displayed read-only in the account buffer.
 
-The manual commands above remain available, including on older WeeChat versions.
+The manual commands above remain available alongside the interactive editor.
 Required fields are marked with `*`. Each executing response lists its allowed
 actions and default. Omitting `--action` (or choosing `execute`) uses that default;
 `cancel` is always available and sends no form payload. Hidden fields such as
@@ -967,7 +959,7 @@ Use `:submit` to register or `:cancel` to abandon the attempt. Server errors kee
 answers available for correction. Closing the editor, a connection failure,
 plugin unload, or the ten-minute form deadline ends the attempt. No account is
 added until registration succeeds. The initial connection has a 30-second
-deadline. Unsupported CAPTCHA/media challenges and older WeeChat versions
+deadline. Unsupported CAPTCHA/media challenges
 require the server's web registration instead. Flat username/password
 registration remains supported. The password in the initial command can appear
 in command history; the editor itself excludes its input from history.

@@ -79,7 +79,7 @@ xbps-create \
     --desc "Xepher — WeeChat plugin for XMPP/Jabber protocol" \
     --homepage "https://github.com/ekollof/xepher" \
     --license "MPL-2.0" \
-    --dependencies "weechat>=3.0 libstrophe libxml2 lmdb libsignal-protocol-c libomemo-c gpgme fmt libcurl openssl libgcrypt" \
+    --dependencies "weechat>=4.3 libstrophe libxml2 lmdb libsignal-protocol-c libomemo-c gpgme fmt libcurl openssl libgcrypt" \
     "${DESTDIR}"
 
 # Copy results out

@@ -20,7 +20,7 @@ Build-Depends: debhelper-compat (= 13),
                libfmt-dev,
                libcurl4-openssl-dev,
                libssl-dev,
-               weechat-dev
+               weechat-dev (>= 4.3)
 Standards-Version: 4.6.0
 Homepage: https://github.com/ekollof/xepher
 Vcs-Git: https://github.com/ekollof/xepher.git
@@ -29,7 +29,7 @@ Vcs-Browser: https://github.com/ekollof/xepher
 Package: xepher
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
-         weechat (>= 3.0),
+         weechat (>= 4.3),
          libstrophe0,
          libxml2,
          liblmdb0,

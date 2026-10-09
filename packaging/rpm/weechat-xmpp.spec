@@ -27,9 +27,9 @@ BuildRequires:  libgcrypt-devel
 BuildRequires:  fmt-devel
 BuildRequires:  libcurl-devel
 BuildRequires:  openssl-devel
-BuildRequires:  weechat-devel
+BuildRequires:  weechat-devel >= 4.3
 
-Requires:       weechat >= 3.0
+Requires:       weechat >= 4.3
 Requires:       libstrophe
 Requires:       libxml2
 Requires:       lmdb

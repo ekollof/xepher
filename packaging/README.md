@@ -150,7 +150,7 @@ All packages install:
 ## Dependencies
 
 ### Runtime Dependencies
-- weechat (>= 3.0)
+- weechat (>= 4.3)
 - libstrophe (>= 0.12.0; CMake enforces this)
 - libxml2
 - lmdb

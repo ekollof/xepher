@@ -1,5 +1,9 @@
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
+pkg_check_modules(WEECHAT REQUIRED IMPORTED_TARGET "weechat>=4.3")
+message(STATUS "WeeChat: ${WEECHAT_VERSION} (minimum 4.3)")
+# Sources include <weechat/weechat-plugin.h>; the .pc Cflags point one level deeper.
+pkg_get_variable(XEPHER_WEECHAT_INCLUDEDIR weechat includedir)
 find_package(LibXml2 REQUIRED)
 find_package(OpenSSL REQUIRED)
 
@@ -45,6 +49,7 @@ find_library(XEPHER_FMT NAMES fmt REQUIRED)
 
 add_library(xepher_deps INTERFACE)
 target_link_libraries(xepher_deps INTERFACE
+    PkgConfig::WEECHAT
     Xepher::sexp
     PkgConfig::STROPH
     PkgConfig::GPGME
@@ -61,6 +66,7 @@ target_link_libraries(xepher_deps INTERFACE
 )
 
 target_include_directories(xepher_deps INTERFACE
+    "${XEPHER_WEECHAT_INCLUDEDIR}"
     "${CMAKE_SOURCE_DIR}/deps/lmdbxx"
     "${CMAKE_SOURCE_DIR}/deps"
     "${CMAKE_SOURCE_DIR}/src"

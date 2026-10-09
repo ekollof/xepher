@@ -101,7 +101,7 @@ url="https://github.com/ekollof/xepher"
 arch="x86_64 aarch64"
 license="MPL-2.0"
 depends="
-    weechat
+    weechat>=4.3
     libstrophe
     libxml2
     lmdb
@@ -133,7 +133,7 @@ makedepends="
     fmt-dev
     curl-dev
     openssl-dev
-    weechat-dev
+    weechat-dev>=4.3
 "
 source="\${pkgname}-\${pkgver}.tar.gz"
 sha256sums="${SHA256}  xepher-${VERSION}.tar.gz"
