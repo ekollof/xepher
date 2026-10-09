@@ -41,7 +41,7 @@ extern "C" {
 WEECHAT_PLUGIN_NAME(WEECHAT_XMPP_PLUGIN_NAME);
 WEECHAT_PLUGIN_DESCRIPTION(N_("XMPP client protocol"));
 WEECHAT_PLUGIN_AUTHOR("bqv <weechat@fron.io>");
-// Base version only — full "0.5.0@git" lives in weechat::plugin_version() so a
+// Base version only — full "1.0.0@git" lives in weechat::plugin_version() so a
 // new commit rebuilds version.cpp alone (ccache-friendly).
 WEECHAT_PLUGIN_VERSION(WEECHAT_XMPP_PLUGIN_VERSION);
 WEECHAT_PLUGIN_LICENSE("MPL2");

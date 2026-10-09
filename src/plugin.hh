@@ -15,7 +15,7 @@
 
 // Base product version for WeeChat plugin registration (string literal required).
 // Full display version with commit: weechat::plugin_version() (see version.hh).
-#define WEECHAT_XMPP_PLUGIN_VERSION "0.5.0"
+#define WEECHAT_XMPP_PLUGIN_VERSION "1.0.0"
 
 #include "version.hh"
 

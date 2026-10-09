@@ -865,6 +865,14 @@
 
     <release>
       <Version>
+        <revision>1.0.0</revision>
+        <created>2026-10-09</created>
+        <xmpp:note xml:lang='en'>Requires WeeChat 4.3 or newer and C++23. Interactive ad-hoc, MUC configuration/registration, and account registration forms; verified STARTTLS for account registration; MAM replay/checkpoint and PubSub archive fixes; legacy OMEMO device/key handling fixes; vCard preservation and publication acknowledgement.</xmpp:note>
+      </Version>
+    </release>
+
+    <release>
+      <Version>
         <revision>0.12.0</revision>
         <created>2026-07-24</created>
         <xmpp:note xml:lang='en'>Safe plugin unload/reload and atomic installation; OMEMO multi-client and MUC bootstrap fixes; /omemo prune; upload path handling and picker/preview improvements; faster debug builds.</xmpp:note>

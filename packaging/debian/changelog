@@ -1,3 +1,14 @@
+xepher (1.0.0-1) unstable; urgency=medium
+
+  * Require WeeChat >= 4.3; retain C++23 as the minimum language standard.
+  * Add interactive ad-hoc, MUC configuration/registration, and account
+    registration forms, with verified STARTTLS for account registration.
+  * Fix MAM replay, reconnect checkpoints, PubSub archive paging, and legacy
+    OMEMO device/key handling.
+  * Preserve vCard data and confirm server publication results.
+
+ -- Emiel Kollof <emiel@kollof.nl>  Fri, 09 Oct 2026 12:00:00 +0000
+
 xepher (0.12.0-1) unstable; urgency=medium
 
   * Update to v0.12.0

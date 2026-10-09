@@ -11,10 +11,10 @@ namespace {
 
 #ifdef GIT_COMMIT
 constexpr const char k_commit[] = XMPP_XSTR(GIT_COMMIT);
-constexpr const char k_version[] = "0.5.0@" XMPP_XSTR(GIT_COMMIT);
+constexpr const char k_version[] = "1.0.0@" XMPP_XSTR(GIT_COMMIT);
 #else
 constexpr const char k_commit[] = "unknown";
-constexpr const char k_version[] = "0.5.0";
+constexpr const char k_version[] = "1.0.0";
 #endif
 
 } // namespace

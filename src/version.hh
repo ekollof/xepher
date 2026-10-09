@@ -12,7 +12,7 @@ namespace weechat {
 // Git describe string, or "unknown" when built without VCS metadata.
 [[nodiscard]] auto plugin_commit() noexcept -> const char *;
 
-// Full version for display / XEP-0092 / Atom generator, e.g. "0.5.0@v0.11.0-1-gabcdef".
+// Full version for display / XEP-0092 / Atom generator, e.g. "1.0.0@v1.0.0".
 [[nodiscard]] auto plugin_version() noexcept -> const char *;
 
 } // namespace weechat

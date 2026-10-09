@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        0.12.0
+Version:        1.0.0
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -72,6 +72,12 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Fri Oct 09 2026 Emiel Kollof <emiel@kollof.nl> - 1.0.0-1
+- Require WeeChat 4.3 or newer; retain C++23 as the minimum language standard
+- Add interactive ad-hoc, MUC configuration/registration, and account registration forms
+- Fix MAM replay, reconnect checkpoints, PubSub archive paging, and legacy OMEMO handling
+- Preserve vCard data and confirm server publication results
+
 * Fri Jul 24 2026 Emiel Kollof <emiel@kollof.nl> - 0.12.0-1
 - Update to v0.12.0
 - Fix: safe plugin unload/reload; atomic install avoids SIGBUS
