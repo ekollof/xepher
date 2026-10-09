@@ -296,16 +296,19 @@
     </div>
     <div class="feature">
       <h3>MUC</h3>
-      <p>XEP-0045: create/join, IRC-style admin, bookmarks, moderation, reactions, typing, rejoin after reconnect.</p>
+      <p>XEP-0045: create/join, IRC-style admin, bookmarks, moderation, reactions, typing, rejoin after reconnect. Interactive room configuration and registration forms.</p>
     </div>
     <div class="feature">
       <h3>WeeChat-native UX</h3>
-      <p>Receipts, read markers, corrections, replies, encryption bar item, safe <code>/plugin reload xmpp</code>.</p>
+      <p>Receipts, read markers, corrections, replies, encryption bar item, safe <code>/plugin reload xmpp</code>. Guided forms for ad-hoc commands and account registration, with masked private fields.</p>
     </div>
   </div>
 
   <section class="block" id="install">
     <h2>Installation</h2>
+    <p>Requires <strong>WeeChat 4.3 or newer</strong>. Source builds require
+      <strong>C++23</strong>, CMake 3.22+, and matching WeeChat development headers.
+      CMake checks their installed version through pkg-config and rejects versions below 4.3.</p>
     <p>Pre-built packages for Debian, Fedora, Arch, Void, and Alpine are on
       <a href="https://github.com/ekollof/xepher/releases/latest">GitHub Releases</a>
       (latest: <strong>v0.12.0</strong>). Use <strong>v0.8.1+</strong>.</p>
