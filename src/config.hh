@@ -56,6 +56,7 @@ namespace weechat
             config_option mam_max_concurrent;
             config_option highlight_words;
             config_option emoticons;
+            config_option consistent_colors;
             config_option icat;
             config_option feeds;
         } look;

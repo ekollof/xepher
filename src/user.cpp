@@ -15,6 +15,7 @@
 #include "plugin.hh"
 #include "weechat/runtime_port.hh"
 #include "color.hh"
+#include "config.hh"
 #include "xmpp/node.hh"
 #include "account.hh"
 #include "user.hh"
@@ -48,6 +49,9 @@ unsigned long nick_hash(std::string_view name)
 
 std::string compute_nick_color(std::string_view name)
 {
+    if (weechat::config::instance
+        && weechat::config::instance->look.consistent_colors.boolean())
+        return weechat::consistent_color(name);
     const char *colors_str = weechat_config_string(
         weechat_config_get("weechat.color.chat_nick_colors"));
     if (!colors_str || !colors_str[0])

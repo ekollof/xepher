@@ -9,6 +9,9 @@
 #include <string_view>
 #include <ranges>
 #include <algorithm>
+#include <array>
+#include <map>
+#include <numbers>
 #include <openssl/evp.h>
 #include <weechat/weechat-plugin.h>
 
@@ -32,44 +35,71 @@ static double generate_angle(std::string_view input)
     return (static_cast<double>(value) / 65536.0) * 360.0;
 }
 
-// Map hue angle to WeeChat color code (256-color palette)
-// This uses a simplified mapping to WeeChat's extended colors (16-255)
+// HSLuv preserves the CIELUV hue and lightness. Saturation is not needed
+// for XEP-0392's palette algorithm, so RGB -> XYZ -> Luv is sufficient.
+namespace {
+struct palette_color {
+    double lightness;
+    int index;
+};
+
+auto hue_palette() -> std::map<int, palette_color>
+{
+    std::map<int, palette_color> palette;
+    std::ranges::for_each(std::views::iota(0, 216), [&](int index) {
+        const int r = index / 36;
+        const int g = index / 6 % 6;
+        const int b = index % 6;
+        if (r == g && g == b)
+            return;
+        const auto linear = [](int component) {
+            const double value = component / 5.0;
+            return value > 0.04045 ? std::pow((value + 0.055) / 1.055, 2.4)
+                                   : value / 12.92;
+        };
+        const std::array rgb{linear(r), linear(g), linear(b)};
+        const double x = 0.41239079926595948 * rgb[0]
+                       + 0.35758433938387796 * rgb[1]
+                       + 0.18048078840183429 * rgb[2];
+        const double y = 0.21263900587151036 * rgb[0]
+                       + 0.71516867876775593 * rgb[1]
+                       + 0.072192315360733715 * rgb[2];
+        const double z = 0.01933081871559185 * rgb[0]
+                       + 0.11919477979462599 * rgb[1]
+                       + 0.95053215224966058 * rgb[2];
+        const double denominator = x + 15.0 * y + 3.0 * z;
+        const double lightness = y <= 0.00885645167903563
+            ? y * 903.2962962962963 : 116.0 * std::cbrt(y) - 16.0;
+        const double u = 4.0 * x / denominator - 0.19783000664283681;
+        const double v = 9.0 * y / denominator - 0.46831999493879100;
+        const double hue = std::atan2(v, u) * 180.0 / std::numbers::pi;
+        const int angle = static_cast<int>(std::round(hue < 0 ? hue + 360.0 : hue));
+        const auto existing = palette.find(angle);
+        if (existing == palette.end()
+            || std::abs(lightness - 73.2) < std::abs(existing->second.lightness - 73.2))
+            palette.insert_or_assign(angle, palette_color{lightness, index + 16});
+    });
+    return palette;
+}
+}
+
+// XEP-0392 sections 5.3 and 5.4: web-safe RGB cube, rounded HSLuv
+// hues, preferred lightness 73.2, then nearest circular hue distance.
 XMPP_TEST_EXPORT std::string angle_to_weechat_color(double angle)
 {
-    // Map angle to one of WeeChat's 216 colors (6x6x6 RGB cube)
-    // These are colors 16-231 in the 256-color palette
-    
-    // Normalize angle to 0-360
-    while (angle < 0) angle += 360.0;
-    while (angle >= 360.0) angle -= 360.0;
-    
-    // Simple hue-to-RGB mapping (saturation=100%, lightness=50%)
-    // We'll map to the nearest color in WeeChat's 6-level RGB cube
-    double h = angle / 60.0; // 0-6
-    double x = 1.0 - std::abs(std::fmod(h, 2.0) - 1.0);
-    
-    double r, g, b;
-    int hi = static_cast<int>(h) % 6;
-    
-    switch (hi) {
-        case 0: r = 1.0; g = x;   b = 0.0; break;  // Red to Yellow
-        case 1: r = x;   g = 1.0; b = 0.0; break;  // Yellow to Green
-        case 2: r = 0.0; g = 1.0; b = x;   break;  // Green to Cyan
-        case 3: r = 0.0; g = x;   b = 1.0; break;  // Cyan to Blue
-        case 4: r = x;   g = 0.0; b = 1.0; break;  // Blue to Magenta
-        case 5: r = 1.0; g = 0.0; b = x;   break;  // Magenta to Red
-        default: r = 0.0; g = 0.0; b = 0.0; break;
-    }
-    
-    // Map to 6-level RGB cube (0-5 for each component)
-    int r_idx = static_cast<int>(r * 5.0 + 0.5);
-    int g_idx = static_cast<int>(g * 5.0 + 0.5);
-    int b_idx = static_cast<int>(b * 5.0 + 0.5);
-    
-    // WeeChat color index: 16 + 36*r + 6*g + b
-    int color = 16 + (36 * r_idx) + (6 * g_idx) + b_idx;
-    
-    return std::to_string(color);
+    static const auto palette = hue_palette();
+    if (!std::isfinite(angle))
+        return {};
+    angle = std::fmod(std::fmod(angle, 360.0) + 360.0, 360.0);
+    if (const auto exact = palette.find(static_cast<int>(std::round(angle)));
+        exact != palette.end())
+        return std::to_string(exact->second.index);
+    const auto distance = [angle](const auto &entry) {
+        const auto &[hue, color] = entry;
+        const double delta = std::abs(angle - hue);
+        return std::ranges::min(std::array{delta, 360.0 - delta});
+    };
+    return std::to_string(std::ranges::min_element(palette, {}, distance)->second.index);
 }
 
 // Main function: generate consistent color for a string (JID or nickname)
@@ -78,14 +108,8 @@ XMPP_TEST_EXPORT std::string consistent_color(std::string_view input)
     if (input.empty())
         return "";
 
-    // Normalize input to lowercase for consistency (per XEP-0392)
-    std::string normalized(input);
-    std::ranges::for_each(normalized, [](char& c) {
-        c = std::tolower(static_cast<unsigned char>(c));
-    });
-
-    double angle = generate_angle(normalized);
-    return angle_to_weechat_color(angle);
+    // Nicknames are case-sensitive. JID callers must supply a prepared JID.
+    return angle_to_weechat_color(generate_angle(input));
 }
 
 XMPP_TEST_EXPORT std::string xmpp_color(std::string_view name)

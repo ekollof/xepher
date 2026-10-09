@@ -1509,7 +1509,11 @@ Legend: ✅ complete or production-usable · ⚡ experimental / partial · ⏳ p
 - ✅ XEP-0382: Spoiler Messages
 - ✅ XEP-0384: OMEMO Encryption (legacy axolotl namespace `eu.siacs.conversations.axolotl` only — OMEMO:2 / `urn:xmpp:omemo:2` is **not supported**; BTBV trust model with per-device LMDB trust store; random pre-key selection; own-device encryption for carbon-copy and self-message decryption; pre-key ID continuity across signed pre-key rotation; stale-session recovery via MAM bundle re-fetch)
 - ✅ XEP-0385: Stateless Inline Media Sharing (SIMS `<reference uri>` extraction fixed for `urn:xmpp:reference:0` sources)
-- ✅ XEP-0392: Consistent Color Generation
+- ✅ XEP-0392: Consistent Color Generation — SHA-1 nickname hashing and HSLuv
+  terminal palette mapping, checked against the specification's reference vectors.
+  Enabled by default. Set `/set xmpp.look.consistent_colors off` to use WeeChat's
+  `weechat.color.chat_nick_colors` palette instead (a single entry gives static
+  coloring); reconnect to refresh cached nickname colors after changing it.
 - ✅ XEP-0402: PEP Native Bookmarks
 - ✅ XEP-0422: Message Fastening
 - ✅ XEP-0428: Fallback Indication

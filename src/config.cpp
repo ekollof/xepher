@@ -220,6 +220,13 @@ weechat::config::config()
                 nullptr, 0, 0,
                 "on", nullptr, false,
                 {}, {}, {}},
+            .consistent_colors{file, section_look, "consistent_colors", "boolean",
+                "use XEP-0392 consistent nickname colors; when off, use WeeChat's "
+                "chat_nick_colors palette (set it to one color for static coloring). "
+                "Reconnect after changing to refresh cached nickname colors.",
+                nullptr, 0, 0,
+                "on", nullptr, false,
+                {}, {}, {}},
             .icat{file, section_look, "icat", "boolean",
                 "display shared images inline using weechat-icat (Kitty graphics protocol), "
                 "including XEP-0449 stickers, XEP-0514 custom emoji markup, "

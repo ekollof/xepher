@@ -505,11 +505,11 @@
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0392.html' />
-        <xmpp:status>partial</xmpp:status>
+        <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.0.1</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >Consistent Color Generation - SHA-1 angle generation with lowercased nickname input and simplified HSL-to-terminal-palette mapping; does not implement the specified HSLuv conversion or palette selection</xmpp:note>
+                >Consistent Color Generation - case-sensitive SHA-1 nickname hashing and HSLuv hue mapping to the 216-color terminal cube, with preferred lightness 73.2 and circular hue distance; canonical palette reference vectors tested. Enabled by xmpp.look.consistent_colors; disable to use WeeChat's configured nickname palette.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

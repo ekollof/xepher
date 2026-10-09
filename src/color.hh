@@ -12,6 +12,7 @@ namespace weechat {
 
 // XEP-0392: Consistent Color Generation
 // Generate a consistent WeeChat color code from a string (JID or nickname)
+// Nicknames are case-sensitive; JIDs must be prepared by the caller.
 XMPP_TEST_EXPORT std::string consistent_color(std::string_view input);
 
 XMPP_TEST_EXPORT std::string angle_to_weechat_color(double angle);

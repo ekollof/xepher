@@ -1013,12 +1013,14 @@ TEST_CASE("consistent_color")
         CHECK(c <= 231);
     }
 
-    SUBCASE("case-insensitive: same color for different cases")
+    SUBCASE("XEP-0392 section 13.2 reference palette vectors")
     {
-        CHECK(weechat::consistent_color("Alice") == weechat::consistent_color("alice"));
-        CHECK(weechat::consistent_color("ALICE") == weechat::consistent_color("alice"));
-        CHECK(weechat::consistent_color("AlIcE@Example.ORG")
-              == weechat::consistent_color("alice@example.org"));
+        CHECK(weechat::consistent_color("Romeo") == "200");
+        CHECK(weechat::consistent_color("juliet@capulet.lit") == "45");
+        CHECK(weechat::consistent_color("😺") == "212");
+        CHECK(weechat::consistent_color("council") == "168");
+        CHECK(weechat::consistent_color("Board") == "50");
+        CHECK(weechat::consistent_color("Romeo") != weechat::consistent_color("romeo"));
     }
 
     SUBCASE("different strings produce potentially different colors (determinism)")
