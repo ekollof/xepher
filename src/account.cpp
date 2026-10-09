@@ -284,6 +284,34 @@ void weechat::account::mam_query_free_all()
     mam_queries.clear();
 }
 
+void weechat::account::cancel_channel_mam(std::string_view channel_id)
+{
+    if (channel_id.empty())
+        return;
+    std::erase_if(mam_deferred_pages, [&](const auto &page) {
+        return page.channel_id == channel_id;
+    });
+    const auto removed = std::erase_if(mam_queries, [&](const auto &entry) {
+        return entry.second.with == channel_id;
+    });
+    std::ranges::for_each(std::views::iota(std::size_t{0}, removed), [&](auto) {
+        release_mam_slot();
+    });
+}
+
+void weechat::account::reset_mam_sync()
+{
+    if (mam_defer_timer)
+    {
+        weechat_unhook(mam_defer_timer);
+        mam_defer_timer = nullptr;
+    }
+    mam_deferred_pages.clear();
+    mam_query_free_all();
+    mam_inflight = 0;
+    mam_jitter_next_initial = false;
+}
+
 bool weechat::account::try_acquire_mam_slot()
 {
     int max_c = weechat::config::instance
@@ -307,7 +335,7 @@ void weechat::account::release_mam_slot()
 
 void weechat::account::schedule_next_mam_page()
 {
-    if (!mam_defer_timer)
+    if (connected() && sm_post_connect_done && !mam_defer_timer)
         mam_defer_timer = (struct t_hook *)weechat_hook_timer(
             1, 0, 0, &account::process_deferred_mam_page_cb,
             this, nullptr);
@@ -361,26 +389,31 @@ int weechat::account::process_deferred_mam_page_cb(const void *pointer, void *da
 
     if (page.channel_id.empty())
     {
-        if (page.after.empty())
+        if (!page.slot_held && !acct->try_acquire_mam_slot())
         {
-            weechat::UiPort::for_buffer(acct->buffer)->printf_error(
-                "xmpp: deferred global MAM page has no <after> token — skipping");
+            acct->mam_deferred_pages.push_back(std::move(page));
             return WEECHAT_RC_OK;
         }
 
         std::string next_id = stanza::uuid(acct->context);
         acct->add_mam_query(next_id.c_str(), "",
                            page.start, page.end);
+        acct->mam_queries.at(next_id).stable = page.stable;
 
         stanza::xep0313::query next_q;
-        if (page.start)
+        if (page.start || page.end)
         {
             stanza::xep0313::x_filter xf;
-            xf.start(format_utc_timestamp(*page.start));
+            if (page.start)
+                xf.start(format_utc_timestamp(*page.start));
+            if (page.end)
+                xf.end(format_utc_timestamp(*page.end));
             next_q.filter(xf);
         }
         stanza::xep0059::set rsm_after;
-        rsm_after.max(50).after(page.after);
+        rsm_after.max(50);
+        if (!page.after.empty())
+            rsm_after.after(page.after);
         next_q.rsm(rsm_after);
 
         acct->connection.send(stanza::iq()
@@ -406,6 +439,7 @@ int weechat::account::process_deferred_mam_page_cb(const void *pointer, void *da
         else
         {
             XDEBUG("deferred MAM page for channel {} (no longer exists) — discarded", page.channel_id);
+            acct->cancel_channel_mam(page.channel_id);
         }
     }
 
@@ -630,9 +664,11 @@ void weechat::account::disconnect_impl(int reconnect, bool immediate_reconnect)
         weechat_unhook(mam_defer_timer);
         mam_defer_timer = nullptr;
     }
-    mam_deferred_pages.clear();
-    mam_inflight = 0;
-    mam_jitter_next_initial = false;
+    // A resumed stream can still deliver replies to these queries. Keep their
+    // state paused until we know whether resumption succeeded; fresh-session
+    // setup discards it before starting replacement fetches.
+    if (!reconnect || sm_id.empty())
+        reset_mam_sync();
 
     // XEP-0045 room mode disco#info: drop in-flight queries and the
     // "already fetched" cache so a fresh /enter re-fetches on reconnect.

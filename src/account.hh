@@ -74,6 +74,7 @@ namespace weechat
             std::string with;
             std::optional<time_t> start;
             std::optional<time_t> end;
+            bool stable = true; // false if any page in this fetch was unstable
         };
 
         struct roster_item
@@ -555,6 +556,8 @@ namespace weechat
         bool mam_query_search(mam_query* out, const std::string id);
         void mam_query_remove(const std::string id);
         void mam_query_free_all();
+        void cancel_channel_mam(std::string_view channel_id);
+        void reset_mam_sync();
 
         // Global MAM concurrency limiter support
         bool try_acquire_mam_slot();
@@ -566,6 +569,8 @@ namespace weechat
             std::optional<time_t> start;
             std::optional<time_t> end;
             std::string after;            // RSM <after> token
+            bool stable = true;
+            bool slot_held = false;       // global continuation retains its slot
         };
         std::deque<mam_page_defer> mam_deferred_pages;
         struct t_hook *mam_defer_timer = nullptr;

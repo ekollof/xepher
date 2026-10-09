@@ -1977,6 +1977,33 @@ TEST_CASE("iq_mam helpers")
     xmpp_stanza_release(err_iq);
 }
 
+TEST_CASE("MAM instability survives later stable pages")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+    const auto parse_fin = [&](std::string_view xml) {
+        return std::shared_ptr<xmpp_stanza_t>(
+            xmpp_stanza_new_from_string(env.ctx, std::string(xml).c_str()),
+            xmpp_stanza_release);
+    };
+    const auto default_stable = parse_fin("<fin xmlns='urn:xmpp:mam:2'/>");
+    const auto unstable = parse_fin("<fin xmlns='urn:xmpp:mam:2' stable='false'/>");
+    const auto stable_final = parse_fin(
+        "<fin xmlns='urn:xmpp:mam:2' complete='true' stable='true'/>");
+    REQUIRE(default_stable);
+    REQUIRE(unstable);
+    REQUIRE(stable_final);
+
+    bool progress = xmpp::mam_fetch_remains_stable(xmpp::StanzaView(default_stable.get()), true);
+    CHECK(progress);
+    progress = xmpp::mam_fetch_remains_stable(xmpp::StanzaView(unstable.get()), progress);
+    CHECK_FALSE(progress);
+    CHECK_FALSE(xmpp::mam_fetch_remains_stable(xmpp::StanzaView(stable_final.get()), progress));
+    CHECK_FALSE(xmpp::mam_fetch_remains_stable(xmpp::StanzaView(default_stable.get()), progress));
+    CHECK(xmpp::mam_fetch_remains_stable(xmpp::StanzaView(stable_final.get()), true));
+    CHECK_FALSE(xmpp::mam_fetch_remains_stable(xmpp::StanzaView(nullptr), true));
+}
+
 TEST_CASE("iq_upload helpers")
 {
     CHECK(xmpp::is_allowed_http_upload_put_header("Authorization"));

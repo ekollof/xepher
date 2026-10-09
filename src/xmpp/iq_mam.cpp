@@ -27,6 +27,14 @@ bool is_mam_fin_bool_attr_true(const std::string_view value)
     return attr_iequals(value, "true") || attr_iequals(value, "1");
 }
 
+bool mam_fetch_remains_stable(const StanzaView fin, bool previous_pages_stable)
+{
+    if (!previous_pages_stable || !fin.valid())
+        return false;
+    const auto stable = fin.attr("stable");
+    return !stable || is_mam_fin_bool_attr_true(*stable);
+}
+
 std::string mam_fin_rsm_last(const StanzaView fin)
 {
     if (!fin.valid())

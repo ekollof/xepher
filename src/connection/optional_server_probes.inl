@@ -60,27 +60,38 @@ void weechat::connection::run_account_connect_probes(bool resumed_session)
         std::string global_mam_cursor = account.mam_cursor_get("global");
         const bool has_cursor = !global_mam_cursor.empty();
 
+        account.omemo.global_mam_catchup = true;
+        if (!account.try_acquire_mam_slot())
+        {
+            account.mam_deferred_pages.push_back({
+                {}, {},
+                has_cursor ? std::optional<time_t>{} : std::optional<time_t>(start),
+                std::optional<time_t>(now), global_mam_cursor
+            });
+            account.schedule_next_mam_page();
+            return;
+        }
+
         std::string global_mam_id = stanza::uuid(account.context);
         account.add_mam_query(global_mam_id.c_str(), "",
                             has_cursor ? std::optional<time_t>{} : std::optional<time_t>(start),
                             std::optional<time_t>(now));
-        account.omemo.global_mam_catchup = true;
 
         stanza::xep0059::set rsm_set;
         rsm_set.max(50);
 
         stanza::xep0313::query mam_query;
+        stanza::xep0313::x_filter xf;
+        xf.end(format_utc_timestamp(now));
         if (!has_cursor)
         {
-            stanza::xep0313::x_filter xf;
             xf.start(format_utc_timestamp(start));
-            mam_query.filter(xf).rsm(rsm_set);
         }
         else
         {
             rsm_set.after(global_mam_cursor);
-            mam_query.rsm(rsm_set);
         }
+        mam_query.filter(xf).rsm(rsm_set);
 
         this->send(stanza::iq()
                        .type("set")

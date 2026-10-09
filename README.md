@@ -1103,6 +1103,15 @@ Also requires Python `PIL`/`Pillow` (`pip install Pillow` or `python-pillow` pac
 /mam prefs never <jid>               # add JID to never-archive list
 ```
 
+If recent messages are missing, run `/mam 3` in the affected chat to re-fetch
+the last three days. Reconnect history checkpoints use the query's end time,
+so time spent loading history does not create a gap in the next fetch.
+Interrupted fetches are cleared before a fresh connection starts; successful
+stream resumption preserves them. Closing a chat cancels its pending history
+work. Global catch-up shares the configured MAM concurrency
+limit with chat fetches. Unstable archive pages do not advance reconnect
+checkpoints, so a later catch-up can query them again.
+
 ### Service discovery & roster
 
 | Command | Description |

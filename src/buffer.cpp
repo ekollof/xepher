@@ -292,6 +292,7 @@ int buffer__close_cb(const void *pointer, void *data,
             weechat::BufferPort::default_port_ref().set_pointer(
                 ptr_channel->buffer, XMPP_BUFFER_CHANNEL_PTR, nullptr);
         ptr_account->invalidate_channel_key_cache(ptr_channel->name);
+        ptr_account->cancel_channel_mam(ptr_channel->id);
         ptr_account->channels.erase(ptr_channel->name);
     }
 

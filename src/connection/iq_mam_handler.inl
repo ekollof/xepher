@@ -27,7 +27,6 @@ void weechat::connection::handle_mam_query_iq_error(xmpp_stanza_t *stanza)
             "clearing cursor and retrying with time-based query");
         account.mam_cursor_clear("global");
         account.mam_query_remove(failed_mam_query.id);
-        account.release_mam_slot();
 
         const time_t now = time(nullptr);
         const time_t fetch_days = weechat::config::instance
@@ -45,6 +44,7 @@ void weechat::connection::handle_mam_query_iq_error(xmpp_stanza_t *stanza)
         stanza::xep0313::query retry_q;
         stanza::xep0313::x_filter xf;
         xf.start(fmt::format("{:%Y-%m-%dT%H:%M:%SZ}", fmt::gmtime(start)));
+        xf.end(format_utc_timestamp(now));
         retry_q.filter(xf).rsm(rsm_set);
 
         send(stanza::iq()
@@ -138,6 +138,8 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
         return false;
 
     const bool is_global_query = mam_query.with.empty();
+    mam_query.stable = ::xmpp::mam_fetch_remains_stable(fin_view, mam_query.stable);
+    account.mam_queries.at(mam_query.id).stable = mam_query.stable;
 
     if (fin_has_abort)
     {
@@ -178,9 +180,16 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
         }
         else
         {
-            // MAM fetch complete, update last fetch timestamp
-            ch.last_mam_fetch = time(nullptr);
-            account.mam_cache_set_last_timestamp(ch.id, ch.last_mam_fetch);
+            // Only checkpoint the interval actually queried. Using completion
+            // time skips messages between the query's end and this reply.
+            // Unbounded/manual queries have no known time boundary, and older
+            // history fetches must not move an existing checkpoint backwards.
+            if (mam_query.stable && fin_is_complete
+                && mam_query.end && *mam_query.end > ch.last_mam_fetch)
+            {
+                ch.last_mam_fetch = *mam_query.end;
+                account.mam_cache_set_last_timestamp(ch.id, ch.last_mam_fetch);
+            }
             // Persist this PM JID so it can be restored on the next full restart
             if (ch.type == weechat::channel::chat_type::PM)
                 account.pm_open_register(ch.id);
@@ -209,19 +218,21 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
         if (!set_last_text.empty() && !fin_is_complete)
         {
             // Persist the RSM cursor so the next reconnect resumes from here
-            account.mam_cursor_set("global", set_last_text);
+            if (mam_query.stable)
+                account.mam_cursor_set("global", set_last_text);
 
             // Defer the next page to the next event-loop tick so the GUI
             // gets a chance to render between batches.
             account.mam_query_remove(mam_query.id);
-            account.release_mam_slot();
 
             account.mam_deferred_pages.push_back({
                 std::string{},                      // empty = global query
                 std::string{},
                 mam_query.start,
                 mam_query.end,
-                set_last_text
+                set_last_text,
+                mam_query.stable,
+                true
             });
             account.schedule_next_mam_page();
         }
@@ -230,7 +241,7 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
             // Global MAM query complete — persist the final RSM cursor so
             // the next reconnect resumes from the very end of the archive
             // rather than replaying from a stale intermediate cursor.
-            if (!set_last_text.empty())
+            if (mam_query.stable && fin_is_complete && !set_last_text.empty())
                 account.mam_cursor_set("global", set_last_text);
 
             account.mam_query_remove(mam_query.id);
@@ -243,11 +254,7 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
     }
     else
     {
-        if (set_last_text.empty())
-        {
-            account.mam_query_remove(mam_query.id);
-            account.release_mam_slot();
-        }
+        account.cancel_channel_mam(mam_query.with);
     }
 
     return false;

@@ -4,6 +4,16 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
         return;
     account.sm_post_connect_done = true;
 
+    if (resumed_session)
+    {
+        if (!account.mam_deferred_pages.empty())
+            account.schedule_next_mam_page();
+    }
+    else
+    {
+        account.reset_mam_sync();
+    }
+
     if (!resumed_session)
     {
         /* Send initial <presence/> so that we appear online to contacts */

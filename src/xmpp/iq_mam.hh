@@ -14,6 +14,10 @@ namespace xmpp {
 
 [[nodiscard]] XMPP_TEST_EXPORT bool is_mam_fin_bool_attr_true(std::string_view value);
 
+// Once a page is unstable, later pages cannot make the fetch safe to checkpoint.
+[[nodiscard]] XMPP_TEST_EXPORT bool mam_fetch_remains_stable(StanzaView fin,
+                                                           bool previous_pages_stable);
+
 [[nodiscard]] XMPP_TEST_EXPORT std::string mam_fin_rsm_last(StanzaView fin);
 
 [[nodiscard]] XMPP_TEST_EXPORT bool iq_has_item_not_found_error(StanzaView iq);
