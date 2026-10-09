@@ -607,16 +607,16 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0413.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>0.2</xmpp:version>
-        <xmpp:note xml:lang='en'>Order-By for MAM and Pubsub queries (Experimental) - urn:xmpp:order-by:1 field='creation-date' element included in XEP-0442 pubsub MAM queries to request newest-first ordering; bare and scoped features advertised in caps per §6</xmpp:note>
+        <xmpp:note xml:lang='en'>Order-By for MAM and Pubsub queries (Experimental) - &lt;order xmlns='urn:xmpp:order-by:1' by='creation'/&gt; included in XEP-0442 queries when the service advertises MAM ordering support; ascending order retained for cursor paging. No user-selectable ordering or modification ordering.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0442.html' />
-        <xmpp:status>partial</xmpp:status>
+        <xmpp:status>complete</xmpp:status>
         <xmpp:version>0.2.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Pubsub Message Archive Management (Experimental) - on reconnect, sends disco#info to each pubsub service; when urn:xmpp:mam:2 is advertised, fetches the node archive via MAM IQ with node= filter and XEP-0413 order-by instead of plain pubsub items IQ; falls back to XEP-0060 max_items fetch for servers that do not support pubsub MAM; forwarded item payloads (Atom entries) extracted from MAM result messages and rendered to the feed buffer with deduplication; RSM last cursor persisted to LMDB, but incomplete results are not automatically paged; urn:xmpp:mam:2#pubsub and urn:xmpp:order-by:1 advertised in caps</xmpp:note>
+        <xmpp:note xml:lang='en'>Pubsub Message Archive Management (client role, Experimental) - discovers service support and queries node archives with explicit query IDs. First restore seeds the latest page; reconnect pages forward from the persisted archive cursor until complete. Checkpoints advance only after a stable complete catch-up; repeated or missing cursors stop paging without advancing. Stale cursors trigger one full archive recovery; other errors fall back to current XEP-0060 items. Atom notifications are deduplicated and rendered with optional forwarded sender attributes supported. Closed feeds and late uncorrelated archive notifications are ignored.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

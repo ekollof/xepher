@@ -277,56 +277,6 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
 
     }
 
-    // Helper: send a XEP-0442 MAM query against a pubsub node.
-        // Uses XEP-0413 Order-By (creation date descending) so we get the newest items.
-        // The result arrives as a sequence of forwarded <message> stanzas followed by
-        // a <fin> IQ result, handled in iq_handler.inl's pubsub MAM fin block.
-        auto send_pubsub_mam_query = [&](std::string_view service_jid,
-                                         std::string_view node_name,
-                                         int max_items)
-        {
-            std::string uid = stanza::uuid(account.context);
-
-            // <order xmlns='urn:xmpp:order-by:1' by='creation'/> (XEP-0413 §3)
-            // Request newest-first so the RSM <max> limit gives us the most recent items.
-            struct order_spec : stanza::spec {
-                order_spec() : spec("order") {
-                    xmlns<urn::xmpp::order_by::_1>();
-                    attr("by", "creation");
-                }
-            };
-
-            stanza::xep0059::set rsm_set;
-            rsm_set.max(static_cast<unsigned>(max_items));
-
-            struct pubsub_mam_query : stanza::xep0313::query {
-                pubsub_mam_query(std::string_view node_name_,
-                                 order_spec &ord,
-                                 stanza::xep0059::set &rsm)
-                    : spec("query") {
-                    xmlns<urn::xmpp::mam::_2>();
-                    attr("node", node_name_);
-                    child(ord);
-                    child(rsm);
-                }
-            };
-
-            order_spec ord;
-            pubsub_mam_query mam_q(node_name, ord, rsm_set);
-
-            account.pubsub_mam_queries[uid] = {std::string(service_jid), std::string(node_name), {}, max_items};
-
-            this->send(stanza::iq()
-                        .from(account.jid())
-                        .to(service_jid)
-                        .type("set")
-                        .id(uid)
-                        .xep0313()
-                        .query(mam_q)
-                        .build(account.context)
-                        .get());
-        };
-
         // Helper: restore one feed buffer by its feed_key ("service/node").
         // Creates the in-memory channel, re-fetches the last page of items.
         // Safe to call multiple times for the same key (try_emplace is idempotent).
@@ -357,7 +307,7 @@ void weechat::connection::run_post_connect_setup(bool resumed_session)
             // XEP-0442: if the service is known to support MAM, query via MAM.
             if (account.pubsub_mam_services.contains(service_jid))
             {
-                send_pubsub_mam_query(service_jid, node_name, max_items);
+                account.start_pubsub_mam(service_jid, node_name, max_items);
                 return;
             }
 

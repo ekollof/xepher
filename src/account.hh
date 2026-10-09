@@ -36,6 +36,7 @@
 #include "xmpp/server_capabilities.hh"
 #include "xmpp/stanza_view.hh"
 #include "xmpp/iq_adhoc.hh"
+#include "xmpp/iq_pubsub_mam.hh"
 #include "connection.hh"
 #include "connection/strophe_stream_features.hh"
 #include "weechat/connection_port.hh"
@@ -358,8 +359,9 @@ namespace weechat
         std::unordered_set<std::string> pubsub_mam_services;
 
         // XEP-0442: pending MAM queries against a pubsub node.
-        // Maps IQ id → pubsub_fetch_info (same fields; service+node+max_items).
-        std::unordered_map<std::string, pubsub_fetch_info> pubsub_mam_queries;
+        std::unordered_map<std::string, ::xmpp::PubsubMamQuery> pubsub_mam_queries;
+        void start_pubsub_mam(std::string_view service, std::string_view node, int max_items);
+        void send_pubsub_mam_page(::xmpp::PubsubMamQuery query);
 
         // XEP-0442: disco#info queries sent to discover MAM support on pubsub services.
         // Maps IQ id → service_jid.  When the result arrives we record in pubsub_mam_services

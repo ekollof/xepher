@@ -1900,11 +1900,13 @@ TEST_CASE("server_capability_map")
 }
 
 #include "xmpp/iq_adhoc.hh"
+#include "xmpp/iq_pubsub_mam.hh"
 
 struct adhoc_test_spec : stanza::spec {
     explicit adhoc_test_spec(std::string_view name) : spec(name) {}
     using spec::attr;
     using spec::xmlns;
+    using spec::text;
 };
 
 TEST_CASE("ad-hoc requester actions and data form round trip")
@@ -2014,6 +2016,142 @@ TEST_CASE("ad-hoc missing and invalid action defaults")
     invalid.child(actions);
     const auto invalid_built = invalid.build(env.ctx);
     CHECK_FALSE(xmpp::parse_adhoc_session(xmpp::StanzaView(invalid_built.get())));
+}
+
+auto pubsub_mam_fin_spec(std::string_view last, bool complete, bool stable = true)
+    -> adhoc_test_spec
+{
+    adhoc_test_spec fin("fin");
+    fin.xmlns<urn::xmpp::mam::_2>();
+    fin.attr("complete", complete ? "true" : "false");
+    fin.attr("stable", stable ? "true" : "false");
+    if (!last.empty())
+    {
+        adhoc_test_spec set("set");
+        set.xmlns<jabber_org::protocol::rsm>();
+        adhoc_test_spec cursor("last");
+        cursor.text(last);
+        set.child(cursor);
+        fin.child(set);
+    }
+    return fin;
+}
+
+TEST_CASE("PubSub MAM query correlation and paging stanzas")
+{
+    unit_strophe_env env;
+    xmpp::PubsubMamQuery query;
+    query.service = "pubsub.example.org";
+    query.node = "posts";
+    auto iq = xmpp::make_pubsub_mam_iq("page1", "alice@example.org", query);
+    const auto built = iq.build(env.ctx);
+    const xmpp::StanzaView view(built.get());
+    CHECK(view.attr_string("id") == "page1");
+    CHECK(view.attr_string("to") == query.service);
+    const auto mam = view.child("query", "urn:xmpp:mam:2");
+    CHECK(mam.attr_string("node") == "posts");
+    CHECK(mam.attr_string("queryid") == "page1");
+    const auto rsm = mam.child("set", "http://jabber.org/protocol/rsm");
+    CHECK(rsm.child("max").text() == "20");
+    CHECK(rsm.child("before").valid());
+    CHECK(rsm.child("before").text().empty());
+    CHECK_FALSE(rsm.child("after").valid());
+    CHECK_FALSE(mam.child("order").valid());
+
+    query.initial_tail = false;
+    query.cursor = "archive-123";
+    query.order_creation = true;
+    auto next_iq = xmpp::make_pubsub_mam_iq("page2", "alice@example.org", query);
+    const auto next_built = next_iq.build(env.ctx);
+    const auto next_mam = xmpp::StanzaView(next_built.get()).child("query", "urn:xmpp:mam:2");
+    CHECK(next_mam.attr_string("queryid") == "page2");
+    const auto next_rsm = next_mam.child("set", "http://jabber.org/protocol/rsm");
+    CHECK(next_rsm.child("after").text() == "archive-123");
+    CHECK_FALSE(next_rsm.child("before").valid());
+    CHECK(next_mam.child("order", "urn:xmpp:order-by:1").attr_string("by") == "creation");
+}
+
+TEST_CASE("PubSub MAM checkpoints require a complete stable catch-up")
+{
+    unit_strophe_env env;
+    xmpp::PubsubMamQuery query;
+    query.initial_tail = false;
+    query.cursor = "A";
+    query.visited_cursors.insert("A");
+    const auto first = pubsub_mam_fin_spec("B", false).build(env.ctx);
+    auto page = xmpp::advance_pubsub_mam(query, xmpp::StanzaView(first.get()));
+    REQUIRE(page);
+    REQUIRE(page->next);
+    CHECK_FALSE(page->checkpoint);
+    CHECK(page->next->cursor == "B");
+    const auto last = pubsub_mam_fin_spec("C", true).build(env.ctx);
+    auto done = xmpp::advance_pubsub_mam(*page->next, xmpp::StanzaView(last.get()));
+    REQUIRE(done);
+    CHECK_FALSE(done->next);
+    CHECK(done->checkpoint == "C");
+    const auto empty = pubsub_mam_fin_spec("", true).build(env.ctx);
+    auto empty_done = xmpp::advance_pubsub_mam(*page->next, xmpp::StanzaView(empty.get()));
+    REQUIRE(empty_done);
+    CHECK(empty_done->checkpoint == "B");
+
+    const auto unstable = pubsub_mam_fin_spec("B", false, false).build(env.ctx);
+    auto unstable_page = xmpp::advance_pubsub_mam(query, xmpp::StanzaView(unstable.get()));
+    REQUIRE(unstable_page);
+    REQUIRE(unstable_page->next);
+    auto unstable_done = xmpp::advance_pubsub_mam(*unstable_page->next, xmpp::StanzaView(last.get()));
+    REQUIRE(unstable_done);
+    CHECK_FALSE(unstable_done->checkpoint);
+    CHECK_FALSE(xmpp::advance_pubsub_mam(*page->next, xmpp::StanzaView(first.get())));
+    const auto cycle = pubsub_mam_fin_spec("A", false).build(env.ctx);
+    CHECK_FALSE(xmpp::advance_pubsub_mam(*page->next, xmpp::StanzaView(cycle.get())));
+    const auto no_cursor = pubsub_mam_fin_spec("", false).build(env.ctx);
+    CHECK_FALSE(xmpp::advance_pubsub_mam(query, xmpp::StanzaView(no_cursor.get())));
+
+    query.initial_tail = true;
+    query.cursor.clear();
+    auto seed = xmpp::advance_pubsub_mam(query, xmpp::StanzaView(first.get()));
+    REQUIRE(seed);
+    CHECK_FALSE(seed->next);
+    CHECK(seed->checkpoint == "B");
+    auto empty_archive = xmpp::advance_pubsub_mam(query, xmpp::StanzaView(empty.get()));
+    REQUIRE(empty_archive);
+    REQUIRE(empty_archive->checkpoint);
+    CHECK(empty_archive->checkpoint->empty());
+}
+
+TEST_CASE("PubSub MAM missing publishers and stale cursor recovery")
+{
+    unit_strophe_env env;
+    adhoc_test_spec message("message");
+    adhoc_test_spec item("item");
+    const auto message_built = message.build(env.ctx);
+    const auto item_built = item.build(env.ctx);
+    CHECK(xmpp::pubsub_mam_publisher(xmpp::StanzaView(message_built.get()),
+        xmpp::StanzaView(item_built.get()), "pubsub.example") == "pubsub.example");
+    item.attr("publisher", "author@example");
+    const auto published = item.build(env.ctx);
+    CHECK(xmpp::pubsub_mam_publisher(xmpp::StanzaView(message_built.get()),
+        xmpp::StanzaView(published.get()), "pubsub.example") == "author@example");
+
+    auto iq = stanza::iq().type("error");
+    adhoc_test_spec error("error");
+    adhoc_test_spec condition("item-not-found");
+    condition.attr("xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas");
+    error.child(condition);
+    iq.child(error);
+    const auto failure = iq.build(env.ctx);
+    xmpp::PubsubMamQuery query;
+    query.initial_tail = false;
+    query.cursor = "stale";
+    query.visited_cursors.insert("stale");
+    auto retry = xmpp::recover_pubsub_mam_cursor(query, xmpp::StanzaView(failure.get()));
+    REQUIRE(retry);
+    CHECK(retry->cursor.empty());
+    CHECK_FALSE(retry->initial_tail);
+    CHECK(retry->visited_cursors.empty());
+    CHECK(retry->stale_retried);
+    retry->cursor = "new-stale";
+    CHECK_FALSE(xmpp::recover_pubsub_mam_cursor(*retry, xmpp::StanzaView(failure.get())));
 }
 
 TEST_CASE("iq_disco and iq_caps helpers")

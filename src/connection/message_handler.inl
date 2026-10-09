@@ -296,6 +296,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                     return 1;
 
                 const auto &pq = account.pubsub_mam_queries.at(*pubsub_queryid);
+                const auto archive_sender = inbound.attr_string("from");
+                if (!archive_sender.empty() && archive_sender != pq.service)
+                    return 1;
                 std::string feed_service = pq.service;
                 std::string node_name    = pq.node;
                 std::string feed_key     = fmt::format("{}/{}", feed_service, node_name);
@@ -324,13 +327,8 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                         const auto fwd_items = fwd_event.valid()
                             ? fwd_event.child("items") : ::xmpp::StanzaView(nullptr);
 
-                        if (fwd_items.valid())
+                        if (fwd_items.valid() && fwd_items.attr_string("node") == node_name)
                         {
-                            // Extract the publisher (from= of the inner message or publisher= on item)
-                            const std::string publisher_jid_s = fwd_msg.attr_string("from");
-                            const char *publisher_jid = publisher_jid_s.empty()
-                                ? nullptr : publisher_jid_s.c_str();
-
                             for (const auto &fwd_item : fwd_items)
                             {
                                 if (fwd_item.name() != "item")
@@ -348,11 +346,9 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                                     entry_view = fwd_item.child("entry");
                                 if (!entry_view.valid()) continue;
 
-                                const std::string pub_s = fwd_item.attr_string("publisher");
-                                const std::string_view pub_sv =
-                                    pub_s.empty() ? std::string_view(publisher_jid) : std::string_view(pub_s);
-
-                                atom_entry ae = parse_atom_entry(entry_view, pub_sv);
+                                const auto publisher = ::xmpp::pubsub_mam_publisher(
+                                    fwd_msg, fwd_item, feed_service);
+                                atom_entry ae = parse_atom_entry(entry_view, publisher);
                                 if (item_id_raw && !ae.item_id.empty())
                                     account.feed_atom_id_set(feed_key, item_id_raw, ae.item_id);
                                 if (item_id_raw && !ae.replies_link.empty())
@@ -382,6 +378,12 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
                 }
                 return 1;
             }
+
+            // A closed feed or an earlier connection may leave late archive
+            // notifications. They must not become ordinary PM chat messages.
+            if (::xmpp::StanzaView(result).child("forwarded", "urn:xmpp:forward:0")
+                .child("message").child("event", "http://jabber.org/protocol/pubsub#event").valid())
+                return 1;
 
             // Regular MAM result (chat/MUC message archive)
             if (auto dispatch = ::xmpp::parse_mam_forwarded_dispatch(mam_view))

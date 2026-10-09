@@ -1266,40 +1266,7 @@ bool weechat::connection::handle_disco_info_iq_event(xmpp_stanza_t *stanza)
 
                     if (has_mam)
                         {
-                            // XEP-0442 + XEP-0413: MAM query with Order-By
-                            std::string uid = stanza::uuid(account.context);
-
-                            struct order_spec : stanza::spec {
-                                order_spec() : spec("order") {
-                                    xmlns<urn::xmpp::order_by::_1>();
-                                    attr("by", "creation");
-                                }
-                            };
-                            stanza::xep0059::set rsm_set;
-                            rsm_set.max(static_cast<unsigned>(max_items));
-                            struct pubsub_mam_q : stanza::xep0313::query {
-                                pubsub_mam_q(std::string_view node_name_,
-                                             order_spec &ord,
-                                             stanza::xep0059::set &rsm)
-                                    : spec("query") {
-                                    xmlns<urn::xmpp::mam::_2>();
-                                    attr("node", node_name_);
-                                    child(ord);
-                                    child(rsm);
-                                }
-                            };
-                            order_spec ord;
-                            pubsub_mam_q mam_q(node_name, ord, rsm_set);
-                            account.pubsub_mam_queries[uid] = {svc_jid, node_name, {}, max_items};
-                            account.connection.send(stanza::iq()
-                                .from(account.jid())
-                                .to(svc_jid)
-                                .type("set")
-                                .id(uid)
-                                .xep0313()
-                                .query(mam_q)
-                                .build(account.context)
-                                .get());
+                            account.start_pubsub_mam(svc_jid, node_name, max_items);
                         }
                         else
                         {

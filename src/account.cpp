@@ -343,6 +343,9 @@ void weechat::account::reset_mam_sync()
     mam_deferred_pages.clear();
     mam_deferred_messages.clear();
     mam_query_free_all();
+    pubsub_mam_queries.clear();
+    pubsub_mam_disco_queries.clear();
+    pubsub_mam_deferred_feeds.clear();
     mam_inflight = 0;
     mam_jitter_next_initial = false;
 }

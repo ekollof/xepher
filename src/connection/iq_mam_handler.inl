@@ -13,6 +13,38 @@ void weechat::connection::handle_mam_query_iq_error(xmpp_stanza_t *stanza)
     if (!id || !type || weechat_strcasecmp(type, "error") != 0)
         return;
 
+    if (auto query = account.pubsub_mam_queries.find(iq_id_str);
+        query != account.pubsub_mam_queries.end())
+    {
+        if (!iq_from_str.empty() && iq_from_str != query->second.service)
+            return;
+        auto page = std::move(query->second);
+        account.pubsub_mam_queries.erase(query);
+        account.mam_cache_write_batch_commit();
+        if (!weechat::xmpp_feeds_enabled()
+            || !account.feed_is_open(fmt::format("{}/{}", page.service, page.node)))
+            return;
+        if (auto retry = ::xmpp::recover_pubsub_mam_cursor(page, view); retry)
+        {
+            // Recover the entire gap rather than dropping all but the latest
+            // page. Keep the previous persisted checkpoint until recovery ends.
+            account.send_pubsub_mam_page(std::move(*retry));
+            return;
+        }
+        weechat::UiPort::for_buffer(account.buffer)->printf_error(fmt::format(
+            "PubSub MAM for {}/{} failed: {}; fetching current items instead",
+            page.service, page.node, ::xmpp::iq_error_text(view.child("error"))));
+        const auto fallback_id = stanza::uuid(account.context);
+        stanza::xep0060::items items(page.node);
+        items.max_items(static_cast<unsigned>(page.max_items > 0 ? page.max_items : 20));
+        stanza::xep0060::pubsub pubsub;
+        pubsub.items(items);
+        account.pubsub_fetch_ids[fallback_id] = {page.service, page.node, {}, page.max_items};
+        send(stanza::iq().type("get").id(fallback_id).to(page.service)
+            .xep0060().pubsub(pubsub).build(account.context).get());
+        return;
+    }
+
     weechat::account::mam_query failed_mam_query;
     if (!account.mam_query_search(&failed_mam_query, id))
         return;
@@ -99,20 +131,30 @@ bool weechat::connection::handle_mam_fin_iq_event(xmpp_stanza_t *stanza)
         {
             if (auto pq_it = account.pubsub_mam_queries.find(id); pq_it != account.pubsub_mam_queries.end())
             {
-                auto& [_, pq] = *pq_it;
-                const std::string svc_jid   = pq.service;
-                const std::string node_name = pq.node;
+                if (!iq_from_str.empty() && iq_from_str != pq_it->second.service)
+                    return true;
+                auto pq = std::move(pq_it->second);
                 account.pubsub_mam_queries.erase(pq_it);
-
-                const std::string feed_key = fmt::format("{}/{}", svc_jid, node_name);
-                const std::string plast_text = ::xmpp::mam_fin_rsm_last(::xmpp::StanzaView(pmam_fin));
-                if (!plast_text.empty())
-                {
-                    account.mam_cursor_set(
-                        fmt::format("pubsub:{}", feed_key),
-                        plast_text);
-                }
                 account.mam_cache_write_batch_commit();
+                const auto feed_key = fmt::format("{}/{}", pq.service, pq.node);
+                if (!weechat::xmpp_feeds_enabled() || !account.feed_is_open(feed_key))
+                    return true;
+                auto page = ::xmpp::advance_pubsub_mam(std::move(pq), pmam_fin);
+                if (!page)
+                {
+                    weechat::UiPort::for_buffer(account.buffer)->printf_error(page.error());
+                    return true;
+                }
+                if (page->next)
+                    account.send_pubsub_mam_page(std::move(*page->next));
+                else if (page->checkpoint)
+                {
+                    const auto key = fmt::format("pubsub:{}", feed_key);
+                    if (page->checkpoint->empty())
+                        account.mam_cursor_clear(key);
+                    else
+                        account.mam_cursor_set(key, *page->checkpoint);
+                }
                 return true;
             }
         }
