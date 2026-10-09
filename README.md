@@ -846,9 +846,22 @@ buffers at all.
 /adhoc example.com                          # list available commands
 /adhoc example.com announce                 # execute a command (form rendered inline)
 /adhoc example.com announce <id> subject=Hello body=World
+/adhoc example.com announce <id> --action=next subject=Hello
+/adhoc example.com announce <id> --action=prev
+/adhoc example.com announce <id> --action=complete body=World
+/adhoc example.com announce <id> --action=cancel
 ```
 
-Required fields are marked with `*`. Multi-step sessions are supported.
+Required fields are marked with `*`. Each executing response lists its allowed
+actions and default. Omitting `--action` (or choosing `execute`) uses that default;
+`cancel` is always available and sends no form payload. Hidden fields such as
+`FORM_TYPE` and server tokens are returned automatically. Repeat a field name for
+multiple values, for example `users=alice@example.org users=bob@example.org`.
+An empty value uses `field=`; `=` inside a value is preserved. Quote arguments
+containing spaces using WeeChat's command argument quoting. Include the required
+visible fields when submitting a form. Completed and canceled sessions end;
+session state is cleared on disconnect. This is requester support; Xepher does
+not host commands for other clients.
 
 ---
 
@@ -1179,7 +1192,7 @@ history instead of leaving them near the top of the replay.
 | `/disco [jid]` | Discover services and features (XEP-0030) |
 | `/disco summary` | Cached server discovery: domain features, components, derived capabilities |
 | `/disco summary refresh` | Re-query domain `disco#info` + `disco#items`, then print summary |
-| `/adhoc <jid> [node] [id] [field=value ...]` | Execute ad-hoc commands (XEP-0050) |
+| `/adhoc <jid> [node] [id] [--action=ACTION] [field=value ...]` | Discover and execute ad-hoc commands, navigate stages, or cancel (XEP-0050) |
 | `/roster` | Display contact list |
 | `/roster add <jid> [name]` | Add a contact |
 | `/roster del <jid>` | Remove a contact |

@@ -994,6 +994,7 @@ struct t_gui_buffer *weechat::account::create_buffer()
 
 void weechat::account::reset()
 {
+    adhoc_sessions.clear();
     if (connection)
     {
         if (xmpp_conn_is_connected(connection) || xmpp_conn_is_connecting(connection))

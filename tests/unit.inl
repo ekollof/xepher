@@ -1899,6 +1899,123 @@ TEST_CASE("server_capability_map")
     }));
 }
 
+#include "xmpp/iq_adhoc.hh"
+
+struct adhoc_test_spec : stanza::spec {
+    explicit adhoc_test_spec(std::string_view name) : spec(name) {}
+    using spec::attr;
+    using spec::xmlns;
+};
+
+TEST_CASE("ad-hoc requester actions and data form round trip")
+{
+    unit_strophe_env env;
+    REQUIRE(env.ctx != nullptr);
+    adhoc_test_spec response("command");
+    response.xmlns<jabber_org::protocol::commands>();
+    adhoc_test_spec actions("actions");
+    actions.xmlns<jabber_org::protocol::commands>();
+    actions.attr("execute", "next");
+    actions.child(adhoc_test_spec("next"));
+    actions.child(adhoc_test_spec("prev"));
+    response.child(actions);
+    stanza::xep0004::form form("form");
+    form.child(stanza::xep0004::hidden_field("FORM_TYPE", "urn:example:admin"));
+    form.child(stanza::xep0004::hidden_field("token", "opaque"));
+    response.child(form);
+    const auto incoming = response.build(env.ctx);
+    const auto session = xmpp::parse_adhoc_session(xmpp::StanzaView(incoming.get()));
+    REQUIRE(session);
+    CHECK(session->default_action == "next");
+    CHECK(session->hidden_fields.at("token") == std::vector<std::string>{"opaque"});
+
+    const std::array<std::string_view, 3> fields{"users=alice", "users=bob", "text=a=b"};
+    auto request = xmpp::make_adhoc_command("admin", "sid", "", fields, &*session);
+    REQUIRE(request);
+    const auto built = request->build(env.ctx);
+    const xmpp::StanzaView command(built.get());
+    CHECK(command.xmlns() == "http://jabber.org/protocol/commands");
+    CHECK(command.attr_string("action") == "next");
+    CHECK(command.attr_string("sessionid") == "sid");
+    const auto submitted = command.child("x", "jabber:x:data");
+    CHECK(submitted.attr_string("type") == "submit");
+    std::map<std::string, std::vector<std::string>> values;
+    std::ranges::for_each(submitted, [&](xmpp::StanzaView field) {
+        auto &out = values[field.attr_string("var")];
+        std::ranges::for_each(field, [&](xmpp::StanzaView value) {
+            if (value.name() == "value") out.emplace_back(value.text());
+        });
+    });
+    CHECK(values.at("users") == std::vector<std::string>{"alice", "bob"});
+    CHECK(values.at("text") == std::vector<std::string>{"a=b"});
+    CHECK(values.at("FORM_TYPE") == std::vector<std::string>{"urn:example:admin"});
+    CHECK(values.at("token") == std::vector<std::string>{"opaque"});
+    CHECK(std::ranges::distance(submitted) == 4);
+
+    auto cancel = xmpp::make_adhoc_command("admin", "sid", "cancel", {}, &*session);
+    REQUIRE(cancel);
+    const auto cancel_built = cancel->build(env.ctx);
+    CHECK_FALSE(xmpp::StanzaView(cancel_built.get()).child("x").valid());
+    CHECK_FALSE(xmpp::make_adhoc_command("admin", "sid", "complete", {}, &*session));
+    CHECK_FALSE(xmpp::make_adhoc_command("admin", "", "next", {}));
+    CHECK_FALSE(xmpp::make_adhoc_command("admin", "sid", "cancel", fields, &*session));
+    CHECK_FALSE(xmpp::make_adhoc_command("admin", "sid", "unknown", {}));
+    const std::array<std::string_view, 1> malformed{"missing-equals"};
+    CHECK_FALSE(xmpp::make_adhoc_command("admin", "sid", "next", malformed, &*session));
+    const std::array<std::string_view, 1> hidden_override{"token=changed"};
+    CHECK_FALSE(xmpp::make_adhoc_command("admin", "sid", "next", hidden_override, &*session));
+}
+
+TEST_CASE("ad-hoc quoted form arguments")
+{
+    const auto fields = xmpp::parse_adhoc_arguments(
+        "subject=\"Hello world\" users=alice users=bob empty= text='a=b c' escaped=one\\ two");
+    REQUIRE(fields);
+    CHECK(*fields == std::vector<std::string>{"subject=Hello world", "users=alice",
+        "users=bob", "empty=", "text=a=b c", "escaped=one two"});
+    CHECK_FALSE(xmpp::parse_adhoc_arguments("field='unterminated"));
+    CHECK_FALSE(xmpp::parse_adhoc_arguments("field=trailing\\"));
+}
+
+TEST_CASE("ad-hoc missing and invalid action defaults")
+{
+    unit_strophe_env env;
+    adhoc_test_spec response("command");
+    const auto built = response.build(env.ctx);
+    const auto single = xmpp::parse_adhoc_session(xmpp::StanzaView(built.get()));
+    REQUIRE(single);
+    CHECK(single->default_action == "complete");
+    xmpp::AdhocSession empty_form = *single;
+    empty_form.has_form = true;
+    auto empty_submit = xmpp::make_adhoc_command("admin", "sid", "", {}, &empty_form);
+    REQUIRE(empty_submit);
+    const auto empty_built = empty_submit->build(env.ctx);
+    CHECK(xmpp::StanzaView(empty_built.get()).child("x", "jabber:x:data").attr_string("type") == "submit");
+    auto initial = xmpp::make_adhoc_command("admin", "", "", {});
+    REQUIRE(initial);
+    const auto initial_built = initial->build(env.ctx);
+    CHECK(xmpp::StanzaView(initial_built.get()).attr_string("action") == "execute");
+    CHECK_FALSE(xmpp::StanzaView(initial_built.get()).attr("sessionid"));
+    CHECK_FALSE(xmpp::StanzaView(initial_built.get()).child("x").valid());
+    auto complete = xmpp::make_adhoc_command("admin", "sid", "", {}, &*single);
+    REQUIRE(complete);
+    const auto complete_built = complete->build(env.ctx);
+    CHECK(xmpp::StanzaView(complete_built.get()).attr_string("action") == "complete");
+    adhoc_test_spec actions("actions");
+    actions.xmlns<jabber_org::protocol::commands>();
+    actions.child(adhoc_test_spec("next"));
+    response.child(actions);
+    const auto multi_built = response.build(env.ctx);
+    const auto multi = xmpp::parse_adhoc_session(xmpp::StanzaView(multi_built.get()));
+    REQUIRE(multi);
+    CHECK(multi->default_action == "next");
+    adhoc_test_spec invalid("command");
+    actions.attr("execute", "complete");
+    invalid.child(actions);
+    const auto invalid_built = invalid.build(env.ctx);
+    CHECK_FALSE(xmpp::parse_adhoc_session(xmpp::StanzaView(invalid_built.get())));
+}
+
 TEST_CASE("iq_disco and iq_caps helpers")
 {
     CHECK(xmpp::is_adhoc_commands_disco_node("http://jabber.org/protocol/commands"));

@@ -661,14 +661,16 @@ void command__init()
         N_("list and execute XMPP ad-hoc commands (XEP-0050)"),
         N_("<jid>"
            " || <jid> <node>"
-           " || <jid> <node> <sessionid> [<field>=<value> ...]"),
+           " || <jid> <node> <sessionid> [--action=<action>] [<field>=<value> ...]"),
         N_("      jid: target JID (server, component, or user)\n"
            "     node: command node URI to execute\n"
            "sessionid: session ID returned by a previous command step\n"
-           "field=val: form field values to submit\n\n"
+           "   action: execute (default), next, prev, complete, or cancel\n"
+           "field=val: form values; repeat a name for multiple values\n\n"
            "Without a node, lists available commands on the target JID.\n"
            "With a node, executes that command (first step).\n"
-           "With a sessionid and field=value pairs, submits a form step.\n\n"
+           "With a sessionid, uses the server's default action unless specified.\n"
+           "Hidden fields are preserved automatically. Values may contain '='.\n\n"
            "Examples:\n"
            "  /adhoc conference.example.com\n"
            "  /adhoc example.com http://jabber.org/protocol/admin#get-active-users\n"

@@ -394,13 +394,20 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
     const char *from = iq_from_str.empty() ? nullptr : iq_from_str.c_str();
     const char *to = iq_to_str.empty() ? nullptr : iq_to_str.c_str();
     const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
-    (void)to;
-
     const ::xmpp::StanzaView adhoc_command = view.child("command", "http://jabber.org/protocol/commands");
-    if (!adhoc_command.valid() || !type)
+    if (!type || (iq_type_str != "result" && iq_type_str != "error"))
         return;
     const char *iq_id = id;
     bool is_adhoc_query = iq_id && account.adhoc_queries.contains(iq_id);
+    if (!is_adhoc_query)
+        return;
+    const auto &query = account.adhoc_queries.at(iq_id);
+    if (!iq_from_str.empty() && iq_from_str != query.target_jid
+        && (query.target_jid.contains('/')
+            || !iq_from_str.starts_with(fmt::format("{}/", query.target_jid))))
+        return;
+    if (!adhoc_command.valid() && iq_type_str != "error")
+        return;
     struct t_gui_buffer *adhoc_buf = is_adhoc_query
         ? (account.adhoc_queries[iq_id].buffer
            ? account.adhoc_queries[iq_id].buffer : account.buffer)
@@ -408,17 +415,58 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
     const std::string cmd_node = adhoc_command.attr_string("node");
     const std::string cmd_status = adhoc_command.attr_string("status");
     const std::string session_id = adhoc_command.attr_string("sessionid");
-    const char *from_jid = from;
+    const std::string target_jid = iq_from_str.empty() ? query.target_jid : iq_from_str;
+    const std::string requested_node = query.node;
+    const std::string requested_session = query.session_id;
+    const char *from_jid = target_jid.c_str();
+    (void)from;
+    (void)to;
+    if (adhoc_command.valid() && !query.is_list
+        && (cmd_node != requested_node
+            || (!requested_session.empty() && session_id != requested_session)))
+        return;
 
     auto adhoc_ui = weechat::UiPort::for_buffer(adhoc_buf);
     if (weechat_strcasecmp(type, "error") == 0)
     {
         adhoc_ui->printf_date_tags_error(0, "xmpp_adhoc,notify_none",
-            fmt::format("[adhoc] Error executing command {}",
-                !cmd_node.empty() ? cmd_node : "(unknown)"));
+            fmt::format("[adhoc] Error executing command {}: {}",
+                requested_node.empty() ? "(discovery)" : requested_node,
+                ::xmpp::iq_error_text(view.child("error"))));
     }
     else if (weechat_strcasecmp(type, "result") == 0)
     {
+        const auto key = std::tuple{target_jid, cmd_node, session_id};
+        if (cmd_status == "executing" && !session_id.empty())
+        {
+            if (auto session = ::xmpp::parse_adhoc_session(adhoc_command); session)
+            {
+                account.adhoc_sessions.insert_or_assign(key, *session);
+                std::ranges::for_each(session->actions, [&](std::string_view action) {
+                    adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                        fmt::format("[adhoc] {}{}: /adhoc {} {} {} --action={}{}",
+                            action, action == session->default_action ? " (default)" : "",
+                            target_jid, cmd_node, session_id, action,
+                            action == "cancel" ? "" : " [field=value ...]"));
+                });
+            }
+            else
+            {
+                account.adhoc_sessions.erase(key);
+                adhoc_ui->printf_date_tags_error(0, "xmpp_adhoc,notify_none", session.error());
+            }
+        }
+        else if (cmd_status == "completed" || cmd_status == "canceled")
+        {
+            account.adhoc_sessions.erase(key);
+            adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                fmt::format("[adhoc] Command {} {}", cmd_node, cmd_status));
+        }
+        std::ranges::for_each(adhoc_command, [&](::xmpp::StanzaView note) {
+            if (note.name() == "note")
+                adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
+                    fmt::format("[adhoc] {}: {}", note.attr_string("type"), note.text()));
+        });
         // Check for a data form to display
         const ::xmpp::StanzaView x_form = adhoc_command.child("x", "jabber:x:data");
 
@@ -433,19 +481,9 @@ void weechat::connection::handle_adhoc_command_iq_event(xmpp_stanza_t *stanza)
             else
             {
                 // Input form — render and prompt for submission
-                render_data_form(adhoc_buf, x_form.raw(), from_jid, cmd_node.c_str(), session_id.empty() ? nullptr : session_id.c_str());
+                render_data_form(adhoc_buf, x_form.raw(), from_jid, cmd_node.c_str(),
+                    cmd_status == "executing" && !session_id.empty() ? session_id.c_str() : nullptr);
             }
-        }
-        else if (!cmd_status.empty() && std::string_view(cmd_status) == "completed")
-        {
-            // Command completed with no form — check for <note>
-            const ::xmpp::StanzaView note = adhoc_command.child("note");
-            const std::string note_text = note.text();
-            adhoc_ui->printf_date_tags_network(0, "xmpp_adhoc,notify_none",
-                fmt::format("[adhoc] Command {} completed{}{}",
-                    !cmd_node.empty() ? cmd_node : "",
-                    note_text.empty() ? "" : ": ",
-                    note_text.empty() ? "" : note_text));
         }
         else if (!cmd_status.empty() && std::string_view(cmd_status) == "executing" && !x_form.valid())
         {

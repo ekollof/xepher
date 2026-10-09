@@ -127,7 +127,7 @@ int command__spoiler(const void *pointer, void *data,
 // Usage:
 //   /adhoc <jid>                         — list available commands
 //   /adhoc <jid> <node>                  — execute a command
-//   /adhoc <jid> <node> <sessionid> [field=value ...]  — submit a form step
+//   /adhoc <jid> <node> <sessionid> [--action=next|prev|complete|cancel] [field=value ...]
 int command__adhoc(const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
@@ -154,7 +154,7 @@ int command__adhoc(const void *pointer, void *data,
 
     if (argc < 2)
     {
-        ui->printf_error("xmpp: /adhoc <jid> [<node> [<sessionid> [field=value ...]]]");
+        ui->printf_error("xmpp: /adhoc <jid> [<node> [<sessionid> [--action=ACTION] [field=value ...]]]");
         return WEECHAT_RC_OK;
     }
 
@@ -174,15 +174,26 @@ int command__adhoc(const void *pointer, void *data,
             fmt::format("Ad-hoc commands on {}  (XEP-0050)  — select to execute", target_jid),
             std::vector<picker_t::entry>{},   // populated async as disco#items result arrives
             [acct, tjid_str](std::string_view node_uri) {
-                // on_select: run /adhoc <jid> <node>
-                std::string cmd = fmt::format("/adhoc {} {}", tjid_str, node_uri);
-                weechat_command(acct->buffer, cmd.c_str());
+                auto command = ::xmpp::make_adhoc_command(node_uri, "", "", {});
+                if (!command || !acct->connected())
+                    return;
+                const auto id = stanza::uuid(acct->context);
+                weechat::account::adhoc_query_info info;
+                info.target_jid = tjid_str;
+                info.node = std::string(node_uri);
+                info.buffer = acct->buffer;
+                acct->adhoc_queries[id] = std::move(info);
+                auto iq = stanza::iq().type("set").id(id).to(tjid_str);
+                iq.child(*command);
+                acct->connection.send(iq.build(acct->context).get());
             },
             [acct, p_holder]() {
                 // on_close: null out any pending adhoc_queries that reference this picker.
                 picker_t *raw = *p_holder;
-                for (auto &[id, info] : acct->adhoc_queries)
+                std::ranges::for_each(acct->adhoc_queries, [&](auto &entry) {
+                    auto &[id, info] = entry;
                     if (info.picker == raw) info.picker = nullptr;
+                });
             },
             buffer);
         if (!*p) return WEECHAT_RC_ERROR;
@@ -208,43 +219,40 @@ int command__adhoc(const void *pointer, void *data,
 
     const char *node = argv[2];
 
-    if (argc == 3)
+    // An optional --action= flag follows the session ID. Repeated field names
+    // encode multiple values in one field, preserving their input order.
+    const std::string_view session_id = argc >= 4 ? argv[3] : "";
+    std::string_view action;
+    int fields_begin = 4;
+    if (argc >= 5 && std::string_view(argv[4]).starts_with("--action="))
     {
-        // Execute a command (first step)
-        std::string exec_id = stanza::uuid(ptr_account->context);
-
-        weechat::account::adhoc_query_info info;
-        info.target_jid = target_jid;
-        info.buffer = buffer;
-        info.is_list = false;
-        info.node = node;
-        ptr_account->adhoc_queries[exec_id] = info;
-
-        struct adhoc_exec_spec : stanza::spec {
-            adhoc_exec_spec(std::string_view id, const char *to,
-                            const char *n) : spec("iq") {
-                attr("type", "set");
-                attr("id", id);
-                attr("to", to);
-                struct command_spec : stanza::spec {
-                    command_spec(const char *n) : spec("command") {
-                        attr("xmlns", "http://jabber.org/protocol/commands");
-                        attr("node", n);
-                        attr("action", "execute");
-                    }
-                } cmd(n);
-                child(cmd);
-            }
-        } adhoc_exec_iq(exec_id, target_jid, node);
-        ptr_account->connection.send(adhoc_exec_iq.build(ptr_account->context).get());
-
-        ui->printf_network(fmt::format("xmpp: executing command {} on {}…", node, target_jid));
+        action = std::string_view(argv[4]).substr(9);
+        if (action.empty())
+        {
+            ui->printf_error("xmpp: --action requires a value");
+            return WEECHAT_RC_OK;
+        }
+        fields_begin = 5;
+    }
+    std::vector<std::string_view> fields;
+    const auto arguments = ::xmpp::parse_adhoc_arguments(
+        argc > fields_begin ? std::string_view(argv_eol[fields_begin]) : std::string_view{});
+    if (!arguments)
+    {
+        ui->printf_error(fmt::format("xmpp: {}", arguments.error()));
         return WEECHAT_RC_OK;
     }
-
-    // argc >= 4: submit a form step
-    // argv[3] = sessionid, argv[4..] = field=value pairs
-    const char *session_id = argv[3];
+    std::ranges::transform(*arguments, std::back_inserter(fields),
+        [](std::string_view value) { return value; });
+    const auto session = ptr_account->adhoc_sessions.find(
+        {std::string(target_jid), std::string(node), std::string(session_id)});
+    auto command = ::xmpp::make_adhoc_command(node, session_id, action, fields,
+        session != ptr_account->adhoc_sessions.end() ? &session->second : nullptr);
+    if (!command)
+    {
+        ui->printf_error(fmt::format("xmpp: {}", command.error()));
+        return WEECHAT_RC_OK;
+    }
     std::string submit_id = stanza::uuid(ptr_account->context);
 
     weechat::account::adhoc_query_info info;
@@ -252,44 +260,16 @@ int command__adhoc(const void *pointer, void *data,
     info.buffer = buffer;
     info.is_list = false;
     info.node = node;
-    info.session_id = session_id;
+    info.session_id = std::string(session_id);
     ptr_account->adhoc_queries[submit_id] = info;
 
-    // Build IQ with command + x:data form using fluent builders.
-    {
-        xmpp_ctx_t *ctx = ptr_account->context;
-        auto form = stanza::xep0004::form("submit");
-        for (int i = 4; i < argc; i++)
-        {
-            std::string_view arg_sv(argv[i]);
-            auto eq_pos = arg_sv.find('=');
-            if (eq_pos == std::string_view::npos) continue;
-            std::string field_var(arg_sv.substr(0, eq_pos));
-            std::string field_val(argv[i] + eq_pos + 1);
-            stanza::xep0004::field f(field_var);
-            f.value(field_val);
-            form.add_field(f);
-        }
-
-        struct command_spec : stanza::spec {
-            command_spec(std::string_view n, std::string_view sid) : spec("command") {
-                xmlns<jabber_org::protocol::commands>();
-                attr("node", n);
-                attr("sessionid", sid);
-                attr("action", "execute");
-            }
-        } cmd(node, session_id);
-        cmd.child(form);
-
-        auto iq = stanza::iq()
-            .type("set")
-            .id(submit_id)
-            .to(target_jid);
-        iq.child(cmd);
-        ptr_account->connection.send(iq.build(ctx).get());
-    }
-
-        ui->printf_network(fmt::format("xmpp: submitting form for command {} (session {})…", node, session_id));
+    auto iq = stanza::iq().type("set").id(submit_id).to(target_jid);
+    iq.child(*command);
+    ptr_account->connection.send(iq.build(ptr_account->context).get());
+    if (action == "cancel" && session != ptr_account->adhoc_sessions.end())
+        ptr_account->adhoc_sessions.erase(session);
+    ui->printf_network(fmt::format("xmpp: sending command {} to {} (session {})…",
+        node, target_jid, session_id.empty() ? "new" : session_id));
     return WEECHAT_RC_OK;
 }
 

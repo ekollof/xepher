@@ -571,16 +571,16 @@
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0004.html' />
         <xmpp:status>partial</xmpp:status>
         <xmpp:version>2.13.2</xmpp:version>
-        <xmpp:note xml:lang='en'>Data Forms - rendered in the buffer for Ad-Hoc Commands</xmpp:note>
+        <xmpp:note xml:lang='en'>Data Forms - rendered in the buffer for Ad-Hoc Commands; manual field=value submission with repeated names for multiple values and automatic preservation of hidden fields; no general interactive form editor</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 
     <implements>
       <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0050.html' />
-        <xmpp:status>partial</xmpp:status>
+        <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.3.0</xmpp:version>
-        <xmpp:note xml:lang='en'>Ad-Hoc Commands - /adhoc discovers and executes server-side commands, renders data forms, and submits single-value fields with a session ID; only the execute action is available, without explicit next, prev, complete, or cancel actions</xmpp:note>
+        <xmpp:note xml:lang='en'>Ad-Hoc Commands (requester role) - /adhoc discovers and executes commands, renders and submits data forms with hidden and multiple values, follows server default actions, and supports next, prev, complete, and cancel. Displays allowed actions, notes, completion, cancellation, and errors; tracks sessions per responder and node. No command responder implementation.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

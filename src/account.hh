@@ -21,6 +21,8 @@
 #include <expected>
 #include <span>
 #include <utility>
+#include <map>
+#include <tuple>
 #include <lmdb++.h>
 
 #include "fmt/core.h"
@@ -33,6 +35,7 @@
 #include "xmpp/message_bob.hh"
 #include "xmpp/server_capabilities.hh"
 #include "xmpp/stanza_view.hh"
+#include "xmpp/iq_adhoc.hh"
 #include "connection.hh"
 #include "connection/strophe_stream_features.hh"
 #include "weechat/connection_port.hh"
@@ -262,6 +265,8 @@ namespace weechat
             weechat::ui::picker<std::string> *picker = nullptr;  // non-owning; picker owns itself
         };
         std::unordered_map<std::string, adhoc_query_info> adhoc_queries;  // iq_id -> info
+        // Scoped by responder, command node, and session ID.
+        std::map<std::tuple<std::string, std::string, std::string>, ::xmpp::AdhocSession> adhoc_sessions;
 
         // XEP-0433: Extended Channel Search query tracking
         struct channel_search_query_info {
