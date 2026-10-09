@@ -162,7 +162,9 @@ All packages install:
 - openssl
 
 ### Build Dependencies
-- clang/clang++ (>= 14) with C++23 support
+- clang/clang++ (>= 19 on Linux with libstdc++) with C++23 support
+- Compatible C++23 standard-library headers and library (GCC/libstdc++ >= 12
+  on Linux); see [toolchain requirements](../README.md#c-toolchain-requirements)
 - cmake (>= 3.22) and ninja (Unix Makefiles fallback if ninja is absent)
 - git
 - bison

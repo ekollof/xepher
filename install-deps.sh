@@ -269,7 +269,8 @@ case "$OS" in
         echo ""
         echo "Please install the following packages manually:"
         echo "  Runtime: libstrophe, libxml2, lmdb, libsignal-protocol-c, gpgme, libfmt, libcurl, openssl, weechat"
-        echo "  Build: clang/clang++ (>= 14), cmake (>= 3.22), ninja, bison, flex, git"
+        echo "  Build: C++23 compiler and standard library, cmake (>= 3.22), ninja, bison, flex, git"
+        echo "  Linux/libstdc++: Clang >= 19 and GCC >= 12 C++ headers/library (see README.md)"
         exit 1
         ;;
 esac

@@ -4,12 +4,14 @@
 
 #include <cassert>
 #include <array>
+#include <algorithm>
 #include <charconv>
 #include <cstdint>
 #include <ctime>
 #include <expected>
 #include <filesystem>
 #include <iomanip>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <random>

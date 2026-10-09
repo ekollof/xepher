@@ -3,7 +3,8 @@ Section: net
 Priority: optional
 Maintainer: Emiel Kollof <emiel@kollof.nl>
 Build-Depends: debhelper-compat (= 13),
-               clang (>= 14),
+               clang (>= 19),
+               g++ (>= 12),
                cmake (>= 3.22),
                ninja-build,
                git,

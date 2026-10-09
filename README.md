@@ -111,7 +111,7 @@ are on [GitHub Releases](https://github.com/ekollof/xepher/releases). Pick your 
 | libsignal-protocol-c | runtime | ✅ package | ✅ `pkg install libsignal-protocol-c` | ✅ `pkg_add libsignal-protocol-c` | ⚠️ build from source |
 | gpgme | runtime | ✅ package | ✅ `pkg install gpgme` | ✅ `pkg_add gpgme` | ✅ `brew install gpgme` |
 | libfmt | runtime | ✅ package | ✅ `pkg install libfmt` | ✅ `pkg_add fmt` | ✅ `brew install fmt` |
-| clang/clang++ (C++23; ≥ 13) | build | ✅ package | ✅ `pkg install llvm` | ✅ base system / `pkg_add` | ✅ `brew install llvm` |
+| clang/clang++ + C++23 standard library (see below) | build | ✅ package | ✅ `pkg install llvm` | ✅ base system / `pkg_add` | ✅ `brew install llvm` |
 | gmake | build | — (GNU make default) | ✅ `pkg install gmake` | ✅ `pkg_add gmake` | ✅ `brew install make` |
 | bison | build | ✅ package | ✅ `pkg install bison` | ✅ `pkg_add bison` | ✅ `brew install bison` |
 | flex | build | ✅ package | ✅ `pkg install flex` | ✅ `pkg_add flex` | ✅ `brew install flex` |
@@ -138,10 +138,12 @@ platforms are **not routinely tested**. Known considerations:
 - Use **`gmake`** instead of `make` on BSD (BSD make has different syntax).
 - **Build backend:** CMake 3.22+ with Ninja (`build/`). The root `makefile` is a
   thin wrapper; packaging and CI still call `gmake PACKAGE_BUILD=1 weechat-xmpp`.
-- **Build deps:** Clang/Clang++ (≥ 14), **cmake**, **ninja**, bison, flex, git.
+- **Build deps:** Clang/Clang++ with a compatible C++23 standard library (see
+  [toolchain requirements](#c-toolchain-requirements)), **cmake**, **ninja**, bison, flex, git.
 - **Default toolchain: Clang/Clang++.** The makefile sets `CC=clang` and
   `CXX=clang++` on all platforms (Homebrew LLVM on macOS). NetBSD 9.x ships
-  Clang 7 and **cannot build** — use NetBSD 10.x+ or a newer Clang from pkgsrc.
+  Clang 7 and **cannot build** — install a current LLVM toolchain and compatible
+  C++ standard library from pkgsrc rather than relying on the OS version alone.
 - `libsignal-protocol-c` and `libomemo-c` are packaged on FreeBSD and OpenBSD;
   on NetBSD they may still need to be built from pkgsrc source.
 - Default builds use Release (`-O2 -DNDEBUG`). Use `DEBUG=1` for dev builds
@@ -152,6 +154,48 @@ platforms are **not routinely tested**. Known considerations:
   skipped on BSD, and skipped in distribution builds (`PACKAGE_BUILD=1`).
 - Debug doctests link the normal `xmpp.so` (no double full compile). Coverage
   instrumentation is only built for `make coverage`.
+
+### C++ toolchain requirements
+
+Both the **compiler** and its selected **C++ standard library headers and
+library** must support the features Xepher uses: `std::expected`, ranges,
+`std::span`, and `std::string::contains`. CMake checks these during configuration
+and stops with a toolchain diagnostic if they are unavailable.
+
+- **Linux with libstdc++:** use **Clang 19 or newer** with **GCC 12 or newer
+  C++ development headers and libstdc++**. Clang normally uses the system GCC
+  standard library; installing a newer Clang does not necessarily update it.
+  Clang 19 enables libstdc++'s `std::expected` support through its updated
+  concepts feature macro ([LLVM release notes](https://releases.llvm.org/19.1.0/tools/clang/docs/ReleaseNotes.html)).
+- **Toolchains using libc++ (including macOS/BSD):** the library needs C++23
+  support, including `std::expected` (available in libc++ 16+; see
+  [libc++ status](https://libcxx.llvm.org/Status/Cxx23.html)). Use a matching,
+  current LLVM toolchain; the CMake feature check is authoritative.
+
+These are feature baselines, not a claim that every compiler/platform combination
+has been tested. The previous Clang 13/14 minimum in this README was incorrect.
+
+If compilation reports `no member named 'to' in namespace 'std::ranges'`
+([issue #20](https://github.com/ekollof/xepher/issues/20)), update the checkout:
+Xepher now collects that range with `std::ranges::copy` and does not require
+`std::ranges::to` (which first appeared in
+[libstdc++ 14](https://gcc.gnu.org/gcc-14/changes.html)). Clang 19/20 with a suitable
+older libstdc++ can therefore build without upgrading to libstdc++ 14 just for
+that function. If `std::expected` is missing instead, update the selected
+compiler/library pair.
+
+Select versioned compilers explicitly as **make command-line arguments**:
+
+```sh
+make CC=clang-20 CXX=clang++-20 DEBUG=1
+```
+
+For an isolated toolchain check with direct CMake, use a fresh build directory:
+
+```sh
+cmake -S . -B /tmp/xepher-clang20 -G Ninja \
+  -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
+```
 
 ### Build from source
 
