@@ -11,13 +11,13 @@
 
 namespace stanza {
 
-    /* MUC Room Registration (XEP-0045 §15 — muc#register) */
+    /* MUC Room Registration (XEP-0045 §7.10). */
     struct xep0045register {
 
-        // <query xmlns='http://jabber.org/protocol/muc#register'>…</query>
+        // muc#register is the FORM_TYPE, not the IQ query namespace.
         struct query : virtual public spec {
             query() : spec("query") {
-                xmlns<jabber_org::protocol::muc::register_>();
+                xmlns<jabber::iq::register_>();
             }
             query& form(xep0004::form& f) { child(f); return *this; }
         };

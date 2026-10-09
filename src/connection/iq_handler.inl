@@ -475,7 +475,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
     if (owner_stanza_id && account.muc_owner_queries.contains(owner_stanza_id))
     {
         const auto &pending_owner = account.muc_owner_queries.at(owner_stanza_id);
-        if (!pending_owner.editor_id.empty()
+        if ((!pending_owner.editor_id.empty() || pending_owner.kind == weechat::account::muc_owner_kind::register_get)
             && (view.attr_string("from") != pending_owner.room_jid
                 || (view.attr_string("type") != "result" && view.attr_string("type") != "error")))
             return true;
@@ -483,11 +483,12 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
         account.muc_owner_queries.erase(owner_stanza_id);
         if (account.handle_room_config_editor(view, info))
             return true;
+        if (account.handle_muc_registration(view, info))
+            return true;
         struct t_gui_buffer *out = info.buffer ? info.buffer : account.buffer;
 
         const ::xmpp::StanzaView owner_q = view.child("query", "http://jabber.org/protocol/muc#owner");
         const ::xmpp::StanzaView admin_q = view.child("query", "http://jabber.org/protocol/muc#admin");
-        const ::xmpp::StanzaView register_q = view.child("query", "http://jabber.org/protocol/muc#register");
 
         // Error path: print a friendly message and return.
         if (type && weechat_strcasecmp(type, "error") == 0)
@@ -520,6 +521,7 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                 case weechat::account::muc_owner_kind::aff_list:     what = "list affiliations";      break;
                 case weechat::account::muc_owner_kind::register_get: what = "fetch registration";     break;
                 case weechat::account::muc_owner_kind::register_set: what = "submit registration";   break;
+                case weechat::account::muc_owner_kind::register_cancel: break; // handled above
             }
             auto ui = weechat::UiPort::for_buffer(out);
             ui->printf_error(fmt::format(
@@ -750,70 +752,8 @@ bool weechat::connection::iq_handler(xmpp_stanza_t *stanza, bool top_level)
                     return true;
                 }
                 case weechat::account::muc_owner_kind::register_get:
-                {
-                    const ::xmpp::StanzaView xdata = register_q.valid()
-                        ? register_q.child("x", "jabber:x:data")
-                        : ::xmpp::StanzaView{};
-                    const auto fields = ::xmpp::parse_muc_register_form_fields(xdata);
-
-                    if (!info.register_nick.empty() && xdata.valid())
-                    {
-                        stanza::xep0004::form submit("submit");
-                        submit.add_hidden("FORM_TYPE",
-                            "http://jabber.org/protocol/muc#register");
-                        for (const auto& field : fields)
-                        {
-                            stanza::xep0004::field fd(field.var);
-                            if (!field.type.empty())
-                                fd.type(field.type);
-                            fd.value(field.var == "muc#register_roomnick"
-                                ? info.register_nick : field.value);
-                            submit.add_field(fd);
-                        }
-
-                        const std::string set_id = stanza::uuid(account.context);
-                        account.muc_owner_queries[set_id] =
-                            weechat::account::muc_owner_query_info{
-                                info.room_jid,
-                                out,
-                                weechat::account::muc_owner_kind::register_set
-                            };
-
-                        stanza::xep0045register::query rq;
-                        rq.form(submit);
-                        auto set_iq = stanza::iq().type("set")
-                                          .to(info.room_jid).id(set_id);
-                        set_iq.muc_register(rq);
-                        account.connection.send(set_iq.build(account.context).get());
-
-                        ui->printf_network(fmt::format(
-                            "{}: registration form submitted for {}",
-                            WEECHAT_XMPP_PLUGIN_NAME, info.room_jid));
-                        return true;
-                    }
-
-                    ui->printf_network(fmt::format(
-                        "Registration info for {}:", info.room_jid));
-                    for (const auto& field : fields)
-                    {
-                        ui->printf(fmt::format(
-                            "  {}{}{}: {}{}{}",
-                            weechat::RuntimePort::default_runtime().color("chat_nick"),
-                            field.label.empty() ? field.var : field.label,
-                            weechat::RuntimePort::default_runtime().color("reset"),
-                            weechat::RuntimePort::default_runtime().color("chat_value"),
-                            field.value.empty() ? "(empty)" : field.value,
-                            weechat::RuntimePort::default_runtime().color("reset")));
-                    }
-                    return true;
-                }
                 case weechat::account::muc_owner_kind::register_set:
-                {
-                    ui->printf_network(fmt::format(
-                        "{}: room registration submitted for {}",
-                        WEECHAT_XMPP_PLUGIN_NAME, info.room_jid));
-                    return true;
-                }
+                case weechat::account::muc_owner_kind::register_cancel: return true; // handled above
             }
         }
         return true;

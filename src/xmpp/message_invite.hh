@@ -70,14 +70,4 @@ struct MucAdminListItem {
 [[nodiscard]] XMPP_TEST_EXPORT std::vector<MucAdminListItem>
 parse_muc_admin_list_items(StanzaView admin_query);
 
-struct MucRegisterFormField {
-    std::string var;
-    std::string label;
-    std::string type;
-    std::string value;
-};
-
-[[nodiscard]] XMPP_TEST_EXPORT std::vector<MucRegisterFormField>
-parse_muc_register_form_fields(StanzaView xdata_form);
-
 }  // namespace xmpp

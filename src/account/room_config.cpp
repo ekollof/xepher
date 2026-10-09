@@ -12,7 +12,8 @@ namespace weechat {
 bool account::handle_room_config_editor(::xmpp::StanzaView response,
     const muc_owner_query_info &info)
 {
-    if (info.editor_id.empty()) return false;
+    if (info.kind != muc_owner_kind::config_edit_get && info.kind != muc_owner_kind::config_edit_set
+        && info.kind != muc_owner_kind::config_edit_cancel) return false;
     auto output = UiPort::for_buffer(buffer);
     const auto type = response.attr_string("type");
     if (type == "error") {

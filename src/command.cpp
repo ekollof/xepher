@@ -875,10 +875,12 @@ void command__init()
 
     hook = weechat_hook_command(
         "mucregister",
-        N_("register with a MUC room (XEP-0045 §15)"),
+        N_("register with a MUC room (XEP-0045 §7.10)"),
         N_("query || [<nick>]"),
         N_("query: show current registration / reserved nick info\n"
-           " nick: submit registration with the given room nickname\n\n"
+           " nick: prefill the nickname in the registration editor\n"
+           "Without arguments, opens the server's registration form. Requires WeeChat 4.3+. "
+           "Use :submit to register or :cancel to cancel; /close sends nothing.\n\n"
            "Examples:\n"
            "  /mucregister query\n"
            "  /mucregister MyNick"),

@@ -148,7 +148,7 @@ platforms are **not routinely tested**. Known considerations:
 - `libsignal-protocol-c` and `libomemo-c` are packaged on FreeBSD and OpenBSD;
   on NetBSD they may still need to be built from pkgsrc source.
 - Default builds use Release (`-O2 -DNDEBUG`). Use `DEBUG=1` for dev builds
-  (`-O0 -DDEBUG` + 174 doctests). Use `ASAN=1` for AddressSanitizer
+  (`-O0 -DDEBUG` + 176 doctests). Use `ASAN=1` for AddressSanitizer
   (`-fsanitize=address`; `-lasan -lrt` on Linux only). Combine: `gmake DEBUG=1 ASAN=1`.
 - The `.source` ELF section embedding step (`objcopy --add-section`) is
   Linux-only, **off by default** (use `make release` or `EMBED_SOURCE=1`),
@@ -209,7 +209,7 @@ cd xepher
 git submodule update --init --recursive
 make install-deps   # installs system packages (requires sudo)
 make                # optimized plugin (no doctests)
-make DEBUG=1        # dev build + 174 doctests and form editor smoke test
+make DEBUG=1        # dev build + 176 doctests and form editor smoke test
 make test           # doctests only (CTest)
 make tools          # optional: dump_mam_db / dump_omemo_db LMDB inspectors
 make install        # atomic install to ~/.local/share/weechat/plugins/ — do NOT run as root
@@ -219,7 +219,7 @@ make install        # atomic install to ~/.local/share/weechat/plugins/ — do N
 On BSD, replace `make` with **`gmake`** throughout.
 
 Doctest is vendored under `deps/doctest/` (v2.5.2). `make DEBUG=1` or `make test`
-runs **174 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
+runs **176 doctests** (handler slices, StanzaView, IQ builders, port stubs) without a
 system package. When `weechat-headless` is available, it also runs an isolated
 form editor smoke test covering input masking, history suppression, rejection
 and retry, cancellation, and cleanup without connecting any XMPP accounts.
@@ -867,6 +867,21 @@ room**, as required by XEP-0045. `/close` closes the editor locally without send
 anything. Disconnecting closes editors. `/setmodes` remains available for quick
 mode changes; avoid changing the same room concurrently in another client.
 
+### Room registration (XEP-0045)
+
+Run `/mucregister` in a MUC buffer to open the room's registration form
+(WeeChat 4.3+). `/mucregister MyNick` prefills the offered nickname field but
+still opens the form for review; it does not automatically submit it. Fill in
+the fields requested by the room, then use `:submit` to register or `:cancel`
+to send form cancellation. `/close` sends nothing. Required fields are checked,
+hidden tokens and multiple values are preserved, and private fields are masked.
+Registration is confirmed only after server acceptance; rejection keeps your
+answers available for correction. Disconnecting closes the editor.
+
+`/mucregister query` displays registration information without opening an editor
+or submitting anything, including an already-registered nickname when supplied
+by the server. Hidden and private form values are not displayed as plain text.
+
 ### Ad-hoc Commands and Data Forms (XEP-0050 / XEP-0004)
 
 The command picker uses the endpoint JID advertised for each command.
@@ -1006,8 +1021,8 @@ only after the server acknowledges publication.
 | `/deop <nick> [reason]` | Revoke moderator role back to participant (not a kick) |
 | `/affiliation list [owner\|admin\|member\|outcast]` | Query affiliation list (default: member) |
 | `/affiliation set <jid> <aff> [--nick <nick>] [reason] [--confirm]` | Change affiliation; `--nick` sets or unsets (empty) reserved member nick |
-| `/mucregister query` | Show room registration / reserved-nick info (XEP-0045 §15) |
-| `/mucregister [nick]` | Register with the room using the given nick |
+| `/mucregister query` | Show room registration / reserved-nick info (XEP-0045 §7.10) |
+| `/mucregister [nick]` | Open the room registration editor, optionally prefilling the nickname (WeeChat 4.3+); `:submit` applies |
 | `/invite [--mediated] <jid> [reason]` | Invite a user (direct XEP-0249 by default; `--mediated` for XEP-0045 §7.8.2) |
 | `/decline [room inviter [reason]]` | Decline a pending mediated MUC invitation (XEP-0045 §7.8.2) |
 | `/topic [text]` | Set or clear the room topic |
@@ -1505,7 +1520,7 @@ See the [Contributing wiki page](https://github.com/ekollof/xepher/wiki/Contribu
   `stanza::spec` builders for outbound stanzas, and `weechat::UiPort` /
   `BufferPort` / `LineStorePort` for WeeChat output. Raw `xmpp_stanza_get_*`
   and `weechat_printf` belong only in hook/adapter glue.
-- **Tests** — run `make DEBUG=1` or `make test` (174 doctests plus the optional form editor smoke test) after changes; manual WeeChat testing
+- **Tests** — run `make DEBUG=1` or `make test` (176 doctests plus the optional form editor and Python TLS tests) after changes; manual WeeChat testing
   for integration behaviour.
 - **Releases** — see [Releasing wiki](https://github.com/ekollof/xepher/wiki/Releasing);
   pushing a `v*` tag triggers GitHub Actions to build and attach packages.
@@ -1569,7 +1584,7 @@ Legend: ✅ complete or production-usable · ⚡ experimental / partial · ⏳ p
 
 ### Beyond the compliance suite
 
-- ✅ XEP-0004: Data Forms (interactive editor for Ad-Hoc Commands, MUC room configuration, and account registration; all core field types, defaults, required fields, and result tables; MUC registration remains separate)
+- ✅ XEP-0004: Data Forms (interactive editor for Ad-Hoc Commands, MUC room configuration/registration, and account registration; all core field types, defaults, required fields, and result tables)
 - ✅ XEP-0048: Bookmark Storage (Private XML)
 - ✅ XEP-0049: Private XML Storage
 - ✅ XEP-0050: Ad-Hoc Commands

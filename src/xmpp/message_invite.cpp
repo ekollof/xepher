@@ -187,31 +187,4 @@ std::vector<MucAdminListItem> parse_muc_admin_list_items(StanzaView admin_query)
     return items;
 }
 
-std::vector<MucRegisterFormField> parse_muc_register_form_fields(StanzaView xdata_form)
-{
-    if (!xdata_form.valid())
-        return {};
-
-    std::vector<MucRegisterFormField> fields;
-    for (const auto field : xdata_form)
-    {
-        if (field.name() != "field")
-            continue;
-        const std::string var = field.attr_string("var");
-        if (var.empty() || var == "FORM_TYPE")
-            continue;
-        MucRegisterFormField parsed;
-        parsed.var = var;
-        parsed.label = field.attr_string("label");
-        parsed.type = field.attr_string("type");
-        for (const auto value_el : field)
-        {
-            if (value_el.name() == "value")
-                parsed.value = value_el.text();
-        }
-        fields.push_back(std::move(parsed));
-    }
-    return fields;
-}
-
 }  // namespace xmpp

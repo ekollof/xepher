@@ -2048,6 +2048,62 @@ TEST_CASE("data form result tables apply reported labels and private field types
 #include "xmpp/iq_room_config.hh"
 #include "xmpp/iq_registration.hh"
 
+TEST_CASE("MUC registration uses jabber:iq:register and preserves the full server form")
+{
+    unit_strophe_env env;
+    stanza::xep0045register::query fetch;
+    auto fetch_xml = fetch.build(env.ctx);
+    CHECK(xmpp::StanzaView(fetch_xml.get()).xmlns() == "jabber:iq:register");
+    auto input = stanza_from_string(env.ctx,
+        "<query xmlns='jabber:iq:register'><x xmlns='jabber:x:data' type='form'>"
+        "<field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/muc#register</value></field>"
+        "<field var='token' type='hidden'><value>one</value><value>two</value></field>"
+        "<field var='muc#register_roomnick'><required/><value>Old</value></field>"
+        "<field var='muc#register_first'><required/></field>"
+        "<field var='muc#register_faqentry' type='text-multi'><value>First line</value><value>Second line</value></field>"
+        "<field var='secret' type='text-private'><value>private</value></field></x></query>");
+    auto form = xmpp::muc_registration_form(xmpp::StanzaView(input.get()), "New");
+    REQUIRE(form);
+    CHECK(form->fields[2].values == std::vector<std::string>{"New"});
+    CHECK(form->fields[1].values == std::vector<std::string>{"one", "two"});
+    CHECK_FALSE(xmpp::muc_registration_query(&*form));
+    REQUIRE(xmpp::set_data_form_values(form->fields[3], std::vector<std::string>{"Alice"}));
+    auto submit = xmpp::muc_registration_query(&*form);
+    REQUIRE(submit);
+    auto built = submit->build(env.ctx);
+    const xmpp::StanzaView query(built.get());
+    CHECK(query.xmlns() == "jabber:iq:register");
+    const auto x = query.child("x", "jabber:x:data");
+    CHECK(x.attr_string("type") == "submit");
+    std::vector<std::vector<std::string>> values;
+    std::ranges::for_each(x, [&](auto field) {
+        std::vector<std::string> entries;
+        std::ranges::transform(field, std::back_inserter(entries), [](auto value) { return value.text(); });
+        values.push_back(std::move(entries));
+    });
+    CHECK(values == std::vector<std::vector<std::string>>{
+        {"http://jabber.org/protocol/muc#register"}, {"one", "two"}, {"New"},
+        {"Alice"}, {"First line", "Second line"}, {"private"}});
+    auto cancel = xmpp::muc_registration_query(&*form, true);
+    REQUIRE(cancel);
+    auto cancelled = cancel->build(env.ctx);
+    const auto cancel_form = xmpp::StanzaView(cancelled.get()).child("x", "jabber:x:data");
+    CHECK(cancel_form.attr_string("type") == "cancel");
+    CHECK_FALSE(cancel_form.child("field").valid());
+}
+
+TEST_CASE("MUC registration refuses wrong query namespaces and absent nickname fields")
+{
+    unit_strophe_env env;
+    auto wrong = stanza_from_string(env.ctx,
+        "<query xmlns='http://jabber.org/protocol/muc#register'><x xmlns='jabber:x:data' type='form'/></query>");
+    CHECK_FALSE(xmpp::muc_registration_form(xmpp::StanzaView(wrong.get()), ""));
+    auto input = stanza_from_string(env.ctx,
+        "<query xmlns='jabber:iq:register'><x xmlns='jabber:x:data' type='form'><field var='email'/></x></query>");
+    CHECK_FALSE(xmpp::muc_registration_form(xmpp::StanzaView(input.get()), "Nick"));
+    CHECK(xmpp::muc_registration_form(xmpp::StanzaView(input.get()), ""));
+}
+
 TEST_CASE("registration forms prefill credentials and submit only namespaced data forms")
 {
     unit_strophe_env env;

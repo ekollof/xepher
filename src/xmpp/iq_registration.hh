@@ -7,6 +7,10 @@
 #include "xmpp/data_form.hh"
 
 namespace xmpp {
+[[nodiscard]] XMPP_TEST_EXPORT auto muc_registration_form(StanzaView query,
+    std::string_view nickname) -> std::expected<data_form, std::string>;
+[[nodiscard]] XMPP_TEST_EXPORT auto muc_registration_query(const data_form *form = nullptr,
+    bool cancel = false) -> std::expected<stanza::spec, std::string>;
 [[nodiscard]] XMPP_TEST_EXPORT auto registration_form(StanzaView query,
     std::string_view username, std::string_view password) -> std::expected<data_form, std::string>;
 [[nodiscard]] XMPP_TEST_EXPORT auto registration_submission(const data_form &form)

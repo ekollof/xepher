@@ -308,18 +308,20 @@ namespace weechat
         enum class muc_owner_kind {
             config_get, config_set, config_edit_get, config_edit_set, config_edit_cancel, destroy,
             aff_set, aff_list,
-            register_get, register_set
+            register_get, register_set, register_cancel
         };
         struct muc_owner_query_info {
             std::string room_jid;
             struct t_gui_buffer *buffer;
             muc_owner_kind kind;
             std::string list_affiliation;   // aff_list filter (e.g. "member")
-            std::string register_nick;        // pending nick for register_set after GET
+            std::string register_nick;        // nickname to prefill after GET
             std::string editor_id;
+            bool edit_registration = false;
         };
         std::unordered_map<std::string, muc_owner_query_info> muc_owner_queries;  // iq_id -> info
         bool handle_room_config_editor(::xmpp::StanzaView response, const muc_owner_query_info &info);
+        bool handle_muc_registration(::xmpp::StanzaView response, const muc_owner_query_info &info);
 
         // XEP-0045 §10.1: rooms created via /create --reserved. When a
         // status 201 self-presence arrives for one of these, the presence

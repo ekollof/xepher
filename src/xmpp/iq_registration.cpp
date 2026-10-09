@@ -7,6 +7,41 @@
 #include "xmpp/iq_registration.hh"
 
 namespace xmpp {
+auto muc_registration_form(StanzaView query, std::string_view nickname)
+    -> std::expected<data_form, std::string>
+{
+    if (!query.valid() || query.xmlns() != "jabber:iq:register")
+        return std::unexpected("Missing jabber:iq:register query");
+    auto form = parse_data_form(query.child("x", "jabber:x:data"));
+    if (!form) return std::unexpected(form.error());
+    if (form->type != "form") return std::unexpected("Expected a room registration input form");
+    if (!nickname.empty()) {
+        const auto field = std::ranges::find(form->fields, "muc#register_roomnick", &data_form_field::var);
+        if (field == form->fields.end())
+            return std::unexpected("The server did not offer a room nickname field; run /mucregister without a nickname");
+        const std::vector<std::string> values{std::string(nickname)};
+        auto updated = set_data_form_values(*field, values);
+        if (!updated) return std::unexpected(updated.error());
+    }
+    return form;
+}
+
+auto muc_registration_query(const data_form *form, bool cancel)
+    -> std::expected<stanza::spec, std::string>
+{
+    stanza::xep0045register::query query;
+    if (cancel) {
+        stanza::xep0004::form cancellation("cancel");
+        query.form(cancellation);
+    }
+    else if (form) {
+        auto submission = submit_data_form(*form);
+        if (!submission) return std::unexpected(submission.error());
+        query.form(*submission);
+    }
+    return query;
+}
+
 auto registration_form(StanzaView query, std::string_view username, std::string_view password)
     -> std::expected<data_form, std::string>
 {

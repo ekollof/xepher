@@ -2789,7 +2789,7 @@ int command__affiliation([[maybe_unused]] const void *pointer,
     return WEECHAT_RC_OK;
 }
 
-// XEP-0045 §15: room registration (membership / reserved nick).
+// XEP-0045 §7.10: room registration (membership / reserved nick).
 //
 // Usage:
 //   /mucregister query
@@ -2812,18 +2812,34 @@ int command__mucregister([[maybe_unused]] const void *pointer,
     if (!muc_admin_precheck(*ui, ptr_account, ptr_channel, "mucregister"))
         return WEECHAT_RC_OK;
 
+    if (argc > 2) {
+        ui->printf_error("Usage: /mucregister [query|nickname]");
+        return WEECHAT_RC_OK;
+    }
+
     const bool is_query = (argc >= 2 && std::string_view{argv[1]} == "query");
     const std::string pending_nick = (!is_query && argc >= 2) ? std::string{argv[1]}
                                                               : std::string{};
 
+    const auto editor = weechat::ui::adhoc_form_id(ptr_account->name, ptr_channel->id, "mucregister", "");
+    if (std::ranges::any_of(ptr_account->muc_owner_queries, [&](const auto &entry) {
+        return entry.second.editor_id == editor;
+    })) {
+        ui->printf_error("A room registration request is already pending");
+        return WEECHAT_RC_OK;
+    }
+    if (!is_query) weechat::ui::form_editor::close(editor);
     const std::string id = stanza::uuid(ptr_account->context);
-    ptr_account->muc_owner_queries[id] = weechat::account::muc_owner_query_info{
+    auto pending = weechat::account::muc_owner_query_info{
         ptr_channel->id,
-        ptr_channel->buffer,
+        ptr_account->buffer,
         weechat::account::muc_owner_kind::register_get,
         {},
         pending_nick
     };
+    pending.editor_id = editor;
+    pending.edit_registration = !is_query;
+    ptr_account->muc_owner_queries.emplace(id, std::move(pending));
 
     stanza::xep0045register::query q;
     auto reg_iq = stanza::iq().type("get").to(ptr_channel->id).id(id);
@@ -2838,7 +2854,7 @@ int command__mucregister([[maybe_unused]] const void *pointer,
     else if (!pending_nick.empty())
     {
         ui->printf_network(fmt::format(
-            "Registering with nick {} in {}…", pending_nick, ptr_channel->id));
+            "Fetching registration form with nick {} for {}…", pending_nick, ptr_channel->id));
     }
     else
     {
