@@ -1871,6 +1871,42 @@ TEST_CASE("iq_vcard and iq_bookmarks helpers")
     xmpp_stanza_release(vcard);
 }
 
+TEST_CASE("vcard edits preserve unedited fields and repeated entries")
+{
+    unit_strophe_env env;
+    auto original = stanza_from_string(env.ctx,
+        "<vCard xmlns='vcard-temp'><PHOTO><TYPE>image/png</TYPE><BINVAL>AAAA</BINVAL></PHOTO>"
+        "<N><FAMILY>Example</FAMILY></N><ADR><CTRY>NL</CTRY></ADR>"
+        "<EMAIL pref='yes'><HOME/><USERID>old@example.org</USERID></EMAIL>"
+        "<EMAIL><WORK/><USERID>work@example.org</USERID></EMAIL>"
+        "<ORG><ORGNAME>Old</ORGNAME><ORGUNIT>Engineering</ORGUNIT></ORG>"
+        "<extra xmlns='urn:example:extension' flag='keep'>value</extra></vCard>");
+    REQUIRE(original);
+    auto edit = [&](xmpp::StanzaView source, std::string_view field, std::string_view value) {
+        auto result = xmpp::merge_vcard_field(source, field, value);
+        REQUIRE(result.has_value());
+        return result->build(env.ctx);
+    };
+    CHECK_FALSE(xmpp::merge_vcard_field(xmpp::StanzaView{}, "email", "value"));
+    CHECK_FALSE(xmpp::merge_vcard_field(xmpp::StanzaView(original.get()), "unknown", "value"));
+    auto merged = edit(xmpp::StanzaView(original.get()), "email", "new@example.org");
+    const xmpp::StanzaView view(merged.get());
+    CHECK(view.child("EMAIL").attr_string("pref") == "yes");
+    CHECK(view.child("EMAIL").child("HOME").valid());
+    CHECK(view.child("EMAIL").child("USERID").text() == "new@example.org");
+    CHECK(view.child("EMAIL").next_sibling().child("USERID").text() == "work@example.org");
+    CHECK(view.child("PHOTO").child("BINVAL").text() == "AAAA");
+    CHECK(view.child("N").child("FAMILY").text() == "Example");
+    CHECK(view.child("ADR").child("CTRY").text() == "NL");
+    CHECK(view.child("extra", "urn:example:extension").attr_string("flag") == "keep");
+    auto org = edit(view, "org", "New");
+    CHECK(xmpp::StanzaView(org.get()).child("ORG").child("ORGUNIT").text() == "Engineering");
+    auto added = edit(view, "tel", "123");
+    CHECK(xmpp::StanzaView(added.get()).child("TEL").child("NUMBER").text() == "123");
+    auto cleared = edit(view, "email", "");
+    CHECK(xmpp::StanzaView(cleared.get()).child("EMAIL").child("USERID").text().empty());
+}
+
 TEST_CASE("server_capability_map")
 {
     xmpp::server_capabilities caps;

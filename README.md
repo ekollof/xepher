@@ -910,6 +910,11 @@ not host commands for other clients.
 | `/setvcard <field> <value>` | Publish a vCard field (XEP-0054) |
 | `/setavatar <filepath>` | Publish avatar image (XEP-0084) |
 
+`/setvcard` preserves other vCard fields, including photos and addresses. For
+email and telephone fields it changes the first entry and keeps additional
+entries; organization edits preserve organization units. Success is reported
+only after the server acknowledges publication.
+
 ### MUC room management
 
 | Command | Description |

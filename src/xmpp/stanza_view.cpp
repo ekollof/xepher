@@ -7,11 +7,25 @@
 #include <algorithm>
 #include <array>
 #include <string>
+#include <ranges>
+#include <vector>
 
 #include "node.hh"
 #include "test_export.hh"
 
 namespace xmpp {
+
+std::map<std::string, std::string> StanzaView::attributes() const
+{
+    std::map<std::string, std::string> result;
+    if (!stanza_) return result;
+    std::vector<const char *> attrs(2 * xmpp_stanza_get_attribute_count(stanza_));
+    xmpp_stanza_get_attributes(stanza_, attrs.data(), attrs.size());
+    std::ranges::for_each(attrs | std::views::chunk(2), [&](const auto pair) {
+        result.emplace(pair[0], pair[1]);
+    });
+    return result;
+}
 
 namespace {
 

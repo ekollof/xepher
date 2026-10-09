@@ -11,45 +11,48 @@ bool weechat::connection::handle_vcard_iq_event(xmpp_stanza_t *stanza, std::stri
     const char *type = iq_type_str.empty() ? nullptr : iq_type_str.c_str();
     (void)to;
 
+    if (auto it = account.setvcard_queries.find(iq_id_str); it != account.setvcard_queries.end())
+    {
+        if (!iq_from_str.empty() && iq_from_str != own_jid_str
+            && iq_from_str != jid(account.context, std::string(own_jid_str)).domain)
+            return false;
+        if (iq_type_str != "result" && iq_type_str != "error")
+            return false;
+        auto pending = it->second;
+        account.setvcard_queries.erase(it);
+        auto ui = weechat::UiPort::for_buffer(pending.buffer);
+        if (iq_type_str == "error") {
+            ui->printf_error(fmt::format("vCard field {} update failed", pending.field));
+            return true;
+        }
+        if (pending.publishing) {
+            ui->printf_network(fmt::format("vCard field {} updated", pending.field));
+            return true;
+        }
+        const auto existing = view.child("vCard", "vcard-temp");
+        if (!existing.valid()) {
+            ui->printf_error("Cannot safely update vCard: server returned no vCard");
+            return true;
+        }
+        auto merged = ::xmpp::merge_vcard_field(existing, pending.field, pending.value);
+        if (!merged) {
+            ui->printf_error(merged.error());
+            return true;
+        }
+        const auto publish_id = stanza::uuid(account.context);
+        auto request = stanza::iq().type("set").id(publish_id);
+        request.child(*merged);
+        pending.publishing = true;
+        account.setvcard_queries.emplace(publish_id, std::move(pending));
+        account.connection.send(request.build(account.context).get());
+        return true;
+    }
+
     const ::xmpp::StanzaView vcard = view.child("vCard", "vcard-temp");
     if (!vcard.valid() || !type || weechat_strcasecmp(type, "result") != 0)
         return false;
 
     const char *from_jid = from ? from : own_jid_str.data();
-
-    if (id)
-    {
-        if (auto sv_it = account.setvcard_queries.find(id); sv_it != account.setvcard_queries.end())
-        {
-            auto& [_, sv] = *sv_it;
-            struct t_gui_buffer *sv_buf = sv.buffer;
-
-            const auto parsed = ::xmpp::vcard_fields_from_stanza(::xmpp::StanzaView(vcard));
-            auto f = parsed;
-            (void)::xmpp::apply_vcard_set_field_override(f, sv.field, sv.value);
-
-            ::xmpp::xep0054::vcard_fields out;
-            out.fn       = f.fn;
-            out.nickname = f.nickname;
-            out.email    = f.email;
-            out.url      = f.url;
-            out.desc     = f.desc;
-            out.org      = f.org;
-            out.title    = f.title;
-            out.tel      = f.tel;
-            out.bday     = f.bday;
-            out.note     = f.note;
-
-            xmpp_stanza_t *set_iq = ::xmpp::xep0054::vcard_set(account.context, out);
-            account.connection.send(set_iq);
-            xmpp_stanza_release(set_iq);
-            weechat::UiPort::for_buffer(sv_buf)->printf_network(fmt::format(
-                "vCard field {} updated", sv.field));
-
-            account.setvcard_queries.erase(sv_it);
-            return true;
-        }
-    }
 
         // Determine which buffer to print into: the one that issued /whois, or
     // the account buffer for auto-fetched vCards (XEP-0153 trigger).

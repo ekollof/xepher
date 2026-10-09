@@ -10,8 +10,12 @@
 
 #include "test_export.hh"
 #include "stanza_view.hh"
+#include "node.hh"
 
 namespace xmpp {
+
+[[nodiscard]] XMPP_TEST_EXPORT std::expected<stanza::spec, std::string> merge_vcard_field(
+    StanzaView vcard, std::string_view field, std::string_view value);
 
 struct vcard_temp_fields {
     std::optional<std::string> fn;

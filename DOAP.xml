@@ -114,7 +114,7 @@
         <xmpp:version>1.3.0</xmpp:version>
         <xmpp:note
                     xml:lang='en'
-                >vcard-temp — /whois fetches and displays supported profile fields and photos; /setvcard edits fn, nickname, email, url, desc, org, title, tel, bday, and note. Editing rebuilds the vCard from supported fields and does not preserve all other fields. Auto-fetch triggered by XEP-0153 presence hash; no vCard PHOTO publishing.</xmpp:note>
+                >vcard-temp — /whois fetches and displays supported profile fields and photos; /setvcard edits fn, nickname, email, url, desc, org, title, tel, bday, and note while preserving other fields, photos, and additional email/phone entries. Updates are confirmed only after server acknowledgement. Auto-fetch triggered by XEP-0153 presence hash; no vCard PHOTO publishing.</xmpp:note>
       </xmpp:SupportedXep>
     </implements>
 

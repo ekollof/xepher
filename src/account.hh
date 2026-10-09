@@ -341,6 +341,7 @@ namespace weechat
             struct t_gui_buffer *buffer;  // buffer for feedback
             std::string field;            // e.g. "fn", "email", …
             std::string value;            // new value to set
+            bool publishing = false;
         };
         std::unordered_map<std::string, setvcard_query_info> setvcard_queries;  // iq_id -> info
 

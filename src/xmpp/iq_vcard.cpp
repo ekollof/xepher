@@ -11,6 +11,64 @@
 namespace xmpp {
 
 namespace {
+struct preserved_element : stanza::spec {
+    explicit preserved_element(StanzaView view) : spec(view.name()) {
+        std::ranges::for_each(view.attributes(), [&](const auto &entry) {
+            const auto &[key, value] = entry;
+            attr(key, value);
+        });
+    }
+    preserved_element(std::string_view name, std::string_view value) : spec(name) { text(value); }
+    void append_text(std::string_view value) { text(value); }
+};
+
+stanza::spec replace_child(StanzaView parent, std::string_view name,
+                           std::string_view nested, std::string_view value)
+{
+    preserved_element out(parent);
+    bool replaced = false;
+    std::ranges::for_each(parent, [&](StanzaView child) {
+        if (child.is_text()) { out.append_text(child.text()); return; }
+        if (!replaced && child.name() == name && child.xmlns() == parent.xmlns()) {
+            replaced = true;
+            if (nested.empty()) {
+                preserved_element replacement(child);
+                replacement.append_text(value);
+                out.child(replacement);
+            }
+            else out.child(replace_child(child, nested, {}, value));
+        } else {
+            // Adding a stanza changes its sibling links; preserve the inbound tree
+            // with a deep copy, rather than sharing its child nodes.
+            out.child(std::shared_ptr<xmpp_stanza_t>(xmpp_stanza_copy(child.raw()), xmpp_stanza_release));
+        }
+    });
+    if (!replaced) {
+        preserved_element leaf(nested.empty() ? name : nested, value);
+        if (nested.empty()) out.child(leaf);
+        else {
+            struct container : stanza::spec { explicit container(std::string_view tag) : spec(tag) {} } node(name);
+            node.child(leaf);
+            out.child(node);
+        }
+    }
+    return out;
+}
+}
+
+std::expected<stanza::spec, std::string> merge_vcard_field(StanzaView vcard, std::string_view field, std::string_view value)
+{
+    static const std::map<std::string_view, std::pair<std::string_view, std::string_view>> names{
+        {"fn", {"FN", ""}}, {"nickname", {"NICKNAME", ""}}, {"email", {"EMAIL", "USERID"}},
+        {"url", {"URL", ""}}, {"desc", {"DESC", ""}}, {"org", {"ORG", "ORGNAME"}},
+        {"title", {"TITLE", ""}}, {"tel", {"TEL", "NUMBER"}}, {"bday", {"BDAY", ""}}, {"note", {"NOTE", ""}}};
+    if (!vcard.valid() || !names.contains(field))
+        return std::unexpected("Invalid vCard or unsupported field");
+    const auto &[name, nested] = names.find(field)->second;
+    return replace_child(vcard, name, nested, value);
+}
+
+namespace {
 
 [[nodiscard]] std::string child_text(const StanzaView parent, const std::string_view name)
 {

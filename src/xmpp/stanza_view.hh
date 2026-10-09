@@ -6,6 +6,8 @@
 
 #include <iterator>
 #include <optional>
+#include <map>
+#include <string>
 #include <string_view>
 #include <strophe.h>
 
@@ -34,6 +36,7 @@ public:
     [[nodiscard]] XMPP_TEST_EXPORT StanzaView child(std::string_view name) const;
     [[nodiscard]] XMPP_TEST_EXPORT StanzaView child(std::string_view name, std::string_view ns) const;
     [[nodiscard]] XMPP_TEST_EXPORT std::string text() const;
+    [[nodiscard]] XMPP_TEST_EXPORT std::map<std::string, std::string> attributes() const;
 
     [[nodiscard]] StanzaView next_sibling() const
     {
