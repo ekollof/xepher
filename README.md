@@ -16,6 +16,9 @@
 microblogging, HTTP upload, and terminal image previews — in a C++23 plugin
 you can reload without restarting WeeChat.
 
+Requires **WeeChat 4.3 or newer**. Source builds require **C++23**, CMake 3.22+,
+and matching WeeChat development headers; CMake checks their installed version.
+
 > **Fork of [bqv/weechat-xmpp](https://github.com/bqv/weechat-xmpp)**  
 > Original author: **Tony Olagbaiye** &lt;bqv@fron.io&gt;  
 > Site: [ekollof.github.io/xepher](https://ekollof.github.io/xepher/) · Repo: [github.com/ekollof/xepher](https://github.com/ekollof/xepher)
@@ -30,7 +33,7 @@ you can reload without restarting WeeChat.
 | **Files** | XEP-0363 upload, SFS/ESFS, stickers; Kitty/cell inline previews via `icat` with left-click to open |
 | **MUC** | Full XEP-0045: join, admin, bookmarks, moderation, reactions |
 | **UX** | Receipts/read markers, typing, corrections, replies, status bar encryption item |
-| **Forms** | Guided ad-hoc command forms with defaults, choices, validation, and masked private fields |
+| **Forms** | Guided ad-hoc commands, MUC configuration/registration, and account registration with defaults, choices, validation, and masked private fields |
 
 ⭐ **Star the repo** if Xepher is useful — it helps others find it.  
 💬 **Join the MUC:** [`xepher@conference.hackerheaven.org`](xmpp:xepher@conference.hackerheaven.org?join) · [Discussions](https://github.com/ekollof/xepher/discussions)

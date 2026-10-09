@@ -162,6 +162,8 @@ All packages install:
 - openssl
 
 ### Build Dependencies
+- WeeChat development headers (>= 4.3), matching the runtime; CMake checks
+  the installed version with `pkg-config weechat` and rejects older versions
 - clang/clang++ (>= 19 on Linux with libstdc++) with C++23 support
 - Compatible C++23 standard-library headers and library (GCC/libstdc++ >= 12
   on Linux); see [toolchain requirements](../README.md#c-toolchain-requirements)

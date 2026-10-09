@@ -15,7 +15,7 @@
 
     <description
             xml:lang='en'
-        >Weechat plugin for accessing XMPP, written in C++. This fork includes bug fixes and feature enhancements.</description>
+        >WeeChat plugin for accessing XMPP, written in C++23. Requires WeeChat 4.3 or newer; source builds require matching development headers and CMake 3.22 or newer. This fork includes bug fixes and feature enhancements.</description>
 
     <homepage
             rdf:resource='https://github.com/ekollof/xepher'
