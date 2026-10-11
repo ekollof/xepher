@@ -6,9 +6,11 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <ranges>
 #include <set>
 #include <fmt/core.h>
+#include <fmt/ranges.h>
 
 namespace xmpp {
 
@@ -71,9 +73,10 @@ auto checked_values(const data_form_field &field, std::span<const std::string> v
             }))
             return std::unexpected("Choose only the offered options");
         // XEP-0004 requires list-multi selections to retain server option order.
-        result = field.options | std::views::filter([&](const auto &option) {
+        result.clear();
+        std::ranges::copy(field.options | std::views::filter([&](const auto &option) {
             return std::ranges::contains(values, option.value);
-        }) | std::views::transform(&data_form_option::value) | std::ranges::to<std::vector>();
+        }) | std::views::transform(&data_form_option::value), std::back_inserter(result));
     }
     if (field.type.starts_with("jid-")) {
         if (std::ranges::any_of(result, [](std::string_view value) {
@@ -110,7 +113,7 @@ auto parse_data_form(StanzaView view) -> std::expected<data_form, std::string>
     if (form.type != "form" && form.type != "result")
         return std::unexpected("Expected a form or result");
     form.title = view.child("title", data_ns).text();
-    std::ranges::for_each(view, [&](StanzaView node) {
+    std::ranges::for_each(view.children_begin(), view.children_end(), [&](StanzaView node) {
         if (node.name() == "instructions" && node.xmlns() == data_ns)
             form.instructions.emplace_back(node.text());
     });
@@ -168,7 +171,7 @@ auto data_form_lines(const data_form &form) -> std::vector<std::string>
     auto describe = [&](const data_form_field &field, std::size_t number) {
         if (field.type == "hidden") return;
         const auto values = field.type == "text-private" ? std::string("********")
-            : field.values | std::views::join_with(std::string_view(" | ")) | std::ranges::to<std::string>();
+            : fmt::format("{}", fmt::join(field.values, " | "));
         if (field.type == "fixed") { lines.emplace_back(values); return; }
         lines.emplace_back(fmt::format("{}. {}{} [{}] = {}", number,
             field.label.empty() ? field.var : field.label, field.required ? " *" : "", field.type,

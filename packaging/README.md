@@ -165,7 +165,7 @@ All packages install:
 - WeeChat development headers (>= 4.3), matching the runtime; CMake checks
   the installed version with `pkg-config weechat` and rejects older versions
 - clang/clang++ (>= 19 on Linux with libstdc++) with C++23 support
-- Compatible C++23 standard-library headers and library (GCC/libstdc++ >= 12
+- Compatible C++23 standard-library headers and library (GCC/libstdc++ >= 13
   on Linux); see [toolchain requirements](../README.md#c-toolchain-requirements)
 - cmake (>= 3.22) and ninja (Unix Makefiles fallback if ninja is absent)
 - git

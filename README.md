@@ -166,7 +166,7 @@ library** must support the features Xepher uses: `std::expected`, ranges,
 `std::span`, and `std::string::contains`. CMake checks these during configuration
 and stops with a toolchain diagnostic if they are unavailable.
 
-- **Linux with libstdc++:** use **Clang 19 or newer** with **GCC 12 or newer
+- **Linux with libstdc++:** use **Clang 19 or newer** with **GCC 13 or newer
   C++ development headers and libstdc++**. Clang normally uses the system GCC
   standard library; installing a newer Clang does not necessarily update it.
   Clang 19 enables libstdc++'s `std::expected` support through its updated
@@ -181,12 +181,17 @@ has been tested. The previous Clang 13/14 minimum in this README was incorrect.
 
 If compilation reports `no member named 'to' in namespace 'std::ranges'`
 ([issue #20](https://github.com/ekollof/xepher/issues/20)), update the checkout:
-Xepher now collects that range with `std::ranges::copy` and does not require
+Xepher collects ranges with `std::ranges::copy` (and formats joins with fmt) and does not require
 `std::ranges::to` (which first appeared in
 [libstdc++ 14](https://gcc.gnu.org/gcc-14/changes.html)). Clang 19/20 with a suitable
 older libstdc++ can therefore build without upgrading to libstdc++ 14 just for
 that function. If `std::expected` is missing instead, update the selected
 compiler/library pair.
+
+The earlier GCC 12 header recommendation was too low for the complete plugin:
+`std::ranges::contains`, `std::views::enumerate`, and `std::views::chunk` require
+newer library support. CMake checks these features as well. GCC 13 headers are
+the libstdc++ baseline; upgrading to GCC 14 solely for `ranges::to` is unnecessary.
 
 Select versioned compilers explicitly as **make command-line arguments**:
 

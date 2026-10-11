@@ -6,10 +6,12 @@
 
 #include <algorithm>
 #include <charconv>
+#include <iterator>
 #include <map>
 #include <ranges>
 #include <span>
 #include <fmt/core.h>
+#include <fmt/ranges.h>
 #include <weechat/weechat-plugin.h>
 #include "xmpp/iq_adhoc.hh"
 #include "weechat/buffer_port.hh"
@@ -79,9 +81,10 @@ void form_editor::close(std::string_view id)
 
 void form_editor::close_owner(std::string_view owner)
 {
-    const auto ids = editors | std::views::filter([&](const auto &entry) {
+    std::vector<std::string> ids;
+    std::ranges::copy(editors | std::views::filter([&](const auto &entry) {
         return entry.second->owner_ == owner;
-    }) | std::views::keys | std::ranges::to<std::vector>();
+    }) | std::views::keys, std::back_inserter(ids));
     std::ranges::for_each(ids, [](std::string_view id) { close(id); });
 }
 
@@ -161,7 +164,7 @@ void form_editor::render()
     } else write("Review your answers, then type :submit. Nothing is sent until you submit.");
     write(":edit NUMBER revisits a field; :review shows answers; :cancel cancels the command.");
     write(fmt::format(":submit [ACTION] — default {}; allowed: {}", default_action_,
-        actions_ | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>()));
+        fmt::join(actions_, ", ")));
 }
 
 void form_editor::input(std::string_view input)
@@ -215,11 +218,11 @@ void form_editor::input(std::string_view input)
             }
         } else if (field.type.ends_with("-multi")) {
             if (input.contains('\n')) {
-                values = input | std::views::split('\n') | std::views::transform([](auto line) {
+                std::ranges::copy(input | std::views::split('\n') | std::views::transform([](auto line) {
                     std::string value(line.begin(), line.end());
                     if (value.ends_with('\r')) value.pop_back();
                     return value;
-                }) | std::ranges::to<std::vector>();
+                }), std::back_inserter(values));
             } else {
                 auto tokens = ::xmpp::parse_adhoc_arguments(input);
                 if (!tokens) { error(tokens.error()); return; }

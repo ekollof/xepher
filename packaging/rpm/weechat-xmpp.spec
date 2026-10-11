@@ -10,7 +10,7 @@ URL:            https://github.com/ekollof/xepher
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  clang >= 19
-BuildRequires:  libstdc++-devel >= 12
+BuildRequires:  libstdc++-devel >= 13
 BuildRequires:  cmake >= 3.22
 BuildRequires:  ninja-build
 BuildRequires:  expat-devel
