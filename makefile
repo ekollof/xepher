@@ -10,6 +10,10 @@ BUILD_DIR := build
 NPROC ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 # Default toolchain: Clang/Clang++ (C++23). GNU make predefines CXX=g++.
+# Keep a configured compiler when a later invocation (notably install) omits
+# CC/CXX. Explicit command-line or environment selections still take priority.
+CACHED_CC := $(shell sed -n 's/^CMAKE_C_COMPILER:[^=]*=//p' "$(BUILD_DIR)/CMakeCache.txt" 2>/dev/null)
+CACHED_CXX := $(shell sed -n 's/^CMAKE_CXX_COMPILER:[^=]*=//p' "$(BUILD_DIR)/CMakeCache.txt" 2>/dev/null)
 ifeq ($(UNAME_S),Darwin)
 HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo /opt/homebrew)
 export PKG_CONFIG_PATH := $(HOMEBREW_PREFIX)/lib/pkgconfig:$(PKG_CONFIG_PATH)
@@ -20,11 +24,11 @@ else
 DEFAULT_CC := clang
 DEFAULT_CXX := clang++
 endif
-ifneq ($(origin CC),command line)
-CC := $(DEFAULT_CC)
+ifneq ($(filter default undefined,$(origin CC)),)
+CC := $(or $(CACHED_CC),$(DEFAULT_CC))
 endif
-ifneq ($(origin CXX),command line)
-CXX := $(DEFAULT_CXX)
+ifneq ($(filter default undefined,$(origin CXX)),)
+CXX := $(or $(CACHED_CXX),$(DEFAULT_CXX))
 endif
 
 # ccache via CMAKE_*_COMPILER_LAUNCHER (CMake-native). CXX="ccache clang++" is
@@ -48,7 +52,7 @@ else
 CMAKE_GENERATOR := -G "Unix Makefiles"
 endif
 
-CMAKE_ARGS := -S . -B $(BUILD_DIR) $(CMAKE_GENERATOR)
+CMAKE_ARGS := -S . -B "$(BUILD_DIR)" $(CMAKE_GENERATOR)
 CMAKE_ARGS += -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"
 ifneq ($(CCACHE_LAUNCHER),)
 CMAKE_ARGS += -DCMAKE_C_COMPILER_LAUNCHER="$(CCACHE_LAUNCHER)"
@@ -64,7 +68,7 @@ CMAKE_ARGS += -DXEPHER_ENABLE_ASAN=$(if $(ASAN),ON,OFF)
 # .source ELF embed is opt-in (slow post-link tar). make release sets EMBED_SOURCE=1.
 CMAKE_ARGS += -DXEPHER_EMBED_SOURCE=$(if $(filter 1,$(EMBED_SOURCE)),ON,OFF)
 
-BUILD_ARGS := --build $(BUILD_DIR) -j$(NPROC)
+BUILD_ARGS := --build "$(BUILD_DIR)" -j$(NPROC)
 
 PREFIX ?= /usr/local
 WEECHATHOME ?= $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)/weechat

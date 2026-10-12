@@ -188,6 +188,19 @@ older libstdc++ can therefore build without upgrading to libstdc++ 14 just for
 that function. If `std::expected` is missing instead, update the selected
 compiler/library pair.
 
+The Make wrapper reuses the configured compiler when `CC`/`CXX` are omitted,
+including during `make install`. Explicit command-line or environment compiler
+settings override it. To change compilers, use a fresh build directory:
+
+```sh
+make BUILD_DIR=build-clang20 CC=clang-20 CXX=clang++-20 DEBUG=1
+make BUILD_DIR=build-clang20 install DEBUG=1
+```
+
+`make clean` removes build products but preserves CMake's compiler cache. If an
+earlier invocation selected the wrong compiler and configuration failed, use a
+fresh `BUILD_DIR` as above rather than retrying against that failed cache.
+
 The earlier GCC 12 header recommendation was too low for the complete plugin:
 `std::ranges::contains`, `std::views::enumerate`, and `std::views::chunk` require
 newer library support. CMake checks these features as well. GCC 13 headers are
