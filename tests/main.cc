@@ -1,6 +1,9 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 
 #include <doctest/doctest.h>
+#include <algorithm>
+#include <ranges>
+#include <utility>
 
 #include "timeout_listener.hh"
 #include "plugin.inl"

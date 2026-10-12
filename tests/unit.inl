@@ -417,6 +417,21 @@ TEST_CASE("StanzaView child_iterator terminates on last child")
         ++count;
     CHECK(count == 2);
 
+    // GCC 13's ranges lookup must accept mutable views, including the nested
+    // callback arguments used by the ad-hoc command parser.
+    static_assert(std::ranges::forward_range<xmpp::StanzaView &>);
+    static_assert(std::ranges::forward_range<const xmpp::StanzaView &>);
+    xmpp::StanzaView view(msg);
+    count = 0;
+    std::ranges::for_each(view, [&](xmpp::StanzaView child) {
+        ++count;
+        std::ranges::for_each(child, [](xmpp::StanzaView) {});
+    });
+    CHECK(count == 2);
+    CHECK(std::ranges::distance(std::as_const(view)) == 2);
+    xmpp::StanzaView empty;
+    CHECK(std::ranges::empty(empty));
+
     xmpp_stanza_release(msg);
 }
 

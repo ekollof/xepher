@@ -94,6 +94,11 @@ public:
     }
     [[nodiscard]] child_iterator children_end() const { return {nullptr, true}; }
 
+    // Member access avoids older libstdc++ ADL poison-pill overloads rejecting
+    // the free begin(const StanzaView &) overload for mutable lvalues.
+    [[nodiscard]] child_iterator begin() const { return children_begin(); }
+    [[nodiscard]] child_iterator end() const { return children_end(); }
+
 private:
     xmpp_stanza_t *stanza_;
 };

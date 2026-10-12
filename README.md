@@ -193,6 +193,11 @@ The earlier GCC 12 header recommendation was too low for the complete plugin:
 newer library support. CMake checks these features as well. GCC 13 headers are
 the libstdc++ baseline; upgrading to GCC 14 solely for `ranges::to` is unnecessary.
 
+Ubuntu 22.04's default GCC 11 toolchain is below this baseline; install a
+suitable Clang and GCC C++ library pair before building. If GCC 13 headers
+report a `StanzaView` range constraint error in `iq_adhoc.cpp`, update the
+checkout for the range lookup compatibility fix (issue #20).
+
 Select versioned compilers explicitly as **make command-line arguments**:
 
 ```sh
