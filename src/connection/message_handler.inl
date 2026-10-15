@@ -823,6 +823,22 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         channel = &ch_pm;
     }
 
+    // Offline PM delivery can race the older archive pages on reconnect.
+    // Keep it behind the chat history, before consuming its OMEMO ratchet key.
+    if (!is_mam_replay && !is_carbon_copy && is_delayed_delivery
+        && channel && channel->type == weechat::channel::chat_type::PM
+        && account.defer_channel_mam_message(channel->id, {}, stanza))
+        return 1;
+
+    // The archive may already have rendered a queued offline message. Dedup
+    // before decryption so its second copy cannot consume the ratchet again.
+    if (is_delayed_delivery && stanza_id && channel && channel->buffer)
+    {
+        const std::string needle = fmt::format("stanza_id_{}", stanza_id);
+        if (weechat::line_store_buffer_contains_any_tag(channel->buffer, {needle}))
+            return 1;
+    }
+
     // XEP-0333 §5 Business Rules: MUST NOT send Displayed Markers for outgoing
     // messages we sent (received back via carbons or MAM).
     // XEP-0333 §4.1: SHOULD NOT send Chat Markers to a MUC room; they reveal
@@ -1457,16 +1473,6 @@ message_handler_after_omemo:
     {
         strptime(timestamp, "%FT%T", &time);
         date = timegm(&time);
-    }
-
-    // XEP-0313 dedup for MUC history: when the MUC server re-delivers old messages
-    // via <delay> on rejoin, suppress any message whose stanza-id is already tagged
-    // in the buffer.  This prevents duplicates on every reconnect.
-    if (delay && stanza_id && channel && channel->buffer)
-    {
-        const std::string needle = fmt::format("stanza_id_{}", stanza_id);
-        if (weechat::line_store_buffer_contains_any_tag(channel->buffer, {needle}))
-            return 1;
     }
 
     // XEP-0085: receiving a message implicitly clears the composing state
