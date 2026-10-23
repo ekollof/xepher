@@ -405,11 +405,15 @@ automatically when the recipient acknowledges the message:
 
 Incoming PMs are never reported as read the moment they arrive: the
 plugin sends the XEP-0184 delivery receipt immediately, but the
-XEP-0333 `<displayed/>` marker only goes out once you have actually
-seen the message — when it prints while its buffer is on screen, when
-you reply, or after the buffer has stayed focused for a few seconds.
-Brief visits while cycling through buffers (keyboard workflows) do not
-mark messages as read.
+XEP-0333 `<displayed/>` marker (and the XEP-0490 displayed-state sync
+that tells your other devices) only goes out once you have actually
+seen the message — when you reply, or after the buffer has stayed on
+screen for a few seconds. This includes messages that arrive while
+their buffer is already focused: a WeeChat sitting open on a chat
+(detached tmux, another workspace) is not a user reading it, so those
+wait out the dwell too instead of instantly silencing notifications
+on your phone. Brief visits while cycling through buffers (keyboard
+workflows) do not mark messages as read.
 
 ```
 /set xmpp.look.displayed_delay 3   # seconds of focus before marking read (default)

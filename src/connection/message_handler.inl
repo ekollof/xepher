@@ -2420,17 +2420,20 @@ message_handler_after_omemo:
                                ephemeral_tombstone_cb, &g_ephemeral_pending.back(), nullptr));
     }
 
-    // XEP-0333: the message is now on screen. If this buffer is currently
-    // displayed, the user has seen it — flush pending <displayed/> markers
-    // immediately instead of waiting for a buffer switch or reply.
-    // Otherwise the markers stay queued until the buffer is actually viewed.
+    // XEP-0333 dwell: the message is now on screen, but "displayed" in a
+    // detached/background WeeChat is not a user reading it — and an instant
+    // <displayed/> + MDS publish would silence notifications on the user's
+    // other devices. Arm the dwell timer instead of flushing immediately;
+    // it fires only if the buffer is still on screen after
+    // look.displayed_delay seconds. Markers otherwise stay queued until
+    // the buffer is actually viewed (or replied to).
     if (!is_from_self
         && channel->type == weechat::channel::chat_type::PM
         && !channel->unreads.empty()
         && channel->buffer
         && weechat::BufferPort::default_port_ref().get_integer(channel->buffer, "num_displayed") > 0)
     {
-        channel->send_reads();
+        channel->schedule_displayed_flush();
     }
 
     weechat_string_dyn_free(dyn_tags, 1);
