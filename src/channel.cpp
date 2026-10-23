@@ -231,6 +231,7 @@ weechat::channel::channel(weechat::account& account,
     }
 
     self_typing_hook_timer = nullptr;  // created lazily on first self-typing event
+    displayed_delay_timer = nullptr;   // created lazily on entering a buffer with pending markers
 
     omemo.enabled = 0;
     omemo.devicelist_requests = weechat_hashtable_new(64,
@@ -536,6 +537,12 @@ weechat::channel::~channel()
     {
         weechat_unhook(self_typing_hook_timer);
         self_typing_hook_timer = nullptr;
+    }
+
+    if (displayed_delay_timer)
+    {
+        weechat_unhook(displayed_delay_timer);
+        displayed_delay_timer = nullptr;
     }
 
     if (buffer)
@@ -2148,8 +2155,63 @@ void weechat::channel::send_link_preview(std::string_view to, std::string_view u
     (void) process_hook;
 }
 
+void weechat::channel::schedule_displayed_flush()
+{
+    if (displayed_delay_timer)
+        return;  // already armed
+    if (unreads.empty() && !muc_last_seen)
+        return;  // nothing pending
+
+    int delay = 3;
+    if (weechat::config::instance)
+        delay = weechat::config::instance->look.displayed_delay.integer();
+    if (delay <= 0)
+    {
+        send_reads();
+        return;
+    }
+    displayed_delay_timer = (struct t_hook *)weechat_hook_timer(
+        delay * 1000, 0, 1, &weechat::channel::displayed_delay_cb,
+        this, nullptr);
+}
+
+bool weechat::channel::cancel_displayed_flush()
+{
+    if (!displayed_delay_timer)
+        return false;
+    weechat_unhook(displayed_delay_timer);
+    displayed_delay_timer = nullptr;
+    return true;
+}
+
+int weechat::channel::displayed_delay_cb(const void *pointer, void *data, int remaining_calls)
+{
+    (void) data;
+    (void) remaining_calls;
+
+    if (!pointer)
+        return WEECHAT_RC_ERROR;
+
+    auto *channel = (weechat::channel *)pointer;
+    channel->displayed_delay_timer = nullptr;  // one-shot already fired
+
+    // Only mark as read if the buffer is still on screen (belt and braces:
+    // leaving normally cancels the timer before it can fire).
+    if (channel->buffer
+        && BufferPort::default_port_ref().get_integer(channel->buffer, "num_displayed") > 0)
+        channel->send_reads();
+
+    return WEECHAT_RC_OK;
+}
+
 void weechat::channel::send_reads()
 {
+    // A manual flush supersedes the dwell timer (everything is sent now).
+    if (displayed_delay_timer)
+    {
+        weechat_unhook(displayed_delay_timer);
+        displayed_delay_timer = nullptr;
+    }
     // Capture the last unread entry for XEP-0490 MDS PEP publish below.
     // Must happen BEFORE the queue is cleared or erased.
     std::string last_unread_id;

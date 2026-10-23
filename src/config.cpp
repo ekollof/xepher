@@ -187,6 +187,13 @@ weechat::config::config()
                 nullptr, 0, 10080,
                 "5", nullptr, false,
                 {}, {}, {}},
+            .displayed_delay{file, section_look, "displayed_delay", "integer",
+                "seconds a buffer must stay focused before pending XEP-0333 displayed "
+                "(read) markers are sent — brief visits while cycling buffers do not "
+                "mark messages as read (0 = send immediately on entering the buffer)",
+                nullptr, 0, 3600,
+                "3", nullptr, false,
+                {}, {}, {}},
             .share_os_info{file, section_look, "share_os_info", "boolean",
                 "include OS name and version in XEP-0092 software version responses "
                 "and XEP-0115 capability discovery; disable to protect privacy "

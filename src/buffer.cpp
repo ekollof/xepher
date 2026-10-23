@@ -167,9 +167,14 @@ int buffer__switch_cb(const void *pointer, void *data,
             auto *self_user = weechat::user::search(prev_account,
                                                     prev_account->jid_device().data());
             prev_channel->send_inactive(self_user);
+            // XEP-0333 dwell: a visit shorter than look.displayed_delay does
+            // not count as reading — drop the pending timer and keep markers
+            // queued (e.g. quick cycling through buffers). Longer visits
+            // already flushed on timer fire, so this is then a no-op.
             // XEP-0490: flush unread markers when leaving the buffer so that
             // other devices know we have read all pending messages here.
-            prev_channel->send_reads();
+            if (!prev_channel->cancel_displayed_flush())
+                prev_channel->send_reads();
         }
     }
 
@@ -184,10 +189,11 @@ int buffer__switch_cb(const void *pointer, void *data,
             auto *self_user = weechat::user::search(new_account,
                                                     new_account->jid_device().data());
             new_channel->send_active(self_user);
-            // XEP-0333: the user is now viewing this buffer — flush pending
-            // <displayed/> markers for messages received while away.
+            // XEP-0333 dwell: the user is now viewing this buffer — arm the
+            // timer that flushes pending <displayed/> markers once the
+            // buffer has been open for look.displayed_delay seconds.
             // No-op when nothing is pending.
-            new_channel->send_reads();
+            new_channel->schedule_displayed_flush();
         }
     }
 

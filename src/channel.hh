@@ -204,6 +204,10 @@ namespace weechat
 
         struct t_hook *self_typing_hook_timer = nullptr;
 
+        // XEP-0333 dwell timer: armed when entering a buffer with pending
+        // displayed markers; fires after look.displayed_delay seconds.
+        struct t_hook *displayed_delay_timer = nullptr;
+
     public:
         std::vector<weechat::channel::unread> unreads;
 
@@ -449,6 +453,13 @@ namespace weechat
         void send_link_preview(std::string_view to, std::string_view url);
 
         void send_reads();
+        // Arm the dwell timer for pending displayed markers (no-op when
+        // nothing is pending). Sends immediately when displayed_delay is 0.
+        void schedule_displayed_flush();
+        // Cancel a pending dwell timer. Returns true when a timer was
+        // pending (the visit was too short to count as reading).
+        bool cancel_displayed_flush();
+        static int displayed_delay_cb(const void *pointer, void *data, int remaining_calls);
         void send_active(weechat::user *user);
         void send_typing(weechat::user *user);
         void send_paused(weechat::user *user);

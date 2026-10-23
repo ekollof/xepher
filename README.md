@@ -401,6 +401,22 @@ automatically when the recipient acknowledges the message:
 | ✓ | Delivered — recipient's client received it (XEP-0184) |
 | ✓✓ | Read — recipient marked it displayed (XEP-0333) |
 
+### Read markers and buffer dwell
+
+Incoming PMs are never reported as read the moment they arrive: the
+plugin sends the XEP-0184 delivery receipt immediately, but the
+XEP-0333 `<displayed/>` marker only goes out once you have actually
+seen the message — when it prints while its buffer is on screen, when
+you reply, or after the buffer has stayed focused for a few seconds.
+Brief visits while cycling through buffers (keyboard workflows) do not
+mark messages as read.
+
+```
+/set xmpp.look.displayed_delay 3   # seconds of focus before marking read (default)
+ /set xmpp.look.displayed_delay 0   # mark read immediately on entering the buffer
+/save
+```
+
 ### Avatar badges in PM
 
 A colored Unicode symbol (for example `◉`) may appear before a contact's bare
