@@ -3033,7 +3033,7 @@ TEST_CASE("build_ack_reply respects suppress policy")
     CHECK_FALSE(xmpp::build_ack_reply(input, suppress).has_value());
 }
 
-TEST_CASE("build_ack_reply builds receipt and displayed children")
+TEST_CASE("build_ack_reply sends receipt immediately, defers displayed")
 {
     unit_strophe_env env;
     REQUIRE(env.ctx != nullptr);
@@ -3049,16 +3049,38 @@ TEST_CASE("build_ack_reply builds receipt and displayed children")
     auto built = xmpp::build_ack_reply(input, {});
     REQUIRE(built.has_value());
 
-    auto stanza_sp = built->reply.build(env.ctx);
+    // XEP-0184 delivery receipt goes out immediately...
+    REQUIRE(built->reply.has_value());
+    auto stanza_sp = built->reply->build(env.ctx);
     const std::string xml = stanza_to_xml(env.ctx, stanza_sp.get());
 
     CHECK(xml.find("to=\"bob@example.org/phone\"") != std::string::npos);
     CHECK(xml.find("type=\"chat\"") != std::string::npos);
     CHECK(xml.find("urn:xmpp:receipts") != std::string::npos);
-    CHECK(xml.find("urn:xmpp:chat-markers:0") != std::string::npos);
     CHECK(xml.find("no-store") != std::string::npos);
-    CHECK(built->unread.id == "m1");
-    CHECK(built->unread.thread == "thr-1");
+    // ...but XEP-0333 <displayed/> must NOT be sent at receipt time.
+    CHECK(xml.find("urn:xmpp:chat-markers:0") == std::string::npos);
+
+    // ...instead it is queued for send_reads() once the buffer is viewed.
+    REQUIRE(built->unread.has_value());
+    CHECK(built->unread->id == "m1");
+    CHECK(built->unread->thread == "thr-1");
+}
+
+TEST_CASE("build_ack_reply with markable-only queues unread, no immediate reply")
+{
+    xmpp::AckReplyInput input;
+    input.message_id = "m2";
+    input.reply_to = "bob@example.org/phone";
+    input.message_type = "chat";
+    input.receipt_requested = false;
+    input.marker_markable = true;
+
+    auto built = xmpp::build_ack_reply(input, {});
+    REQUIRE(built.has_value());
+    CHECK_FALSE(built->reply.has_value());
+    REQUIRE(built->unread.has_value());
+    CHECK(built->unread->id == "m2");
 }
 
 TEST_CASE("strip_status_glyph_suffix removes trailing delivery glyphs")

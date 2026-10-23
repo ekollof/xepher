@@ -53,8 +53,13 @@ struct PendingUnread {
 };
 
 struct AckReplyResult {
-    stanza::message reply;
-    PendingUnread unread;
+    // Immediate XEP-0184 delivery receipt — safe to send on receipt
+    // (delivery is not display).
+    std::optional<stanza::message> reply;
+    // Deferred XEP-0333 displayed marker payload. Queued in
+    // channel::unreads and sent via channel::send_reads() once the user
+    // actually views the message — never sent immediately here.
+    std::optional<PendingUnread> unread;
 };
 
 [[nodiscard]] XMPP_TEST_EXPORT bool stanza_is_receipt_ack(StanzaView msg);

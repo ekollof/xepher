@@ -72,26 +72,37 @@ std::optional<AckReplyResult> build_ack_reply(const AckReplyInput &input,
         || suppress.mam_replay || suppress.delayed_delivery)
         return std::nullopt;
 
-    stanza::message msg;
-    msg.to(input.reply_to).type(input.message_type.empty() ? "chat" : input.message_type);
+    AckReplyResult result;
 
+    // XEP-0184: delivery receipts acknowledge receipt, not display —
+    // safe to send immediately.
     if (input.receipt_requested)
+    {
+        stanza::message msg;
+        msg.to(input.reply_to).type(input.message_type.empty() ? "chat" : input.message_type);
         msg.receipt_received(input.message_id);
+        if (input.thread.has_value())
+            msg.thread(*input.thread);
+        msg.no_store();
+        result.reply.emplace(std::move(msg));
+    }
 
+    // XEP-0333: <displayed/> means the user has seen the message, which is
+    // not true at receipt time. Queue it; channel::send_reads() sends the
+    // marker once the buffer is actually viewed.
     if (input.marker_markable)
-        msg.chat_marker_displayed(input.message_id);
+    {
+        PendingUnread unread;
+        unread.id = input.message_id;
+        unread.thread = input.thread;
+        unread.stanza_id = input.stanza_id;
+        unread.stanza_id_by = input.stanza_id_by;
+        result.unread.emplace(std::move(unread));
+    }
 
-    if (input.thread.has_value())
-        msg.thread(*input.thread);
-
-    msg.no_store();
-
-    PendingUnread unread;
-    unread.id = input.message_id;
-    unread.thread = input.thread;
-    unread.stanza_id = input.stanza_id;
-    unread.stanza_id_by = input.stanza_id_by;
-    return AckReplyResult{std::move(msg), std::move(unread)};
+    if (!result.reply && !result.unread)
+        return std::nullopt;
+    return result;
 }
 
 }  // namespace xmpp

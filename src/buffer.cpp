@@ -184,6 +184,10 @@ int buffer__switch_cb(const void *pointer, void *data,
             auto *self_user = weechat::user::search(new_account,
                                                     new_account->jid_device().data());
             new_channel->send_active(self_user);
+            // XEP-0333: the user is now viewing this buffer — flush pending
+            // <displayed/> markers for messages received while away.
+            // No-op when nothing is pending.
+            new_channel->send_reads();
         }
     }
 

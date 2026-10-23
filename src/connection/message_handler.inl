@@ -873,14 +873,21 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
 
         if (auto ack_reply = ::xmpp::build_ack_reply(ack_input, suppress))
         {
-            account.connection.send(ack_reply->reply.build(account.context).get());
+            // XEP-0184 delivery receipt: send immediately.
+            if (ack_reply->reply)
+                account.connection.send(ack_reply->reply->build(account.context).get());
 
-            weechat::channel::unread unread;
-            unread.id = ack_reply->unread.id;
-            unread.thread = ack_reply->unread.thread;
-            unread.stanza_id = ack_reply->unread.stanza_id;
-            unread.stanza_id_by = ack_reply->unread.stanza_id_by;
-            channel->unreads.push_back(unread);
+            // XEP-0333 displayed marker: queue only. channel::send_reads()
+            // sends it once the user actually views the buffer.
+            if (ack_reply->unread)
+            {
+                weechat::channel::unread unread;
+                unread.id = ack_reply->unread->id;
+                unread.thread = ack_reply->unread->thread;
+                unread.stanza_id = ack_reply->unread->stanza_id;
+                unread.stanza_id_by = ack_reply->unread->stanza_id_by;
+                channel->unreads.push_back(unread);
+            }
         }
     }
 
@@ -2411,6 +2418,19 @@ message_handler_after_omemo:
         g_ephemeral_pending.back().timer_hook = static_cast<struct t_hook *>(
             weechat_hook_timer(ephemeral_timer * 1000, 0, 1,
                                ephemeral_tombstone_cb, &g_ephemeral_pending.back(), nullptr));
+    }
+
+    // XEP-0333: the message is now on screen. If this buffer is currently
+    // displayed, the user has seen it — flush pending <displayed/> markers
+    // immediately instead of waiting for a buffer switch or reply.
+    // Otherwise the markers stay queued until the buffer is actually viewed.
+    if (!is_from_self
+        && channel->type == weechat::channel::chat_type::PM
+        && !channel->unreads.empty()
+        && channel->buffer
+        && weechat::BufferPort::default_port_ref().get_integer(channel->buffer, "num_displayed") > 0)
+    {
+        channel->send_reads();
     }
 
     weechat_string_dyn_free(dyn_tags, 1);
