@@ -86,6 +86,15 @@ macro(xepher_add_tests plugin_target)
     endif()
 
     find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND AND XEPHER_WEECHAT_HEADLESS)
+        add_test(NAME doctest_mam_ordering
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_mam_ordering.py"
+                --plugin "$<TARGET_FILE:${plugin_target}>"
+                --weechat "${XEPHER_WEECHAT_HEADLESS}" -v)
+        set_tests_properties(doctest_mam_ordering PROPERTIES
+            TIMEOUT 35 LABELS "doctest" RUN_SERIAL TRUE
+            SKIP_REGULAR_EXPRESSION "OK \\(skipped=1\\)")
+    endif()
     find_program(XEPHER_OPENSSL_CLI NAMES openssl)
     if(Python3_Interpreter_FOUND AND XEPHER_WEECHAT_HEADLESS AND XEPHER_OPENSSL_CLI)
         add_test(NAME doctest_registration_tls

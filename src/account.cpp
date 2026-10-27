@@ -303,7 +303,7 @@ void weechat::account::cancel_channel_mam(std::string_view channel_id)
 
 bool weechat::account::defer_channel_mam_message(std::string_view channel_id,
                                                 std::string_view result_query_id,
-                                                xmpp_stanza_t *message)
+                                                xmpp_stanza_t *message, bool is_carbon_copy)
 {
     if (!message || channel_id.empty())
         return false;
@@ -316,8 +316,8 @@ bool weechat::account::defer_channel_mam_message(std::string_view channel_id,
     });
     if (!chat_fetch_active)
         return false;
-    mam_deferred_messages[std::string(channel_id)].emplace_back(
-        xmpp_stanza_clone(message), xmpp_stanza_release);
+    mam_deferred_messages[std::string(channel_id)].push_back({
+        {xmpp_stanza_clone(message), xmpp_stanza_release}, is_carbon_copy});
     return true;
 }
 
@@ -329,7 +329,8 @@ void weechat::account::flush_channel_mam_messages(std::string_view channel_id)
     // The chat fetch has finished. Normal MAM dedup removes copies already
     // rendered by it, leaving newer account-catchup results at the bottom.
     std::ranges::for_each(pending.mapped(), [&](const auto &message) {
-        connection.message_handler(message.get());
+        connection.message_handler(message.stanza.get(), true, false, {}, {},
+                                   message.is_carbon_copy);
     });
     mam_cache_write_batch_commit();
 }

@@ -577,9 +577,13 @@ namespace weechat
         void reset_mam_sync();
         bool defer_channel_mam_message(std::string_view channel_id,
                                        std::string_view result_query_id,
-                                       xmpp_stanza_t *message);
+                                       xmpp_stanza_t *message, bool is_carbon_copy = false);
         void flush_channel_mam_messages(std::string_view channel_id);
-        std::unordered_map<std::string, std::vector<std::shared_ptr<xmpp_stanza_t>>>
+        struct deferred_mam_message {
+            std::shared_ptr<xmpp_stanza_t> stanza;
+            bool is_carbon_copy = false;
+        };
+        std::unordered_map<std::string, std::vector<deferred_mam_message>>
             mam_deferred_messages;
 
         // Global MAM concurrency limiter support

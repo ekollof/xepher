@@ -1319,7 +1319,10 @@ checkpoints, so a later catch-up can query them again.
 When account catch-up overlaps a chat's history fetch, account results wait for
 the chat fetch to finish before display. This keeps recent replies below older
 history instead of leaving them near the top of the replay.
-Delayed offline PM deliveries also wait for an active chat history fetch.
+Live PMs, carbon copies, and delayed offline deliveries wait for an active
+chat history fetch before display. This prevents a message arriving during
+reconnect from appearing above older history and then being deduplicated away
+at its expected position.
 Copies already present in the archive are deduplicated before OMEMO decryption,
 so reconnecting cannot place a recent offline message above older history or
 attempt to decrypt the same encrypted message twice.

@@ -823,16 +823,16 @@ bool weechat::connection::message_handler(xmpp_stanza_t *stanza, bool top_level,
         channel = &ch_pm;
     }
 
-    // Offline PM delivery can race the older archive pages on reconnect.
+    // Live PMs and offline deliveries can race older archive pages on reconnect.
     // Keep it behind the chat history, before consuming its OMEMO ratchet key.
-    if (!is_mam_replay && !is_carbon_copy && is_delayed_delivery
+    if (!is_mam_replay
         && channel && channel->type == weechat::channel::chat_type::PM
-        && account.defer_channel_mam_message(channel->id, {}, stanza))
+        && account.defer_channel_mam_message(channel->id, {}, stanza, is_carbon_copy))
         return 1;
 
     // The archive may already have rendered a queued offline message. Dedup
     // before decryption so its second copy cannot consume the ratchet again.
-    if (is_delayed_delivery && stanza_id && channel && channel->buffer)
+    if ((is_delayed_delivery || !is_mam_replay) && stanza_id && channel && channel->buffer)
     {
         const std::string needle = fmt::format("stanza_id_{}", stanza_id);
         if (weechat::line_store_buffer_contains_any_tag(channel->buffer, {needle}))
