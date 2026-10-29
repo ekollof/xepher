@@ -230,6 +230,17 @@
 
     <implements>
       <xmpp:SupportedXep>
+        <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0175.html' />
+        <xmpp:status>complete</xmpp:status>
+        <xmpp:version>1.2</xmpp:version>
+        <xmpp:note
+                    xml:lang='en'
+                >SASL ANONYMOUS login via /account add --anon. The server assigns a temporary JID; no trace data is sent</xmpp:note>
+      </xmpp:SupportedXep>
+    </implements>
+
+    <implements>
+      <xmpp:SupportedXep>
         <xmpp:xep rdf:resource='https://xmpp.org/extensions/xep-0184.html' />
         <xmpp:status>complete</xmpp:status>
         <xmpp:version>1.4.0</xmpp:version>

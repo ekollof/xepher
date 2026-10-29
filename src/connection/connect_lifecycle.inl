@@ -13,6 +13,13 @@ bool weechat::connection::conn_handler(event status, int error, xmpp_stream_erro
         // Populate bare JID cache (avoids re-parsing bound JID on every stanza)
         account.connection_port().refresh_bare_cache();
 
+        ::jid configured(nullptr, std::string(account.option_jid.string()));
+        if (configured.local.empty() && !configured.domain.empty())
+        {
+            weechat::UiPort::for_buffer(account.buffer)->printf_network(fmt::format(
+                "SASL ANONYMOUS: server assigned {}", account.jid()));
+        }
+
         // Only add handlers once (they persist across reconnects via libstrophe)
         if (!account.sm_handlers_registered)
         {
@@ -345,12 +352,14 @@ int weechat::connection::connect(std::string jid, std::string password, weechat:
         account.resource(ident);
         resource = account.resource().data();
     }
+    ::jid parsed(nullptr, jid);
+    // No localpart: libstrophe treats the JID as SASL ANONYMOUS (XEP-0175)
+    // and sends <auth mechanism='ANONYMOUS'/>. A leading '@' would be a node.
+    if (parsed.local.empty())
+        m_conn.set_jid(fmt::format("{}/{}", parsed.domain, resource).c_str());
+    else
     {
-        ::jid parsed(nullptr, jid);
-        std::string full_jid = fmt::format("{}@{}/{}", parsed.local, parsed.domain, resource);
-        m_conn.set_jid(full_jid.c_str());
-    }
-    {
+        m_conn.set_jid(fmt::format("{}@{}/{}", parsed.local, parsed.domain, resource).c_str());
         std::unique_ptr<char, decltype(&free)> evaled_pass(
             weechat_string_eval_expression(password.data(), nullptr, nullptr, nullptr), free);
         m_conn.set_pass(evaled_pass.get());

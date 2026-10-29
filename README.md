@@ -424,6 +424,16 @@ The minimum C++ language standard remains **C++23**.
 /account connect work
 ```
 
+Try a room without creating an account (SASL ANONYMOUS, same idea as Poezio):
+
+```
+/account add --anon
+/account connect anon
+/enter room@conference.example.org
+```
+
+`--anon` uses `anon.jeproteste.info` unless you pass another server that offers SASL ANONYMOUS. The server assigns a new temporary JID on every connect.
+
 Use `/help account` for full details.
 
 ### Encryption status indicator
@@ -1048,6 +1058,7 @@ not host commands for other clients.
 ```
 /account list
 /account add <name> <jid> <password>
+/account add --anon [<name>] [<server>]    # SASL ANONYMOUS (XEP-0175), no password
 /account connect <account>
 /account disconnect <account>
 /account reconnect <account>

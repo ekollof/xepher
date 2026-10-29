@@ -636,6 +636,52 @@ void command__account_register(struct t_gui_buffer *buffer, int argc, char **arg
     ibr_register(argv[2], argv[3], argv[4], buffer);
 }
 
+// Poezio's anonymous server. The host must offer SASL ANONYMOUS (XEP-0175).
+constexpr std::string_view k_default_anon_server{"anon.jeproteste.info"};
+
+void command__add_anonymous_account(std::string_view name, std::string_view domain)
+{
+    auto ui = weechat::UiPort::for_buffer(nullptr);
+    if (name.empty() || domain.empty() || domain.contains('@') || domain.contains('/'))
+    {
+        ui->printf_error(fmt::format(
+            fmt::runtime(_("{}: usage: /account add --anon [<name>] [<server>]")),
+            WEECHAT_XMPP_PLUGIN_NAME));
+        return;
+    }
+
+    weechat::account *existing = nullptr;
+    const std::string name_str{name};
+    if (weechat::account::search(existing, name_str.c_str(), true))
+    {
+        ui->printf_error(fmt::format(
+            fmt::runtime(_("{}: account \"{}\" already exists, can't add it!")),
+            WEECHAT_XMPP_PLUGIN_NAME, name));
+        return;
+    }
+
+    auto [it, _ins] = weechat::accounts.emplace(
+        std::piecewise_construct, std::forward_as_tuple(name_str),
+        std::forward_as_tuple(weechat::config::instance->file, name_str.c_str()));
+    auto& [_, acc] = *it;
+    acc.name = name_str;
+    acc.jid(std::string(domain));
+    acc.nickname(name_str);
+
+    ui->printf(fmt::format(
+        fmt::runtime(_("{}: anonymous account {}{}{} {}({}{}{}){} added (SASL ANONYMOUS)")),
+        WEECHAT_XMPP_PLUGIN_NAME,
+        weechat::RuntimePort::default_runtime().color("chat_server"), acc.name.data(),
+        weechat::RuntimePort::default_runtime().color("reset"),
+        weechat::RuntimePort::default_runtime().color("chat_delimiters"),
+        weechat::RuntimePort::default_runtime().color("chat_server"), domain,
+        weechat::RuntimePort::default_runtime().color("chat_delimiters"),
+        weechat::RuntimePort::default_runtime().color("reset")));
+    ui->printf_info(fmt::format(
+        fmt::runtime(_("{}: /account connect {}  then  /enter room@conference.example.org")),
+        WEECHAT_XMPP_PLUGIN_NAME, name));
+}
+
 void command__add_account(const char *name, const char *jid, const char *password)
 {
     weechat::account *account = nullptr;
@@ -681,23 +727,66 @@ void command__add_account(const char *name, const char *jid, const char *passwor
 
 void command__account_add(struct t_gui_buffer *buffer, int argc, char **argv)
 {
-    switch (argc)
+    bool anon = false;
+    const char *positional[3] = {};
+    int npos = 0;
+    for (int i = 2; i < argc; ++i)
     {
-        case 5:
+        if (std::string_view(argv[i]) == "--anon")
+            anon = true;
+        else if (npos < 3)
+            positional[npos++] = argv[i];
+        else
+        {
+            weechat::UiPort::for_buffer(nullptr)->printf(_("account add: wrong number of arguments"));
+            return;
+        }
+    }
+
+    if (anon)
+    {
+        std::string_view name = "anon";
+        std::string_view domain = k_default_anon_server;
+        if (npos == 1)
+        {
+            const std::string_view arg{positional[0]};
+            if (arg.contains('.'))
+                domain = arg;
+            else
+                name = arg;
+        }
+        else if (npos == 2)
+        {
+            name = positional[0];
+            domain = positional[1];
+        }
+        else if (npos != 0)
+        {
+            weechat::UiPort::for_buffer(nullptr)->printf(
+                _("account add: usage: /account add --anon [<name>] [<server>]"));
+            return;
+        }
+        command__add_anonymous_account(name, domain);
+        return;
+    }
+
+    switch (npos)
+    {
+        case 3:
             // name jid password — all provided, store directly
-            command__add_account(argv[2], argv[3], argv[4]);
+            command__add_account(positional[0], positional[1], positional[2]);
             break;
-        case 4:
+        case 2:
             // name jid — no password, prompt for it
             prompt_password(buffer, prompt_action::add,
-                            std::string(argv[2]), std::string(argv[3]));
+                            std::string(positional[0]), std::string(positional[1]));
             break;
-        case 3:
+        case 1:
             // name only — still need jid+password
-            command__add_account(argv[2], nullptr, nullptr);
+            command__add_account(positional[0], nullptr, nullptr);
             break;
         default:
-        weechat::UiPort::for_buffer(nullptr)->printf(_("account add: wrong number of arguments"));
+            weechat::UiPort::for_buffer(nullptr)->printf(_("account add: wrong number of arguments"));
             break;
     }
 }
@@ -730,8 +819,10 @@ int command__account_connect(struct t_gui_buffer *buffer, int argc, char **argv)
         {
             // Check whether a password is configured (raw value may be a
             // ${sec.data.*} reference — treat it as present if non-empty).
+            ::jid configured(nullptr, std::string(ptr_account->option_jid.string()));
+            const bool anonymous = configured.local.empty() && !configured.domain.empty();
             std::string_view pw = ptr_account->password();
-            if (pw.empty()) {
+            if (!anonymous && pw.empty()) {
                 // No password stored — prompt interactively
                 prompt_password(buffer, prompt_action::connect,
                                 std::string(ptr_account->name));

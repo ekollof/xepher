@@ -65,11 +65,14 @@ std::string LibstropheConnectionPort::bound_jid_full()
     // Build user@domain/weechat from the configured JID when not yet bound.
     const std::string opt(configured_jid_);
     const auto at = opt.find('@');
-    const std::string node = at == std::string::npos ? opt : opt.substr(0, at);
     std::string domain = at == std::string::npos ? opt : opt.substr(at + 1);
     const auto slash = domain.find('/');
     if (slash != std::string::npos)
         domain = domain.substr(0, slash);
+    // Domain-only JID is SASL ANONYMOUS: do not invent a localpart.
+    if (at == std::string::npos)
+        return domain.empty() ? std::string{} : fmt::format("{}/{}", domain, "weechat");
+    const std::string node = opt.substr(0, at);
     return fmt::format("{}@{}/{}", node, domain, "weechat");
 }
 

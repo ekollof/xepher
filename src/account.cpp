@@ -1045,7 +1045,10 @@ int weechat::account::connect([[maybe_unused]] bool manual)
         }
     }
 
-    is_connected = connection.connect(std::string(jid()), std::string(password()), tls());
+    // Authenticate as the configured JID. account.jid() is the bound JID,
+    // which for SASL ANONYMOUS is a temporary localpart the server assigned.
+    connection_port().clear_bare_cache();
+    is_connected = connection.connect(std::string(option_jid.string()), std::string(password()), tls());
 
     (void) weechat_hook_signal_send("xmpp_account_connecting",
                                     WEECHAT_HOOK_SIGNAL_STRING, name.data());

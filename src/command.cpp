@@ -54,6 +54,7 @@ void command__init()
         N_("handle xmpp accounts"),
         N_("list"
            " || add <name> <jid> <password>"
+           " || add --anon [<name>] [<server>]"
            " || register <name> <jid> <password>"
            " || unregister <account>"
            " || password <account> <new-password>"
@@ -63,6 +64,8 @@ void command__init()
            " || delete <account>"),
         N_("         list: list accounts\n"
            "          add: add a xmpp account\n"
+           "               --anon: SASL ANONYMOUS (XEP-0175), no password;\n"
+           "               default name anon, default server anon.jeproteste.info\n"
            "     register: register a new account via in-band registration (XEP-0077)\n"
            "   unregister: cancel account registration on the server (XEP-0077)\n"
            "     password: change account password on the server (XEP-0077)\n"

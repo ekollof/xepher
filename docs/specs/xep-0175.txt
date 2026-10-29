@@ -1,0 +1,171 @@
+<!DOCTYPE html SYSTEM "about:legacy-compat">
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><title>XEP-0175: Best Practices for Use of SASL ANONYMOUS</title><style type="text/css">
+/* don't mind this hack */
+nav#toc h2:before {
+display: none;
+content: "XEP-0175";
+}
+        </style><link rel="stylesheet" type="text/css" href="xmpp.css"><link href="prettify.css" type="text/css" rel="stylesheet"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico"><script type="text/javascript" src="prettify.js"></script><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="title" content="XEP-0175: Best Practices for Use of SASL ANONYMOUS"><meta name="description" content="This document specifies best practices for use of the SASL ANONYMOUS mechanism in the context of client authentication with an XMPP server."><meta name="DC.Title" content="Best Practices for Use of SASL ANONYMOUS"><meta name="DC.Creator" content="Peter Saint-Andre"><meta name="DC.Description" content="This document specifies best practices for use of the SASL ANONYMOUS mechanism in the context of client authentication with an XMPP server."><meta name="DC.Publisher" content="XMPP Standards Foundation"><meta name="DC.Contributor" content="XMPP Extensions Editor"><meta name="DC.Date" content="2009-09-30"><meta name="DC.Type" content="XMPP Extension Protocol"><meta name="DC.Format" content="XHTML"><meta name="DC.Identifier" content="XEP-0175"><meta name="DC.Language" content="en"><meta name="DC.Rights" content="This XMPP Extension Protocol is copyright © 1999 – 2024 by the XMPP Standards Foundation (XSF)."><meta property="og:type" content="website"><meta property="og:url" content="https://xmpp.org/extensions/xep-0175.html"><meta property="og:title" content="XEP-0175: Best Practices for Use of SASL ANONYMOUS"><meta property="og:description" content="This document specifies best practices for use of the SASL ANONYMOUS mechanism in the context of client authentication with an XMPP server."><meta property="og:image" content="https://xmpp.org/images/logos/xmpp-logo-text-banner.jpg"><meta property="og:image:alt" content="XMPP (Extensible Messaging and Presence Protocol) Logo"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary"><meta name="twitter:url" content="https://xmpp.org/extensions/xep-0175.html"><meta name="twitter:title" content="XEP-0175: Best Practices for Use of SASL ANONYMOUS"><meta name="twitter:description" content="This document specifies best practices for use of the SASL ANONYMOUS mechanism in the context of client authentication with an XMPP server."><meta name="twitter:image" content="https://xmpp.org/images/logos/xmpp-logo-text-banner.jpg"></head><body onload="prettyPrint()"><h1>XEP-0175: Best Practices for Use of SASL ANONYMOUS</h1><div class="docmeta-wrap"><dl id="docmeta" class="compact"><dt>Abstract</dt><dd>This document specifies best practices for use of the SASL ANONYMOUS mechanism in the context of client authentication with an XMPP server.</dd><dt>Author</dt><dd>Peter Saint-Andre</dd><dt>Copyright</dt><dd>© 2006 – 2009 XMPP Standards Foundation. <a href="#appendix-legal">SEE LEGAL NOTICES</a>.</dd><dt>Status</dt><dd><p>Active</p><div id="status-notice" class="active informational">NOTICE: This Informational specification defines a best practice or protocol profile that has been approved by the XMPP Council and/or the XSF Board of Directors. Implementations are encouraged and the best practice or protocol profile is appropriate for deployment in production systems.</div></dd><dt>Type</dt><dd>Informational</dd><dt>Version</dt><dd>1.2 (2009-09-30)</dd></dl><div class="timeline-wrap"><div class="timeline-head">Document Lifecycle</div><ol class="timeline"><li>Experimental</li><li>Proposed</li><li class="current">Active</li></ol></div></div><nav id="toc"><a href="#top"><h2>Table of Contents</h2></a><ol class="toc"><li><a href="#intro">Introduction</a></li><li><a href="#deployments">Deployment Types</a></li><li><a href="#recommendations">Recommendations</a></li><li><a href="#flow">Protocol Flow</a></li><li><a href="#disco">Service Discovery</a></li><li><a href="#security">Security Considerations</a></li><li><a href="#iana">IANA Considerations</a></li><li><a href="#registrar">XMPP Registrar Considerations</a></li><li><a href="#ack">Acknowledgements</a></li></ol><h6><a href="#appendices">Appendices</a></h6><ol class="toc-appendices"><li><a href="#appendix-docinfo">Document Information</a></li><li><a href="#appendix-authorinfo">Author Information</a></li><li><a href="#appendix-legal">Legal Notices</a></li><li><a href="#appendix-xmpp">Relation to XMPP</a></li><li><a href="#appendix-discuss">Discussion Venue</a></li><li><a href="#appendix-conformance">Requirements Conformance</a></li><li><a href="#appendix-notes">Notes</a></li><li><a href="#appendix-revs">Revision History</a></li><li><a href="#appendix-biblatex">Bib(La)Tex Entry</a></li></ol></nav><h2 id="intro">1.
+       Introduction<a class="anchor-link" href="#intro"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style=""><span class="ref" style=""><a href="http://tools.ietf.org/html/rfc6120">XMPP Core</a></span>  [<a href="#nt-idm44867749053872">1</a>] allows XMPP server implementations to support any SASL mechanism (see <span class="ref" style=""><a href="http://tools.ietf.org/html/rfc4422">RFC 4422</a></span>  [<a href="#nt-idm44867749049648">2</a>]) when authenticating clients. This document provides recommendations regarding use of the SASL ANONYMOUS mechanism (see <span class="ref" style=""><a href="http://tools.ietf.org/html/rfc4505">RFC 4505</a></span>  [<a href="#nt-idm44867749040464">3</a>]) in XMPP systems.</p>
+<h2 id="deployments">2.
+       Deployment Types<a class="anchor-link" href="#deployments"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">XMPP server implementations can be deployed in a variety of settings. Although it is difficult to provide recommendations for every kind of XMPP deployment, this document attempts to strike a balance between more and less controlled settings by defining three different deployment types:</p>
+  <ul class="" style="">
+    <li class="" style="">Public deployments, such as well-known instant messaging (IM) services on the open Internet.</li>
+    <li class="" style="">Private deployments, such as enterprise IM services, technical support departments, and helplines.</li>
+    <li class="" style="">Specialized deployments that typically will be accessed in a controlled fashion, such as gaming services, members-only websites, and applications that are not used directly by human users.</li>
+  </ul>
+<h2 id="recommendations">3.
+       Recommendations<a class="anchor-link" href="#recommendations"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">An XMPP server implementation SHOULD NOT enable the SASL ANONYMOUS mechanism by default, but instead SHOULD force the administrator of a given service to explicitly enable support in the context of that deployment.</p>
+  <p class="" style="">When a client authenticates using SASL ANONYMOUS, an XMPP server SHOULD assign a temporary, unique bare JID &lt;localpart@domain.tld&gt; to the client. Although the method for ensuring the uniqueness of the localpart is a matter of implementation, it is RECOMMENDED for the localpart to be a UUID as specified in <span class="ref" style=""><a href="http://tools.ietf.org/html/rfc4122">RFC 4122</a></span>  [<a href="#nt-idm44867749030528">4</a>].</p>
+  <p class="" style="">Although <span class="ref" style=""><a href="http://tools.ietf.org/html/rfc4505">RFC 4505</a></span>  [<a href="#nt-idm44867749040464">3</a>] allows the client to provide so-called "trace data" when authenticating via SASL ANONYMOUS, it is NOT RECOMMENDED for the client to include trace data as the XML character data of the &lt;auth/&gt; element (instead, the &lt;auth/&gt; element SHOULD be empty). However, if trace data is included, the server MUST NOT use it for any purpose other than tracing (e.g., not use it as the resource identifier of the anonymous user's full JID).</p>
+  <p class="" style="">Because an anonymous user is unknown to the server, the server SHOULD appropriately restrict the user's access in order to limit the possibility of malicious behavior (such as denial of service attacks as described in <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0205.html">Best Practices to Discourage Denial of Service Attacks (XEP-0205)</a></span>  [<a href="#nt-idm44867749021168">5</a>]), especially on public deployments. The following restrictions are encouraged on public deployments. Administrators of private deployments and specialized deployments are advised to take these restrictions into account when configuring their services, but can reasonably relax these restrictions if they have appropriate access controls in place or their deployment requirements cannot be met using the more restrictive profile applied in public deployments.</p>
+  <ol start="1" class="" style="">
+    <li class="" style=""><p class="" style="">During resource binding, the server MAY ignore the resource identifier provided by the client (if any) and instead assign a resource identifier that it generates on behalf of the client.</p></li>
+    <li class="" style=""><p class="" style="">The server SHOULD NOT allow the client to initiate communication with entities hosted at remote servers.</p></li>
+    <li class="" style=""><p class="" style="">The server MAY allow the client to establish relationships with local services and users; such relationships might include presence subscriptions and roster additions (see <span class="ref" style=""><a href="http://tools.ietf.org/html/rfc6121">XMPP IM</a></span>  [<a href="#nt-idm44867749009392">6</a>]), <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0045.html">Multi-User Chat (XEP-0045)</a></span>  [<a href="#nt-idm44867749004976">7</a>] registrations, and <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0060.html">Publish-Subscribe (XEP-0060)</a></span>  [<a href="#nt-idm44867748996064">8</a>] subscriptions. (Note that allowing presence subscriptions and roster additions can create a sub-optimal user experience for the added contacts.) However, if the server permits such relationships, it MUST cancel them when the client's session ends.</p></li>
+    <li class="" style=""><p class="" style="">The server MAY allow the client to store information on the server for the purpsoe of providing an optimal user experience (e.g., storage of client preferences using <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0049.html">Private XML Storage (XEP-0049)</a></span>  [<a href="#nt-idm44867748993328">9</a>]). However, if the server allows this, it SHOULD remove such information when the client's session ends.</p></li>
+    <li class="" style=""><p class="" style="">The server SHOULD NOT allow the client to send large numbers of XMPP stanzas or otherwise use large amounts of system resources (e.g., by binding multiple resource identifiers or creating multiple <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0065.html">SOCKS5 Bytestreams (XEP-0065)</a></span>  [<a href="#nt-idm44867748987184">10</a>] sessions).</p></li>
+  </ol>
+<h2 id="flow">4.
+       Protocol Flow<a class="anchor-link" href="#flow"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">The RECOMMENDED protocol flow following TLS negotiation (refer to <span class="ref" style=""><a href="http://tools.ietf.org/html/rfc3920">RFC 3920</a></span>  [<a href="#nt-idm44867748982032">11</a>]) is as follows:</p>
+  <ol start="" class="" style="">
+    <li class="" style="">
+      <p class="" style="">Client initiates stream to server.</p>
+      <figure class="code-example" id="example-1"><figcaption><strong>Example 1.</strong> Stream initiation<a class="anchor-link" href="#example-1"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;stream:stream
+        xmlns:stream='http://etherx.jabber.org/streams'
+        xmlns='jabber:client'
+        to='example.com'
+        version='1.0'&gt;
+</pre></figure>
+    </li>
+    <li class="" style="">
+      <p class="" style="">Server replies with stream header.</p>
+      <figure class="code-example" id="example-2"><figcaption><strong>Example 2.</strong> Stream header reply<a class="anchor-link" href="#example-2"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;stream:stream
+        xmlns:stream='http://etherx.jabber.org/streams'
+        xmlns='jabber:client'
+        id='c2s_234'
+        from='example.com'
+        version='1.0'&gt;
+</pre></figure>
+    </li>
+    <li class="" style="">
+      <p class="" style="">Server advertises stream features.</p>
+      <figure class="code-example" id="example-3"><figcaption><strong>Example 3.</strong> Stream features advertisement<a class="anchor-link" href="#example-3"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;stream:features&gt;
+  &lt;mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'&gt;
+    &lt;mechanism&gt;DIGEST-MD5&lt;/mechanism&gt;
+    &lt;mechanism&gt;ANONYMOUS&lt;/mechanism&gt;
+  &lt;/mechanisms&gt;
+&lt;/stream:features&gt;
+</pre></figure>
+    </li>
+    <li class="" style="">
+      <p class="" style="">Client requests SASL ANONYMOUS mechanism.</p>
+      <figure class="code-example" id="example-4"><figcaption><strong>Example 4.</strong> Requesting SASL ANONYMOUS<a class="anchor-link" href="#example-4"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;auth xmlns='urn:ietf:params:xml:ns:xmpp-sasl' mechanism='ANONYMOUS'/&gt;
+</pre></figure>
+    </li>
+    <li class="" style="">
+      <p class="" style="">Server sends &lt;success/&gt;.</p>
+      <figure class="code-example" id="example-5"><figcaption><strong>Example 5.</strong> Sending success<a class="anchor-link" href="#example-5"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/&gt;
+</pre></figure>
+    </li>
+    <li class="" style="">
+      <p class="" style="">Client opens new stream.</p>
+      <figure class="code-example" id="example-6"><figcaption><strong>Example 6.</strong> Initiating a new stream<a class="anchor-link" href="#example-6"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;stream:stream
+        xmlns:stream='http://etherx.jabber.org/streams'
+        xmlns='jabber:client'
+        to='example.com'
+        version='1.0'&gt;
+</pre></figure>
+    </li>
+    <li class="" style="">
+      <p class="" style="">Server tells client that resource binding is required.</p>
+      <figure class="code-example" id="example-7"><figcaption><strong>Example 7.</strong> Stream header reply with features<a class="anchor-link" href="#example-7"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;stream:stream
+        xmlns:stream='http://etherx.jabber.org/streams'
+        xmlns='jabber:client'
+        id='c2s_345'
+        from='example.com'
+        version='1.0'&gt;
+&lt;stream:features&gt;
+  &lt;bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/&gt;
+&lt;/stream:features&gt;
+</pre></figure>
+    </li>
+    <li class="" style="">
+      <p class="" style="">Client requests that server create a resource for it.</p>
+      <figure class="code-example" id="example-8"><figcaption><strong>Example 8.</strong> Requesting resource creation<a class="anchor-link" href="#example-8"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;iq type='set' id='bind_1'&gt;
+  &lt;bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/&gt;
+&lt;/iq&gt;
+</pre></figure>
+    </li>
+    <li class="" style="">
+      <p class="" style="">Server replies with full JID.</p>
+      <figure class="code-example" id="example-9"><figcaption><strong>Example 9.</strong> Server informs client of full JID<a class="anchor-link" href="#example-9"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;iq type='result' id='bind_1'&gt;
+  &lt;bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'&gt;
+    &lt;jid&gt;59BEC12A-9BAB-452B-88F8-D1563F09E549@example.com/2384F02A7E01&lt;/jid&gt;
+  &lt;/bind&gt;
+&lt;/iq&gt;
+</pre></figure>
+    </li>
+  </ol>
+<h2 id="disco">5.
+       Service Discovery<a class="anchor-link" href="#disco"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">A server MUST reply to a <span class="ref" style=""><a href="https://xmpp.org/extensions/xep-0030.html">Service Discovery (XEP-0030)</a></span>  [<a href="#nt-idm44867748949808">12</a>] information ("disco#info") request sent to the bare JID &lt;localpart@domain.tld&gt; of the user with an identity of "account/anonymous", as shown in the following example.</p>
+  <figure class="code-example" id="example-10"><figcaption><strong>Example 10.</strong> Server informs client of full JID<a class="anchor-link" href="#example-10"><abbr title="Link to this point in the document">¶</abbr></a></figcaption><pre class="prettyprint">
+&lt;iq from='59BEC12A-9BAB-452B-88F8-D1563F09E549@example.com'
+    id='kj37vd95'
+    to='requester@example.com/foo'
+    type='result'&gt;
+  &lt;query xmlns='http://jabber.org/protocol/disco#info'&gt;
+    &lt;identity category='account' type='anonymous'/&gt;
+    &lt;feature var='http://jabber.org/protocol/disco#info'/&gt;
+    &lt;feature var='http://jabber.org/protocol/disco#items'/&gt;
+  &lt;/query&gt;
+&lt;/iq&gt;
+</pre></figure>
+<h2 id="security">6.
+       Security Considerations<a class="anchor-link" href="#security"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">The security considerations discussed in <span class="ref" style=""><a href="http://tools.ietf.org/html/rfc3920">RFC 3920</a></span>  [<a href="#nt-idm44867748982032">11</a>] and <span class="ref">RFC 4505</span> apply to the use of SASL ANONYMOUS in XMPP; specific suggestions regarding usage restrictions for anonymous users are provided under the <a href="#rec">Recommendations</a> section of this document.</p>
+<h2 id="iana">7.
+       IANA Considerations<a class="anchor-link" href="#iana"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">This document requires no interaction with the <span class="ref" style=""><a href="http://www.iana.org/">Internet Assigned Numbers Authority (IANA)</a></span>  [<a href="#nt-idm44867748936208">13</a>].</p>
+<h2 id="registrar">8.
+       XMPP Registrar Considerations<a class="anchor-link" href="#registrar"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">This document requires no interaction with the <span class="ref" style=""><a href="https://xmpp.org/registrar/">XMPP Registrar</a></span>  [<a href="#nt-idm44867748929664">14</a>].</p>
+<h2 id="ack">9.
+       Acknowledgements<a class="anchor-link" href="#ack"><abbr title="Link to this point in the document">¶</abbr></a></h2>
+  <p class="" style="">Thanks to Dave Cridland, Tuomas Koski, Jack Moffitt, Andy Skelton, and Kurt Zeilenga for their feedback.</p>
+<hr><a name="appendices"></a><h2>Appendices</h2><h3 id="appendix-docinfo">Appendix A: Document Information<a class="anchor-link" href="#appendix-docinfo"><abbr title="Link to this point in the document">¶</abbr></a></h3><dl class="compact"><dt>Series</dt><dd><a href="https://xmpp.org/extensions/">XEP</a></dd><dt>Number</dt><dd>0175</dd><dt>Publisher</dt><dd><a href="/xsf/">XMPP Standards Foundation</a></dd><dt>Status</dt><dd><a href="https://xmpp.org/extensions/xep-0001.html#states-Active">Active</a></dd><dt>Type</dt><dd><a href="https://xmpp.org/extensions/xep-0001.html#types-Informational">Informational</a></dd><dt>Version</dt><dd>1.2</dd><dt>Last Updated</dt><dd>2009-09-30</dd><dt>Approving Body</dt><dd><a href="https://xmpp.org/council/">XMPP Council</a></dd><dt>Dependencies</dt><dd>XMPP Core</dd><dt>Supersedes</dt><dd>None</dd><dt>Superseded By</dt><dd>None</dd><dt>Short Name</dt><dd>N/A</dd><dt>Source Control</dt><dd><a class="standardsButton" href="https://github.com/xsf/xeps/blob/master/xep-0175.xml">HTML</a></dd></dl><p>
+          This document in other formats:
+          <a class="standardsButton" href="https://xmpp.org/extensions/xep-0175.xml">XML</a> 
+          <a class="standardsButton" href="https://xmpp.org/extensions/xep-0175.pdf">PDF</a></p><h3 id="appendix-authorinfo">Appendix B: Author Information<a class="anchor-link" href="#appendix-authorinfo"><abbr title="Link to this point in the document">¶</abbr></a></h3><h5>Peter Saint-Andre</h5><dl class="compact"><dt>Email</dt><dd><a href="mailto:stpeter@stpeter.im">stpeter@stpeter.im</a></dd><dt>JabberID</dt><dd><a href="xmpp:stpeter@jabber.org">stpeter@jabber.org</a></dd><dt>URI</dt><dd><a href="https://stpeter.im/">https://stpeter.im/</a></dd></dl><h3 id="appendix-legal">Appendix C: Legal Notices<a class="anchor-link" href="#appendix-legal"><abbr title="Link to this point in the document">¶</abbr></a></h3><div class="indent"><h4>Copyright</h4><p>This XMPP Extension Protocol is copyright © 1999 – 2024 by the <a href="https://xmpp.org/">XMPP Standards Foundation</a> (XSF).</p><h4>Permissions</h4><p>Permission is hereby granted, free of charge, to any person obtaining a copy of this specification (the "Specification"), to make use of the Specification without restriction, including without limitation the rights to implement the Specification in a software program, deploy the Specification in a network service, and copy, modify, merge, publish, translate, distribute, sublicense, or sell copies of the Specification, and to permit persons to whom the Specification is furnished to do so, subject to the condition that the foregoing copyright notice and this permission notice shall be included in all copies or substantial portions of the Specification. Unless separate permission is granted, modified works that are redistributed shall not contain misleading information regarding the authors, title, number, or publisher of the Specification, and shall not claim endorsement of the modified works by the authors, any organization or project to which the authors belong, or the XMPP Standards Foundation.</p><h4>Disclaimer of Warranty</h4><p class="box info">## NOTE WELL: This Specification is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. ##</p><h4>Limitation of Liability</h4><p>In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall the XMPP Standards Foundation or any author of this Specification be liable for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising from, out of, or in connection with the Specification or the implementation, deployment, or other use of the Specification (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if the XMPP Standards Foundation or such author has been advised of the possibility of such damages.</p><h4>IPR Conformance</h4><p>This XMPP Extension Protocol has been contributed in full conformance with the XSF's Intellectual Property Rights Policy (a copy of which can be found at &lt;<a href="https://xmpp.org/about/xsf/ipr-policy">https://xmpp.org/about/xsf/ipr-policy</a>&gt; or obtained by writing to XMPP Standards Foundation, P.O. Box 787, Parker, CO 80134 USA).</p><h4>Visual Presentation</h4><p>The HTML representation (you are looking at) is maintained by the XSF. It is based on the <a href="http://yaml.de">YAML CSS Framework</a>, which is licensed under the terms of the <a href="https://creativecommons.org/licenses/by/2.0/">CC-BY-SA 2.0</a> license.</p></div><h3 id="appendix-xmpp">Appendix D: Relation to XMPP<a class="anchor-link" href="#appendix-xmpp"><abbr title="Link to this point in the document">¶</abbr></a></h3><p class="indent">The Extensible Messaging and Presence Protocol (XMPP) is defined in the XMPP Core (RFC 6120) and XMPP IM (RFC 6121) specifications contributed by the XMPP Standards Foundation to the Internet Standards Process, which is managed by the Internet Engineering Task Force in accordance with RFC 2026. Any protocol defined in this document has been developed outside the Internet Standards Process and is to be understood as an extension to XMPP rather than as an evolution, development, or modification of XMPP itself.</p><h3 id="appendix-discuss">Appendix E: Discussion Venue<a class="anchor-link" href="#appendix-discuss"><abbr title="Link to this point in the document">¶</abbr></a></h3><p class="indent">The primary venue for discussion of XMPP Extension Protocols is the &lt;<a href="https://mail.jabber.org/mailman/listinfo/standards">standards@xmpp.org</a>&gt; discussion list.</p><p class="indent">Discussion on other xmpp.org discussion lists might also be appropriate; see &lt;<a href="https://xmpp.org/community/">https://xmpp.org/community/</a>&gt; for a complete list.</p><p class="indent">Errata can be sent to &lt;<a href="mailto:editor@xmpp.org">editor@xmpp.org</a>&gt;.</p><h3 id="appendix-conformance">Appendix F: Requirements Conformance<a class="anchor-link" href="#appendix-conformance"><abbr title="Link to this point in the document">¶</abbr></a></h3><p class="indent">
+          The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+          "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED",
+          "MAY", and "OPTIONAL" in this document are to be interpreted as
+          described in <a href="https://tools.ietf.org/rfc/bcp/bcp14.txt">BCP 14</a>
+          [<a href="https://www.ietf.org/rfc/rfc2119.txt">RFC2119</a>]
+          [<a href="https://tools.ietf.org/rfc/rfc8174.txt">RFC8174</a>] when,
+          and only when, they appear in all capitals, as shown here.
+        </p><h3 id="appendix-notes">Appendix G: Notes<a class="anchor-link" href="#appendix-notes"><abbr title="Link to this point in the document">¶</abbr></a></h3><div class="indent"><p><a name="nt-idm44867749053872">1</a>. RFC 6120: Extensible Messaging and Presence Protocol (XMPP): Core &lt;<a href="http://tools.ietf.org/html/rfc6120">http://tools.ietf.org/html/rfc6120</a>&gt;.</p><p><a name="nt-idm44867749049648">2</a>. RFC 4422: Simple Authentication and Security Layer (SASL) &lt;<a href="http://tools.ietf.org/html/rfc4422">http://tools.ietf.org/html/rfc4422</a>&gt;.</p><p><a name="nt-idm44867749040464">3</a>. RFC 4505: The SASL ANONYMOUS Mechanism &lt;<a href="http://tools.ietf.org/html/rfc4505">http://tools.ietf.org/html/rfc4505</a>&gt;.</p><p><a name="nt-idm44867749030528">4</a>. RFC 4122: A Universally Unique IDentifier (UUID) URN Namespace &lt;<a href="http://tools.ietf.org/html/rfc4122">http://tools.ietf.org/html/rfc4122</a>&gt;.</p><p><a name="nt-idm44867749021168">5</a>. XEP-0205: Best Practices to Discourage Denial of Service Attacks &lt;<a href="https://xmpp.org/extensions/xep-0205.html">https://xmpp.org/extensions/xep-0205.html</a>&gt;.</p><p><a name="nt-idm44867749009392">6</a>. RFC 6121: Extensible Messaging and Presence Protocol (XMPP): Instant Messaging and Presence &lt;<a href="http://tools.ietf.org/html/rfc6121">http://tools.ietf.org/html/rfc6121</a>&gt;.</p><p><a name="nt-idm44867749004976">7</a>. XEP-0045: Multi-User Chat &lt;<a href="https://xmpp.org/extensions/xep-0045.html">https://xmpp.org/extensions/xep-0045.html</a>&gt;.</p><p><a name="nt-idm44867748996064">8</a>. XEP-0060: Publish-Subscribe &lt;<a href="https://xmpp.org/extensions/xep-0060.html">https://xmpp.org/extensions/xep-0060.html</a>&gt;.</p><p><a name="nt-idm44867748993328">9</a>. XEP-0049: Private XML Storage &lt;<a href="https://xmpp.org/extensions/xep-0049.html">https://xmpp.org/extensions/xep-0049.html</a>&gt;.</p><p><a name="nt-idm44867748987184">10</a>. XEP-0065: SOCKS5 Bytestreams &lt;<a href="https://xmpp.org/extensions/xep-0065.html">https://xmpp.org/extensions/xep-0065.html</a>&gt;.</p><p><a name="nt-idm44867748982032">11</a>. RFC 3920: Extensible Messaging and Presence Protocol (XMPP): Core &lt;<a href="http://tools.ietf.org/html/rfc3920">http://tools.ietf.org/html/rfc3920</a>&gt;.</p><p><a name="nt-idm44867748949808">12</a>. XEP-0030: Service Discovery &lt;<a href="https://xmpp.org/extensions/xep-0030.html">https://xmpp.org/extensions/xep-0030.html</a>&gt;.</p><p><a name="nt-idm44867748936208">13</a>. The Internet Assigned Numbers Authority (IANA) is the central coordinator for the assignment of unique parameter values for Internet protocols, such as port numbers and URI schemes. For further information, see &lt;<a href="http://www.iana.org/">http://www.iana.org/</a>&gt;.</p><p><a name="nt-idm44867748929664">14</a>. The XMPP Registrar maintains a list of reserved protocol namespaces as well as registries of parameters used in the context of XMPP extension protocols approved by the XMPP Standards Foundation. For further information, see &lt;<a href="https://xmpp.org/registrar/">https://xmpp.org/registrar/</a>&gt;.</p></div><h3 id="appendix-revs">Appendix H: Revision History<a class="anchor-link" href="#appendix-revs"><abbr title="Link to this point in the document">¶</abbr></a></h3><p>Note: Older versions of this specification might be available at <a href="https://xmpp.org/extensions/attic/">https://xmpp.org/extensions/attic/</a></p><ol class="revision-history"><li id="revision-history-v1.2"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0175-1.2.html">1.2</a> (2009-09-30)<a class="anchor-link" href="#revision-history-v1.2"><abbr title="Link to this point in the document">¶</abbr></a></div><p class="" style="">Provided more detailed recommendations regarding usage restrictions for anonymous users, including the concept of different deployment types; added note about the account/anonymous service discovery identity.</p><div class="revision-author">psa</div></li><li id="revision-history-v1.1"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0175-1.1.html">1.1</a> (2007-11-07)<a class="anchor-link" href="#revision-history-v1.1"><abbr title="Link to this point in the document">¶</abbr></a></div><p class="" style="">Recommended that node identifier be a UUID; recommended that trace data not be included.</p><div class="revision-author">psa</div></li><li id="revision-history-v1.0"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0175-1.0.html">1.0</a> (2006-09-20)<a class="anchor-link" href="#revision-history-v1.0"><abbr title="Link to this point in the document">¶</abbr></a></div><p class="" style="">Per a vote of the Jabber Council, advanced status to Active.</p><div class="revision-author">psa</div></li><li id="revision-history-v0.1"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0175-0.1.html">0.1</a> (2006-02-09)<a class="anchor-link" href="#revision-history-v0.1"><abbr title="Link to this point in the document">¶</abbr></a></div><p class="" style="">Initial version; modified flow to remove unecessary challenge.</p><div class="revision-author">psa</div></li><li id="revision-history-v0.0.1"><div class="revision-head">Version <a href="https://xmpp.org/extensions/attic/xep-0175-0.0.1.html">0.0.1</a> (2006-01-24)<a class="anchor-link" href="#revision-history-v0.0.1"><abbr title="Link to this point in the document">¶</abbr></a></div><p class="" style="">First draft.</p><div class="revision-author">psa</div></li></ol><h3 id="appendix-biblatex">Appendix I: Bib(La)TeX Entry</h3><pre>
+@report{saint-andre2006n/a,
+  title = {Best Practices for Use of SASL ANONYMOUS},
+  author = {Saint-Andre, Peter},
+  type = {XEP},
+  number = {0175},
+  version = {1.2},
+  institution = {XMPP Standards Foundation},
+  url = {https://xmpp.org/extensions/xep-0175.html},
+  date = {2006-01-24/2009-09-30},
+}</pre><p>END</p></body></html>
