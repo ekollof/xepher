@@ -461,15 +461,26 @@ Xepher follows **semantic versioning** (MAJOR.MINOR.PATCH):
 ### Release checklist
 
 1. **All commits pushed**, 147 doctests passing (`make DEBUG=1`), and optimized build OK (`make`).
-2. **Bump version** in the three packaging files (all must match):
-   - `packaging/arch/PKGBUILD` — `pkgver=X.Y.Z`
+2. **Bump version** in the packaging files `release.sh` checks (all must match):
+   - `packaging/arch/PKGBUILD` — `pkgver=X.Y.Z` (and `packaging/arch/stable/PKGBUILD` when present)
    - `packaging/rpm/weechat-xmpp.spec` — `Version: X.Y.Z` + new `%changelog` entry
    - `packaging/debian/changelog` — new stanza at the top
+   - `packaging/freebsd/Makefile` — `PORTVERSION=`
+   - `packaging/openbsd/Makefile` — `V =`
+   - `packaging/nix/package.nix` — `version =` (the in-repo flake, not nixpkgs)
+   - Leave `packaging/arch/git/PKGBUILD` alone (`pkgver()` comes from `git describe`)
 3. **Commit** the version bump: `chore: bump packaging to vX.Y.Z`
 4. **Tag** the release: `git tag -a vX.Y.Z -m "vX.Y.Z — <one-line summary>"`
 5. **Push** commits and tag: `git push && git push origin vX.Y.Z`
 6. **Push the tag** — GitHub Actions (`.github/workflows/packages.yml`) builds all five distro packages sequentially and attaches them to the release automatically.
 7. **Edit the release** on GitHub if needed (title, notes) — `gh release edit vX.Y.Z`.
+8. **Bump nixpkgs** after the tag is on GitHub. `fetchFromGitHub` reads `tag = "v${version}"`, so the bump waits until `vX.Y.Z` exists. The expression is `pkgs/by-name/xe/xepher/package.nix` in a checkout of nixpkgs (this machine: `/home/ekollof/src/nixpkgs`, fork remote `ekollof`, upstream `origin`).
+   - Branch from current `origin/master`. Update `version`. Replace `hash` with `lib.fakeHash`, run the build below, and put the printed SRI hash (`sha256-…`) back. That hash is the unpacked `fetchFromGitHub` output.
+   - Keep `clangStdenv`, `dontUseCmakeConfigure`, `strictDeps = true`, and `__structuredAttrs = true` (nixpkgs-vet NPV-164 and NPV-166). Keep `bison` and `flex` in `nativeBuildInputs`, and `flex` in `buildInputs` so `FlexLexer.h` is on the host include path.
+   - Format with `nixfmt`. Build in the `nixos/nix` container (`sudo docker`; this host has no `nix` binary). `sandbox = true`. `nix-build -A xepher -A xepher.tests.load-plugin` must print `Plugin "xmpp" loaded`.
+   - Author the commit as `Emiel (Andrath) Kollof <324236+ekollof@users.noreply.github.com>`. Message: `xepher: <old> -> X.Y.Z`. An agent commit also carries `Assisted-by: Grok Build (xAI Grok 4.7)` (nixpkgs automation policy).
+   - Push the branch to `ekollof/nixpkgs` and open a PR against `NixOS/nixpkgs` `master`. While https://github.com/NixOS/nixpkgs/pull/580553 is still open, push the bump onto that branch. After it merges, open a new update PR.
+   - WeeChat does not autoload this plugin. The load path is `/plugin load <xepher>/lib/weechat/plugins/xmpp.so`.
 
 ### Building packages
 

@@ -141,8 +141,17 @@ When releasing a new version, update these files:
 5. **OpenBSD**: `packaging/openbsd/Makefile`
    - Update `V=` and `GH_TAGNAME=`
 
-6. **Nix**: `packaging/nix/package.nix`
+6. **Nix flake** (this repo): `packaging/nix/package.nix`
    - Update `version =`
+   - `release.sh` checks this file with the distro packaging files.
+
+7. **nixpkgs** (after the `vX.Y.Z` tag is on GitHub): `pkgs/by-name/xe/xepher/package.nix`
+   - Set `version`. The source uses `tag = "v${version}"`.
+   - Replace `hash` with `lib.fakeHash`, build once, and use the SRI hash the fixed-output derivation prints.
+   - Keep `clangStdenv`, `dontUseCmakeConfigure`, `strictDeps = true`, `__structuredAttrs = true`, and `flex` in both `nativeBuildInputs` and `buildInputs`.
+   - `nixfmt` the file. `nix-build -A xepher -A xepher.tests.load-plugin` must print `Plugin "xmpp" loaded`.
+   - PR to `NixOS/nixpkgs` from the `ekollof/nixpkgs` fork: `xepher: <old> -> X.Y.Z`.
+   - The first package PR is https://github.com/NixOS/nixpkgs/pull/580553. Until it merges, push the bump onto that branch.
 
 ## Package Contents
 
