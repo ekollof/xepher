@@ -1,6 +1,6 @@
 {
   lib,
-  stdenv,
+  clangStdenv,
   cmake,
   ninja,
   pkg-config,
@@ -20,11 +20,18 @@
   src,
 }:
 
-stdenv.mkDerivation {
+# GCC 16 treats warn_unused_result as an error under -Werror. The tree is
+# developed and released with Clang.
+clangStdenv.mkDerivation {
   pname = "xepher";
   version = "1.1.0";
 
   inherit src;
+
+  # The makefile configures CMake itself. The nixpkgs CMake hook would configure
+  # first, leave the builder in build/, and then install would miss xmpp.so
+  # (CMake writes the module to the source root).
+  dontUseCmakeConfigure = true;
 
   nativeBuildInputs = [
     cmake

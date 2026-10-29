@@ -18,6 +18,10 @@ __pycache__/
 build/
 obj/
 
+# Nix `nix build` output symlink
+result
+result-*
+
 # Object files
 *.o
 *.ko
