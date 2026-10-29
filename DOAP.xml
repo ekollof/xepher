@@ -876,6 +876,14 @@
 
     <release>
       <Version>
+        <revision>1.1.0</revision>
+        <created>2026-10-29</created>
+        <xmpp:note xml:lang='en'>Displayed markers wait until the buffer is viewed, with a dwell delay. Live PMs and carbons stay ordered after archive catchup. Offline PM delivery waits until chat history finishes. Nix package (flake.nix).</xmpp:note>
+      </Version>
+    </release>
+
+    <release>
+      <Version>
         <revision>1.0.0</revision>
         <created>2026-10-09</created>
         <xmpp:note xml:lang='en'>Requires WeeChat 4.3 or newer and C++23. Interactive ad-hoc, MUC configuration/registration, and account registration forms; verified STARTTLS for account registration; MAM replay/checkpoint and PubSub archive fixes; legacy OMEMO device/key handling fixes; vCard preservation and publication acknowledgement.</xmpp:note>
