@@ -312,6 +312,26 @@
     </div>
   </div>
 
+  <section class="block" id="try">
+    <h2>Try it without an account</h2>
+    <p>On current master (<a href="https://aur.archlinux.org/packages/xepher-git">xepher-git</a>, a Nix checkout, or a source build), SASL ANONYMOUS (XEP-0175) connects the way Poezio does. No password. The default server is <code>anon.jeproteste.info</code>. The server assigns a new temporary JID on every connect.</p>
+    <pre>/account add --anon
+/account connect anon
+/enter room@conference.example.org</pre>
+    <p>The v1.1.0 release packages do not include this command yet.</p>
+  </section>
+
+  <section class="block" id="v1-1-0">
+    <h2>v1.1.0</h2>
+    <ul>
+      <li>Displayed markers wait until the buffer is viewed, with a dwell delay.</li>
+      <li>Live PMs and carbons stay ordered after archive catchup.</li>
+      <li>Offline PM delivery waits until chat history finishes.</li>
+      <li>Nix package (<code>flake.nix</code>).</li>
+    </ul>
+    <p><a href="https://github.com/ekollof/xepher/releases/tag/v1.1.0">Release v1.1.0</a></p>
+  </section>
+
   <section class="block" id="install">
     <h2>Installation</h2>
     <p>Requires <strong>WeeChat 4.3 or newer</strong>. Source builds require
@@ -439,6 +459,7 @@ make install
       <tbody>
         <tr><td>XEP-0030</td><td>Service Discovery</td><td><code>/disco summary</code>; auto-print after connect</td></tr>
         <tr><td>XEP-0045</td><td>Multi-User Chat</td><td>Admin, bookmarks, create, invitations</td></tr>
+        <tr><td>XEP-0175</td><td>SASL ANONYMOUS</td><td><code>/account add --anon</code> on current master</td></tr>
         <tr><td>XEP-0198</td><td>Stream Management</td><td>Resume + retransmit; MUC rejoin on reconnect</td></tr>
         <tr><td>XEP-0277 / 0472</td><td>Microblogging / Social Feed</td><td>PubSub; Movim-compatible</td></tr>
         <tr><td>XEP-0313</td><td>MAM</td><td>LMDB cache + RSM</td></tr>
