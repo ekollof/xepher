@@ -119,7 +119,7 @@ More detail: [Installation wiki](https://github.com/ekollof/xepher/wiki/Installa
 
 ### Pre-built packages
 
-Binary packages for **v0.8.1+** (current: **[v1.1.0](https://github.com/ekollof/xepher/releases/tag/v1.1.0)**)
+Binary packages for **v0.8.1+** (current: **[v1.1.1](https://github.com/ekollof/xepher/releases/tag/v1.1.1)**)
 are on [GitHub Releases](https://github.com/ekollof/xepher/releases). Pick your distro:
 
 | Platform | Package |
@@ -254,8 +254,10 @@ that function. If `std::expected` is missing instead, update the selected
 compiler/library pair.
 
 The Make wrapper reuses the configured compiler when `CC`/`CXX` are omitted,
-including during `make install`. Explicit command-line or environment compiler
-settings override it. To change compilers, use a fresh build directory:
+including during `make install`. A command-line compiler (`make CXX=clang++-20`)
+and any environment compiler other than `cc`/`gcc`/`c++`/`g++` override it.
+Fedora RPM and Alpine abuild export `g++`; that stays on Clang, which is what
+the packages build with. To change compilers, use a fresh build directory:
 
 ```sh
 make BUILD_DIR=build-clang20 CC=clang-20 CXX=clang++-20 DEBUG=1

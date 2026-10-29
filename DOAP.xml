@@ -876,6 +876,14 @@
 
     <release>
       <Version>
+        <revision>1.1.1</revision>
+        <created>2026-10-29</created>
+        <xmpp:note xml:lang='en'>Package builds stay on Clang when RPM or Alpine export g++. SASL ANONYMOUS login via /account add --anon (XEP-0175); the server assigns a temporary JID.</xmpp:note>
+      </Version>
+    </release>
+
+    <release>
+      <Version>
         <revision>1.1.0</revision>
         <created>2026-10-29</created>
         <xmpp:note xml:lang='en'>Displayed markers wait until the buffer is viewed, with a dwell delay. Live PMs and carbons stay ordered after archive catchup. Offline PM delivery waits until chat history finishes. Nix package (flake.nix).</xmpp:note>

@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        1.1.0
+Version:        1.1.1
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -72,6 +72,10 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Thu Oct 29 2026 Emiel Kollof <emiel@kollof.nl> - 1.1.1-1
+- Keep package builds on Clang when RPM or Alpine export g++
+- Add SASL ANONYMOUS login (/account add --anon, XEP-0175)
+
 * Thu Oct 29 2026 Emiel Kollof <emiel@kollof.nl> - 1.1.0-1
 - Wait to send displayed markers until the buffer is viewed, with a dwell delay
 - Keep live PMs and carbons ordered after archive catchup

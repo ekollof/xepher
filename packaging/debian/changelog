@@ -1,3 +1,11 @@
+xepher (1.1.1-1) unstable; urgency=medium
+
+  * Keep package builds on Clang when RPM or Alpine export g++.
+    Fixes the Fedora and Alpine v1.1.0 package failure.
+  * Add SASL ANONYMOUS login (/account add --anon, XEP-0175).
+
+ -- Emiel Kollof <emiel@kollof.nl>  Thu, 29 Oct 2026 20:00:00 +0000
+
 xepher (1.1.0-1) unstable; urgency=medium
 
   * Wait to send displayed markers until the buffer is viewed, with a dwell delay.
