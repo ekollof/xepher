@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           xepher
-Version:        1.0.0
+Version:        1.1.0
 Release:        1%{?dist}
 Summary:        Xepher — WeeChat plugin for XMPP/Jabber protocol
 
@@ -72,6 +72,12 @@ install -D -m 0755 xmpp.so %{buildroot}%{_libdir}/weechat/plugins/xmpp.so
 %{_libdir}/weechat/plugins/xmpp.so
 
 %changelog
+* Thu Oct 29 2026 Emiel Kollof <emiel@kollof.nl> - 1.1.0-1
+- Wait to send displayed markers until the buffer is viewed, with a dwell delay
+- Keep live PMs and carbons ordered after archive catchup
+- Hold offline PM delivery until chat history finishes
+- Add a Nix package
+
 * Fri Oct 09 2026 Emiel Kollof <emiel@kollof.nl> - 1.0.0-1
 - Require WeeChat 4.3 or newer; retain C++23 as the minimum language standard
 - Add interactive ad-hoc, MUC configuration/registration, and account registration forms

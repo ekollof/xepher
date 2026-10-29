@@ -127,6 +127,7 @@ check_packaging_versions() {
     deb_ver=$(packaging_version_from "${root}/packaging/debian/changelog" 's/^xepher (//p' | sed 's/-.*//')
     fbsd_ver=$(packaging_version_from "${root}/packaging/freebsd/Makefile" 's/^PORTVERSION=//p')
     obsd_ver=$(packaging_version_from "${root}/packaging/openbsd/Makefile" 's/^V =[[:space:]]*//p')
+    nix_ver=$(packaging_version_from "${root}/packaging/nix/package.nix" 's/^  version = "//p' | sed 's/";.*//')
 
     mismatch=0
     for entry in \
@@ -134,7 +135,8 @@ check_packaging_versions() {
         "rpm:$rpm_ver" \
         "debian:$deb_ver" \
         "freebsd:$fbsd_ver" \
-        "openbsd:$obsd_ver"
+        "openbsd:$obsd_ver" \
+        "nix:$nix_ver"
     do
         name=${entry%%:*}
         value=${entry#*:}

@@ -64,6 +64,14 @@ sudo xbps-install -R . xepher-*.xbps   # or install the .xbps from Releases
 sudo apk add --allow-untrusted xepher-*-r0.apk
 ```
 
+**Nix** (from a checkout; Nix looks up dependencies in nixpkgs):
+
+```sh
+nix build
+ln -sfn "$(nix path-info)"/lib/weechat/plugins/xmpp.so \
+  ~/.local/share/weechat/plugins/xmpp.so
+```
+
 **From source** (Linux; on BSD use `gmake`):
 
 ```sh

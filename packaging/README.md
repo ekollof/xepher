@@ -11,6 +11,7 @@ This directory contains packaging infrastructure for building distribution packa
 - **Void Linux** (.xbps packages)
 - **FreeBSD** (.pkg packages — port skeleton in `packaging/freebsd/`)
 - **OpenBSD** (.tgz packages — port skeleton in `packaging/openbsd/`)
+- **Nix** (`flake.nix` and `packaging/nix/package.nix`; `nix build` from the repo)
 
 ## Quick Start
 
@@ -139,6 +140,9 @@ When releasing a new version, update these files:
 
 5. **OpenBSD**: `packaging/openbsd/Makefile`
    - Update `V=` and `GH_TAGNAME=`
+
+6. **Nix**: `packaging/nix/package.nix`
+   - Update `version =`
 
 ## Package Contents
 

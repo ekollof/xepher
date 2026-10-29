@@ -96,5 +96,9 @@ makepkg -sf --noconfirm
 mkdir -p "${OUTPUT_DIR}"
 cp "${BUILD_DIR}"/*.pkg.tar.zst "${OUTPUT_DIR}/"
 
+# AUR submission file. The makepkg recipe above uses the local tarball;
+# this is the git-tag PKGBUILD from the repo, versioned with this release.
+cp /project/packaging/arch/PKGBUILD "${OUTPUT_DIR}/PKGBUILD"
+
 echo "=== [Arch] Done. Packages in ${OUTPUT_DIR} ==="
-ls -lh "${OUTPUT_DIR}"/*.pkg.tar.zst
+ls -lh "${OUTPUT_DIR}"/*.pkg.tar.zst "${OUTPUT_DIR}/PKGBUILD"

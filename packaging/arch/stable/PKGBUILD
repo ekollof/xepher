@@ -1,13 +1,13 @@
 # Maintainer: Emiel Kollof <emiel@kollof.nl>
 pkgname=xepher
-pkgver=0.12.0
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="Xepher — WeeChat plugin for XMPP/Jabber protocol"
 arch=('x86_64' 'aarch64')
 url="https://github.com/ekollof/xepher"
-license=('MPL-2.0')
+license=('MPL2')
 depends=(
-    'weechat'
+    'weechat>=4.3'
     'libstrophe'
     'libxml2'
     'lmdb'

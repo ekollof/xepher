@@ -1,3 +1,12 @@
+xepher (1.1.0-1) unstable; urgency=medium
+
+  * Wait to send displayed markers until the buffer is viewed, with a dwell delay.
+  * Keep live PMs and carbons ordered after archive catchup.
+  * Hold offline PM delivery until chat history finishes.
+  * Add a Nix package (flake and packaging/nix).
+
+ -- Emiel Kollof <emiel@kollof.nl>  Thu, 29 Oct 2026 18:00:00 +0000
+
 xepher (1.0.0-1) unstable; urgency=medium
 
   * Require WeeChat >= 4.3; retain C++23 as the minimum language standard.

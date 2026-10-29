@@ -120,6 +120,7 @@ jobs:
             packaging/build/*.pkg.tar.zst
             packaging/build/*.apk
             packaging/build/*.xbps
+            packaging/build/PKGBUILD
 
       - name: Attach packages to GitHub Release
         # Tag push always attaches. Dispatch attaches when attach_to_release is true
@@ -138,5 +139,6 @@ jobs:
             packaging/build/*.pkg.tar.zst
             packaging/build/*.apk
             packaging/build/*.xbps
+            packaging/build/PKGBUILD
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
