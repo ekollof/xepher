@@ -11,7 +11,9 @@ NPROC ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 # Default toolchain: Clang/Clang++ (C++23). GNU make predefines CXX=g++.
 # Keep a configured compiler when a later invocation (notably install) omits
-# CC/CXX. Explicit command-line or environment selections still take priority.
+# CC/CXX. Command-line `make CXX=...` and a non-default environment compiler
+# (CXX=clang++-20) still win. RPM %make_build and Alpine abuild export
+# CC=gcc and CXX=g++; that is the distro default, not a chosen toolchain.
 CACHED_CC := $(shell sed -n 's/^CMAKE_C_COMPILER:[^=]*=//p' "$(BUILD_DIR)/CMakeCache.txt" 2>/dev/null)
 CACHED_CXX := $(shell sed -n 's/^CMAKE_CXX_COMPILER:[^=]*=//p' "$(BUILD_DIR)/CMakeCache.txt" 2>/dev/null)
 ifeq ($(UNAME_S),Darwin)
@@ -24,11 +26,24 @@ else
 DEFAULT_CC := clang
 DEFAULT_CXX := clang++
 endif
-ifneq ($(filter default undefined,$(origin CC)),)
+# cc/gcc/c++/g++ from the environment are the make builtin under another name.
+ifneq ($(origin CC),command line)
+ifneq ($(filter environment,$(origin CC)),)
+ifneq ($(filter cc gcc c++ g++,$(notdir $(CC))),)
 CC := $(or $(CACHED_CC),$(DEFAULT_CC))
 endif
-ifneq ($(filter default undefined,$(origin CXX)),)
+else
+CC := $(or $(CACHED_CC),$(DEFAULT_CC))
+endif
+endif
+ifneq ($(origin CXX),command line)
+ifneq ($(filter environment,$(origin CXX)),)
+ifneq ($(filter cc gcc c++ g++,$(notdir $(CXX))),)
 CXX := $(or $(CACHED_CXX),$(DEFAULT_CXX))
+endif
+else
+CXX := $(or $(CACHED_CXX),$(DEFAULT_CXX))
+endif
 endif
 
 # ccache via CMAKE_*_COMPILER_LAUNCHER (CMake-native). CXX="ccache clang++" is
