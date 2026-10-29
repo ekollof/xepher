@@ -41,7 +41,7 @@
     "image": "https://ekollof.github.io/xepher/og.png",
     "screenshot": "https://ekollof.github.io/xepher/screenshot.png",
     "description": "Modern, full-featured XMPP for WeeChat with OMEMO, MAM, PubSub microblogging, HTTP upload, and terminal image previews. C++23 WeeChat plugin.",
-    "softwareVersion": "1.1.0",
+    "softwareVersion": "1.1.1",
     "license": "https://www.mozilla.org/MPL/2.0/",
     "downloadUrl": "https://github.com/ekollof/xepher/releases/latest"
   }
@@ -349,11 +349,19 @@
 
   <section class="block" id="try">
     <h2>Try it without an account</h2>
-    <p>On current master (<a href="https://aur.archlinux.org/packages/xepher-git">xepher-git</a>, a Nix checkout, or a source build), SASL ANONYMOUS (XEP-0175) connects the way Poezio does. No password. The default server is <code>anon.jeproteste.info</code>. The server assigns a new temporary JID on every connect.</p>
+    <p>SASL ANONYMOUS (XEP-0175) connects the way Poezio does. No password. The default server is <code>anon.jeproteste.info</code>. The server assigns a new temporary JID on every connect. This is in v1.1.1 and current master.</p>
     <pre>/account add --anon
 /account connect anon
 /enter room@conference.example.org</pre>
-    <p>The v1.1.0 release packages do not include this command yet.</p>
+  </section>
+
+  <section class="block" id="v1-1-1">
+    <h2>v1.1.1</h2>
+    <ul>
+      <li>Fedora and Alpine packages build with Clang again. RPM and Alpine were exporting <code>g++</code>, and that build failed <code>-Werror</code>.</li>
+      <li>SASL ANONYMOUS login (<code>/account add --anon</code>, XEP-0175).</li>
+    </ul>
+    <p><a href="https://github.com/ekollof/xepher/releases/tag/v1.1.1">Release v1.1.1</a></p>
   </section>
 
   <section class="block" id="v1-1-0">
@@ -374,7 +382,7 @@
       CMake checks their installed version through pkg-config and rejects versions below 4.3.</p>
     <p>Pre-built packages for Debian, Fedora, Arch, Void, and Alpine are on
       <a href="https://github.com/ekollof/xepher/releases/latest">GitHub Releases</a>
-      (latest: <strong>v1.1.0</strong>). Packages are attached as each distribution build completes.</p>
+      (latest: <strong>v1.1.1</strong>). Packages are attached as each distribution build completes.</p>
     <p>Arch Linux, from the AUR.
       <a href="https://aur.archlinux.org/packages/xepher">xepher</a> builds the current release tag.
       <a href="https://aur.archlinux.org/packages/xepher-git">xepher-git</a> tracks master and replaces <code>xepher</code>.</p>
@@ -494,7 +502,7 @@ make install
       <tbody>
         <tr><td>XEP-0030</td><td>Service Discovery</td><td><code>/disco summary</code>; auto-print after connect</td></tr>
         <tr><td>XEP-0045</td><td>Multi-User Chat</td><td>Admin, bookmarks, create, invitations</td></tr>
-        <tr><td>XEP-0175</td><td>SASL ANONYMOUS</td><td><code>/account add --anon</code> on current master</td></tr>
+        <tr><td>XEP-0175</td><td>SASL ANONYMOUS</td><td><code>/account add --anon</code></td></tr>
         <tr><td>XEP-0198</td><td>Stream Management</td><td>Resume + retransmit; MUC rejoin on reconnect</td></tr>
         <tr><td>XEP-0277 / 0472</td><td>Microblogging / Social Feed</td><td>PubSub; Movim-compatible</td></tr>
         <tr><td>XEP-0313</td><td>MAM</td><td>LMDB cache + RSM</td></tr>
