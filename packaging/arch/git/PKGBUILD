@@ -1,13 +1,13 @@
 # Maintainer: Emiel Kollof <emiel@kollof.nl>
 pkgname=xepher-git
-pkgver=0.7.0.r0.g573cdae
+pkgver=1.1.0.r0.g31d1738
 pkgrel=1
 pkgdesc="Xepher — WeeChat plugin for XMPP/Jabber protocol (git master)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/ekollof/xepher"
-license=('MPL-2.0')
+license=('MPL2')
 depends=(
-    'weechat'
+    'weechat>=4.3'
     'libstrophe'
     'libxml2'
     'lmdb'
@@ -26,14 +26,14 @@ makedepends=(
     'bison'
     'flex'
 )
-provides=('xepher')
+provides=("xepher=${pkgver}")
 conflicts=('xepher')
 source=("git+https://github.com/ekollof/xepher.git")
 sha256sums=('SKIP')
 
 pkgver() {
     cd "$srcdir/xepher"
-    git describe --long --tags | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
 prepare() {
