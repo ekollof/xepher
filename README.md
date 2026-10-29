@@ -44,7 +44,34 @@ and matching WeeChat development headers; CMake checks their installed version.
 
 ### 1. Install the plugin
 
-**Packages** (recommended) — grab the latest from
+**Arch Linux (AUR)** — release builds, one package per tag:
+
+```sh
+git clone https://aur.archlinux.org/xepher.git
+cd xepher
+makepkg -si
+```
+
+An AUR helper does the same thing: `yay -S xepher` or `paru -S xepher`.
+[`xepher-git`](https://aur.archlinux.org/packages/xepher-git) tracks `master`
+and replaces `xepher` when installed.
+
+**Nix** (from a checkout; dependencies come from nixpkgs):
+
+```sh
+git clone https://github.com/ekollof/xepher.git
+cd xepher
+nix build
+mkdir -p ~/.local/share/weechat/plugins
+ln -sfn "$(nix path-info)"/lib/weechat/plugins/xmpp.so \
+  ~/.local/share/weechat/plugins/xmpp.so
+```
+
+The flake builds `xmpp.so` for `x86_64-linux` and `aarch64-linux`. WeeChat
+stays your normal install; the symlink is how it finds the plugin. `icat.py`
+and `feed_compose.py` are at `$(nix path-info)/share/weechat/python/`.
+
+**Packages** — grab the latest from
 [Releases](https://github.com/ekollof/xepher/releases/latest):
 
 ```sh
@@ -54,7 +81,7 @@ sudo dpkg -i xepher_*_amd64.deb
 # Fedora
 sudo dnf install ./xepher-*-*.x86_64.rpm
 
-# Arch Linux
+# Arch Linux (release tarball; the AUR package above is the usual path)
 sudo pacman -U xepher-*-x86_64.pkg.tar.zst
 
 # Void
@@ -62,14 +89,6 @@ sudo xbps-install -R . xepher-*.xbps   # or install the .xbps from Releases
 
 # Alpine
 sudo apk add --allow-untrusted xepher-*-r0.apk
-```
-
-**Nix** (from a checkout; Nix looks up dependencies in nixpkgs):
-
-```sh
-nix build
-ln -sfn "$(nix path-info)"/lib/weechat/plugins/xmpp.so \
-  ~/.local/share/weechat/plugins/xmpp.so
 ```
 
 **From source** (Linux; on BSD use `gmake`):
@@ -90,7 +109,7 @@ make install         # plugin + icat.py/feed_compose.py with Python autoload
 /account connect work
 ```
 
-After upgrades: `make install`, then `/plugin reload xmpp` (reconnect accounts).
+After upgrades: let your AUR helper update `xepher`, or for Nix run `nix build` and refresh the symlink, or from source run `make install`. Then `/plugin reload xmpp` (reconnect accounts).
 
 More detail: [Installation wiki](https://github.com/ekollof/xepher/wiki/Installation) · full deps and platforms below.
 
@@ -100,18 +119,56 @@ More detail: [Installation wiki](https://github.com/ekollof/xepher/wiki/Installa
 
 ### Pre-built packages
 
-Binary packages for **v0.8.1+** (current: **[v0.12.0](https://github.com/ekollof/xepher/releases/tag/v0.12.0)**)
+Binary packages for **v0.8.1+** (current: **[v1.1.0](https://github.com/ekollof/xepher/releases/tag/v1.1.0)**)
 are on [GitHub Releases](https://github.com/ekollof/xepher/releases). Pick your distro:
 
 | Platform | Package |
 |----------|---------|
 | Debian / Ubuntu | `xepher_*_amd64.deb` |
 | Fedora / RHEL | `xepher-*-fc*.x86_64.rpm` |
-| Arch Linux | `xepher-*-x86_64.pkg.tar.zst` |
+| Arch Linux | [AUR `xepher`](https://aur.archlinux.org/packages/xepher), or `xepher-*-x86_64.pkg.tar.zst` from Releases |
 | Void Linux | `xepher-*_x86_64.xbps` |
 | Alpine Linux | `xepher-*-r0.apk` |
+| Nix | `nix build` from a checkout (`flake.nix`) |
 
 > Avoid v0.8.0 Fedora/Alpine artifacts (~1 GB packaging bug). Use **v0.8.1** or newer.
+
+### Arch Linux (AUR)
+
+[`xepher`](https://aur.archlinux.org/packages/xepher) builds the current release
+tag. [`xepher-git`](https://aur.archlinux.org/packages/xepher-git) builds
+`master` and replaces `xepher`.
+
+```sh
+git clone https://aur.archlinux.org/xepher.git
+cd xepher
+makepkg -si
+```
+
+`yay -S xepher` and `paru -S xepher` work the same way. For a rolling build,
+use `xepher-git` instead. The plugin lands in `/usr/lib/weechat/plugins/xmpp.so`.
+
+A downloaded release tarball still installs with
+`sudo pacman -U xepher-*-x86_64.pkg.tar.zst`.
+
+### Nix
+
+`flake.nix` builds the plugin with dependencies from nixpkgs
+(`x86_64-linux` and `aarch64-linux`):
+
+```sh
+git clone https://github.com/ekollof/xepher.git
+cd xepher
+nix build
+mkdir -p ~/.local/share/weechat/plugins
+ln -sfn "$(nix path-info)"/lib/weechat/plugins/xmpp.so \
+  ~/.local/share/weechat/plugins/xmpp.so
+```
+
+WeeChat stays your normal install. Repeat the `nix build` and `ln` after
+pulling. `icat.py` and `feed_compose.py` are at
+`$(nix path-info)/share/weechat/python/`.
+
 ### Dependencies
 
 | Library | Type | Linux | FreeBSD | OpenBSD | macOS (Homebrew) |
