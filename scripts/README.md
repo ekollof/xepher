@@ -17,6 +17,15 @@ loaded scripts, use `/python reload icat.py` or `/python reload feed_compose.py`
 `icat.py` requires Pillow (`python-pillow` or `pip install Pillow`); the installer
 does not install Python dependencies or change `xmpp.look.icat`.
 
+Video thumbnails additionally require optional `ffmpeg` on PATH. The script
+extracts one frame in its background worker and caches it under
+`${weechat_cache_dir}/icat/video_frames/`; no video or audio plays inside WeeChat.
+All graphics backends render the cached PNG while preview rows retain the
+original local media path, so Xepher's left-click handler opens the video using
+`xdg-open` (enable `/mouse enable`). GIFs remain static first-frame previews.
+The original video must be downloaded/decrypted locally first. If FFmpeg is
+unavailable or extraction fails, the file link remains usable.
+
 ## feed_compose.py
 
 Open `$EDITOR` to compose a `/feed post` message, then populate the WeeChat

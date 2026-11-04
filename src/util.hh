@@ -88,6 +88,9 @@ std::string apply_markdown_to_weechat(std::string_view text);
 
 // Returns true if `mime` is an image type (starts with "image/").
 XMPP_TEST_EXPORT bool is_image_mime_type(std::string_view mime);
+// Inline media previews: images directly, videos via a static FFmpeg frame.
+XMPP_TEST_EXPORT bool is_previewable_media_mime(std::string_view mime);
+XMPP_TEST_EXPORT bool is_previewable_media_path(std::string_view path);
 
 // Read image pixel dimensions from PNG/JPEG file headers.
 // Returns {width, height} or {0, 0} if unsupported or unreadable.

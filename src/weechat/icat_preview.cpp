@@ -117,21 +117,11 @@ void join_icat_background_workers()
     }
 }
 
-[[nodiscard]] bool path_is_image(std::string_view path)
-{
-    const auto dot = path.rfind('.');
-    if (dot == std::string_view::npos)
-        return false;
-    const std::string_view ext = path.substr(dot);
-    return ext == ".jpg" || ext == ".jpeg" || ext == ".png"
-        || ext == ".gif" || ext == ".webp";
-}
-
 [[nodiscard]] bool should_icat(const icat_preview_request &req)
 {
     if (!req.mime.empty())
-        return is_image_mime_type(req.mime);
-    return path_is_image(req.source);
+        return is_previewable_media_mime(req.mime);
+    return is_previewable_media_path(req.source);
 }
 
 [[nodiscard]] std::string image_cache_dir(account &acct)
@@ -146,14 +136,13 @@ void join_icat_background_workers()
 
 [[nodiscard]] std::string extension_from_url(std::string_view url)
 {
-    auto q = url.find('?');
+    auto q = url.find_first_of("?#");
     const std::string_view base = (q != std::string_view::npos) ? url.substr(0, q) : url;
     const auto dot = base.rfind('.');
     if (dot == std::string_view::npos || dot + 1 >= base.size())
         return ".bin";
     const std::string_view ext = base.substr(dot);
-    if (ext == ".jpg" || ext == ".jpeg" || ext == ".png"
-        || ext == ".gif" || ext == ".webp")
+    if (is_previewable_media_path(base))
         return std::string(ext);
     return ".bin";
 }
@@ -258,8 +247,7 @@ void cache_image_path_background(account *acct,
     if (dot == std::string_view::npos || dot + 1 >= path.size())
         return ".bin";
     const std::string_view ext = path.substr(dot);
-    if (ext == ".jpg" || ext == ".jpeg" || ext == ".png"
-        || ext == ".gif" || ext == ".webp")
+    if (is_previewable_media_path(path))
         return std::string(ext);
     return ".bin";
 }

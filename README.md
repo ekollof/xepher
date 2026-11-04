@@ -30,7 +30,7 @@ and matching WeeChat development headers; CMake checks their installed version.
 | **OMEMO** | Axolotl-namespace E2EE for PMs (MUC experimental); BTBV trust; `/omemo fingerprint` |
 | **History** | XEP-0313 MAM + LMDB cache across reconnects |
 | **Social** | PubSub microblog (Movim-compatible); optional feed buffers |
-| **Files** | XEP-0363 upload, SFS/ESFS, stickers; Kitty/cell inline previews via `icat` with left-click to open |
+| **Files** | XEP-0363 upload, SFS/ESFS, stickers; image and static video previews via `icat` with left-click to open/play |
 | **MUC** | Full XEP-0045: join, admin, bookmarks, moderation, reactions |
 | **UX** | Receipts/read markers, typing, corrections, replies, status bar encryption item |
 | **Forms** | Guided ad-hoc commands, MUC configuration/registration, and account registration with defaults, choices, validation, and masked private fields |
@@ -1307,16 +1307,16 @@ inline `<data xmlns='urn:xmpp:bob'/>`, and larger ones are IQ-hosted from
 entity capabilities. OMEMO-enabled channels still use HTTP upload with XEP-0448
 ESFS for images — outbound BoB inside encrypted messages is not implemented.
 
-#### Inline image display (weechat-icat)
+#### Inline image and video previews (weechat-icat)
 
 The `weechat-icat` script is **vendored** in `scripts/icat.py` (built from
 https://github.com/trygveaa/weechat-icat). Enabling `xmpp.look.icat` causes the
-plugin to automatically display received images inline using the Kitty graphics
-protocol:
+plugin to automatically display images and static video thumbnails inline using
+the configured graphics backend:
 
 - **Outgoing uploads** — the local file is shown via `/icat` immediately after the
   upload completes and the sharing link is posted (HTTP upload or XEP-0231 BoB).
-- **Incoming SFS / SIMS / OOB** — unencrypted image URLs are passed to `/icat`
+- **Incoming SFS / SIMS / OOB** — unencrypted image/video URLs are passed to `/icat`
   when the message is received (including MAM replay).
 - **Incoming encrypted uploads (XEP-0448 ESFS)** — after the file is decrypted and
   saved to `~/Downloads/xmpp/<jid>/<date>/`, `/icat` is invoked on the local path.
@@ -1329,13 +1329,29 @@ protocol:
   `~/.local/share/weechat/xmpp/bob_cache/<account>/`, and displayed inline (the
   `[Sticker]` placeholder is not shown when icat is enabled).
 
-With WeeChat mouse mode enabled (`/mouse enable`), left-click an image row
+With WeeChat mouse mode enabled (`/mouse enable`), left-click a preview row
 to open its downloaded local asset in the default desktop application via
 `xdg-open`. This requires the updated `scripts/icat.py`; reload it after updating
 (`/script reload icat.py`). Missing or removed assets produce an error.
 
-Only image MIME types (`image/*`) trigger icat. Other file types are announced
+Image and video MIME types (`image/*`, `video/*`) trigger icat. OOB links without
+MIME metadata are recognized by common image/video extensions, including MP4,
+WebM, MKV, and MOV (also with URL query parameters). Other files are announced
 normally without inline display.
+
+**Video previews** require optional **FFmpeg** (`ffmpeg` on PATH), in addition
+to Pillow. The original video is downloaded/decrypted locally, then the script's
+background worker extracts its first video frame into a cached PNG. Thumbnails
+are bounded to 1280 pixels wide, extraction times out after 20 seconds, and
+cache keys include the original path, file size, and modification time. Frames
+live under `${weechat_cache_dir}/icat/video_frames/`. Kitty, cell-art, and Sixel
+backends render that PNG; left-click opens the **original video** in the default
+player through `xdg-open`. There is no inline playback or audio. Missing FFmpeg
+or unsupported/corrupt videos leave the normal file link available.
+
+GIF and animated WebP previews remain static first frames; click opens the
+original animation. Newly extracted video previews appear asynchronously,
+including during MAM replay. Existing image rendering behavior is unchanged.
 
 **Note:** The plugin passes `-print_immediately` to icat so placeholder lines are
 printed synchronously, directly under the message that shared the image. Kitty

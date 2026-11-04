@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cctype>
 #include <cmath>
 #include <expected>
 #include <optional>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -833,6 +835,26 @@ std::string apply_markdown_to_weechat(std::string_view text)
 XMPP_TEST_EXPORT bool is_image_mime_type(std::string_view mime)
 {
     return mime.starts_with("image/");
+}
+
+XMPP_TEST_EXPORT bool is_previewable_media_mime(std::string_view mime)
+{
+    return is_image_mime_type(mime) || mime.starts_with("video/");
+}
+
+XMPP_TEST_EXPORT bool is_previewable_media_path(std::string_view path)
+{
+    path = path.substr(0, path.find_first_of("?#"));
+    const auto dot = path.rfind('.');
+    if (dot == std::string_view::npos) return false;
+    const auto ext = path.substr(dot);
+    constexpr std::string_view extensions[]{".jpg", ".jpeg", ".png", ".gif", ".webp",
+        ".mp4", ".m4v", ".webm", ".mkv", ".mov", ".avi", ".ogv", ".mpeg", ".mpg"};
+    return std::ranges::any_of(extensions, [&](std::string_view candidate) {
+        return std::ranges::equal(ext, candidate, [](unsigned char left, unsigned char right) {
+            return std::tolower(left) == right;
+        });
+    });
 }
 
 XMPP_TEST_EXPORT std::pair<size_t, size_t> read_image_dimensions(const char *path)

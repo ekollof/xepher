@@ -46,6 +46,7 @@ from uuid import UUID, uuid4
 import array
 import fcntl
 import io
+import hashlib
 import os
 import pickle
 import PIL
@@ -54,6 +55,7 @@ import shutil
 import subprocess
 import sys
 import termios
+import tempfile
 import weechat
 
 
@@ -227,6 +229,7 @@ def create_image(
             and columns
             and rows
             and os.path.isfile(path)
+            and pillow_image_path(path)
         ):
             try:
                 image_placement = ImagePlacement(
@@ -393,9 +396,53 @@ class ImageData:
     height: int
 
 
+def pillow_image_path(path: str) -> bool:
+    try:
+        with Image.open(path):
+            return True
+    except PIL.UnidentifiedImageError:
+        return False
+
+
+def preview_image_path(path: str) -> str:
+    """Keep the original path for clicks; cache one PNG frame for video rendering."""
+    if pillow_image_path(path):
+        return path
+    source = os.path.realpath(path)
+    info = os.stat(source)
+    key = hashlib.sha256(os.fsencode(source) +
+                         f":{info.st_size}:{info.st_mtime_ns}".encode()).hexdigest()
+    directory = weechat.string_eval_path_home(f"{shared.cache_path}/video_frames", {}, {}, {})
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    thumbnail = os.path.join(directory, f"{key}.png")
+    if os.path.isfile(thumbnail):
+        return thumbnail
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError("Video previews require ffmpeg on PATH")
+    with tempfile.NamedTemporaryFile(dir=directory, suffix=".png", delete=False) as output:
+        temporary = output.name
+    try:
+        result = subprocess.run(
+            [ffmpeg, "-nostdin", "-v", "error", "-y", "-protocol_whitelist", "file,pipe",
+             "-i", source, "-map", "0:v:0", "-frames:v", "1", "-an", "-sn",
+             "-vf", "scale='min(1280,iw)':-2", "-threads", "1", temporary],
+            capture_output=True, timeout=20, check=False,
+        )
+        if result.returncode:
+            raise RuntimeError("FFmpeg could not extract a video preview frame")
+        with Image.open(temporary) as frame:
+            frame.load()
+        os.replace(temporary, thumbnail)
+        return thumbnail
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def load_image_data(path: str):
     with io.BytesIO() as data:
-        with Image.open(path) as im:
+        with Image.open(preview_image_path(path)) as im:
             im.save(data, "png")
             return ImageData(data.getvalue(), im.width, im.height)
 
@@ -435,7 +482,7 @@ def removesuffix(self: str, suffix: str) -> str:
 
 SCRIPT_AUTHOR = "Trygve Aaberge <trygveaa@gmail.com>"
 SCRIPT_LICENSE = "MIT"
-SCRIPT_DESC = "Display images in the chat (Kitty, or chafa cell art)"
+SCRIPT_DESC = "Display images and static video previews (Kitty, or chafa cell art)"
 
 
 def create_cache_paths():
@@ -1763,7 +1810,7 @@ def send_image_to_terminal(
     if backend == "cells":
         if not image_placement.cell_lines:
             image_placement.cell_lines = encode_cells(
-                image_placement.path,
+                preview_image_path(image_placement.path),
                 image_placement.columns,
                 image_placement.rows,
             )
@@ -1786,7 +1833,7 @@ def send_image_to_terminal(
             # Auto: let chafa probe the terminal and pick iterm/kitty/sixels
             # or symbols. Symbols output becomes buffer text (like cells).
             kind, payload = encode_chafa_auto(
-                image_placement.path,
+                preview_image_path(image_placement.path),
                 image_placement.columns,
                 image_placement.rows,
             )
@@ -1803,7 +1850,7 @@ def send_image_to_terminal(
         # Explicit sixel: forced via WEECHAT_ICAT_BACKEND=sixel, or chafa is
         # missing and img2sixel is the only encoder.
         sixel = encode_sixel(
-            image_placement.path,
+            preview_image_path(image_placement.path),
             image_placement.columns,
             image_placement.rows,
             terminal_size or get_terminal_size(),

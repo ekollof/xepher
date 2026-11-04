@@ -1558,7 +1558,7 @@ int weechat::channel::send_message(std::string to, std::string body,
     }
 
     if (local_preview_path && file_meta
-        && is_image_mime_type(file_meta->content_type))
+        && is_previewable_media_mime(file_meta->content_type))
     {
         weechat::icat_preview_request req;
         req.buffer = buffer;

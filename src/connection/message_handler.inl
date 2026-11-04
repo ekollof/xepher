@@ -1822,9 +1822,7 @@ message_handler_after_omemo:
         {
             // Candidate for weechat-icat (no MIME in OOB — check extension)
             std::string_view url_sv(url_text);
-            if (url_sv.ends_with(".jpg") || url_sv.ends_with(".jpeg")
-                || url_sv.ends_with(".png") || url_sv.ends_with(".gif")
-                || url_sv.ends_with(".webp"))
+            if (is_previewable_media_path(url_sv))
             {
                 incoming_image_url = url_text;
             }
@@ -1879,7 +1877,7 @@ message_handler_after_omemo:
 
     for (const auto &share : ::xmpp::collect_sims_shares(media_view))
     {
-        if (is_image_mime_type(share.meta.mime))
+        if (is_previewable_media_mime(share.meta.mime))
         {
             incoming_image_url = share.url;
             incoming_image_mime = share.meta.mime;
@@ -1947,7 +1945,7 @@ message_handler_after_omemo:
                 }
             }
 
-            if (already_downloaded && esfs_local_path && is_image_mime_type(enc.meta.mime))
+            if (already_downloaded && esfs_local_path && is_previewable_media_mime(enc.meta.mime))
             {
                 pending_icat = pending_icat_preview{
                     *esfs_local_path,
@@ -1975,7 +1973,7 @@ message_handler_after_omemo:
         if (!oob_suffix.empty() && oob_suffix.contains(sfs_url))
             oob_suffix.clear();
 
-        if (is_image_mime_type(sfs.meta.mime))
+        if (is_previewable_media_mime(sfs.meta.mime))
         {
             incoming_image_url = sfs_url;
             incoming_image_mime = sfs.meta.mime;

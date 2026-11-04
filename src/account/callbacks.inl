@@ -527,7 +527,7 @@ int weechat::account::upload_fd_cb(const void *pointer, void *data, int fd)
     }
 
     if (!sent_rich && !ctx->local_path.empty()
-        && is_image_mime_type(ctx->content_type))
+        && is_previewable_media_mime(ctx->content_type))
     {
         weechat::icat_preview_request req;
         req.buffer = status_buf;

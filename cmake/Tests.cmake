@@ -86,6 +86,11 @@ macro(xepher_add_tests plugin_target)
     endif()
 
     find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME doctest_icat_media
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_icat_media.py" -v)
+        set_tests_properties(doctest_icat_media PROPERTIES LABELS "doctest")
+    endif()
     if(Python3_Interpreter_FOUND AND XEPHER_WEECHAT_HEADLESS)
         add_test(NAME doctest_mam_ordering
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_mam_ordering.py"

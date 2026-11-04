@@ -4025,6 +4025,15 @@ TEST_CASE("is_image_mime_type accepts image MIME types")
 TEST_CASE("is_image_mime_type rejects non-image MIME types")
 {
     CHECK(is_image_mime_type("application/pdf") == false);
+    CHECK(is_previewable_media_mime("image/gif"));
+    CHECK(is_previewable_media_mime("video/mp4"));
+    CHECK(is_previewable_media_mime("video/webm"));
+    CHECK_FALSE(is_previewable_media_mime("audio/mpeg"));
+    CHECK_FALSE(is_previewable_media_mime("application/pdf"));
+    CHECK(is_previewable_media_path("https://example.org/clip.MP4?token=x#preview"));
+    CHECK(is_previewable_media_path("/tmp/clip.webm"));
+    CHECK(is_previewable_media_path("/tmp/animation.gif"));
+    CHECK_FALSE(is_previewable_media_path("https://example.org/file.txt?name=clip.mp4"));
     CHECK(is_image_mime_type("text/plain") == false);
     CHECK(is_image_mime_type("video/mp4") == false);
     CHECK(is_image_mime_type("audio/ogg") == false);
