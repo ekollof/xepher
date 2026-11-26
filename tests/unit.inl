@@ -4041,6 +4041,63 @@ TEST_CASE("is_image_mime_type rejects non-image MIME types")
     CHECK(is_image_mime_type("") == false);
 }
 
+TEST_CASE("fit_icat_grid preserves aspect ratio in non-square terminal cells")
+{
+    // 4:3 landscape fills the 40-column box; ~1:2 cells give 15 rows.
+    auto grid = fit_icat_grid(4000, 3000, 2.0);
+    CHECK(grid.columns == 40);
+    CHECK(grid.rows == 15);
+
+    // 16:9 landscape.
+    grid = fit_icat_grid(1920, 1080, 2.0);
+    CHECK(grid.columns == 40);
+    CHECK(grid.rows == 11);
+
+    // Portrait phone screenshot: limited by rows, so columns shrink instead
+    // of squashing the image (the old code clamped rows and distorted it).
+    grid = fit_icat_grid(1080, 2400, 2.0);
+    CHECK(grid.columns == 18);
+    CHECK(grid.rows == 20);
+
+    // Tighter cell shape (e.g. 9x17 cells) still keeps the pixel aspect.
+    grid = fit_icat_grid(1080, 2400, 17.0 / 9.0);
+    CHECK(grid.columns == 17);
+    CHECK(grid.rows == 20);
+
+    // Unknown dimensions keep the neutral default.
+    grid = fit_icat_grid(0, 0, 2.0);
+    CHECK(grid.columns == 40);
+    CHECK(grid.rows == 10);
+
+    // Degenerate values never produce a zero-sized grid.
+    grid = fit_icat_grid(100, 10000, 2.0);
+    CHECK(grid.columns >= 1);
+    CHECK(grid.rows <= 20);
+}
+
+TEST_CASE("read_image_dimensions reads GIF and WebP headers")
+{
+    const std::string path = "/tmp/xepher-dims-" + std::to_string(getpid());
+    auto write_header = [&](std::initializer_list<unsigned char> bytes) {
+        FILE *file = fopen(path.c_str(), "wb");
+        REQUIRE(file != nullptr);
+        std::fwrite(bytes.begin(), 1, bytes.size(), file);
+        std::fclose(file);
+    };
+
+    // GIF89a logical screen descriptor: 640x480 (little endian).
+    write_header({'G', 'I', 'F', '8', '9', 'a', 0x80, 0x02, 0xE0, 0x01});
+    CHECK(read_image_dimensions(path.c_str()) == std::pair<size_t, size_t>{640, 480});
+
+    // WebP VP8X canvas: 1080x2400 (stored minus one).
+    write_header({'R', 'I', 'F', 'F', 0x16, 0, 0, 0, 'W', 'E', 'B', 'P',
+                  'V', 'P', '8', 'X', 0x0A, 0, 0, 0, 0, 0, 0, 0,
+                  0x37, 0x04, 0x00, 0x5F, 0x09, 0x00});
+    CHECK(read_image_dimensions(path.c_str()) == std::pair<size_t, size_t>{1080, 2400});
+
+    ::unlink(path.c_str());
+}
+
 TEST_CASE("collect_bob_image_refs parses Movim XHTML-IM cid sticker")
 {
     unit_strophe_env env;

@@ -20,6 +20,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 #include <unistd.h>
 #include <strophe.h>
 #include <weechat/weechat-plugin.h>
@@ -864,24 +866,34 @@ XMPP_TEST_EXPORT std::pair<size_t, size_t> read_image_dimensions(const char *pat
     if (!file)
         return {0, 0};
 
-    unsigned char hdr[24] = {};
+    constexpr auto read_le16 = [](const unsigned char *p) {
+        return static_cast<size_t>(p[0]) | (static_cast<size_t>(p[1]) << 8);
+    };
+    constexpr auto read_le24 = [](const unsigned char *p) {
+        return static_cast<size_t>(p[0]) | (static_cast<size_t>(p[1]) << 8)
+             | (static_cast<size_t>(p[2]) << 16);
+    };
+    constexpr auto read_le32 = [](const unsigned char *p) {
+        return static_cast<size_t>(p[0]) | (static_cast<size_t>(p[1]) << 8)
+             | (static_cast<size_t>(p[2]) << 16) | (static_cast<size_t>(p[3]) << 24);
+    };
+    constexpr auto read_be32 = [](const unsigned char *p) {
+        return (static_cast<size_t>(p[0]) << 24) | (static_cast<size_t>(p[1]) << 16)
+             | (static_cast<size_t>(p[2]) <<  8) |  static_cast<size_t>(p[3]);
+    };
+
+    unsigned char hdr[32] = {};
     size_t hdr_read = fread(hdr, 1, sizeof(hdr), file.get());
 
     // PNG: IHDR chunk starts at byte 8
     if (hdr_read >= 24
         && hdr[0] == 0x89 && hdr[1] == 'P' && hdr[2] == 'N' && hdr[3] == 'G'
         && hdr[4] == 0x0D && hdr[5] == 0x0A && hdr[6] == 0x1A && hdr[7] == 0x0A)
-    {
-        size_t w = (static_cast<size_t>(hdr[16]) << 24)
-                 | (static_cast<size_t>(hdr[17]) << 16)
-                 | (static_cast<size_t>(hdr[18]) <<  8)
-                 |  static_cast<size_t>(hdr[19]);
-        size_t h = (static_cast<size_t>(hdr[20]) << 24)
-                 | (static_cast<size_t>(hdr[21]) << 16)
-                 | (static_cast<size_t>(hdr[22]) <<  8)
-                 |  static_cast<size_t>(hdr[23]);
-        return {w, h};
-    }
+        return {read_be32(&hdr[16]), read_be32(&hdr[20])};
+
+    // GIF: logical screen descriptor at byte 6 (little endian)
+    if (hdr_read >= 10 && (memcmp(hdr, "GIF87a", 6) == 0 || memcmp(hdr, "GIF89a", 6) == 0))
+        return {read_le16(&hdr[6]), read_le16(&hdr[8])};
 
     // JPEG: scan for SOF0/SOF1/SOF2 markers (0xFF 0xC0-0xC2)
     if (hdr_read >= 3 && hdr[0] == 0xFF && hdr[1] == 0xD8 && hdr[2] == 0xFF)
@@ -900,28 +912,76 @@ XMPP_TEST_EXPORT std::pair<size_t, size_t> read_image_dimensions(const char *pat
         }
     }
 
+    // WebP: RIFF/WEBP container, canvas size in the first chunk
+    if (hdr_read >= 30 && memcmp(hdr, "RIFF", 4) == 0 && memcmp(&hdr[8], "WEBP", 4) == 0)
+    {
+        if (memcmp(&hdr[12], "VP8X", 4) == 0)
+            return {read_le24(&hdr[24]) + 1, read_le24(&hdr[27]) + 1};
+        if (memcmp(&hdr[12], "VP8L", 4) == 0 && hdr[20] == 0x2F)
+        {
+            const size_t bits = read_le32(&hdr[21]);
+            return {(bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1};
+        }
+        if (memcmp(&hdr[12], "VP8 ", 4) == 0
+            && hdr[23] == 0x9D && hdr[24] == 0x01 && hdr[25] == 0x2A)
+            return {read_le16(&hdr[26]) & 0x3FFF, read_le16(&hdr[28]) & 0x3FFF};
+    }
+
     return {0, 0};
+}
+
+namespace {
+
+// Terminal cells are taller than wide. When the terminal does not report pixel
+// metrics (tmux, screen, some emulators) assume the common ~1:2 cell shape.
+constexpr double k_default_cell_aspect = 2.0;
+
+// cell height / cell width, from TIOCGWINSZ pixel metrics when available.
+[[nodiscard]] double terminal_cell_aspect()
+{
+    for (const int fd : {STDOUT_FILENO, STDIN_FILENO, STDERR_FILENO})
+    {
+        struct winsize ws{};
+        if (ioctl(fd, TIOCGWINSZ, &ws) != 0 || ws.ws_col == 0 || ws.ws_row == 0
+            || ws.ws_xpixel == 0 || ws.ws_ypixel == 0)
+            continue;
+        const double cell_w = static_cast<double>(ws.ws_xpixel) / ws.ws_col;
+        const double cell_h = static_cast<double>(ws.ws_ypixel) / ws.ws_row;
+        if (cell_w > 0 && cell_h > 0)
+            return cell_h / cell_w;
+    }
+    return k_default_cell_aspect;
+}
+
+}  // namespace
+
+XMPP_TEST_EXPORT icat_grid fit_icat_grid(size_t pixel_width,
+                                         size_t pixel_height,
+                                         double cell_aspect)
+{
+    constexpr size_t max_columns = 40;
+    constexpr size_t max_rows = 20;
+
+    // Dimensionless: image rows/columns is pixel_height/pixel_width, and each
+    // terminal cell is `cell_aspect` times taller than it is wide.
+    if (pixel_width == 0 || pixel_height == 0 || cell_aspect <= 0)
+        return {.columns = max_columns, .rows = 10};
+
+    const double pixel_aspect = static_cast<double>(pixel_height) / pixel_width;
+    const double scale = std::min(
+        static_cast<double>(max_columns),
+        static_cast<double>(max_rows) * cell_aspect / pixel_aspect);
+
+    return {
+        .columns = std::clamp<size_t>(std::lround(scale), 1, max_columns),
+        .rows = std::clamp<size_t>(
+            std::lround(scale * pixel_aspect / cell_aspect), 1, max_rows),
+    };
 }
 
 std::string icat_dimension_args(size_t pixel_width, size_t pixel_height)
 {
-    constexpr size_t default_columns = 40;
-    constexpr size_t max_rows = 20;
-
-    size_t rows;
-    if (pixel_width == 0 || pixel_height == 0)
-    {
-        // No dimensions known — use a sensible default so -print_immediately works
-        rows = 10;
-    }
-    else
-    {
-        rows = std::max(size_t(1),
-            static_cast<size_t>(std::round(
-                static_cast<double>(default_columns) * pixel_height / pixel_width)));
-        if (rows > max_rows)
-            rows = max_rows;
-    }
-
-    return fmt::format(" -columns {} -rows {}", default_columns, rows);
+    const auto [columns, rows] = fit_icat_grid(pixel_width, pixel_height,
+                                               terminal_cell_aspect());
+    return fmt::format(" -columns {} -rows {}", columns, rows);
 }

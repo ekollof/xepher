@@ -22,6 +22,7 @@
 
 #include "account.hh"
 #include "config.hh"
+#include "debug.hh"
 #include "plugin.hh"
 #include "util.hh"
 #include "weechat/ui_port.hh"
@@ -211,6 +212,7 @@ void run_icat_command(account &acct,
         std::tie(w, h) = read_image_dimensions(local_path.data());
 
     const std::string dim_args = icat_dimension_args(w, h);
+    XDEBUG("icat: {} ({}x{} px) ->{}", local_path, w, h, dim_args);
     const std::string icat_cmd = fmt::format("/icat -print_immediately -quiet{} {}",
                                              dim_args, local_path);
     weechat_command(buffer, icat_cmd.c_str());

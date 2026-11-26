@@ -21,6 +21,9 @@
 #   - "cells" backend: half-block art printed into the WeeChat buffer (PIL, with
 #     chafa fallback). Survives redraws. Colors are converted to WeeChat codes
 #     (not raw ANSI — prnt does not interpret CSI).
+#   - Aspect: -columns/-rows is treated as an upper-bound box; the image is
+#     fitted into it using the terminal's pixel cell size (fallback ~1:2),
+#     so portrait images shrink horizontally instead of being stretched.
 # Override: WEECHAT_ICAT_BACKEND=kitty|cells|sixel|auto
 #
 # Why Kitty "just works" with escapes: graphics protocol data is written to the
@@ -41,6 +44,7 @@ from typing import Callable, Dict
 from typing import Callable, Dict, List, Optional, Union
 from typing import Callable, Dict, Union
 from typing import Dict, List, Optional
+from typing import Tuple
 from uuid import uuid4
 from uuid import UUID, uuid4
 import array
@@ -208,6 +212,9 @@ def create_image(
     rows: Optional[int],
     print_immediately: bool,
 ):
+    if columns and rows:
+        columns, rows = fit_preview_grid(path, int(columns), int(rows))
+
     for ip in image_placements[path]:
         if (columns is None or columns == ip.columns) and (
             rows is None or rows == ip.rows
@@ -445,6 +452,59 @@ def load_image_data(path: str):
         with Image.open(preview_image_path(path)) as im:
             im.save(data, "png")
             return ImageData(data.getvalue(), im.width, im.height)
+
+
+def terminal_cell_size(terminal_size: Optional[TerminalSize]) -> Tuple[float, float]:
+    """Pixel size of one terminal cell as (width, height).
+
+    Falls back to the common ~1:2 cell shape when the terminal does not report
+    pixel metrics (tmux, screen, redirection).
+    """
+    if (
+        terminal_size
+        and terminal_size.columns > 0
+        and terminal_size.rows > 0
+        and terminal_size.width > 0
+        and terminal_size.height > 0
+    ):
+        return (
+            terminal_size.width / terminal_size.columns,
+            terminal_size.height / terminal_size.rows,
+        )
+    return (1.0, 2.0)
+
+
+def fit_preview_grid(path: str, columns: int, rows: int) -> Tuple[int, int]:
+    """Fit media into a columns x rows cell box, preserving its pixel aspect.
+
+    Kitty and sixel stretch the payload to the requested cell grid, so the
+    caller's box is an upper bound only: a portrait image must use fewer
+    columns instead of being flattened into every row of the box.
+    """
+    if not pillow_image_path(path):
+        # Videos need an FFmpeg frame; never generate that on the main thread.
+        return columns, rows
+    try:
+        with Image.open(path) as image:
+            image_width, image_height = image.size
+    except Exception:  # pylint: disable=broad-exception-caught
+        return columns, rows
+    if image_width <= 0 or image_height <= 0:
+        return columns, rows
+
+    try:
+        terminal_size: Optional[TerminalSize] = get_terminal_size()
+    except (OSError, ValueError):
+        terminal_size = None
+    cell_width, cell_height = terminal_cell_size(terminal_size)
+
+    image_columns = image_width / cell_width
+    image_rows = image_height / cell_height
+    scale = min(columns / image_columns, rows / image_rows)
+    return (
+        max(1, round(image_columns * scale)),
+        max(1, round(image_rows * scale)),
+    )
 
 
 

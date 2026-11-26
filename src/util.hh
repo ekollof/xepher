@@ -92,11 +92,26 @@ XMPP_TEST_EXPORT bool is_image_mime_type(std::string_view mime);
 XMPP_TEST_EXPORT bool is_previewable_media_mime(std::string_view mime);
 XMPP_TEST_EXPORT bool is_previewable_media_path(std::string_view path);
 
-// Read image pixel dimensions from PNG/JPEG file headers.
+// Read image pixel dimensions from PNG/JPEG/GIF/WebP file headers.
 // Returns {width, height} or {0, 0} if unsupported or unreadable.
 XMPP_TEST_EXPORT std::pair<size_t, size_t> read_image_dimensions(const char *path);
 
-// Compute icat -columns/-rows from pixel dimensions.
-// Uses default columns=40 and maintains aspect ratio.
-// Returns " -columns C -rows R" string (with leading space) or empty if no dims.
+// Terminal cell grid used for an inline media preview.
+struct icat_grid {
+    size_t columns = 0;
+    size_t rows = 0;
+};
+
+// Fit an image into the preview box (40 columns, 20 rows) while preserving its
+// aspect ratio. `cell_aspect` is cell height / cell width (terminal cells are
+// taller than wide), so a portrait image shrinks its column count instead of
+// being squashed. Unknown dimensions fall back to a neutral 40x10 grid.
+[[nodiscard]] XMPP_TEST_EXPORT icat_grid fit_icat_grid(size_t pixel_width,
+                                                       size_t pixel_height,
+                                                       double cell_aspect);
+
+// Compute icat -columns/-rows from pixel dimensions, using the terminal's
+// reported cell shape (falls back to ~1:2 when the terminal does not report
+// pixel metrics, e.g. tmux).
+// Returns " -columns C -rows R" string (with leading space).
 std::string icat_dimension_args(size_t pixel_width, size_t pixel_height);
