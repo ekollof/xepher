@@ -24,6 +24,8 @@
 #   - Aspect: -columns/-rows is treated as an upper-bound box; the image is
 #     fitted into it using the terminal's pixel cell size (fallback ~1:2),
 #     so portrait images shrink horizontally instead of being stretched.
+#   - Detection: herdr panes (HERDR_ENV / TERM_PROGRAM=herdr) use the Kitty
+#     graphics protocol even though TERM is a generic xterm value.
 # Override: WEECHAT_ICAT_BACKEND=kitty|cells|sixel|auto
 #
 # Why Kitty "just works" with escapes: graphics protocol data is written to the
@@ -571,11 +573,14 @@ def kitty_graphics_available() -> bool:
         return True
     if _env("WEZTERM_EXECUTABLE"):
         return True
+    # herdr passes Kitty graphics through its panes but reports a plain TERM.
+    if _env("HERDR_ENV"):
+        return True
     term = _env("TERM").lower()
     if "kitty" in term:
         return True
     term_prog = _env("TERM_PROGRAM").lower()
-    if term_prog in ("kitty", "ghostty", "wezterm"):
+    if term_prog in ("kitty", "ghostty", "wezterm", "herdr"):
         return True
     return False
 
